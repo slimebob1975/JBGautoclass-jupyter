@@ -1,0 +1,22 @@
+IF OBJECT_ID('[Arbetsdatabas].[aterkommande_automat].[AutoKlassificering]','U') IS NULL 
+	CREATE TABLE [Arbetsdatabas].[aterkommande_automat].[AutoKlassificering](
+    class_id INTEGER IDENTITY(1,1) PRIMARY KEY,     /* The primary key */
+	catalog_name VARCHAR(255) NOT NULL,             /* Database namne */
+	table_name VARCHAR(255) NOT NULL,               /* Table name */
+	column_names NVARCHAR(512) NOT NULL,             /* Column names, CSV-style */
+    unique_key BIGINT NOT NULL,                     /* Unique key for classified row in table_name*/
+	class_result VARCHAR(255) NOT NULL,              /* Classification result as string */
+	class_rate FLOAT,                               /* Estimated correctness of rate */
+	class_rate_type CHAR DEFAULT 'U',               /* How rate was calculcated: (U)nknown, (A)verage or (I)ndividual */
+	class_labels VARCHAR(255) NOT NULL,				/* The possible class labels for the classification */
+	class_probabilities VARCHAR(255) NOT NULL,      /* The different probabilities corresponding to class labels, CSV-style */
+	class_algorithm VARCHAR(255),                   /* Name of classification algorithm */
+    class_time DATETIME DEFAULT CURRENT_TIMESTAMP,  /* A timestamp when the record was inserted */
+	class_script VARCHAR(255),                      /* The full path to the classification program */
+    class_user VARCHAR(255),                        /* Who executed the classification program */
+
+	CONSTRAINT Check_catalog_name CHECK (DB_ID(catalog_name) IS NOT NULL),
+	CONSTRAINT Check_table_name CHECK (OBJECT_ID(CONCAT(catalog_name,'.',table_name)) IS NOT NULL),
+	CONSTRAINT Check_class_rate CHECK ( class_rate >= 0.0 AND class_rate <= 1.0 ),
+	CONSTRAINT Check_class_rate_type CHECK ( CHARINDEX(class_rate_type, 'UAI') > 0 ),
+);
