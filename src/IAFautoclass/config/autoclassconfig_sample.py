@@ -17,7 +17,10 @@ sql = {
     "odbc_driver": "<odbc_driver>",
 
     # Database host
-    "host": "<host>",   
+    "host": "<host>", 
+    
+    # Trusted connection or not
+    "trusted_connection": "<trusted_connection>",
 
     # Database catalog for results of classification
     "class_catalog": "Arbetsdatabas",         
@@ -128,7 +131,10 @@ io = {
     "verbose": "<verbose>",
 
     # Where to save/load trained and generated model
-    "model_path": "./model/"
+    "model_path": "./model/",
+    
+    # Name of previously trained model
+    "model_path": "default",
 }
 
 # Some debug settings

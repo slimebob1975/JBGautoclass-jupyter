@@ -18,6 +18,9 @@ sql = {
 
     # Database host
     "host": "tcp:sql-stat.iaf.local",   
+    
+    # Trusted connection or not
+    "trusted_connection": "false",
 
     # Database catalog for results of classification
     "class_catalog": "Arbetsdatabas",         

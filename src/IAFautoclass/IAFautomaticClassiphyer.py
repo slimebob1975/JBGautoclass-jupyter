@@ -66,6 +66,7 @@ import base64, getopt, pickle, scipy, numpy as np
 import importlib, getpass
 import time as time
 import getpass
+import copy
 from datetime import datetime, timedelta
 from numpy.linalg import lstsq, norm
 from math import ceil
@@ -107,6 +108,7 @@ import langdetect
 from lexicalrichness import LexicalRichness
 import warnings
 import ipywidgets as widgets
+from pathlib import Path
 
 # Sklearn issue a lot of warnings sometimes, we suppress them here
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -133,11 +135,13 @@ class IAFautomaticClassifier:
     LIMIT_MISPREDICTED = 10
     MAX_HEAD_COLUMNS = 10
     MAX_ITERATIONS = 20000
+    DEFAULT_MODEL_FILE_EXTENSION = ".sav"
     
     # Constructor with arguments
     def __init__(self, config = None, name = "iris", \
         odbc_driver = "ODBC Driver 17 for SQL Server", \
-        host = "tcp:sql-stat.iaf.local", class_catalog = "Arbetsdatabas", \
+        host = "tcp:sql-stat.iaf.local", trusted_connection = False, \
+        class_catalog = "Arbetsdatabas", \
         class_table = "aterkommande_automat.AutoKlassificering", \
         class_table_script = "./sql/autoClassCreateTable.sql", \
         class_username = "robert_tmp", class_password = "robert", \
@@ -150,13 +154,15 @@ class IAFautomaticClassifier:
         test_size = 0.2, smote = False, undersample = False, algorithm = "ALL", \
         preprocessor = "NON", feature_selection = "NON", num_selected_features = None, \
         scoring = "accuracy", max_iterations = None, verbose = True, redirect_output = False, \
-        model_path = "./model/", debug_on = True, num_rows = None ):
-
+        model_path = "./model/", model_name = "iris", debug_on = True, num_rows = None, \
+        progress_bar = None, progress_label = None):
+        
         # If configuration module was loaded from command line call, use it and ignore 
         # the rest of the input arguments to the constructor
         if config != None:
             self.config = self.Config( config.project["name"], config.sql["odbc_driver"], \
-                config.sql["host"], config.sql["class_catalog"], config.sql["class_table"], \
+                config.sql["host"], config.sql["trusted_connection"] == "true", \
+                config.sql["class_catalog"], config.sql["class_table"], \
                 config.sql["class_table_script"], config.sql["class_username"], \
                 config.sql["class_password"], config.sql["data_catalog"],  config.sql["data_table"], \
                 config.sql["class_column"], config.sql["hierarchical_class"] == "true", \
@@ -170,7 +176,7 @@ class IAFautomaticClassifier:
                 config.mode["algorithm"], config.mode["preprocessor"], \
                 config.mode["feature_selection"], config.mode["num_selected_features"], \
                 config.mode["scoring"], int(config.mode["max_iterations"]), \
-                config.io["verbose"] == "true", False, config.io["model_path"], \
+                config.io["verbose"] == "true", False, config.io["model_path"], config.io["model_name"], \
                 config.debug["debug_on"] == "true", int(config.debug["num_rows"]) )
 
         # Otherwise, Test input arguments to constructor
@@ -184,6 +190,8 @@ class IAFautomaticClassifier:
                 not self.is_str(class_username) or not self.is_str(class_password) or \
                 not self.is_str(data_catalog) or not self.is_str(data_table):
                 raise ValueError("Specified database connection information is invalid!")
+            elif not self.is_bool(trusted_connection):
+                raise ValueError("Trusted connection must be true or false!")
             elif not self.is_str(class_column) or not self.is_str(data_text_columns) or \
                 not self.is_str(data_numerical_columns) or not self.is_str(id_column) or \
                 not self.is_str(data_username) or not self.is_str(data_password):
@@ -225,13 +233,13 @@ class IAFautomaticClassifier:
                 raise ValueError("Argument num_rows is invalid!")
 
             # If input okay, create configuration object with given settings
-            self.config = self.Config( name, odbc_driver, host, class_catalog, class_table, \
-                class_table_script, class_username, class_password, data_catalog,  data_table, \
+            self.config = self.Config( name, odbc_driver, host, trusted_connection, class_catalog, \
+                class_table, class_table_script, class_username, class_password, data_catalog, data_table, \
                 class_column, hierarchical_class, data_text_columns, data_numerical_columns, \
                 id_column, data_username, data_password, train, predict, mispredicted, use_stop_words, \
                 specific_stop_words_threshold, hex_encode, use_categorization, test_size, smote, \
                 undersample, algorithm, preprocessor, feature_selection, num_selected_features, \
-                scoring, max_iterations, verbose, redirect_output, model_path, debug_on, num_rows )
+                scoring, max_iterations, verbose, redirect_output, model_path, model_name, debug_on, num_rows )
 
         # In case no specific row number was specified, fall back on the total 
         if self.config.debug["num_rows"] == None:
@@ -242,15 +250,15 @@ class IAFautomaticClassifier:
             self.config.mode["max_iterations"] = self.MAX_ITERATIONS
         
         # For the external progressbar (hopefully an iPython widget)
+        self.ProgressBar = progress_bar
+        self.ProgressLabel = progress_label
+
         self.numMajorTasks = 12
         self.percentPermajorTask = 0.03
-        self.progressPercent = 0.0
-        self.progressText = "Starting up..."
+        if self.ProgressBar: self.ProgressBar.value = 0.0
+        if self.ProgressLabel: self.ProgressLabel.value = "Starting up..."
         self.majorTask = 0
         self.use_progress_bar = True
-        self.ProgressBar = widgets.FloatProgress( value=self.progressPercent, min=0, max=1.0, \
-            description=self.progressText, bar_style='info', style={'bar_color': '#ffff00'}, \
-            orientation='horizontal')
         
          # Init some internal variables
         self.scriptpath = os.path.dirname(os.path.realpath(__file__))
@@ -269,20 +277,13 @@ class IAFautomaticClassifier:
         self.numerical_data = self.config.sql["data_numerical_columns"] != ""
         self.use_feature_selection = self.config.mode["feature_selection"] != "NON"
         
-        # This is unfortunately the case
-        self.integrated_security = False; 
-        
-         # Set the name and path of the model file
+         # Set the name and path of the model file depending on training or predictions
         pwd = os.path.dirname(os.path.realpath(__file__))
-        self.model_filename = self.config.io["model_path"]
-        if self.model_filename[0] == '.':
-            self.model_filename = self.model_filename[1:]
-        self.model_filename = pwd + self.model_filename
-        if self.model_filename[-1] == "/":
-             self.model_filename += self.config.project["name"] + ".sav"
+        self.model_path = Path(pwd) / self.config.io["model_path"]
+        if self.config.mode["train"]:
+            self.model_filename = self.model_path / (self.config.project["name"] + ".sav")
         else:
-             self.model_filename += self.config.project["name"] + "/" + ".sav"
-        self.model_filename = self.model_filename.replace("/","\\")
+            self.model_filename = self.model_path / self.config.io["model_name"]
 
         # Redirect standard output to debug files
         if self.config.debug["debug_on"] and self.config.io["redirect_output"]:
@@ -306,7 +307,7 @@ class IAFautomaticClassifier:
         # Get some timestamps
         self.date_now = datetime.now()
         self.clock1 = time.time()
-
+        
     # Destructor
     def __del__(self):
         pass
@@ -320,21 +321,25 @@ class IAFautomaticClassifier:
     class Config:
         
         # Constructor with arguments
-        def __init__( self, name, odbc_driver, host, class_catalog, class_table, \
-            class_table_script, class_username, class_password, data_catalog,  data_table, \
-            class_column, hierarchical_class, data_text_columns, data_numerical_columns, \
-            id_column, data_username, data_password, train, predict, mispredicted, use_stop_words, \
-            specific_stop_words_threshold, hex_encode, use_categorization, test_size, \
-            smote, undersample, algorithm, preprocessor, feature_selection, num_selected_features, \
-            scoring, max_iterations, verbose, redirect_output, model_path, debug_on, num_rows ):  
+        def __init__( self, name="", odbc_driver="", host="", trusted_connection=False, \
+                     class_catalog="", class_table="", class_table_script="", class_username="", \
+                     class_password="", data_catalog="",  data_table="", class_column="", \
+                     hierarchical_class=False, data_text_columns="", data_numerical_columns="", \
+                     id_column="", data_username="", data_password="", train=True, predict=False, \
+                     mispredicted=False, use_stop_words=True, specific_stop_words_threshold=1.0, \
+                     hex_encode=True, use_categorization=True, test_size=0.2, smote=False, \
+                     undersample=False, algorithm="ALL", preprocessor="ALL", feature_selection="NON", \
+                     num_selected_features="", scoring="accuracy", max_iterations="20000", \
+                     verbose=True, redirect_output=False, model_path="", model_name="Model", \
+                     debug_on=True, num_rows="" ):  
 
             # Project information, will be used to distinguish data and generated model
             # from other
             self.project = { "name": name }
 
             # Database configuration
-            self.sql = { "odbc_driver": odbc_driver, "host": host, "class_catalog": class_catalog, \
-                "class_table": class_table, "class_table_script": class_table_script, \
+            self.sql = { "odbc_driver": odbc_driver, "host": host, "trusted_connection": trusted_connection, \
+                "class_catalog": class_catalog, "class_table": class_table, "class_table_script": class_table_script, \
                 "class_username": class_username, "class_password": class_password, \
                 "data_catalog": data_catalog, "data_table": data_table, \
                 "class_column": class_column, "hierarchical_class": hierarchical_class, \
@@ -352,11 +357,12 @@ class IAFautomaticClassifier:
                 "scoring": scoring, "max_iterations": max_iterations}
 
             # Specifies how to direct output, where to save model, etc
-            self.io = { "verbose": verbose, "redirect_output": redirect_output, "model_path": model_path }
+            self.io = { "verbose": verbose, "redirect_output": redirect_output, "model_path": model_path, \
+                 "model_name": model_name}
 
             # Some debug settings
             self.debug = { "debug_on": debug_on, "num_rows": num_rows }
-
+        
         # Destructor
         def __del__(self):
             pass
@@ -385,7 +391,8 @@ class IAFautomaticClassifier:
         # Get a sql handler and connect to data database
         sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
             host = self.config.sql["host"], catalog = self.config.sql["class_catalog"], \
-            trusted_connection = False, username = self.config.sql["class_username"], \
+            trusted_connection = self.config.sql["trusted_connection"], \
+            username = self.config.sql["class_username"], \
             password = self.config.sql["class_password"])
         sqlHelper.connect()
 
@@ -406,7 +413,8 @@ class IAFautomaticClassifier:
             # Get a sql handler and connect to data database
             sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["class_catalog"], \
-                trusted_connection = False, username = self.config.sql["class_username"], \
+                trusted_connection = self.config.sql["trusted_connection"], \
+                username = self.config.sql["class_username"], \
                 password = self.config.sql["class_password"])
             sqlHelper.connect()
 
@@ -449,7 +457,8 @@ class IAFautomaticClassifier:
             # Get a sql handler and connect to data database
             sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["class_catalog"], \
-                trusted_connection = False, username = self.config.sql["class_username"], \
+                trusted_connection = self.config.sql["trusted_connection"], \
+                username = self.config.sql["class_username"], \
                 password = self.config.sql["class_password"])
             sqlHelper.connect()
 
@@ -476,7 +485,7 @@ class IAFautomaticClassifier:
             return 1
         except Exception as e:
             print("Mark of executionend failed: " + str(e))
-            self.progressPercent = 1.0
+            if self.ProgressBar: self.ProgressBar.value = 1.0
             sys.exit("Program aborted.")
 
     # Function for reading in data to classify from database
@@ -488,7 +497,8 @@ class IAFautomaticClassifier:
             # Get a sql handler and connect to data database
             sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["data_catalog"], \
-                trusted_connection = False, username = self.config.sql["data_username"], \
+                trusted_connection = self.config.sql["trusted_connection"], \
+                username = self.config.sql["data_username"], \
                 password = self.config.sql["data_password"])
             sqlHelper.connect()
 
@@ -515,7 +525,8 @@ class IAFautomaticClassifier:
             query = query[:-1] # Remove last comma sign from last statement above
             query += " FROM "
             outer_query = query
-            query += "[" + self.config.sql["data_catalog"] + "].[" + self.config.sql["data_table"].replace(".","].[") + "]"
+            query += "[" + self.config.sql["data_catalog"] + "].[" + \
+                self.config.sql["data_table"].replace(".","].[") + "]"
 
             # Take care of the special case of only training or only predictions
             if self.config.mode["train"] and not self.config.mode["predict"]:
@@ -676,7 +687,7 @@ class IAFautomaticClassifier:
 
         except Exception as e:
             print("Load of dataset failed: " + str(e))
-            self.progressPercent = 1.0
+            if self.ProgressBar: self.ProgressBar.value = 1.0
             sys.exit("Program aborted.")
 
         # Return bort data and keys
@@ -690,7 +701,8 @@ class IAFautomaticClassifier:
             # Get a sql handler and connect to data database
             sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["data_catalog"], \
-                trusted_connection = False, username = self.config.sql["data_username"], \
+                trusted_connection = self.config.sql["trusted_connection"], \
+                username = self.config.sql["data_username"], \
                 password = self.config.sql["data_password"])
             sqlHelper.connect()
             #
@@ -710,12 +722,20 @@ class IAFautomaticClassifier:
 
         except Exception as e:
             print("Count of dataset failed: " + str(e))
-            self.progressPercent = 1.0
+            if self.ProgressBar: self.ProgressBar.value = 1.0
             sys.exit("Program aborted.")
 
         # Return 
         return count
-
+    
+    # Get a list of pretrained models
+    def get_trained_models(self):
+        models = []
+        for file in os.listdir(self.model_path):
+            if file[-len(self.DEFAULT_MODEL_FILE_EXTENSION):] == self.DEFAULT_MODEL_FILE_EXTENSION:
+                models.append(file)
+        return models
+                
     # Help routines for determining consistency of input data
     @staticmethod
     def is_float(val):
@@ -1045,7 +1065,7 @@ class IAFautomaticClassifier:
             # Notice also, that PCA cannot be use together with PLS.
             if self.config.mode["feature_selection"] == "PCA" and self.config.mode["algorithm"] != "PLS":
                 if self.config.io["verbose"]: print("\nPCA conversion of dataset under way...")
-                self.progressText = "PCA conversion of dataset under way..."
+                if self.ProgressLabel: self.ProgressLabel.value = "PCA conversion of dataset under way..."
                 if number_of_components != None and number_of_components > 0:
                     components = number_of_components
                 elif X.shape[0] >= X.shape[1]:
@@ -1070,7 +1090,7 @@ class IAFautomaticClassifier:
 
             # Nystroem transformation next
             elif self.config.mode["feature_selection"] == "NYS":
-                self.progressText = "Nystroem conversion of dataset under way..."
+                if self.ProgressLabel: self.ProgressLabel.value = "Nystroem conversion of dataset under way..."
                 if number_of_components != None and number_of_components > 0:
                     components = number_of_components
                 else:
@@ -1116,7 +1136,7 @@ class IAFautomaticClassifier:
     def spot_check_ml_algorithms(self, X_train, Y_train, k=10):
 
         # Save standard progress text
-        standardProgressText = self.progressText
+        standardProgressText = self.ProgressLabel.value
 
         # Add all algorithms in a list
         if self.config.io["verbose"]: print("Spot check ml algorithms...")
@@ -1193,13 +1213,11 @@ class IAFautomaticClassifier:
             for preprocessor_name, preprocessor in preprocessors:
 
                 # Update progressbar
-                self.progressText = standardProgressText + " (" + name + "-" + preprocessor_name + ")"
+                if self.ProgressLabel: self.ProgressLabel.value = standardProgressText + " (" + name + "-" + preprocessor_name + ")"
                 if not first_round:
-                    self.progressPercent += percentAddPerMinorTask
+                    if self.ProgressBar: self.ProgressBar.value += percentAddPerMinorTask
                 else:
                     first_round = False;
-                self.ProgressBar.value = self.progressPercent
-                self.ProgressBar.description = self.progressText
 
                 # If the user has specified a specific algorithm and/or preprocessor, restrict
                 # computations accordingly            
@@ -1279,7 +1297,7 @@ class IAFautomaticClassifier:
                         kfold = StratifiedKFold(n_splits=k, random_state=1, shuffle=True)
                     except Exception as ex:
                         print("NOTICE: StratifiedKfold raised an exception with message: {1}. Killing the program".format(names[-1], str(ex)))
-                        self.progressPercent = 1.0
+                        if self.ProgressBar: self.ProgressBar.value = 1.0
                         sys.exit()
 
                     # Now make kfolded cross evaluation
@@ -1339,21 +1357,46 @@ class IAFautomaticClassifier:
     # Save ml model and corresponding configuration
     def save_model_to_file(self, label_binarizers, count_vectorizer, tfid_transformer, \
         feature_selection_transform, model_name, model, filename):
-
+        
         try:
-            data = [self.config, label_binarizers, count_vectorizer, tfid_transformer, \
+            save_config = self.get_configuration_to_save()
+            data = [save_config, label_binarizers, count_vectorizer, tfid_transformer, \
                 feature_selection_transform, model_name, model]
             pickle.dump(data, open(filename,'wb'))
 
         except Exception as ex:
             print("Something went wrong on saving model to file: {0}".format(str(ex)))
+    
+    # A help method to extract the config information to save
+    def get_configuration_to_save(self):
+        configuration = self.Config()
+        configuration.sql = copy.deepcopy(self.config.sql)
+        configuration.sql.pop("data_catalog")
+        configuration.sql.pop("data_table")
+        configuration.mode = copy.deepcopy(self.config.mode)
+        configuration.mode.pop("train")
+        configuration.mode.pop("predict")
+        configuration.mode.pop("mispredicted")
+        configuration.io = copy.deepcopy(self.config.io)
+        configuration.io.pop("model_name")
+        configuration.debug = copy.deepcopy(self.config.debug)
+        configuration.debug.pop("num_rows")
+        return configuration
 
     # Load ml model with corresponding configuration
     def load_model_from_file(self, filename):
 
         try:
-            self.config, label_binarizers, count_vectorizer, tfid_transformer, \
+            saved_config, label_binarizers, count_vectorizer, tfid_transformer, \
                 feature_selection_transform, model_name, model = pickle.load(open(filename, 'rb'))
+            saved_config.mode["train"] = self.config.mode["train"]
+            saved_config.mode["predict"] = self.config.mode["predict"]
+            saved_config.mode["mispredicted"] = self.config.mode["mispredicted"]
+            saved_config.sql["data_catalog"] = self.config.sql["data_catalog"]
+            saved_config.sql["data_table"] = self.config.sql["data_table"]
+            saved_config.io["model_name"] = self.config.io["model_name"]
+            saved_config.debug["num_rows"] = self.config.debug["num_rows"]
+            self.config = saved_config
         except Exception as ex:
             print("Something went wrong on loading model from file: {0}".format(str(ex)))
 
@@ -1367,7 +1410,7 @@ class IAFautomaticClassifier:
             predictions = model.predict(X)
         except ValueError as e:
             print("It seems like you need to regenerate your prediction model: " + str(e))
-            self.progressPercent = 1.0
+            if self.ProgressBar: self.ProgressBar.value = 1.0
             sys.exit("Program aborted.")
         try:
             probabilities = model.predict_proba(X)
@@ -1441,7 +1484,8 @@ class IAFautomaticClassifier:
             # Get a sql handler and connect to data database
             sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["class_catalog"], \
-                trusted_connection = False, username = self.config.sql["class_username"], \
+                trusted_connection = self.config.sql["trusted_connection"], \
+                username = self.config.sql["class_username"], \
                 password = self.config.sql["class_password"])
             sqlHelper.connect()
 
@@ -1480,7 +1524,7 @@ class IAFautomaticClassifier:
 
         except Exception as e:
             print("Save of predictions: {0} failed: {1}".format(query,str(e)))
-            self.progressPercent = 1.0
+            if self.ProgressBar: self.ProgressBar.value = 1.0
             sys.exit("Program aborted.")
 
     # Make absolute file paths into relative
@@ -1503,32 +1547,28 @@ class IAFautomaticClassifier:
     
     # The main classification function for the class
     def run(self):
-
+        
         # Create the classification table, if it does not exist already
-        self.progressText = "Create the classification table"
+        if self.ProgressLabel: self.ProgressLabel.value = "Create the classification table"
         self.create_classification_table()
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Set a flag in the classification database that execution has started
         self.mark_execution_started()
 
         # Read in all data, with classifications or not
-        self.progressText = "Read in data from database"
+        if self.ProgressLabel: self.ProgressLabel.value = "Read in data from database"
         dataset, unique_keys, data_query = self.read_in_data()
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Investigate dataset (optional)
         if self.config.mode["train"]:
-            self.progressText = "Investigate dataset (see console)"
+            if self.ProgressLabel: self.ProgressLabel.value = "Investigate dataset (see console)"
             if self.config.io["verbose"]: self.investigate_dataset(dataset)
 
             # Give some statistical overview of the training material
             if self.config.io["verbose"]: self.show_statistics_on_dataset(dataset)
-            self.progressPercent += self.percentPermajorTask
+            if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # We need to know the number of data rows that are currently not
         # classified (assuming that they are last in the dataset because they
@@ -1555,7 +1595,7 @@ class IAFautomaticClassifier:
         # Rearrange dataset such that all text columns are merged into one single
         # column, and convert text to numbers. Return the data in left-hand and
         # right hand side parts
-        self.progressText = "Rearrange dataset for possible textclassification, etc."
+        if self.ProgressLabel: self.ProgressLabel.value = "Rearrange dataset for possible textclassification, etc."
         X, Y, label_binarizers, count_vectorizer, tfid_transformer = \
             self.convert_textdata_to_numbers(dataset, label_binarizers, count_vectorizer, tfid_transformer)
 
@@ -1563,28 +1603,23 @@ class IAFautomaticClassifier:
             if self.config.io["verbose"]: 
                 print("After conversion of text data to numerical data:")
                 self.investigate_dataset( X, False )
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # In case of PCA or Nystreom feature reduction, here it goes
         if self.use_feature_selection and self.config.mode["feature_selection"] != "RFE":
             t0 = time.time()
-            X, self.config.mode.num_selected_features, feature_selection_transform = \
-                self.perform_feature_selection( X, self.config.mode.num_selected_features, feature_selection_transform )
+            X, self.config.mode["num_selected_features"], feature_selection_transform = \
+                self.perform_feature_selection( X, self.config.mode["num_selected_features"], feature_selection_transform )
 
             t = time.time() - t0
             if self.config.io["verbose"]: print("Feature reduction took " + str(round(t,2)) + " sec.\n")
 
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Split dataset for machine learning
         if self.config.mode["train"]:
-            self.progressText = "Split dataset for machine learning"
-            X_train, X_validation, X_unknown, Y_train, Y_validation, Y_unknown = \
-                self.split_dataset(X, Y, num_un_pred)
+            if self.ProgressLabel: self.ProgressLabel.value = "Split dataset for machine learning"
+            X_train, X_validation, X_unknown, Y_train, Y_validation, Y_unknown = self.split_dataset(X, Y, num_un_pred)
         else:
             X_train = None
             X_validation = None
@@ -1593,15 +1628,13 @@ class IAFautomaticClassifier:
             X_unknown = X
             Y_unknown = Y
 
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Check algorithms for best model and train that model. K-value should be 10 or below.
         # Or just use the model previously trained.
         num_features = None
         if self.config.mode["train"]:
-            self.progressText = "Check and train algorithms for best model"
+            if self.ProgressLabel: self.ProgressLabel.value = "Check and train algorithms for best model"
             k = min(10, self.find_smallest_class_number(Y_train))
             if k < 10:
                 if self.config.io["verbose"]: print("Using non-standard k-value for spotcheck of algorithms: {0}".format(k))
@@ -1615,29 +1648,23 @@ class IAFautomaticClassifier:
         else:
             sys.exit("Aborting. User must choose either to train a new model or use old one for predictions!")
         if self.config.io["verbose"]: print("Best model is: {0} with number of features: {1}".format(trained_model_name, num_features))
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Make predictions on known testdata
         if self.config.mode["train"] and X_validation.shape[0] > 0:
-            self.progressText = "Make predictions on known testdata"
+            if self.ProgressLabel: self.ProgressLabel.value = "Make predictions on known testdata"
             pred, prob, probs = self.make_predictions(trained_model, X_validation)
             if self.config.io["verbose"] and not prob.any() == None :
                 #print("Training Probabilities:",prob)
                 print("Training Classification prob: Mean, Std.dev: ", \
                         np.mean(prob),np.std(prob))
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Evaluate predictions (optional)
         if self.config.mode["train"] and Y_validation.shape[0] > 0:
-            self.progressText = "Evaluate predictions"
+            if self.ProgressLabel: self.ProgressLabel.value = "Evaluate predictions"
             if self.config.io["verbose"]: self.evaluate_predictions(pred, Y_validation, "ML algorithm: " + trained_model_name)
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Get accumulated classification score report for all predictions
         if self.config.mode["train"] and Y_validation.shape[0] > 0:
@@ -1647,7 +1674,7 @@ class IAFautomaticClassifier:
 
         # RETRAIN best model on whole dataset: Xtrain + Xvalidation
         if self.config.mode["train"] and (X_train.shape[0] + X_validation.shape[0]) > 0:
-            self.progressText = "Retrain model on whole dataset"
+            if self.ProgressLabel: self.ProgressLabel.value = "Retrain model on whole dataset"
             trained_model = \
                 self.train_picked_model( trained_model, \
                     concat([X_train, X_validation], axis = 0), \
@@ -1672,13 +1699,11 @@ class IAFautomaticClassifier:
                                            compression='infer', quoting=None, quotechar='"', line_terminator=None, \
                                            chunksize=None, date_format=None, doublequote=True, decimal=',', \
                                            errors='strict')
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Now make predictions on non-classified dataset: X_unknown -> Y_unknown
         if self.config.mode["predict"] and X_unknown.shape[0] > 0:
-            self.progressText = "Make predictions on un-classified dataset"
+            if self.ProgressLabel: self.ProgressLabel.value = "Make predictions on un-classified dataset"
             Y_unknown, Y_prob, Y_probs = self.make_predictions(trained_model, X_unknown)
 
             if self.config.io["verbose"]: print("\n---Predictions for the unknown data---\n")
@@ -1702,19 +1727,15 @@ class IAFautomaticClassifier:
                     for i in range(len(Y_unknown)):
                         Y_prob = Y_prob + [0.0]
                 if self.config.io["verbose"]: print("Probabilities:",Y_prob)
-            self.progressPercent += self.percentPermajorTask
-            self.ProgressBar.value = self.progressPercent
-            self.ProgressBar.description = self.progressText
+            if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
             # Save new classifications for X_unknown in classification database
-            self.progressText = "Save new classifications in database"
+            if self.ProgressLabel: self.ProgressLabel.value = "Save new classifications in database"
             results_saved = self.save_data( unpred_keys.values, Y_unknown, Y_prob, rate_type, \
                trained_model.classes_, Y_probs, trained_model_name )
             if self.config.io["verbose"]: print("Added {0} rows to classification table".format(results_saved))
 
-        self.progressPercent += self.percentPermajorTask
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         elapsed_time = time.time() - self.clock1
         date_again = str(datetime.now())
@@ -1724,9 +1745,8 @@ class IAFautomaticClassifier:
         self.mark_execution_ended()
 
         # Make sure progressbar is completed if not before
-        self.progressPercent = 1.0
-        self.ProgressBar.value = self.progressPercent
-        self.ProgressBar.description = self.progressText
+        if self.ProgressLabel: self.ProgressLabel.value = "Process finished"
+        if self.ProgressBar: self.ProgressBar.value = 1.0
 
         # Close redirect of standard output in case of self.config.debug["debug_on"]ging
         if self.config.debug["debug_on"] and self.config.io["redirect_output"]:
@@ -1745,11 +1765,12 @@ class IAFautomaticClassifier:
         if self.config.io["verbose"]: print(" 1. Database settings ")
         if self.config.io["verbose"]: print(" * ODBC driver (when applicable):           " + self.config.sql["odbc_driver"])
         if self.config.io["verbose"]: print(" * Classification Host:                     " + self.config.sql["host"])
+        if self.config.io["verbose"]: print(" * Trusted connection:                      " + str(self.config.sql["trusted_connection"]))
         if self.config.io["verbose"]: print(" * Classification Table:                    " + self.config.sql["class_catalog"])
         if self.config.io["verbose"]: print(" * Classification Table:                    " + self.config.sql["class_table"])
         if self.config.io["verbose"]: print(" * Classification Table creation script:    " + self.config.sql["class_table_script"])
-        if self.config.io["verbose"]: print(" * Classification Db username:              " + self.config.sql["class_username"])
-        if self.config.io["verbose"]: print(" * Classification Db password:              " + self.config.sql["class_password"])
+        if self.config.io["verbose"]: print(" * Classification Db username (optional):   " + self.config.sql["class_username"])
+        if self.config.io["verbose"]: print(" * Classification Db password (optional)    " + self.config.sql["class_password"])
         if self.config.io["verbose"]: print("");
         if self.config.io["verbose"]: print(" * Data Catalog:                            " + self.config.sql["data_catalog"])
         if self.config.io["verbose"]: print(" * Data Table:                              " + self.config.sql["data_table"])
@@ -1757,8 +1778,8 @@ class IAFautomaticClassifier:
         if self.config.io["verbose"]: print(" * Text Data columns (CSV):                 " + self.config.sql["data_text_columns"])
         if self.config.io["verbose"]: print(" * Numerical Data columns (CSV):            " + self.config.sql["data_numerical_columns"])
         if self.config.io["verbose"]: print(" * Unique data id column:                   " + self.config.sql["id_column"])
-        if self.config.io["verbose"]: print(" * Data username:                           " + self.config.sql["data_username"])
-        if self.config.io["verbose"]: print(" * Data password:                           " + self.config.sql["data_password"])
+        if self.config.io["verbose"]: print(" * Data username (optional):                " + self.config.sql["data_username"])
+        if self.config.io["verbose"]: print(" * Data password (optional):                " + self.config.sql["data_password"])
         if self.config.io["verbose"]: print("")
         if self.config.io["verbose"]: print(" 2. Classification mode settings ")
         if self.config.io["verbose"]: print(" * Train new model:                         " + str(self.config.mode["train"]))
@@ -1781,6 +1802,7 @@ class IAFautomaticClassifier:
         if self.config.io["verbose"]: print(" 3. I/O specifications ")
         if self.config.io["verbose"]: print(" * Verbosity:                               " + str(self.config.io["verbose"]))
         if self.config.io["verbose"]: print(" * Path where to save generated model:      " + self.config.io["model_path"])
+        if self.config.io["verbose"]: print(" * Name of generated or loaded model:       " + self.config.io["model_name"])
         if self.config.io["verbose"]: print("")
         if self.config.io["verbose"]: print(" 4. Debug settings ")
         if self.config.io["verbose"]: print(" * Debugging on:                            " + str(self.config.debug["debug_on"]))
@@ -1855,9 +1877,9 @@ def main(argv):
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
     myClassiphyer = IAFautomaticClassifier(config=config)
-
+    
     # Print a welcoming message for the audience
-    myClassiphyer._print_welcoming_message()
+    self._print_welcoming_message()
 
     # Run the classifier
     myClassiphyer.run()
