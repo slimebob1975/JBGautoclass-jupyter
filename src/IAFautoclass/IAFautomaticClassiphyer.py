@@ -157,6 +157,13 @@ class IAFautomaticClassifier:
         model_path = "./model/", model_name = "iris", debug_on = True, num_rows = None, \
         progress_bar = None, progress_label = None):
         
+        # In case of a trusted connection, update the sql usernames and password accordingly
+        if trusted_connection:
+            class_username = os.getlogin()
+            class_password = ""
+            data_username = os.getlogin()
+            data_password = ""
+        
         # If configuration module was loaded from command line call, use it and ignore 
         # the rest of the input arguments to the constructor
         if config != None:
@@ -271,6 +278,10 @@ class IAFautomaticClassifier:
                     self.config.sql["data_username"] + ".csv"
         else:
             self.misplaced_filepath = None
+            
+        # Prepare variables for unique class lables and misplaced data elements
+        self.unique_classes = None
+        self.X_most_mispredicted = None
         
         # Extract parameters that are not textual
         self.text_data = self.config.sql["data_text_columns"] != ""
@@ -585,7 +596,7 @@ class IAFautomaticClassifier:
                     data = np.asarray(data_chunk)
                     num_lines = len(data_chunk)
                     percent_fetched = round(100.0 * float(num_lines) / float(self.config.debug["num_rows"]))
-                    if not self.config.io["redirect_output"]:
+                    if self.config.io["verbose"] and not self.config.io["redirect_output"]:
                         print("Data fetched of available: " + str(percent_fetched) + " %", end='\r')
                     while data_chunk:
                         if self.config.debug["debug_on"] and num_lines >= self.config.debug["num_rows"]:
@@ -596,7 +607,7 @@ class IAFautomaticClassifier:
                             num_lines += len(data_chunk)
                             old_percent_fetched = percent_fetched
                             percent_fetched = round(100.0 * float(num_lines) / float(self.config.debug["num_rows"]))
-                            if not self.config.io["redirect_output"] and percent_fetched > old_percent_fetched:
+                            if self.config.io["verbose"] and not self.config.io["redirect_output"] and percent_fetched > old_percent_fetched:
                                 print("Data fetched of available: " + str(percent_fetched) + " %", end='\r')
 
             if self.config.io["verbose"]: print("\n--- Totally fetched {0} data rows ---".format(num_lines))
@@ -613,6 +624,9 @@ class IAFautomaticClassifier:
             except Exception as ex:
                 print("\nNotice: attempt to remove empty column name failed.")
             dataset = pandas.DataFrame(data, columns = column_names)
+            
+            # Extract unique class labels from dataset
+            unique_classes = list(set(dataset[self.config.sql["class_column"]].tolist()))
 
             # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
             # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
@@ -624,7 +638,7 @@ class IAFautomaticClassifier:
                 for index in dataset.index:
                     old_percent_checked = percent_checked
                     percent_checked = round(100.0*float(index)/float(len(dataset.index)))
-                    if not self.config.io["redirect_output"] and percent_checked > old_percent_checked:
+                    if self.config.io["verbose"] and not self.config.io["redirect_output"] and percent_checked > old_percent_checked:
                         print("Data checked of fetched: " + str(percent_checked) + " %", end='\r')
                     for key in dataset.columns:
                         item = dataset.at[index,key]
@@ -691,7 +705,7 @@ class IAFautomaticClassifier:
             sys.exit("Program aborted.")
 
         # Return bort data and keys
-        return dataset, keys, non_ordered_query
+        return dataset, keys, non_ordered_query, unique_classes
 
     # Function for counting the number of rows in data to classify
     def count_data_rows(self):
@@ -1458,14 +1472,15 @@ class IAFautomaticClassifier:
             return pandas.DataFrame()
         Y_prob_max = np.amax(Y_prob, axis = 1)
 
-        #  Re-insert original data columns
+        #  Re-insert original data columns but drop the class column
         X_mispredicted = X_original.loc[X_not]
+        X_mispredicted = X_mispredicted.drop(self.config.sql["class_column"], axis = 1)
 
         # Add other columns to mispredicted data
         X_mispredicted.insert(0, "Actual", Y.loc[X_not])
         X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].values)
         for i in reversed(range(Y_prob.shape[1])):
-            X_mispredicted.insert(0, model.classes_[i], Y_prob[:,i])
+            X_mispredicted.insert(0, "P(" + model.classes_[i] + ")", Y_prob[:,i])
         X_mispredicted.insert(0, "__Sort__", Y_prob_max)
 
         # Sort the dataframe on the first column and remove it
@@ -1527,6 +1542,42 @@ class IAFautomaticClassifier:
             if self.ProgressBar: self.ProgressBar.value = 1.0
             sys.exit("Program aborted.")
 
+    # For saving results in database
+    def correct_mispredicted_data(self, index, new_class):
+
+        try:
+            if self.config.io["verbose"]: print("Changing data row {0} to {1}".format(index, new_class))
+
+            # Get a sql handler and connect to data database
+            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+                host = self.config.sql["host"], catalog = self.config.sql["data_catalog"], \
+                trusted_connection = self.config.sql["trusted_connection"], \
+                username = self.config.sql["data_username"], \
+                password = self.config.sql["data_password"])
+            sqlHelper.connect()
+
+            # Set together SQL code for the insert
+            query =  "UPDATE " + self.config.sql["data_catalog"] + "." + self.config.sql["data_table"]
+            query += " SET " + self.config.sql["class_column"] + " = \'" + str(new_class) + "\'"  
+            query += " WHERE " + self.config.sql["id_column"] + " = " + str(index)
+            
+            # Execute a query without getting any data
+            # Delay the commit until the connection is closed
+            if sqlHelper.execute_query(query, get_data=False, commit=False):
+                num_lines = 1
+            else:
+                num_lines = 0
+
+            # Disconnect from database and commit all inserts
+            sqlHelper.disconnect(commit=True)
+
+            # Return the number of inserted rows
+            return num_lines
+
+        except Exception as e:
+            print("Correction of mispredicted data: {0} failed: {1}".format(query,str(e)))
+            return 0             
+    
     # Make absolute file paths into relative
     @staticmethod
     def convert_absolut_path_to_relative(absolute_path):
@@ -1558,7 +1609,7 @@ class IAFautomaticClassifier:
 
         # Read in all data, with classifications or not
         if self.ProgressLabel: self.ProgressLabel.value = "Read in data from database"
-        dataset, unique_keys, data_query = self.read_in_data()
+        dataset, unique_keys, data_query, self.unique_classes = self.read_in_data()
         if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Investigate dataset (optional)
@@ -1654,7 +1705,7 @@ class IAFautomaticClassifier:
         if self.config.mode["train"] and X_validation.shape[0] > 0:
             if self.ProgressLabel: self.ProgressLabel.value = "Make predictions on known testdata"
             pred, prob, probs = self.make_predictions(trained_model, X_validation)
-            if self.config.io["verbose"] and not prob.any() == None :
+            if not prob.any() == None :
                 #print("Training Probabilities:",prob)
                 print("Training Classification prob: Mean, Std.dev: ", \
                         np.mean(prob),np.std(prob))
@@ -1663,14 +1714,15 @@ class IAFautomaticClassifier:
         # Evaluate predictions (optional)
         if self.config.mode["train"] and Y_validation.shape[0] > 0:
             if self.ProgressLabel: self.ProgressLabel.value = "Evaluate predictions"
-            if self.config.io["verbose"]: self.evaluate_predictions(pred, Y_validation, "ML algorithm: " + trained_model_name)
+            self.evaluate_predictions(pred, Y_validation, "ML algorithm: " + trained_model_name)
         if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Get accumulated classification score report for all predictions
         if self.config.mode["train"] and Y_validation.shape[0] > 0:
             class_report = classification_report(Y_validation, pred, output_dict = True)
-            if self.config.io["verbose"]: print("Classification report for {0} with #features: {1}".format(trained_model_name, num_features))
-            if self.config.io["verbose"]: print("Class_report dictionary = ",class_report)
+            print("Classification report for {0} with #features: {1}".format(trained_model_name, num_features))
+            for key in class_report.keys():
+                print("{0}: {1}".format(key, class_report[key]))
 
         # RETRAIN best model on whole dataset: Xtrain + Xvalidation
         if self.config.mode["train"] and (X_train.shape[0] + X_validation.shape[0]) > 0:
@@ -1681,19 +1733,19 @@ class IAFautomaticClassifier:
                     concat([Y_train, Y_validation], axis = 0) )
             self.save_model_to_file(label_binarizers, count_vectorizer, tfid_transformer, \
                 feature_selection_transform, trained_model_name, trained_model, self.model_filename )
-            X_most_mispredicted = self.most_mispredicted(X_original, trained_model, \
+            self.X_most_mispredicted = self.most_mispredicted(X_original, trained_model, \
                 concat([X_train, X_validation], axis = 0), \
                     concat([Y_train, Y_validation], axis = 0) , \
                     self.LIMIT_MISPREDICTED)
             joiner = self.config.sql["id_column"] + " = \'"
             most_mispredicted_query = data_query + "WHERE " +  joiner \
-                + ("\' OR " + joiner).join([str(number) for number in X_most_mispredicted.index.tolist()]) + "\'"
-            if not X_most_mispredicted.empty and self.config.mode["mispredicted"]: 
+                + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
+            if not self.X_most_mispredicted.empty and self.config.mode["mispredicted"]: 
                 print("\n---Most mispredicted during training:")
-                print(X_most_mispredicted.head(self.LIMIT_MISPREDICTED))
+                print(self.X_most_mispredicted.head(self.LIMIT_MISPREDICTED))
                 print("\nGet the most misplaced data by SQL query:\n {0}".format(most_mispredicted_query))
                 print("\nOr open the following csv-data file: \n\t {0}".format(self.misplaced_filepath))
-                X_most_mispredicted.to_csv(path_or_buf = self.misplaced_filepath, sep = ';', na_rep='N/A', \
+                self.X_most_mispredicted.to_csv(path_or_buf = self.misplaced_filepath, sep = ';', na_rep='N/A', \
                                            float_format=None, columns=None, header=True, index=True, \
                                            index_label=self.config.sql["id_column"], mode='w', encoding='utf-8', \
                                            compression='infer', quoting=None, quotechar='"', line_terminator=None, \
@@ -1706,9 +1758,9 @@ class IAFautomaticClassifier:
             if self.ProgressLabel: self.ProgressLabel.value = "Make predictions on un-classified dataset"
             Y_unknown, Y_prob, Y_probs = self.make_predictions(trained_model, X_unknown)
 
-            if self.config.io["verbose"]: print("\n---Predictions for the unknown data---\n")
+            print("\n---Predictions for the unknown data---\n")
             if self.config.io["verbose"]: print("Predictions:", Y_unknown)
-            if self.config.io["verbose"] and not Y_prob.any() == None :
+            if not Y_prob.any() == None :
                 #print("Probabilities:",Y_prob)
                 print("Classification Y_prob: Mean, Std.dev: ", np.mean(Y_prob), np.std(Y_prob))
 
