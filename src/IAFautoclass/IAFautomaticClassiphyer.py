@@ -685,7 +685,7 @@ class IAFautomaticClassifier:
             # put in random order keeping the unclassified material in the bottom
             # Notice: perhaps this operation is now obsolete, since we now use a NEWID() in the 
             # data query above
-            if self.config.io["verbose"]: print("Shuffle data")
+            if self.config.io["verbose"]: print("\n\n---Shuffle data")
             num_un_pred = self.get_num_unpredicted_rows(dataset)
             dataset['rnd'] = np.concatenate([np.random.rand(num_lines - num_un_pred), [num_lines]*num_un_pred])
             dataset.sort_values(by = 'rnd', inplace = True )
@@ -694,9 +694,12 @@ class IAFautomaticClassifier:
             # Use the unique id column from the data as the index column and take a copy, 
             # since it will not be used in the classification but only to reconnect each 
             # data row with classification results later on
-            keys = dataset[self.config.sql["id_column"]].copy(deep = True)
-            dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True, \
-                              verify_integrity=False)
+            keys = dataset[self.config.sql["id_column"]].copy(deep = True).apply(IAFautomaticClassifier.get_rid_of_decimals)
+            try:
+                dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True, \
+                                  verify_integrity=False)
+            except Exception as ex:
+                sys.exit("Could not set index for dataset: {0}".format(str(ex)))
             dataset = dataset.drop([self.config.sql["id_column"]], axis = 1)
 
         except Exception as e:
@@ -706,6 +709,13 @@ class IAFautomaticClassifier:
 
         # Return bort data and keys
         return dataset, keys, non_ordered_query, unique_classes
+    
+    @staticmethod
+    def get_rid_of_decimals(x):
+        try:
+            return int(round(float(x)))
+        except Exception as ex:
+            sys.exit("Could not convert {0} to integer: {1}".format(x,str(ex)))
 
     # Function for counting the number of rows in data to classify
     def count_data_rows(self):
@@ -773,11 +783,12 @@ class IAFautomaticClassifier:
 
     @staticmethod
     def is_str(val):
-        try:
-            text = str(val)
-        except ValueError:
-            return False
-        return True
+        is_other_type = \
+            IAFautomaticClassifier.is_float(val) or \
+            IAFautomaticClassifier.is_int(val) or \
+            IAFautomaticClassifier.is_bool(val) or \
+            IAFautomaticClassifier.is_datetime(val)
+        return not is_other_type 
     
     @staticmethod
     def is_datetime(val):
@@ -837,11 +848,11 @@ class IAFautomaticClassifier:
             for column in text_columns:
                 if not self.config.mode["use_categorization"] or not self.is_categorical_data(dataset[column]) \
                     or (len(label_binarizers) > 0 and not column in label_binarizers.keys()):
-                    print("Text data NOT picked for categorization: ",column)
+                    if self.config.io["verbose"]: print("Text data NOT picked for categorization: ",column)
                     text_dataset = \
                         concat([text_dataset, dataset[column]], axis = 1)
                 else:
-                    print("Text data picked for categorization: ",column)
+                    if self.config.io["verbose"]: print("Text data picked for categorization: ",column)
                     categorical_dataset = \
                         concat([categorical_dataset, dataset[column]], axis = 1)
         if self.numerical_data:
@@ -852,7 +863,7 @@ class IAFautomaticClassifier:
         # For concatenation, we need to make sure all text data are 
         # really treated as text, and categorical data as categories
         if self.text_data:
-            print("Text Columns:",text_dataset.columns)
+            if self.config.io["verbose"]: print("Text Columns:",text_dataset.columns)
             if len(text_dataset.columns) > 0:
 
                 text_dataset = text_dataset.applymap(str)
@@ -883,10 +894,12 @@ class IAFautomaticClassifier:
                     try:
                         if lb_results.shape[1] > 1:
                             lb_results_df = pandas.DataFrame(lb_results, columns=lb.classes_)
-                            print("Column {0} was categorized with categories: {1}".format(column,lb.classes_))
+                            if self.config.io["verbose"]: 
+                                print("Column {0} was categorized with categories: {1}".format(column,lb.classes_))
                         else:
                             lb_results_df = pandas.DataFrame(lb_results, columns=[column])
-                            print("Column {0} was binarized".format(column))
+                            if self.config.io["verbose"]:
+                                print("Column {0} was binarized".format(column))
                     except ValueError as ex:
                         print("Column {0} could not be binarized: {1}".format(column,str(ex)))
                     binarized_dataset = concat([binarized_dataset, lb_results_df], axis = 1 )
@@ -930,14 +943,15 @@ class IAFautomaticClassifier:
             # Calculate the lexical richness
             try:
                 lex = LexicalRichness(' '.join(X)) 
-                print("#Words, #Terms and TTR for original text is {0}, {1}, {2:5.2f} %"
+                if self.config.io["verbose"]: 
+                    print("#Words, #Terms and TTR for original text is {0}, {1}, {2:5.2f} %"
                       .format(lex.words,lex.terms,100*float(lex.ttr)))
             except Exception as ex:
                 print("Could not calculate lexical richness: {0}".format(str(ex)))
 
         # Mask all material by encryption (optional)
         if (self.config.mode["hex_encode"]):
-            X = do_hex_base64_encode_on_data(X)
+            X = self.do_hex_base64_encode_on_data(X)
 
         # Text must be turned into numerical feature vectors ("bag-of-words"-technique).
         # If selected, remove stop words
@@ -1226,7 +1240,7 @@ class IAFautomaticClassifier:
             # Loop over pre-processing methods
             for preprocessor_name, preprocessor in preprocessors:
 
-                # Update progressbar
+                # Update progressbar percent and label
                 if self.ProgressLabel: self.ProgressLabel.value = standardProgressText + " (" + name + "-" + preprocessor_name + ")"
                 if not first_round:
                     if self.ProgressBar: self.ProgressBar.value += percentAddPerMinorTask
@@ -1445,28 +1459,33 @@ class IAFautomaticClassifier:
         print("\nClassification matrix: \n\n", classification_report(Y, predictions, zero_division='warn'))
 
     # Function for finding the n most mispredicted data rows
-    def most_mispredicted(self, X_original, model, X_transformed, Y, n_limit):
+    def most_mispredicted(self, X_original, model, ct_model, X_transformed, Y, n_limit):
 
-        # Calculate predictions
-        Y_pred = pandas.DataFrame(model.predict(X_transformed), index = Y.index)
+        # Calculate predictions for both total model and cross trained model
+        for what_model, the_model in [("total_model",model), ("train_model",ct_model)]:
+            Y_pred = pandas.DataFrame(the_model.predict(X_transformed), index = Y.index)
 
-        # Find the data rows where the real category is different from the predictions
-        # Iterate over the indexes (they are now not in order)
-        X_not = []
-        for i in Y.index:
-            X_not.append((Y.loc[i] != Y_pred.loc[i]).bool())
+            # Find the data rows where the real category is different from the predictions
+            # Iterate over the indexes (they are now not in order)
+            X_not = []
+            for i in Y.index:
+                X_not.append((Y.loc[i] != Y_pred.loc[i]).bool())
 
+            # Quick end of loop if possible
+            num_mispredicted = sum(elem == True for elem in X_not)
+            if num_mispredicted != 0:
+                break
+ 
         # Quick return if possible
-        num_mispredicted = sum(elem == True for elem in X_not)
         if num_mispredicted == 0:
-            return pandas.DataFrame()
+            return "no_model", pandas.DataFrame()
 
         # Select the found data
         X_mispredicted = X_transformed.loc[X_not]
 
         # Predict probabilites
         try:
-            Y_prob = model.predict_proba(X_mispredicted)
+            Y_prob = the_model.predict_proba(X_mispredicted)
         except Exception as ex:
             print("Could not predict probabilities: {0}".format(str(ex)))
             return pandas.DataFrame()
@@ -1480,7 +1499,7 @@ class IAFautomaticClassifier:
         X_mispredicted.insert(0, "Actual", Y.loc[X_not])
         X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].values)
         for i in reversed(range(Y_prob.shape[1])):
-            X_mispredicted.insert(0, "P(" + model.classes_[i] + ")", Y_prob[:,i])
+            X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", Y_prob[:,i])
         X_mispredicted.insert(0, "__Sort__", Y_prob_max)
 
         # Sort the dataframe on the first column and remove it
@@ -1488,7 +1507,7 @@ class IAFautomaticClassifier:
         X_mispredicted = X_mispredicted.drop("__Sort__", axis = 1)
 
         # Keep only the top n_limit rows and return
-        return X_mispredicted.head(n_limit)
+        return what_model, X_mispredicted.head(n_limit)
 
     # For saving results in database
     def save_data(self, keys, Y, rates, prob_mode = 'U', labels='N/A', probabilities='N/A', alg = "Unknown"):
@@ -1598,6 +1617,10 @@ class IAFautomaticClassifier:
     
     # The main classification function for the class
     def run(self):
+        
+         # Print a welcoming message for the audience
+        if self.config.io["verbose"]:
+            self._print_welcoming_message()
         
         # Create the classification table, if it does not exist already
         if self.ProgressLabel: self.ProgressLabel.value = "Create the classification table"
@@ -1727,21 +1750,23 @@ class IAFautomaticClassifier:
         # RETRAIN best model on whole dataset: Xtrain + Xvalidation
         if self.config.mode["train"] and (X_train.shape[0] + X_validation.shape[0]) > 0:
             if self.ProgressLabel: self.ProgressLabel.value = "Retrain model on whole dataset"
+            _label_binarizers, _count_vectorizer, _tfid_transformer, _feature_selection_transform, \
+                _trained_model_name, cross_trained_model = self.load_model_from_file(self.model_filename)
             trained_model = \
                 self.train_picked_model( trained_model, \
                     concat([X_train, X_validation], axis = 0), \
                     concat([Y_train, Y_validation], axis = 0) )
             self.save_model_to_file(label_binarizers, count_vectorizer, tfid_transformer, \
                 feature_selection_transform, trained_model_name, trained_model, self.model_filename )
-            self.X_most_mispredicted = self.most_mispredicted(X_original, trained_model, \
+            what_model, self.X_most_mispredicted = self.most_mispredicted(X_original, trained_model, cross_trained_model, \
                 concat([X_train, X_validation], axis = 0), \
-                    concat([Y_train, Y_validation], axis = 0) , \
-                    self.LIMIT_MISPREDICTED)
+                concat([Y_train, Y_validation], axis = 0), \
+                self.LIMIT_MISPREDICTED)
             joiner = self.config.sql["id_column"] + " = \'"
             most_mispredicted_query = data_query + "WHERE " +  joiner \
                 + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
             if not self.X_most_mispredicted.empty and self.config.mode["mispredicted"]: 
-                print("\n---Most mispredicted during training:")
+                print("\n---Most mispredicted during training (using {0}):".format(what_model))
                 print(self.X_most_mispredicted.head(self.LIMIT_MISPREDICTED))
                 print("\nGet the most misplaced data by SQL query:\n {0}".format(most_mispredicted_query))
                 print("\nOr open the following csv-data file: \n\t {0}".format(self.misplaced_filepath))
@@ -1930,9 +1955,6 @@ def main(argv):
     # or create a classifier object with only standard settings
     myClassiphyer = IAFautomaticClassifier(config=config)
     
-    # Print a welcoming message for the audience
-    self._print_welcoming_message()
-
     # Run the classifier
     myClassiphyer.run()
 
