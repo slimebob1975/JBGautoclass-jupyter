@@ -1635,7 +1635,30 @@ class IAFautomaticClassifier:
 
         except Exception as e:
             print("Correction of mispredicted data: {0} failed: {1}".format(query,str(e)))
-            return 0             
+            return 0  
+        
+    # Produces an SQL command that can be executed to get a hold of the recently classified
+    # data elements
+    def get_sql_command_for_recently_classified_data(self, num_rows):
+        
+        selcols = ("A.[" + \
+            "],A.[".join((self.config.sql["id_column"] + "," + \
+            self.config.sql["data_numerical_columns"] + "," + \
+            self.config.sql["data_text_columns"]).split(',')) + \
+            "] ").replace("A.[]", "").replace(",,",",")
+        
+        query = \
+            "SELECT TOP(" + str(num_rows) + ") " + selcols + \
+            "B.[class_result], B.[class_rate],  B.[class_time], B.[class_algorithm] " + \
+            "FROM [" + self.config.sql["data_catalog"].replace('.',"].[") + "].[" + \
+            self.config.sql["data_table"].replace('.',"].[") + "] A " + \
+            " INNER JOIN [" + self.config.sql["class_catalog"].replace('.',"].[") + "].[" + \
+            self.config.sql["class_table"].replace('.',"].[") + "] B " + \
+            "ON A." + self.config.sql["id_column"] + " = B.[unique_key] " + \
+            "WHERE B.[class_user] = \'" + self.config.sql["class_username"] + "\' AND " + \
+            "B.[table_name] = \'" + self.config.sql["data_table"] + "\' " + \
+            "ORDER BY B.[class_time] DESC "
+        return query
     
     # Make absolute file paths into relative
     @staticmethod
@@ -1849,8 +1872,9 @@ class IAFautomaticClassifier:
             # Save new classifications for X_unknown in classification database
             if self.ProgressLabel: self.ProgressLabel.value = "Save new classifications in database"
             results_saved = self.save_data( unpred_keys.values, Y_unknown, Y_prob, rate_type, \
-               trained_model.classes_, Y_probs, trained_model_name )
-            if self.config.io["verbose"]: print("Added {0} rows to classification table".format(results_saved))
+               trained_model.classes_, Y_probs, trained_model_name ) 
+            print("Added {0} rows to classification table. Get them with SQL query:\n\n{1}".
+                  format(results_saved,self.get_sql_command_for_recently_classified_data(results_saved)))
 
         if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
