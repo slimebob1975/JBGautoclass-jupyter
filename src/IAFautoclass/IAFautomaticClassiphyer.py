@@ -736,7 +736,6 @@ class IAFautomaticClassifier:
             # Now we are ready to execute the sql query
             # By default, all fetched data is placed in one long 1-dim list. The alternative is to read by chunks.
             num_lines = 0
-            percent_fetched = 0
             data = []
             if sqlHelper.execute_query(query, get_data=True):
                 count = sqlHelper.read_data()[0]
@@ -751,6 +750,47 @@ class IAFautomaticClassifier:
 
         # Return 
         return count
+    
+    # Function for counting the number of rows in data corresponding to each class
+    def count_class_distribution(self):
+        try:
+
+            # Get a sql handler and connect to data database
+            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+                host = self.config.sql["host"], catalog = self.config.sql["data_catalog"], \
+                trusted_connection = self.config.sql["trusted_connection"], \
+                username = self.config.sql["data_username"], \
+                password = self.config.sql["data_password"])
+            sqlHelper.connect()
+            
+            # Construct the query
+            query = "SELECT " + self.config.sql["class_column"] + ", COUNT(*) FROM "
+            query += "[" + self.config.sql["data_catalog"] + "].[" + self.config.sql["data_table"].replace(".","].[") + "] "
+            query += "GROUP BY " + self.config.sql["class_column"] + " ORDER BY " + self.config.sql["class_column"] + " DESC"
+            
+            # Now we are ready to execute the sql query
+            # By default, all fetched data is placed in one long 1-dim list. The alternative is to read by chunks.
+            num_lines = 0
+            data = []
+            if sqlHelper.execute_query(query, get_data=True):
+                data = sqlHelper.read_all_data()
+            dict = {}
+            for pair in data:
+                key, value = pair
+                if key == None:
+                    key = "NULL"
+                dict[key] = value
+            
+            # Disconnect from database
+            sqlHelper.disconnect()
+
+        except Exception as e:
+            print("Count of dataset distribution failed: " + str(e))
+            if self.ProgressBar: self.ProgressBar.value = 1.0
+            sys.exit("Program aborted.")
+
+        # Return 
+        return dict
     
     # Get a list of pretrained models
     def get_trained_models(self):
@@ -1462,7 +1502,7 @@ class IAFautomaticClassifier:
     def most_mispredicted(self, X_original, model, ct_model, X_transformed, Y, n_limit):
 
         # Calculate predictions for both total model and cross trained model
-        for what_model, the_model in [("total_model",model), ("train_model",ct_model)]:
+        for what_model, the_model in [("model retrained on all data",model), ("modell cross trained on training data",ct_model)]:
             Y_pred = pandas.DataFrame(the_model.predict(X_transformed), index = Y.index)
 
             # Find the data rows where the real category is different from the predictions
@@ -1478,7 +1518,7 @@ class IAFautomaticClassifier:
  
         # Quick return if possible
         if num_mispredicted == 0:
-            return "no_model", pandas.DataFrame()
+            return "no model produced mispredictions", pandas.DataFrame()
 
         # Select the found data
         X_mispredicted = X_transformed.loc[X_not]
