@@ -107,7 +107,7 @@ from stop_words import get_stop_words
 import langdetect
 from lexicalrichness import LexicalRichness
 import warnings
-import ipywidgets as widgets
+#import ipywidgets as widgets
 from pathlib import Path
 
 # Sklearn issue a lot of warnings sometimes, we suppress them here
@@ -167,7 +167,7 @@ class IAFautomaticClassifier:
         preprocessor = "NON", feature_selection = "NON", num_selected_features = None, \
         scoring = "accuracy", max_iterations = None, verbose = True, redirect_output = False, \
         model_path = "./model/", model_name = "iris", debug_on = True, num_rows = None, \
-        progress_bar = None, progress_label = None):
+        progress_bar = None, progress_label = None, save_config_to_file = False):
         
         # In case of a trusted connection, update the sql usernames and password accordingly
         if trusted_connection:
@@ -268,7 +268,7 @@ class IAFautomaticClassifier:
         if self.config.mode["max_iterations"] == None:
             self.config.mode["max_iterations"] = self.MAX_ITERATIONS
         
-        # For the external progressbar (hopefully an iPython widget)
+        # For the external progressbar (hopefully iPython widgets)
         self.ProgressBar = progress_bar
         self.ProgressLabel = progress_label
 
@@ -324,7 +324,8 @@ class IAFautomaticClassifier:
                 sys.exit("Something went wrong with redirection of standard output and error: {0}".format(str(ex)))
         
         # Write configuration to file for easy start from command line
-        self.export_configuration_to_file()
+        if save_config_to_file:
+            self.export_configuration_to_file()
     
         # Internal settings for panda
         pandas.set_option("max_columns", self.MAX_HEAD_COLUMNS)
@@ -1225,7 +1226,8 @@ class IAFautomaticClassifier:
     def spot_check_ml_algorithms(self, X_train, Y_train, k=10):
 
         # Save standard progress text
-        standardProgressText = self.ProgressLabel.value
+        if self.ProgressLabel:
+            standardProgressText = self.ProgressLabel.value
 
         # Add all algorithms in a list
         if self.config.io["verbose"]: print("Spot check ml algorithms...")

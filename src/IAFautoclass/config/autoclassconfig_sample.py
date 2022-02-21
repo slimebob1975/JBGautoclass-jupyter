@@ -134,7 +134,7 @@ io = {
     "model_path": "<model_path>",
     
     # Name of previously trained model
-    "model_path": "<model_name>",
+    "model_name": "<model_name>",
 }
 
 # Some debug settings
