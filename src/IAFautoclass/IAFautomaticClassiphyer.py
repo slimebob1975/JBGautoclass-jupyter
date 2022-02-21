@@ -136,6 +136,18 @@ class IAFautomaticClassifier:
     MAX_HEAD_COLUMNS = 10
     MAX_ITERATIONS = 20000
     DEFAULT_MODEL_FILE_EXTENSION = ".sav"
+    CONFIG_FILENAME_PATH = "./config/"
+    CONFIG_FILENAME_START = "autoclassconfig_"
+    CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "sample.py"
+    CONFIGURATION_TAGS = ["<name>", "<odbc_driver>", "<host>", "<trusted_connection>", "<class_catalog>", \
+                          "<class_table>", "<class_table_script>", "<class_username>", \
+                          "<class_password>", "<data_catalog>", "<data_table>", "<class_column>", \
+                          "<hierarchical_class>", "<data_text_columns>", "<data_numerical_columns>", "<id_column>", \
+                          "<data_username>", "<data_password>", "<train>", "<predict>", "<mispredicted>", \
+                          "<use_stop_words>", "<specific_stop_words_threshold>", "<hex_encode>", \
+                          "<use_categorization>", "<test_size>", "<smote>", "<undersample>", "<algorithm>", \
+                          "<preprocessor>", "<feature_selection>", "<num_selected_features>", "<scoring>", \
+                          "<max_iterations>", "<verbose>", "<model_path>", "<model_name>",  "<debug_on>", "<num_rows>"]
     
     # Constructor with arguments
     def __init__(self, config = None, name = "iris", \
@@ -168,23 +180,23 @@ class IAFautomaticClassifier:
         # the rest of the input arguments to the constructor
         if config != None:
             self.config = self.Config( config.project["name"], config.sql["odbc_driver"], \
-                config.sql["host"], config.sql["trusted_connection"] == "true", \
+                config.sql["host"], config.sql["trusted_connection"] , \
                 config.sql["class_catalog"], config.sql["class_table"], \
                 config.sql["class_table_script"], config.sql["class_username"], \
                 config.sql["class_password"], config.sql["data_catalog"],  config.sql["data_table"], \
-                config.sql["class_column"], config.sql["hierarchical_class"] == "true", \
+                config.sql["class_column"], config.sql["hierarchical_class"] , \
                 config.sql["data_text_columns"], config.sql["data_numerical_columns"], \
                 config.sql["id_column"], config.sql["data_username"], config.sql["data_password"], \
-                config.mode["train"] == "true", config.mode["predict"] == "true", \
-                config.mode["mispredicted"] == "true", config.mode["use_stop_words"] == "true", \
-                float(config.mode["specific_stop_words_threshold"]), config.mode["hex_encode"] == "true", \
-                config.mode["use_categorization"] == "true", float(config.mode["test_size"]), \
-                config.mode["smote"] == "true", config.mode["undersample"] == "true", \
+                config.mode["train"] , config.mode["predict"] , \
+                config.mode["mispredicted"] , config.mode["use_stop_words"] , \
+                float(config.mode["specific_stop_words_threshold"]), config.mode["hex_encode"] , \
+                config.mode["use_categorization"] , float(config.mode["test_size"]), \
+                config.mode["smote"] , config.mode["undersample"] , \
                 config.mode["algorithm"], config.mode["preprocessor"], \
                 config.mode["feature_selection"], config.mode["num_selected_features"], \
                 config.mode["scoring"], int(config.mode["max_iterations"]), \
-                config.io["verbose"] == "true", False, config.io["model_path"], config.io["model_name"], \
-                config.debug["debug_on"] == "true", int(config.debug["num_rows"]) )
+                config.io["verbose"] , False, config.io["model_path"], config.io["model_name"], \
+                config.debug["debug_on"] , int(config.debug["num_rows"]) )
 
         # Otherwise, Test input arguments to constructor
         else:
@@ -310,7 +322,10 @@ class IAFautomaticClassifier:
                 sys.stderr = open(error_file,'w')
             except Exception as ex:
                 sys.exit("Something went wrong with redirection of standard output and error: {0}".format(str(ex)))
-
+        
+        # Write configuration to file for easy start from command line
+        self.export_configuration_to_file()
+    
         # Internal settings for panda
         pandas.set_option("max_columns", self.MAX_HEAD_COLUMNS)
         pandas.set_option("display.width", 80)
@@ -380,7 +395,13 @@ class IAFautomaticClassifier:
         
         # Print the class 
         def __str__(self):
-            return str(type(self)) 
+            output = \
+            "Project:" + str(self.project) + "\n" + \
+            "SQL:    " + str(self.sql) + "\n" + \
+            "Mode:   " + str(self.mode) + "\n" + \
+            "I/O:    " + str(self.io) + "\n" + \
+            "Debug:  " + str(self.debug)
+            return output
     
     # Functions below
 
@@ -1894,6 +1915,41 @@ class IAFautomaticClassifier:
             sys.stdout.close()
             sys.stderr.close()
     
+    # Export configuration file for specified settings
+    def export_configuration_to_file(self):
+        
+        pwd = os.path.dirname(os.path.realpath(__file__))
+        config_path = Path(pwd) / self.CONFIG_FILENAME_PATH
+        fin = open(config_path / self.CONFIG_SAMPLE_FILE, "r")
+        lines = fin.readlines()
+        fin.close()
+
+        for tag in self.CONFIGURATION_TAGS:
+            for i in range(len(lines)):
+                try:
+                    lines[i] = lines[i].replace(tag, str(self.config.project[tag[1:-1]]))
+                except KeyError:
+                    try:
+                        lines[i] = lines[i].replace(tag, str(self.config.sql[tag[1:-1]]))
+                    except KeyError:
+                        try:
+                            lines[i] = lines[i].replace(tag, str(self.config.mode[tag[1:-1]]))
+                        except KeyError:
+                            try:
+                                lines[i] = lines[i].replace(tag, str(self.config.io[tag[1:-1]]))
+                            except KeyError:
+                                try:
+                                    lines[i] = lines[i].replace(tag, str(self.config.debug[tag[1:-1]]))
+                                except Exception as ex:
+                                    write("Could not write configuration tag {0} to file: {1}". \
+                                         format(tag, str(ex)))
+        
+        fout_name = self.CONFIG_FILENAME_START + self.config.project["name"] + "_" + \
+                    self.config.sql["data_username"] + ".py"
+        fout = open(config_path / fout_name, "w")
+        fout.writelines(lines)
+        fout.close()
+    
     # Some welcoming message to the audience
     def _print_welcoming_message(self):
         
@@ -2005,7 +2061,7 @@ def check_input_arguments(argv):
             print("Illegal argument to " + argv[0] + "!")
             print(command_line_instructions)
             sys.exit()
-
+            
 # Main program
 def main(argv):
 

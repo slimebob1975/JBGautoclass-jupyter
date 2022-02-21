@@ -6,7 +6,7 @@ import datetime
 project = {
     
     # Name of the project
-    "name": "<project>",
+    "name": "<name>",
 
     }
 
@@ -20,21 +20,21 @@ sql = {
     "host": "<host>", 
     
     # Trusted connection or not
-    "trusted_connection": "<trusted_connection>",
+    "trusted_connection": <trusted_connection>,
 
     # Database catalog for results of classification
-    "class_catalog": "Arbetsdatabas",         
+    "class_catalog": "<class_catalog>",         
 
     # Database table for results for classification
-    "class_table": "aterkommande_automat.AutoKlassificering",
+    "class_table": "<class_table>",
 
     # Creation script for classification table results
-    "class_table_script": "./sql/autoClassCreateTable.sql",
+    "class_table_script": "<class_table_script>",
 
     # User information for classification
     # Notice: ignored if trusted_connection = "true".
-    "class_username": "robert_tmp",
-    "class_password": "robert",
+    "class_username": "<class_username>",
+    "class_password": "<class_password>",
 
     # Database catalog for data to be classified
     "data_catalog": "<data_catalog>",
@@ -44,11 +44,11 @@ sql = {
 
     # The columns in data table to be classified, in CSV-style.
     # First the classification column:
-    "class_column": "<classification_column>",
+    "class_column": "<class_column>",
 
     # If the class column should be treated as a hierarchical class
     # this setting should be "true", otherwise false
-    "hierarchical_class": "<hierarchical_class>",
+    "hierarchical_class": <hierarchical_class>,
 
     # Secondly, the data columns containing TEXT data, in CSV-style 
     # Set to "" (empty string) if none.
@@ -60,7 +60,7 @@ sql = {
 
     # The unique key index in the data table by which each row is
     # uniquely identied
-    "id_column": "<unique_id>",
+    "id_column": "<id_column>",
 
     # User information for data table access.
     # Notice: ignored if trusted_connection = "true"
@@ -72,13 +72,13 @@ sql = {
 mode = {
 
     # The classifier can train, predict and display mispredicted data
-    "train": "<train>",
-    "predict": "<predict>",
-    "mispredicted": "<mispredicted>",
+    "train": <train>,
+    "predict": <predict>,
+    "mispredicted": <mispredicted>,
 
     # Ignore standard stop words in classification and,
     # possibly, material specific stop words (see below)
-    "use_stop_words": "<use_stop_words>",
+    "use_stop_words": <use_stop_words>,
 
      # Lower percentage limit for specific stop words retrieval. 
      # Words which have a document frequency higher than
@@ -87,21 +87,21 @@ mode = {
     "specific_stop_words_threshold": "<specific_stop_words_threshold>",
 
     # Use hex encoding on text data before classification.
-    "hex_encode": "<hex_encode>",
+    "hex_encode": <hex_encode>,
 
      # Use hex encoding on text data before classification.
-    "use_categorization": "<use_categorization>",
+    "use_categorization": <use_categorization>,
 
     # How large part, between 0 and 1, of already classified data
     # should be used for classification tests (the rest will be
     # used for prediction)
-    "test_size": "<testsize>",
+    "test_size": "<test_size>",
 
     # Use Synthetic Minority Oversampling Technique
-    "smote": "<smote>",
+    "smote": <smote>,
 
     # Use Random Undersampling of majority class
-    "undersample": "<undersample>",
+    "undersample": <undersample>,
 
     # What algorithm to use
     "algorithm": "<algorithm>",
@@ -121,27 +121,27 @@ mode = {
 
     # For iterative algorithms where we can specify the maximum
     # number of iterations, we do this here
-    "max_iterations": "<maxiter>",
+    "max_iterations": "<max_iterations>",
 }
 
 # Specifies how to direct output, where to save model, etc
 io = {
 
     # Output level
-    "verbose": "<verbose>",
+    "verbose": <verbose>,
 
     # Where to save/load trained and generated model
-    "model_path": "./model/",
+    "model_path": "<model_path>",
     
     # Name of previously trained model
-    "model_path": "default",
+    "model_path": "<model_name>",
 }
 
 # Some debug settings
 debug = {
 
     # Debugging on/off
-    "debug_on": "true",
+    "debug_on": <debug_on>,
     
     # Number of records to consider in data table
     "num_rows": "<num_rows>",    

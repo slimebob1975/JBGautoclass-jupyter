@@ -14,13 +14,13 @@ project = {
 sql = {
 
     # If applicable in a Windows enviroment, use this database driver
-    "odbc_driver": "{ODBC Driver 17 for SQL Server}",
+    "odbc_driver": "ODBC Driver 17 for SQL Server",
 
     # Database host
-    "host": "tcp:sql-stat.iaf.local",   
+    "host": "tcp:sql-stat.iaf.local", 
     
     # Trusted connection or not
-    "trusted_connection": "false",
+    "trusted_connection": False,
 
     # Database catalog for results of classification
     "class_catalog": "Arbetsdatabas",         
@@ -48,7 +48,7 @@ sql = {
 
     # If the class column should be treated as a hierarchical class
     # this setting should be "true", otherwise false
-    "hierarchical_class": "false",
+    "hierarchical_class": False,
 
     # Secondly, the data columns containing TEXT data, in CSV-style 
     # Set to "" (empty string) if none.
@@ -72,25 +72,25 @@ sql = {
 mode = {
 
     # The classifier can train, predict and display mispredicted data
-    "train": "true",
-    "predict": "true",
-    "mispredicted": "true",
+    "train": True,
+    "predict": True,
+    "mispredicted": True,
 
     # Ignore standard stop words in classification and,
     # possibly, material specific stop words (see below)
-    "use_stop_words": "true",
+    "use_stop_words": True,
 
      # Lower percentage limit for specific stop words retrieval. 
      # Words which have a document frequency higher than
      # this threshold will be considered as stop words.
      # Set to 1.0 to not consider any specific stop words
-    "specific_stop_words_threshold": "1",
+    "specific_stop_words_threshold": "1.0",
 
     # Use hex encoding on text data before classification.
-    "hex_encode": "true",
+    "hex_encode": True,
 
      # Use hex encoding on text data before classification.
-    "use_categorization": "true",
+    "use_categorization": True,
 
     # How large part, between 0 and 1, of already classified data
     # should be used for classification tests (the rest will be
@@ -98,13 +98,13 @@ mode = {
     "test_size": "0.2",
 
     # Use Synthetic Minority Oversampling Technique
-    "smote": "false",
+    "smote": False,
 
     # Use Random Undersampling of majority class
-    "undersample": "false",
+    "undersample": False,
 
     # What algorithm to use
-    "algorithm": "LDA",
+    "algorithm": "ALL",
 
     # What pre-processing method to use
     "preprocessor": "NON",
@@ -114,7 +114,7 @@ mode = {
 
     # If feature selection is on, and we want to specify the 
     # numbers of features to use
-    "num_selected_features": "",
+    "num_selected_features": "None",
 
     # How to score algoithms in cross-score evaluation,
     "scoring": "accuracy",
@@ -128,17 +128,20 @@ mode = {
 io = {
 
     # Output level
-    "verbose": "true",
+    "verbose": True,
 
     # Where to save/load trained and generated model
-    "model_path": "./model/"
+    "model_path": "./model/",
+    
+    # Name of previously trained model
+    "model_path": "iris",
 }
 
 # Some debug settings
 debug = {
 
     # Debugging on/off
-    "debug_on": "true",
+    "debug_on": True,
     
     # Number of records to consider in data table
     "num_rows": "150",    
