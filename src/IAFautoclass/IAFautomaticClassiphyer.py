@@ -1549,9 +1549,10 @@ class IAFautomaticClassifier:
         # Predict probabilites
         try:
             Y_prob = the_model.predict_proba(X_mispredicted)
+            could_predict_proba = True
         except Exception as ex:
             print("Could not predict probabilities: {0}".format(str(ex)))
-            Y_prob = None
+            could_predict_proba = False
 
         #  Re-insert original data columns but drop the class column
         X_mispredicted = X_original.loc[X_not]
@@ -1563,7 +1564,7 @@ class IAFautomaticClassifier:
         
         # Add probabilities and sort only if they could be calculated above, otherwise
         # return a random sample of mispredicted
-        if not Y_prob:
+        if not could_predict_proba:
             for i in range(len(the_model.classes_)):
                 X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", "N/A")
             return what_model, X_mispredicted.sample(n=n_limit)
@@ -1860,10 +1861,11 @@ class IAFautomaticClassifier:
             most_mispredicted_query = data_query + "WHERE " +  joiner \
                 + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
             if not self.X_most_mispredicted.empty and self.config.mode["mispredicted"]: 
-                print("\n---Most mispredicted during training (using {0}):".format(what_model))
-                print(self.X_most_mispredicted.head(self.LIMIT_MISPREDICTED))
-                print("\nGet the most misplaced data by SQL query:\n {0}".format(most_mispredicted_query))
-                print("\nOr open the following csv-data file: \n\t {0}".format(self.misplaced_filepath))
+                if self.config.io["verbose"]:
+                    print("\n---Most mispredicted during training (using {0}):".format(what_model))
+                    print(self.X_most_mispredicted.head(self.LIMIT_MISPREDICTED))
+                    print("\nGet the most misplaced data by SQL query:\n {0}".format(most_mispredicted_query))
+                    print("\nOr open the following csv-data file: \n\t {0}".format(self.misplaced_filepath))
                 self.X_most_mispredicted.to_csv(path_or_buf = self.misplaced_filepath, sep = ';', na_rep='N/A', \
                                            float_format=None, columns=None, header=True, index=True, \
                                            index_label=self.config.sql["id_column"], mode='w', encoding='utf-8', \
