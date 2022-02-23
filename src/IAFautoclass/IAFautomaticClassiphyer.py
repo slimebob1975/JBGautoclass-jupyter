@@ -1516,10 +1516,10 @@ class IAFautomaticClassifier:
 
     # Evaluate predictions
     def evaluate_predictions(self, predictions, Y, message="Unknown"):
-        print("\nEvaluation type: " + message)
-        print("\nAccuracy score: ", accuracy_score(Y, predictions))
-        print("\nConfusion matrix: \n\n", confusion_matrix(Y, predictions))
-        print("\nClassification matrix: \n\n", classification_report(Y, predictions, zero_division='warn'))
+        print("\nEvaluation performed with evaluation data: " + message)
+        print("\nAccuracy score for evaluation data: ", accuracy_score(Y, predictions))
+        print("\nConfusion matrix for evaluation data: \n\n", confusion_matrix(Y, predictions))
+        print("\nClassification matrix for evaluation data: \n\n", classification_report(Y, predictions, zero_division='warn'))
 
     # Function for finding the n most mispredicted data rows
     def most_mispredicted(self, X_original, model, ct_model, X_transformed, Y, n_limit):
@@ -1551,8 +1551,7 @@ class IAFautomaticClassifier:
             Y_prob = the_model.predict_proba(X_mispredicted)
         except Exception as ex:
             print("Could not predict probabilities: {0}".format(str(ex)))
-            return pandas.DataFrame()
-        Y_prob_max = np.amax(Y_prob, axis = 1)
+            Y_prob = None
 
         #  Re-insert original data columns but drop the class column
         X_mispredicted = X_original.loc[X_not]
@@ -1561,16 +1560,25 @@ class IAFautomaticClassifier:
         # Add other columns to mispredicted data
         X_mispredicted.insert(0, "Actual", Y.loc[X_not])
         X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].values)
-        for i in reversed(range(Y_prob.shape[1])):
-            X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", Y_prob[:,i])
-        X_mispredicted.insert(0, "__Sort__", Y_prob_max)
+        
+        # Add probabilities and sort only if they could be calculated above, otherwise
+        # return a random sample of mispredicted
+        if not Y_prob:
+            for i in range(len(the_model.classes_)):
+                X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", "N/A")
+            return what_model, X_mispredicted.sample(n=n_limit)
+        else:
+            Y_prob_max = np.amax(Y_prob, axis = 1)
+            for i in reversed(range(Y_prob.shape[1])):
+                X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", Y_prob[:,i])
+            X_mispredicted.insert(0, "__Sort__", Y_prob_max)
 
-        # Sort the dataframe on the first column and remove it
-        X_mispredicted = X_mispredicted.sort_values("__Sort__", ascending = False)
-        X_mispredicted = X_mispredicted.drop("__Sort__", axis = 1)
+            # Sort the dataframe on the first column and remove it
+            X_mispredicted = X_mispredicted.sort_values("__Sort__", ascending = False)
+            X_mispredicted = X_mispredicted.drop("__Sort__", axis = 1)
 
-        # Keep only the top n_limit rows and return
-        return what_model, X_mispredicted.head(n_limit)
+            # Keep only the top n_limit rows and return
+            return what_model, X_mispredicted.head(n_limit)
 
     # For saving results in database
     def save_data(self, keys, Y, rates, prob_mode = 'U', labels='N/A', probabilities='N/A', alg = "Unknown"):
