@@ -123,9 +123,21 @@ class IAFautomaticClassifier:
     ALGORITHMS = [ "ALL", "LRN", "KNN", "CART", "GNB", "MNB", "BNB", "CNB", "REC", "PCN", \
         "PAC", "RFC1", "RFC2", "LIN1", "LIN2", "LINP", "SGD", "SGD1", "SGD2", "SGDE", "NCT", \
         "SVC", "LDA", "BDT", "ETC", "ABC", "GBC", "MLPR", "MLPL" ]
+    ALGORITHM_NAMES = ["All", "Logistic Regression", "K-Neighbors Classifier", "Decision Tree Classifier", \
+        "Gaussian Naive Bayes", "Multinomial Naive Bayes", "Bernoulli Naive Bayes", "Complement Naive Bayes", \
+        "Ridge Classifier", "Perceptron", "Passive Aggressive Classifier", "Random Forest Classifier 1", \
+        "Random Forest Classifier 2", "Linear Support Vector L1", "Linear Support Vector L2", \
+        "Linear SV L1+L2", "Stochastic Gradient Descent", "Stochastic GD L1", "Stochastic GD L2", \
+        "Stochastic GD Elast.", "Nearest Centroid", "Support Vector Classification", \
+        "Linear Discriminant Analysis", "Bagging CLassifier", "Extra Trees Classifier", \
+        "Ada Boost Classifier", "Gradient Boosting Classifier", "ML Neural Network Relu", \
+        "ML Neural Network Sigm" ]
     PREPROCESS = [ "ALL", "NON", "STA", "MIX", "MMX", "NRM", "BIN" ]
+    PREPROCESS_NAMES = ["All", "None", "Standard Scaler", "Min-Max Scaler", "Max-Absolute Scaler", "Normalizer", "Binarizer"]
     REDUCTIONS = [ "NON", "RFE", "PCA", "NYS" ]
+    REDUCTION_NAMES = ["None", "Recursive Feature Elimination", "Principal Component Analysis", "Nystroem Method"]
     SCORETYPES = [ "accuracy", "balanced_accuracy", "f1_micro", "recall_micro", "precision_micro" ]
+    SCORETYPE_NAMES =  ["Accuracy", "Balanced Accuracy", "Balanced F1 Micro", "Recall Micro", "Precision Micro"]
     STANDARD_LANG = "sv"
     SQL_CHUNKSIZE = 1000
     SQL_USE_CHUNKS = True
