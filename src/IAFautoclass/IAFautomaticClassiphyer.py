@@ -27,7 +27,7 @@ def check_pip_installation():
     except:
         return False
 
-# Check that importlib is avaiable
+# Check that importlib is available
 try:
     try:
         import importlib
@@ -656,7 +656,7 @@ class IAFautomaticClassifier:
             try:
                 column_names.remove("") # Remove any empty column name
             except Exception as ex:
-                print("\nNotice: attempt to remove empty column name failed.")
+                pass
             dataset = pandas.DataFrame(data, columns = column_names)
             
             # Extract unique class labels from dataset
@@ -1579,6 +1579,7 @@ class IAFautomaticClassifier:
         if not could_predict_proba:
             for i in range(len(the_model.classes_)):
                 X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", "N/A")
+            n_limit = min(n_limit, X_mispredicted.shape[0])
             return what_model, X_mispredicted.sample(n=n_limit)
         else:
             Y_prob_max = np.amax(Y_prob, axis = 1)
