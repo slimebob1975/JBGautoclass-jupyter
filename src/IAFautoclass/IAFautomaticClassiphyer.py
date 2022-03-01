@@ -979,12 +979,12 @@ class IAFautomaticClassifier:
                     binarized_dataset = concat([binarized_dataset, lb_results_df], axis = 1 )
 
         # Set together all the data before returning
-        X = None
-        if self.text_data:
+        X = pandas.DataFrame()
+        if self.text_data and text_dataset.shape[1] > 0:
             text_dataset.set_index(dataset.index, drop=False, append=False, inplace=True, \
                                    verify_integrity=False)
-            X = text_dataset
-        if self.numerical_data:
+            X = concat([text_dataset, X], axis = 1)
+        if self.numerical_data and num_dataset.shape[1] > 0:
             num_dataset.set_index(dataset.index, drop=False, append=False, inplace=True, \
                                   verify_integrity=False)
             X = concat([num_dataset, X], axis = 1)
