@@ -1333,11 +1333,11 @@ class IAFautomaticClassifier:
                 max_features_selection = X_train.shape[1]
 
                 # Make sure all numbers are propely set for feature selection interval
-                if self.use_feature_selection and self.config.mode.num_selected_features == "":
+                if self.use_feature_selection and self.config.mode["num_selected_features"] == "":
                     min_features_selection = 0
-                elif self.use_feature_selection and self.config.mode.num_selected_features > 0:
-                    min_features_selection = self.config.mode.num_selected_features
-                    max_features_selection = self.config.mode.num_selected_features
+                elif self.use_feature_selection and self.config.mode["num_selected_features"] > 0:
+                    min_features_selection = self.config.mode["num_selected_features"]
+                    max_features_selection = self.config.mode["num_selected_features"]
                 else:
                     min_features_selection = max_features_selection # No or minimal number of features are eliminated
 
@@ -1553,9 +1553,13 @@ class IAFautomaticClassifier:
  
         # Quick return if possible
         if num_mispredicted == 0:
-            return "no model produced mispredictions", pandas.DataFrame()
+            return "no model produced mispredictions", num_mispredicted, pandas.DataFrame()
+        
+        #
+        if self.config.io["verbose"]:
+            print("\nAccuracy score for {0}: {1}".format(what_model, accuracy_score(Y, Y_pred)))
 
-        # Select the found data
+        # Select the found mispredicted data
         X_mispredicted = X_transformed.loc[X_not]
 
         # Predict probabilites
@@ -1580,7 +1584,7 @@ class IAFautomaticClassifier:
             for i in range(len(the_model.classes_)):
                 X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", "N/A")
             n_limit = min(n_limit, X_mispredicted.shape[0])
-            return what_model, X_mispredicted.sample(n=n_limit)
+            return what_model, num_mispredicted, X_mispredicted.sample(n=n_limit)
         else:
             Y_prob_max = np.amax(Y_prob, axis = 1)
             for i in reversed(range(Y_prob.shape[1])):
@@ -1592,7 +1596,7 @@ class IAFautomaticClassifier:
             X_mispredicted = X_mispredicted.drop("__Sort__", axis = 1)
 
             # Keep only the top n_limit rows and return
-            return what_model, X_mispredicted.head(n_limit)
+            return what_model, num_mispredicted, X_mispredicted.head(n_limit)
 
     # For saving results in database
     def save_data(self, keys, Y, rates, prob_mode = 'U', labels='N/A', probabilities='N/A', alg = "Unknown"):
@@ -1862,14 +1866,17 @@ class IAFautomaticClassifier:
                 _trained_model_name, cross_trained_model = self.load_model_from_file(self.model_filename)
             trained_model = \
                 self.train_picked_model( trained_model, \
-                    concat([X_train, X_validation], axis = 0), \
+                    concat([pandas.DataFrame(X_train), pandas.DataFrame(X_validation)], axis = 0), \
                     concat([Y_train, Y_validation], axis = 0) )
             self.save_model_to_file(label_binarizers, count_vectorizer, tfid_transformer, \
                 feature_selection_transform, trained_model_name, trained_model, self.model_filename )
-            what_model, self.X_most_mispredicted = self.most_mispredicted(X_original, trained_model, cross_trained_model, \
-                concat([X_train, X_validation], axis = 0), \
+            what_model, num_mispredicted, self.X_most_mispredicted = \
+                self.most_mispredicted(X_original, trained_model, cross_trained_model, \
+                concat([pandas.DataFrame(X_train), pandas.DataFrame(X_validation)], axis = 0), \
                 concat([Y_train, Y_validation], axis = 0), \
                 self.LIMIT_MISPREDICTED)
+            if self.config.io["verbose"]:
+                print("Total number of mispredicted elements: {0}".format(num_mispredicted))
             joiner = self.config.sql["id_column"] + " = \'"
             most_mispredicted_query = data_query + "WHERE " +  joiner \
                 + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
