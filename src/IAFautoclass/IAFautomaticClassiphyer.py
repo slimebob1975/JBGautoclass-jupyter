@@ -116,6 +116,7 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=FitFailedWarning)
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 class IAFautomaticClassifier:
 
@@ -144,7 +145,7 @@ class IAFautomaticClassifier:
     LIMIT_IS_CATEGORICAL = 30
     LIMIT_NYSTROEM = 100
     LIMIT_SVC = 10000
-    LIMIT_MISPREDICTED = 10
+    LIMIT_MISPREDICTED = 50
     MAX_HEAD_COLUMNS = 10
     MAX_ITERATIONS = 20000
     DEFAULT_MODEL_FILE_EXTENSION = ".sav"
@@ -1333,7 +1334,7 @@ class IAFautomaticClassifier:
                 max_features_selection = X_train.shape[1]
 
                 # Make sure all numbers are propely set for feature selection interval
-                if self.use_feature_selection and self.config.mode["num_selected_features"] == "":
+                if self.use_feature_selection and self.config.mode["num_selected_features"] in ["", None]:
                     min_features_selection = 0
                 elif self.use_feature_selection and self.config.mode["num_selected_features"] > 0:
                     min_features_selection = self.config.mode["num_selected_features"]
