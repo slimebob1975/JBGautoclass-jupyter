@@ -224,15 +224,17 @@ class IAFautomaticClassifier:
                 raise ValueError("Specified database connection information is invalid!")
             elif not self.is_bool(trusted_connection):
                 raise ValueError("Trusted connection must be true or false!")
-            elif not self.is_str(class_column) or not self.is_str(data_text_columns) or \
-                not self.is_str(data_numerical_columns) or not self.is_str(id_column) or \
-                not self.is_str(data_username) or not self.is_str(data_password):
-                raise ValueError("Specified data columns or login credentials are invalid!")
+            elif not self.is_str(data_username) or not self.is_str(data_password):
+                raise ValueError("Specified login credentials are invalid!")
             elif not self.is_bool(hierarchical_class) or hierarchical_class:
                 raise ValueError("Argument for hierachical class is invalid or currently not supported!")
             elif not self.is_bool(train) or not self.is_bool(predict) or not self.is_bool(mispredicted) or \
                 not (train or predict or mispredicted):
                 raise ValueError("Class must be set for either training, predictions or mispredictions!") 
+            elif (train or mispredicted) and (not self.is_str(class_column) or \
+                not self.is_str(data_text_columns) or not self.is_str(data_numerical_columns) or \
+                not self.is_str(id_column)):
+                raise ValueError("Specified data columns are invalid for training!")
             elif not self.is_bool(use_stop_words):
                 raise ValueError("Argument use_stop_words must be true or false!")
             elif not self.is_bool(hex_encode):
@@ -576,7 +578,7 @@ class IAFautomaticClassifier:
 
             # Take care of the special case of only training or only predictions
             if self.config.mode["train"] and not self.config.mode["predict"]:
-                query += " WHERE " + self.config.sql["class_column"] + " IS NOT NULL OR " + \
+                query += " WHERE " + self.config.sql["class_column"] + " IS NOT NULL AND " + \
                      self.config.sql["class_column"] + " != \'\' "
             elif not self.config.mode["train"] and self.config.mode["predict"]:
                 query += " WHERE " + self.config.sql["class_column"] + " IS NULL OR " + \
@@ -646,6 +648,10 @@ class IAFautomaticClassifier:
                                 print("Data fetched of available: " + str(percent_fetched) + " %", end='\r')
 
             if self.config.io["verbose"]: print("\n--- Totally fetched {0} data rows ---".format(num_lines))
+            
+            # Quick return if no data was fetched
+            if num_lines == 0:
+                return pandas.DataFrame(), None, None, None
 
             # Disconnect from database
             sqlHelper.disconnect()
@@ -889,7 +895,7 @@ class IAFautomaticClassifier:
 
         num = 0
         for item in dataset[self.config.sql["class_column"]]:
-            if item == None: # Corresponds to empty string and SQL NULL
+            if item == None or not item.strip(): # Corresponds to empty string and SQL NULL
                 num += 1
         return num   
 
@@ -921,15 +927,14 @@ class IAFautomaticClassifier:
         if self.text_data:
             text_columns = self.config.sql["data_text_columns"].split(',')
             for column in text_columns:
-                if not self.config.mode["use_categorization"] or not self.is_categorical_data(dataset[column]) \
-                    or (len(label_binarizers) > 0 and not column in label_binarizers.keys()):
-                    if self.config.io["verbose"]: print("Text data NOT picked for categorization: ",column)
-                    text_dataset = \
-                        concat([text_dataset, dataset[column]], axis = 1)
-                else:
+                if (self.config.mode["train"] and self.config.mode["use_categorization"] and  \
+                    self.is_categorical_data(dataset[column])) or column in label_binarizers.keys():
+                    categorical_dataset = concat([categorical_dataset, dataset[column]], axis = 1)
                     if self.config.io["verbose"]: print("Text data picked for categorization: ",column)
-                    categorical_dataset = \
-                        concat([categorical_dataset, dataset[column]], axis = 1)
+                else:
+                    text_dataset = concat([text_dataset, dataset[column]], axis = 1)
+                    if self.config.io["verbose"]: print("Text data NOT picked for categorization: ",column)
+                 
         if self.numerical_data:
             num_columns = self.config.sql["data_numerical_columns"].split(',')
             for column in num_columns:
@@ -1506,10 +1511,20 @@ class IAFautomaticClassifier:
 
         return label_binarizers, count_vectorizer, tfid_transformer, feature_selection_transform, \
             model_name, model
+    
+    # Load only config object from pickle object with model
+    def load_config_from_model(self, filename):
+        try:
+            saved_config, *args = pickle.load(open(filename, 'rb'))
+        except Exception as ex:
+            print("Something went wrong on loading model configuration from file: {0}".format(str(ex)))
+
+        return saved_config
 
     # Make predictions on dataset
     def make_predictions(self, model, X):
 
+        could_predict_proba = False
         try:
             predictions = model.predict(X)
         except ValueError as e:
@@ -1519,13 +1534,14 @@ class IAFautomaticClassifier:
         try:
             probabilities = model.predict_proba(X)
             rates = np.amax(probabilities, axis=1)
+            could_predict_proba = True
         except Exception as e:
             if self.config.io["verbose"]:
                 print("Probablity prediction not available for current model: " + \
                         str(e))
-            probabilities = np.array([None])
-            rates = np.array([None])
-        return predictions, rates, probabilities
+            probabilities = np.array([[-1.0]*len(model.classes_)]*max(X.shape))
+            rates = np.array([-1.0]*max(X.shape))
+        return predictions, could_predict_proba, rates, probabilities
 
     # Evaluate predictions
     def evaluate_predictions(self, predictions, Y, message="Unknown"):
@@ -1692,13 +1708,13 @@ class IAFautomaticClassifier:
     def get_sql_command_for_recently_classified_data(self, num_rows):
         
         selcols = ("A.[" + \
-            "],A.[".join((self.config.sql["id_column"] + "," + \
+            "], A.[".join((self.config.sql["id_column"] + "," + \
             self.config.sql["data_numerical_columns"] + "," + \
             self.config.sql["data_text_columns"]).split(',')) + \
-            "] ").replace("A.[]", "").replace(",,",",")
+            "], ").replace("A.[]", "").replace(",,",",").replace(", ,",",")
         
         query = \
-            "SELECT TOP(" + str(num_rows) + ") " + selcols + \
+            "SELECT TOP(" + str(num_rows) + ") " + selcols +  \
             "B.[class_result], B.[class_rate],  B.[class_time], B.[class_algorithm] " + \
             "FROM [" + self.config.sql["data_catalog"].replace('.',"].[") + "].[" + \
             self.config.sql["data_table"].replace('.',"].[") + "] A " + \
@@ -1746,7 +1762,12 @@ class IAFautomaticClassifier:
         # Read in all data, with classifications or not
         if self.ProgressLabel: self.ProgressLabel.value = "Read in data from database"
         dataset, unique_keys, data_query, self.unique_classes = self.read_in_data()
-        if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
+        if dataset.empty:
+            if self.ProgressLabel: self.ProgressLabel.value = "Process finished"
+            if self.ProgressBar: self.ProgressBar.value = 1.0
+            return -1
+            
+        elif self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
         # Investigate dataset (optional)
         if self.config.mode["train"]:
@@ -1825,8 +1846,10 @@ class IAFautomaticClassifier:
             k = min(10, self.find_smallest_class_number(Y_train))
             if k < 10:
                 if self.config.io["verbose"]: print("Using non-standard k-value for spotcheck of algorithms: {0}".format(k))
-            trained_model_name, trained_model, num_features = \
-                self.spot_check_ml_algorithms(X_train, Y_train, k)
+            trained_model_name, trained_model, num_features = self.spot_check_ml_algorithms(X_train, Y_train, k)
+            self.config.mode["algorithm"] = trained_model_name.split('-')[0]
+            self.config.mode["preprocessor"] = trained_model_name.split('-')[-1]
+            self.config.mode["num_selected_features"] = num_features 
             trained_model = self.train_picked_model(trained_model, X_train, Y_train)
             self.save_model_to_file(label_binarizers, count_vectorizer, tfid_transformer, \
                 feature_selection_transform, trained_model_name, trained_model, self.model_filename )
@@ -1840,8 +1863,8 @@ class IAFautomaticClassifier:
         # Make predictions on known testdata
         if self.config.mode["train"] and X_validation.shape[0] > 0:
             if self.ProgressLabel: self.ProgressLabel.value = "Make predictions on known testdata"
-            pred, prob, probs = self.make_predictions(trained_model, X_validation)
-            if not prob.any() == None :
+            pred, could_proba, prob, probs = self.make_predictions(trained_model, X_validation)
+            if could_proba:
                 #print("Training Probabilities:",prob)
                 print("Training Classification prob: Mean, Std.dev: ", \
                         np.mean(prob),np.std(prob))
@@ -1898,18 +1921,17 @@ class IAFautomaticClassifier:
         # Now make predictions on non-classified dataset: X_unknown -> Y_unknown
         if self.config.mode["predict"] and X_unknown.shape[0] > 0:
             if self.ProgressLabel: self.ProgressLabel.value = "Make predictions on un-classified dataset"
-            Y_unknown, Y_prob, Y_probs = self.make_predictions(trained_model, X_unknown)
-
+            Y_unknown, could_proba, Y_prob, Y_probs = self.make_predictions(trained_model, X_unknown)
             print("\n---Predictions for the unknown data---\n")
             if self.config.io["verbose"]: print("Predictions:", Y_unknown)
-            if not Y_prob.any() == None :
+            if could_proba:
                 #print("Probabilities:",Y_prob)
                 print("Classification Y_prob: Mean, Std.dev: ", np.mean(Y_prob), np.std(Y_prob))
 
             rate_type = 'I'
-            if Y_prob.any() == None:
-                Y_prob = []
+            if not could_proba:
                 if self.config.mode["train"]:
+                    Y_prob = []
                     rate_type = 'A'
                     for i in range(len(Y_unknown)):
                         try:
@@ -1918,8 +1940,7 @@ class IAFautomaticClassifier:
                             print("Warning: probability collection failed for key {0} with error {1}".format(Y_unknown[i]),str(e))
                 else:
                     rate_type = 'U'
-                    for i in range(len(Y_unknown)):
-                        Y_prob = Y_prob + [0.0]
+                    
                 if self.config.io["verbose"]: print("Probabilities:",Y_prob)
             if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
@@ -1943,10 +1964,13 @@ class IAFautomaticClassifier:
         if self.ProgressLabel: self.ProgressLabel.value = "Process finished"
         if self.ProgressBar: self.ProgressBar.value = 1.0
 
-        # Close redirect of standard output in case of self.config.debug["debug_on"]ging
+        # Close redirect of standard output in case of debugging
         if self.config.debug["debug_on"] and self.config.io["redirect_output"]:
             sys.stdout.close()
             sys.stderr.close()
+            
+        # Return positive signal
+        return 0
     
     # Export configuration file for specified settings
     def export_configuration_to_file(self):

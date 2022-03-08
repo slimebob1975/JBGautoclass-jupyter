@@ -17,6 +17,6 @@ IF OBJECT_ID('[Arbetsdatabas].[aterkommande_automat].[AutoKlassificering]','U') 
 
 	CONSTRAINT Check_catalog_name CHECK (DB_ID(catalog_name) IS NOT NULL),
 	CONSTRAINT Check_table_name CHECK (OBJECT_ID(CONCAT(catalog_name,'.',table_name)) IS NOT NULL),
-	CONSTRAINT Check_class_rate CHECK ( class_rate >= 0.0 AND class_rate <= 1.0 ),
+	CONSTRAINT Check_class_rate CHECK ((class_rate >= 0.0 AND class_rate <= 1.0) OR class_rate = -1.0), /* -1 means N/A */
 	CONSTRAINT Check_class_rate_type CHECK ( CHARINDEX(class_rate_type, 'UAI') > 0 ),
 );
