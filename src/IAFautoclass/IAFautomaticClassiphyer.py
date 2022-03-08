@@ -145,7 +145,7 @@ class IAFautomaticClassifier:
     LIMIT_IS_CATEGORICAL = 30
     LIMIT_NYSTROEM = 100
     LIMIT_SVC = 10000
-    LIMIT_MISPREDICTED = 50
+    LIMIT_MISPREDICTED = 20
     MAX_HEAD_COLUMNS = 10
     MAX_ITERATIONS = 20000
     DEFAULT_MODEL_FILE_EXTENSION = ".sav"
@@ -1539,8 +1539,8 @@ class IAFautomaticClassifier:
             if self.config.io["verbose"]:
                 print("Probablity prediction not available for current model: " + \
                         str(e))
-            probabilities = np.array([[-1.0]*len(model.classes_)]*max(X.shape))
-            rates = np.array([-1.0]*max(X.shape))
+            probabilities = np.array([[-1.0]*len(model.classes_)]*X.shape[0])
+            rates = np.array([-1.0]*X.shape[0])
         return predictions, could_predict_proba, rates, probabilities
 
     # Evaluate predictions
