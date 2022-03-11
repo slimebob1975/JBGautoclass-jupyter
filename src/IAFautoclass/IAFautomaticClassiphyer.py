@@ -672,7 +672,7 @@ class IAFautomaticClassifier:
             # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
             # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
             # or similar from a certain starting point, if any are left after the conversion above.
-            if self.config.io["verbose"]: print("\nConsistency check")
+            if self.config.io["verbose"]: print("Consistency check")
             change = False
             percent_checked = 0
             try:
