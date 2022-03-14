@@ -666,6 +666,13 @@ class IAFautomaticClassifier:
                 pass
             dataset = pandas.DataFrame(data, columns = column_names)
             
+            # Make sure the class column is a categorical variable by setting it as string
+            try:
+                dataset.astype({self.config.sql["class_column"]: 'str'}, copy=False)
+            except Exception as ex:
+                print("Could not convert class column {0} to categorical variable: {1}". \
+                      format(self.config.sql["class_column"], str(ex)))
+            
             # Extract unique class labels from dataset
             unique_classes = list(set(dataset[self.config.sql["class_column"]].tolist()))
 
@@ -895,7 +902,7 @@ class IAFautomaticClassifier:
 
         num = 0
         for item in dataset[self.config.sql["class_column"]]:
-            if item == None or not item.strip(): # Corresponds to empty string and SQL NULL
+            if item == None or not str(item).strip(): # Corresponds to empty string and SQL NULL
                 num += 1
         return num   
 

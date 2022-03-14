@@ -3,7 +3,7 @@ IF OBJECT_ID('[Arbetsdatabas].[aterkommande_automat].[AutoKlassificering]','U') 
     class_id INTEGER IDENTITY(1,1) PRIMARY KEY,     /* The primary key */
 	catalog_name VARCHAR(255) NOT NULL,             /* Database namne */
 	table_name VARCHAR(255) NOT NULL,               /* Table name */
-	column_names NVARCHAR(512) NOT NULL,             /* Column names, CSV-style */
+	column_names NVARCHAR(1024) NOT NULL,             /* Column names, CSV-style */
     unique_key BIGINT NOT NULL,                     /* Unique key for classified row in table_name*/
 	class_result VARCHAR(255) NOT NULL,              /* Classification result as string */
 	class_rate FLOAT,                               /* Estimated correctness of rate */
