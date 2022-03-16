@@ -578,11 +578,14 @@ class IAFautomaticClassifier:
 
             # Take care of the special case of only training or only predictions
             if self.config.mode["train"] and not self.config.mode["predict"]:
-                query += " WHERE " + self.config.sql["class_column"] + " IS NOT NULL AND " + \
-                     self.config.sql["class_column"] + " != \'\' "
+                query += " WHERE [" + self.config.sql["class_column"] + "] IS NOT NULL AND ([" + \
+                     self.config.sql["class_column"] + "] != \'\' OR [" + \
+                     self.config.sql["class_column"] + "] = 0)"
+                
             elif not self.config.mode["train"] and self.config.mode["predict"]:
-                query += " WHERE " + self.config.sql["class_column"] + " IS NULL OR " + \
-                     self.config.sql["class_column"] + " = \'\' "
+                query += " WHERE [" + self.config.sql["class_column"] + "] IS NULL OR [" + \
+                     self.config.sql["class_column"] + "] = \'\' AND [" + \
+                     self.config.sql["class_column"] + "] != 0)"
 
             # Since sorting the DataFrames directly does not seem to work right now (see below)
             # we sort the data in retreiving in directly in SQL. The "DESC" keyword makes sure
@@ -670,7 +673,7 @@ class IAFautomaticClassifier:
             try:
                 dataset.astype({self.config.sql["class_column"]: 'str'}, copy=False)
             except Exception as ex:
-                print("Could not convert class column {0} to categorical variable: {1}". \
+                print("Could not convert class column {0} to string variable: {1}". \
                       format(self.config.sql["class_column"], str(ex)))
             
             # Extract unique class labels from dataset
