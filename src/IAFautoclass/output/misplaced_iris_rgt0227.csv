@@ -1,5 +1,5 @@
 id;P(Iris-setosa);P(Iris-versicolor);P(Iris-virginica);Predicted;Actual;sepal-length;sepal-width;petal-width
-135;5,063708937498659e-16;0,9917105517873903;0,008289448212609232;Iris-versicolor;Iris-virginica;6.1;2.6;1.4
-134;1,964714884369572e-16;0,9692986840052435;0,03070131599475621;Iris-versicolor;Iris-virginica;6.3;2.8;1.5
-71;1,4010089167304012e-17;0,37553158113688634;0,6244684188631136;Iris-virginica;Iris-versicolor;5.9;3.2;1.8
-78;3,4618408563965666e-19;0,4795199658114153;0,5204800341885847;Iris-virginica;Iris-versicolor;6.7;3.0;1.7
+134;0,0;0,8;0,2;Iris-versicolor;Iris-virginica;6.3;2.8;1.5
+71;0,0;0,2;0,8;Iris-virginica;Iris-versicolor;5.9;3.2;1.8
+78;0,0;0,4;0,6;Iris-virginica;Iris-versicolor;6.7;3.0;1.7
+135;0,0;0,6;0,4;Iris-versicolor;Iris-virginica;6.1;2.6;1.4

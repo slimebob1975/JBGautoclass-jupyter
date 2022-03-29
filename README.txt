@@ -10,7 +10,7 @@ To use the Jupyter GUI for IAF Python autoclassification script, do as follows:
             into an appropriate directory
     b) Ask a friend to get a copy of the code
 2. Download and install Anaconda from: https://www.anaconda.com/products/distribution
-3. Start Anaconda and launch Jupyter-lab from within
+3. Start Anaconda Navigator and launch Jupyter-lab from within
 4. In the file explorer window to the left in Jupyter-lab, browse your way to the file
     IAFautoclass_GUI.ipynb
 5. If you see the IAF logo and some webb-like widgets in the right hand side, then all is ok!
