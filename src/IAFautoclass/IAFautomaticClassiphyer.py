@@ -1270,8 +1270,8 @@ class IAFautomaticClassifier:
         models.append(("REC", RidgeClassifier(tol=1e-2, solver="sag")))
         models.append(("PCN", Perceptron(max_iter=int(self.config.mode["max_iterations"]))))
         models.append(("PAC", PassiveAggressiveClassifier(max_iter=int(self.config.mode["max_iterations"]))))
-        models.append(("RFC1", RandomForestClassifier(n_estimators=100, max_features= 3)))
-        models.append(("RFC2", RandomForestClassifier()))
+        models.append(("RFC1", RandomForestClassifier(n_estimators=100, max_features="sqrt")))
+        models.append(("RFC2",RandomForestClassifier(n_estimators=100, max_features="log2")))
         models.append(("LIN1", LinearSVC(penalty="l1", dual=False, tol=1e-3, max_iter=int(self.config.mode["max_iterations"]))))
         models.append(("LIN2", LinearSVC(penalty="l2", dual=False, tol=1e-3, max_iter=int(self.config.mode["max_iterations"]))))
         models.append(("LINP", Pipeline([ \
@@ -1681,7 +1681,7 @@ class IAFautomaticClassifier:
     def correct_mispredicted_data(self, index, new_class):
 
         try:
-            if self.config.io["verbose"]: print("Changing data row {0} to {1}".format(index, new_class))
+            if self.config.io["verbose"]: print("Changing data row {0} to {1}: ".format(index, new_class))
 
             # Get a sql handler and connect to data database
             sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
@@ -1692,9 +1692,12 @@ class IAFautomaticClassifier:
             sqlHelper.connect()
 
             # Set together SQL code for the insert
-            query =  "UPDATE " + self.config.sql["data_catalog"] + "." + self.config.sql["data_table"]
+            query =  "UPDATE [" + self.config.sql["data_catalog"] + "]."
+            query += "[" + "].[".join(self.config.sql["data_table"].split('.')) + "]"
             query += " SET " + self.config.sql["class_column"] + " = \'" + str(new_class) + "\'"  
             query += " WHERE " + self.config.sql["id_column"] + " = " + str(index)
+            
+            if self.config.io["verbose"]: print("Executing SQL code: {0}".format(query))
             
             # Execute a query without getting any data
             # Delay the commit until the connection is closed
