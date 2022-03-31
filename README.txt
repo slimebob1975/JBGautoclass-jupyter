@@ -17,7 +17,7 @@ To use the Jupyter GUI for IAF Python autoclassification script, do as follows:
     
 Notice:
 * The connection to SQL Server uses integrated security, so you will only be able to see the
-databases and datatables that also show up in e.g. Microsoft SQL Server Management Studio.
+databases and datatables that also show up in e.g. Microsoft SQL Server Management Studio
     
 Troubleshooting:
 * If you only see text in the right hand side window of Jupyter-lab, try to restart the kernel

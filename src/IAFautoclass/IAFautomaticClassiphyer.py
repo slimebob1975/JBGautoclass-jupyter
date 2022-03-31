@@ -143,6 +143,7 @@ class IAFautomaticClassifier:
     SQL_CHUNKSIZE = 1000
     SQL_USE_CHUNKS = True
     LIMIT_IS_CATEGORICAL = 30
+    PCA_VARIANCE_EXPLAINED = 0.995
     LIMIT_NYSTROEM = 100
     LIMIT_SVC = 10000
     LIMIT_MISPREDICTED = 20
@@ -1189,8 +1190,10 @@ class IAFautomaticClassifier:
                 elif X.shape[0] >= X.shape[1]:
                     components = 'mle'
                 else:
-                    components = X.shape[0]-1
-                    print("Notice: PCA n_components is set to n_samples-1: {0}".format(components))
+                    #components = X.shape[0]
+                    #print("Notice: PCA n_components is set to n_samples: {0}".format(components))
+                    components = self.PCA_VARIANCE_EXPLAINED
+                    print("Notice: PCA n_components is set to explain {0} % of variance".format(round(components*100.0, 1)))
                 # Make transformation
                 try:
                     feature_selection_transform = PCA(n_components=components)
@@ -1212,9 +1215,8 @@ class IAFautomaticClassifier:
                 if number_of_components != None and number_of_components > 0:
                     components = number_of_components
                 else:
-                    components = min(self.LIMIT_NYSTROEM,X.shape[1])
-                    print("Notice: Nystroem n_components is set to minimum of number of data column and {1}: {0}".\
-                        format(components,self.LIMIT_NYSTROEM))
+                    components = max(LIMIT_NYSTROEM, min(X.shape))
+                    print("Notice: Nystroem n_components is set to at: {0}".format(components))
                 # Make transformation
                 try:
                     feature_selection_transform = Nystroem(n_components=components)
@@ -1677,7 +1679,7 @@ class IAFautomaticClassifier:
             if self.ProgressBar: self.ProgressBar.value = 1.0
             sys.exit("Program aborted.")
 
-    # For saving results in database
+    # For correcting mispredicted data in database
     def correct_mispredicted_data(self, index, new_class):
 
         try:
