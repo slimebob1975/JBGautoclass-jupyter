@@ -143,7 +143,7 @@ class IAFautomaticClassifier:
     SQL_CHUNKSIZE = 1000
     SQL_USE_CHUNKS = True
     LIMIT_IS_CATEGORICAL = 30
-    PCA_VARIANCE_EXPLAINED = 0.995
+    PCA_VARIANCE_EXPLAINED = 0.999
     LIMIT_NYSTROEM = 100
     LIMIT_SVC = 10000
     LIMIT_MISPREDICTED = 20
@@ -1215,7 +1215,7 @@ class IAFautomaticClassifier:
                 if number_of_components != None and number_of_components > 0:
                     components = number_of_components
                 else:
-                    components = max(LIMIT_NYSTROEM, min(X.shape))
+                    components = max(self.LIMIT_NYSTROEM, min(X.shape))
                     print("Notice: Nystroem n_components is set to at: {0}".format(components))
                 # Make transformation
                 try:
