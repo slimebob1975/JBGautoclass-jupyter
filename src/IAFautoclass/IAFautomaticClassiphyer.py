@@ -79,7 +79,7 @@ from sklearn.model_selection import train_test_split, cross_val_score, Stratifie
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
 from sklearn.svm import SVC
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfTransformer
@@ -123,14 +123,14 @@ class IAFautomaticClassifier:
     # Internal constants
     ALGORITHMS = [ "ALL", "LRN", "KNN", "CART", "GNB", "MNB", "BNB", "CNB", "REC", "PCN", \
         "PAC", "RFC1", "RFC2", "LIN1", "LIN2", "LINP", "SGD", "SGD1", "SGD2", "SGDE", "NCT", \
-        "SVC", "LDA", "BDT", "ETC", "ABC", "GBC", "MLPR", "MLPL" ]
+        "SVC", "LDA", "QDA", "BDT", "ETC", "ABC", "GBC", "MLPR", "MLPL" ]
     ALGORITHM_NAMES = ["All", "Logistic Regression", "K-Neighbors Classifier", "Decision Tree Classifier", \
         "Gaussian Naive Bayes", "Multinomial Naive Bayes", "Bernoulli Naive Bayes", "Complement Naive Bayes", \
         "Ridge Classifier", "Perceptron", "Passive Aggressive Classifier", "Random Forest Classifier 1", \
         "Random Forest Classifier 2", "Linear Support Vector L1", "Linear Support Vector L2", \
         "Linear SV L1+L2", "Stochastic Gradient Descent", "Stochastic GD L1", "Stochastic GD L2", \
         "Stochastic GD Elast.", "Nearest Centroid", "Support Vector Classification", \
-        "Linear Discriminant Analysis", "Bagging CLassifier", "Extra Trees Classifier", \
+        "Linear Discriminant Analysis", "Quadratic Discriminant Analysis", "Bagging CLassifier", "Extra Trees Classifier", \
         "Ada Boost Classifier", "Gradient Boosting Classifier", "ML Neural Network Relu", \
         "ML Neural Network Sigm" ]
     PREPROCESS = [ "ALL", "NON", "STA", "MIX", "MMX", "NRM", "BIN" ]
@@ -1328,7 +1328,8 @@ class IAFautomaticClassifier:
             if self.config.io["verbose"]: print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
         else:
             if self.config.io["verbose"]: print("\nNotice: SVC model was ignored since n_samples > {0}\n".format(self.LIMIT_SVC))
-        models.append(('LDA', LinearDiscriminantAnalysis()))
+        models.append(('LDA', LinearDiscriminantAnalysis()))        
+        models.append(('QDA', QuadraticDiscriminantAnalysis()))
         models.append(('BDT', BaggingClassifier(base_estimator=DecisionTreeClassifier(), n_estimators = 100, random_state = 7)))
         models.append(('ETC', ExtraTreesClassifier(n_estimators = 100)))
         models.append(('ABC', AdaBoostClassifier(n_estimators = 30, random_state = 7)))
