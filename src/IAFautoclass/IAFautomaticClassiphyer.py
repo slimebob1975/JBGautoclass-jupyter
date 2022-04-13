@@ -96,7 +96,7 @@ from sklearn.naive_bayes import GaussianNB, BernoulliNB, ComplementNB, Multinomi
 from sklearn.neighbors import KNeighborsClassifier, NearestCentroid
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import SelectFromModel, RFE
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, TruncatedSVD
 from sklearn.kernel_approximation import Nystroem
 from sklearn.exceptions import FitFailedWarning, ConvergenceWarning
 from sklearn.preprocessing import LabelBinarizer
@@ -135,8 +135,8 @@ class IAFautomaticClassifier:
         "ML Neural Network Sigm" ]
     PREPROCESS = [ "ALL", "NON", "STA", "MIX", "MMX", "NRM", "BIN" ]
     PREPROCESS_NAMES = ["All", "None", "Standard Scaler", "Min-Max Scaler", "Max-Absolute Scaler", "Normalizer", "Binarizer"]
-    REDUCTIONS = [ "NON", "RFE", "PCA", "NYS" ]
-    REDUCTION_NAMES = ["None", "Recursive Feature Elimination", "Principal Component Analysis", "Nystroem Method"]
+    REDUCTIONS = [ "NON", "RFE", "PCA", "NYS", "TSVD" ]
+    REDUCTION_NAMES = ["None", "Recursive Feature Elimination", "Principal Component Analysis", "Nystroem Method", "Truncated SVD"]
     SCORETYPES = [ "accuracy", "balanced_accuracy", "f1_micro", "recall_micro", "precision_micro" ]
     SCORETYPE_NAMES =  ["Accuracy", "Balanced Accuracy", "Balanced F1 Micro", "Recall Micro", "Precision Micro"]
     STANDARD_LANG = "sv"
@@ -1216,7 +1216,7 @@ class IAFautomaticClassifier:
                     components = number_of_components
                 else:
                     components = max(self.LIMIT_NYSTROEM, min(X.shape))
-                    print("Notice: Nystroem n_components is set to at: {0}".format(components))
+                    print("Notice: Nystroem n_components is set to: {0}".format(components))
                 # Make transformation
                 try:
                     feature_selection_transform = Nystroem(n_components=components)
@@ -1224,6 +1224,24 @@ class IAFautomaticClassifier:
                     X = feature_selection_transform.transform(X)
                 except Exception as ex:
                     print("Notice: Nystroem transform could not be used: {0}".format(str(ex)))
+                else:
+                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
+                    
+            # Truncated SVD transformation next
+            elif self.config.mode["feature_selection"] == "TSVD":
+                if self.ProgressLabel: self.ProgressLabel.value = "Truncated SVD reduction of dataset under way..."
+                if number_of_components != None and number_of_components > 0:
+                    components = number_of_components
+                else:
+                    components = max(self.LIMIT_NYSTROEM, min(X.shape))
+                    print("Notice: Truncated SVD n_components is set to: {0}".format(components))
+                # Make transformation
+                try:
+                    feature_selection_transform = TruncatedSVD(n_components=components)
+                    feature_selection_transform.fit(X)
+                    X = feature_selection_transform.transform(X)
+                except Exception as ex:
+                    print("Notice: Truncated SVD reduction could not be used: {0}".format(str(ex)))
                 else:
                     if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
 
@@ -1828,7 +1846,7 @@ class IAFautomaticClassifier:
                 self.investigate_dataset( X, False )
         if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
 
-        # In case of PCA or Nystreom feature reduction, here it goes
+        # In case of PCA or Nystreom or other feature reduction, here it goes
         if self.use_feature_selection and self.config.mode["feature_selection"] != "RFE":
             t0 = time.time()
             X, self.config.mode["num_selected_features"], feature_selection_transform = \
