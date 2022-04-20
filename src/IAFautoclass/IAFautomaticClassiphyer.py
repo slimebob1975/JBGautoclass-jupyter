@@ -97,9 +97,11 @@ from sklearn.neighbors import KNeighborsClassifier, NearestCentroid
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_selection import SelectFromModel, RFE
 from sklearn.decomposition import PCA, TruncatedSVD, FastICA
+from sklearn.random_projection import GaussianRandomProjection
 from sklearn.kernel_approximation import Nystroem
 from sklearn.exceptions import FitFailedWarning, ConvergenceWarning
 from sklearn.preprocessing import LabelBinarizer
+from sklearn.manifold import Isomap, LocallyLinearEmbedding
 import time
 import threading
 from math import isnan
@@ -117,6 +119,7 @@ warnings.filterwarnings("ignore", category=FitFailedWarning)
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+#warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
 
 class IAFautomaticClassifier:
 
@@ -135,9 +138,10 @@ class IAFautomaticClassifier:
         "ML Neural Network Sigm" ]
     PREPROCESS = [ "ALL", "NON", "STA", "MIX", "MMX", "NRM", "BIN" ]
     PREPROCESS_NAMES = ["All", "None", "Standard Scaler", "Min-Max Scaler", "Max-Absolute Scaler", "Normalizer", "Binarizer"]
-    REDUCTIONS = [ "NON", "RFE", "PCA", "NYS", "TSVD", "FICA" ]
+    REDUCTIONS = [ "NON", "RFE", "PCA", "NYS", "TSVD", "FICA", "GRP", "ISO", "LLE" ]
     REDUCTION_NAMES = ["None", "Recursive Feature Elimination", "Principal Component Analysis", "Nystroem Method", \
-                       "Truncated SVD", "Fast Indep. Component Analysis"]
+                       "Truncated SVD", "Fast Indep. Component Analysis", "Gaussion Random Projection", \
+                       "Isometric Mapping", "Locally Linearized Embedding"]
     SCORETYPES = [ "accuracy", "balanced_accuracy", "f1_micro", "recall_micro", "precision_micro" ]
     SCORETYPE_NAMES =  ["Accuracy", "Balanced Accuracy", "Balanced F1 Micro", "Recall Micro", "Precision Micro"]
     STANDARD_LANG = "sv"
@@ -146,6 +150,7 @@ class IAFautomaticClassifier:
     LIMIT_IS_CATEGORICAL = 30
     PCA_VARIANCE_EXPLAINED = 0.999
     LOWER_LIMIT_REDUCTION = 100
+    NON_LINEAR_REDUCTION_COMPONENTS = 2
     LIMIT_SVC = 10000
     LIMIT_MISPREDICTED = 20
     MAX_HEAD_COLUMNS = 10
@@ -1263,7 +1268,63 @@ class IAFautomaticClassifier:
                     print("Notice: Fast ICA reduction could not be used: {0}".format(str(ex)))
                 else:
                     if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
-
+                    
+            # Random Gaussian Projection
+            elif self.config.mode["feature_selection"] == "GRP":
+                if self.ProgressLabel: self.ProgressLabel.value = "Gaussian Random Projection reduction of dataset under way..."
+                if number_of_components != None and number_of_components > 0:
+                    components = number_of_components
+                else:
+                    components = 'auto'
+                    print("Notice: GRP n_components is set to: {0}".format(components))
+                # Make transformation
+                try:
+                    feature_selection_transform = GaussianRandomProjection(n_components=components)
+                    feature_selection_transform.fit(X)
+                    X = feature_selection_transform.transform(X)
+                except Exception as ex:
+                    print("Notice: GRP reduction could not be used: {0}".format(str(ex)))
+                else:
+                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
+                components = feature_selection_transform.n_components_
+            
+            # Non Linear Transformations below
+            # First: Isomap
+            elif self.config.mode["feature_selection"] == "ISO":
+                if self.ProgressLabel: self.ProgressLabel.value = "Isometric Mapping reduction of dataset under way..."
+                if number_of_components != None and number_of_components > 0:
+                    components = number_of_components
+                else:
+                    components = self.NON_LINEAR_REDUCTION_COMPONENTS
+                    print("Notice: ISO n_components is set to: {0}".format(components))
+                # Make transformation
+                try:
+                    feature_selection_transform = Isomap(n_components=components)
+                    feature_selection_transform.fit(X)
+                    X = feature_selection_transform.transform(X)
+                except Exception as ex:
+                    print("Notice: Isomap reduction could not be used: {0}".format(str(ex)))
+                else:
+                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
+                
+            # Second: LLE
+            elif self.config.mode["feature_selection"] == "LLE":
+                if self.ProgressLabel: self.ProgressLabel.value = "Locally Linear Embedding reduction of dataset under way..."
+                if number_of_components != None and number_of_components > 0:
+                    components = number_of_components
+                else:
+                    components = self.NON_LINEAR_REDUCTION_COMPONENTS
+                    print("Notice: LLE n_components is set to: {0}".format(components))
+                # Make transformation
+                try:
+                    feature_selection_transform = LocallyLinearEmbedding(n_components=components)
+                    feature_selection_transform.fit(X)
+                    X = feature_selection_transform.transform(X)
+                except Exception as ex:
+                    print("Notice: LLE reduction could not be used: {0}".format(str(ex)))
+                else:
+                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
+                
         # For only predictions, use the saved transform associated with trained model
         else:
             X = feature_selection_transform.transform(X)
