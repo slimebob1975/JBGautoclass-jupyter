@@ -1190,33 +1190,40 @@ class IAFautomaticClassifier:
             # PCA first. If not the number of features is specified by
             # the user, we rely on  Minka’s MLE to guess the optimal dimension.
             # Notice, MLE can only be used if the number of samples exceeds the number
-            # of features, which is common, but not always. If not, rely on some
-            # heuristic choice of the number of features.
+            # of features, which is common, but not always. If MLE cannot be used or
+            # fails, pick the number of components that explain a certain level of variance.
+            
             # Notice also, that PCA cannot be use together with PLS.
             if self.config.mode["feature_selection"] == "PCA" and self.config.mode["algorithm"] != "PLS":
                 if self.config.io["verbose"]: print("\nPCA conversion of dataset under way...")
                 if self.ProgressLabel: self.ProgressLabel.value = "PCA conversion of dataset under way..."
+                components_options = []
                 if number_of_components != None and number_of_components > 0:
+                    components_options.append(number_of_components)
                     components = number_of_components
-                elif X.shape[0] >= X.shape[1]:
+                if X.shape[0] >= X.shape[1]:
+                    components_options.append('mle')
                     components = 'mle'
-                else:
-                    #components = X.shape[0]
-                    #print("Notice: PCA n_components is set to n_samples: {0}".format(components))
-                    components = self.PCA_VARIANCE_EXPLAINED
-                    print("Notice: PCA n_components is set to explain {0} % of variance".format(round(components*100.0, 1)))
+                components_options.append(self.PCA_VARIANCE_EXPLAINED)
+                components_options.append(min(X.shape[0], X.shape[1]) - 1)
+                
                 # Make transformation
-                try:
-                    feature_selection_transform = PCA(n_components=components)
-                    feature_selection_transform.fit(X)
-                    X = feature_selection_transform.transform(X)
-                except Exception as ex:
-                    print("Notice: PCA could not be used: {0}".format(str(ex)))
-                    failed = True
-                else:
-                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".
-                                      format(X.shape[0],X.shape[1]))
-                    components = feature_selection_transform.n_components_
+                for components in components_options:
+                    
+                    print("Notice: PCA n_components is set to {0}".format(components))
+                    try:
+                        failed = True
+                        feature_selection_transform = PCA(n_components=components)
+                        feature_selection_transform.fit(X)
+                        X = feature_selection_transform.transform(X)
+                        failed = False
+                    except Exception as ex:
+                        print("Notice: PCA could not be used with n_components = {1}: {0}".format(str(ex),components))
+                    else:
+                        if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".
+                                          format(X.shape[0],X.shape[1]))
+                        components = feature_selection_transform.n_components_
+                        break
 
             elif self.use_feature_selection and self.config.mode["feature_selection"] == "PCA" and self.config.mode["algorithm"] == "PLS":
                 if self.config.io["verbose"]: print("PCA feature reduction was not used because algorithm PLS was chosen...")
