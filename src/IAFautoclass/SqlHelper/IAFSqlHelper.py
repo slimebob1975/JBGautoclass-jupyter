@@ -14,7 +14,9 @@ class IAFSqlHelper():
     
     # Constructor with arguments
     def __init__(self, driver = "", host = "", catalog = "", \
-                 trusted_connection = False, username = "", password = "" ):
+                 trusted_connection = False, username = "", password = "", \
+                 ignore_errors = True ):
+        
         self.Driver = driver
         self.Host = host
         self.Catalog = catalog
@@ -64,7 +66,8 @@ class IAFSqlHelper():
         except Exception as ex:
             func = str(sys._getframe().f_code.co_name)
             print("Connection to database failed: " + connect_string)
-            self.end_program( func, str(ex) )
+            if not self.ignore_errors:
+                self.end_program( func, str(ex) )
     
     # Disconnect from SQL server and close cursor
     def disconnect(self, commit = False):
@@ -97,7 +100,8 @@ class IAFSqlHelper():
         except Exception as ex:
             func = str(sys._getframe().f_code.co_name)
             print("Execution of query failed: " + query)
-            self.end_program( func, str(ex) )    
+            if not self.ignore_errors:
+                self.end_program( func, str(ex) )    
     
     # Read next line of data, if possible
     def read_data(self):
@@ -108,7 +112,8 @@ class IAFSqlHelper():
         except Exception as ex:
             func = str(sys._getframe().f_code.co_name)
             print("Execution failed!")
-            self.end_program( func, str(ex) )
+            if not self.ignore_errors:
+                self.end_program( func, str(ex) )
 
     # Read many (chunksize) lines of data, if possible
     def read_many_data(self, chunksize=standard_chunksize):
@@ -119,7 +124,8 @@ class IAFSqlHelper():
         except Exception as ex:
             func = str(sys._getframe().f_code.co_name)
             print("Execution failed!")
-            self.end_program( func, str(ex) )
+            if not self.ignore_errors:
+                self.end_program( func, str(ex) )
 
     # Read all (remaining) lines of data, if possible
     def read_all_data(self):
@@ -130,7 +136,8 @@ class IAFSqlHelper():
         except Exception as ex:
             func = str(sys._getframe().f_code.co_name)
             print("Execution failed!")
-            self.end_program( func, str(ex) )
+            if not self.ignore_errors:
+                self.end_program( func, str(ex) )
             
     # Print available drivers
     @staticmethod

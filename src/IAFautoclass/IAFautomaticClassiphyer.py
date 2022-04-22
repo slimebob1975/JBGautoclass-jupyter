@@ -737,7 +737,7 @@ class IAFautomaticClassifier:
                             dataset.at[index,key] = item
                             change = False
             except Exception as ex:
-                print("Warning: {0}. Something went wrong in inconsistency check at {1}: {2}. Continuing, but at risk.".format(str(ex),key,item))
+                raise ValueError("Aborting! Reason: {0}. Something went wrong in inconsistency check at {1}: {2}.".format(str(ex),key,item))
 
             # Shuffle the upper part of the data, such that all already classified material are
             # put in random order keeping the unclassified material in the bottom
@@ -1178,9 +1178,14 @@ class IAFautomaticClassifier:
     # considered here.)
     def perform_feature_selection(self, X, number_of_components = None, feature_selection_transform = None ):
         components = None
+        if number_of_components == "None": # Convert from string to Nonetype Object
+            number_of_components = None
 
         # In the case of training, we compute a new transformation
         if feature_selection_transform == None:
+            
+            # Keep track it the selected transform fails or not
+            failed = False
 
             # PCA first. If not the number of features is specified by
             # the user, we rely on  Minka’s MLE to guess the optimal dimension.
@@ -1207,10 +1212,11 @@ class IAFautomaticClassifier:
                     X = feature_selection_transform.transform(X)
                 except Exception as ex:
                     print("Notice: PCA could not be used: {0}".format(str(ex)))
+                    failed = True
                 else:
                     if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".
                                       format(X.shape[0],X.shape[1]))
-                components = feature_selection_transform.n_components_
+                    components = feature_selection_transform.n_components_
 
             elif self.use_feature_selection and self.config.mode["feature_selection"] == "PCA" and self.config.mode["algorithm"] == "PLS":
                 if self.config.io["verbose"]: print("PCA feature reduction was not used because algorithm PLS was chosen...")
@@ -1230,8 +1236,10 @@ class IAFautomaticClassifier:
                     X = feature_selection_transform.transform(X)
                 except Exception as ex:
                     print("Notice: Nystroem transform could not be used: {0}".format(str(ex)))
+                    failed = True
                 else:
-                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
+                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1]))
+                    components = feature_selection_transform.n_components_
                     
             # Truncated SVD transformation next
             elif self.config.mode["feature_selection"] == "TSVD":
@@ -1248,9 +1256,11 @@ class IAFautomaticClassifier:
                     X = feature_selection_transform.transform(X)
                 except Exception as ex:
                     print("Notice: Truncated SVD reduction could not be used: {0}".format(str(ex)))
+                    failed = True
                 else:
-                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
-            
+                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1]))
+                    components = feature_selection_transform.n_components_
+
             # Fast independent component transformation next
             elif self.config.mode["feature_selection"] == "FICA":
                 if self.ProgressLabel: self.ProgressLabel.value = "Fast ICA reduction of dataset under way..."
@@ -1266,8 +1276,10 @@ class IAFautomaticClassifier:
                     X = feature_selection_transform.transform(X)
                 except Exception as ex:
                     print("Notice: Fast ICA reduction could not be used: {0}".format(str(ex)))
+                    failed = True
                 else:
-                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
+                    if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1]))
+                    components = feature_selection_transform.n_components_
                     
             # Random Gaussian Projection
             elif self.config.mode["feature_selection"] == "GRP":
@@ -1284,9 +1296,10 @@ class IAFautomaticClassifier:
                     X = feature_selection_transform.transform(X)
                 except Exception as ex:
                     print("Notice: GRP reduction could not be used: {0}".format(str(ex)))
+                    failed = True
                 else:
                     if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
-                components = feature_selection_transform.n_components_
+                    components = feature_selection_transform.n_components_
             
             # Non Linear Transformations below
             # First: Isomap
@@ -1304,6 +1317,7 @@ class IAFautomaticClassifier:
                     X = feature_selection_transform.transform(X)
                 except Exception as ex:
                     print("Notice: Isomap reduction could not be used: {0}".format(str(ex)))
+                    failed = True
                 else:
                     if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
                 
@@ -1322,8 +1336,14 @@ class IAFautomaticClassifier:
                     X = feature_selection_transform.transform(X)
                 except Exception as ex:
                     print("Notice: LLE reduction could not be used: {0}".format(str(ex)))
+                    failed = True
                 else:
                     if self.config.io["verbose"]: print("...new shape of data matrix is: ({0},{1})\n".format(X.shape[0],X.shape[1])) 
+                
+            # If the wanted transform failed, mark it here
+            if failed:
+                feature_selection_transform = None
+                components = X.shape[1]
                 
         # For only predictions, use the saved transform associated with trained model
         else:
@@ -2091,7 +2111,7 @@ class IAFautomaticClassifier:
         
         pwd = os.path.dirname(os.path.realpath(__file__))
         config_path = Path(pwd) / self.CONFIG_FILENAME_PATH
-        fin = open(config_path / self.CONFIG_SAMPLE_FILE, "r")
+        fin = open(config_path / self.CONFIG_SAMPLE_FILE, "r", encoding="utf-8")
         lines = fin.readlines()
         fin.close()
 
@@ -2117,7 +2137,7 @@ class IAFautomaticClassifier:
         
         fout_name = self.CONFIG_FILENAME_START + self.config.project["name"] + "_" + \
                     self.config.sql["data_username"] + ".py"
-        fout = open(config_path / fout_name, "w")
+        fout = open(config_path / fout_name, "w", encoding="utf-8")
         fout.writelines(lines)
         fout.close()
     
