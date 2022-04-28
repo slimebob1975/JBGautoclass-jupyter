@@ -76,7 +76,7 @@ from pandas.plotting import scatter_matrix
 from matplotlib import pyplot
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, MaxAbsScaler, Normalizer, Binarizer
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, make_scorer, matthews_corrcoef
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
@@ -142,8 +142,13 @@ class IAFautomaticClassifier:
     REDUCTION_NAMES = ["None", "Recursive Feature Elimination", "Principal Component Analysis", "Nystroem Method", \
                        "Truncated SVD", "Fast Indep. Component Analysis", "Gaussion Random Projection", \
                        "Isometric Mapping", "Locally Linearized Embedding"]
-    SCORETYPES = [ "accuracy", "balanced_accuracy", "f1_micro", "recall_micro", "precision_micro" ]
-    SCORETYPE_NAMES =  ["Accuracy", "Balanced Accuracy", "Balanced F1 Micro", "Recall Micro", "Precision Micro"]
+    SCORETYPES = [ "accuracy", "balanced_accuracy", "f1_micro",  "f1_macro",  "f1_weighted", \
+                   "recall_micro", "recall_macro", "recall_weighted", "precision_micro", "precision_macro", \
+                   "precision_weighted", "mcc"  ]
+    SCORETYPE_NAMES =  \
+                  ["Accuracy", "Balanced Accuracy", "Balanced F1 Micro", "Balanced F1 Macro", "Balanced F1 Weighted", \
+                   "Recall Micro", "Recall Macro", "Recall Weighted", "Precision Micro", "Precision Macro", "Precision Weighted", \
+                   "Matthews Corr. Coefficient" ]
     STANDARD_LANG = "sv"
     SQL_CHUNKSIZE = 1000
     SQL_USE_CHUNKS = True
@@ -1374,7 +1379,7 @@ class IAFautomaticClassifier:
 
         # Return all parts of the data, including the unclassified
         return X_train, X_validation, X_lower, Y_train, Y_validation, Y_lower
-
+    
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
@@ -1445,6 +1450,7 @@ class IAFautomaticClassifier:
         trained_model = None
         temp_model = None
         trained_model_name = None
+        scorer_mechanism = None
         best_feature_selection = X_train.shape[1]
         first_round = True
         if self.config.io["verbose"]:
@@ -1550,7 +1556,12 @@ class IAFautomaticClassifier:
                     # Now make kfolded cross evaluation
                     cv_results = None
                     try:
-                        cv_results = cross_val_score(pipe, X_train, Y_train, cv=kfold, scoring=self.config.mode["scoring"]) 
+                        if scorer_mechanism == None:
+                            if self.config.mode["scoring"] == "mcc":
+                                scorer_mechanism = make_scorer(matthews_corrcoef)
+                            else:
+                                scorer_mechanism = self.config.mode["scoring"]
+                        cv_results = cross_val_score(pipe, X_train, Y_train, cv=kfold, scoring=scorer_mechanism) 
                     except Exception as ex:
                         if self.config.io["verbose"]: print("NOTICE: Model {0} raised an exception in cross_val_score with message: {1}. Skipping to next".
                                           format(names[-1], str(ex)))
