@@ -1710,7 +1710,11 @@ class IAFautomaticClassifier:
             # Iterate over the indexes (they are now not in order)
             X_not = []
             for i in Y.index:
-                X_not.append((Y.loc[i] != Y_pred.loc[i]).bool())
+                try:
+                    X_not.append((Y.loc[i] != Y_pred.loc[i]).bool())
+                except Exception as ex:
+                    print("Append of data row with index: {0} failed: {1}. Probably duplicate indicies in data!".format(str(i),str(ex)))
+                    break
 
             # Quick end of loop if possible
             num_mispredicted = sum(elem == True for elem in X_not)
