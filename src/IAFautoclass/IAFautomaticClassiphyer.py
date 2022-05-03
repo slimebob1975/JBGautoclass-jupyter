@@ -170,8 +170,8 @@ class IAFautomaticClassifier:
                           "<hierarchical_class>", "<data_text_columns>", "<data_numerical_columns>", "<id_column>", \
                           "<data_username>", "<data_password>", "<train>", "<predict>", "<mispredicted>", \
                           "<use_stop_words>", "<specific_stop_words_threshold>", "<hex_encode>", \
-                          "<use_categorization>", "<test_size>", "<smote>", "<undersample>", "<algorithm>", \
-                          "<preprocessor>", "<feature_selection>", "<num_selected_features>", "<scoring>", \
+                          "<use_categorization>", "<category_text_columns>", "<test_size>", "<smote>", "<undersample>", \
+                          "<algorithm>", "<preprocessor>", "<feature_selection>", "<num_selected_features>", "<scoring>", \
                           "<max_iterations>", "<verbose>", "<model_path>", "<model_name>",  "<debug_on>", "<num_rows>"]
     
     # Constructor with arguments
@@ -188,8 +188,8 @@ class IAFautomaticClassifier:
         id_column = "id", data_username = "robert_tmp", data_password = "robert", \
         train = True, predict = True, mispredicted = True, use_stop_words = True, \
         specific_stop_words_threshold = 1.0, hex_encode = True, use_categorization = True, \
-        test_size = 0.2, smote = False, undersample = False, algorithm = "ALL", \
-        preprocessor = "NON", feature_selection = "NON", num_selected_features = None, \
+        category_text_columns = "", test_size = 0.2, smote = False, undersample = False, \
+        algorithm = "ALL", preprocessor = "NON", feature_selection = "NON", num_selected_features = None, \
         scoring = "accuracy", max_iterations = None, verbose = True, redirect_output = False, \
         model_path = "./model/", model_name = "iris", debug_on = True, num_rows = None, \
         progress_bar = None, progress_label = None, save_config_to_file = False):
@@ -215,8 +215,8 @@ class IAFautomaticClassifier:
                 config.mode["train"] , config.mode["predict"] , \
                 config.mode["mispredicted"] , config.mode["use_stop_words"] , \
                 float(config.mode["specific_stop_words_threshold"]), config.mode["hex_encode"] , \
-                config.mode["use_categorization"] , float(config.mode["test_size"]), \
-                config.mode["smote"] , config.mode["undersample"] , \
+                config.mode["use_categorization"], config.mode["category_text_columns"], \
+                float(config.mode["test_size"]), config.mode["smote"] , config.mode["undersample"] , \
                 config.mode["algorithm"], config.mode["preprocessor"], \
                 config.mode["feature_selection"], config.mode["num_selected_features"], \
                 config.mode["scoring"], int(config.mode["max_iterations"]), \
@@ -253,6 +253,8 @@ class IAFautomaticClassifier:
                 raise ValueError("Argument hex_encode must be true or false!")
             elif not self.is_bool(use_categorization):
                 raise ValueError("Argument use_categorization must be true or false!")
+            elif not self.is_str(category_text_columns):
+                raise ValueError("Specified catogory text columns are invalid!")    
             elif specific_stop_words_threshold > 1.0 or specific_stop_words_threshold < 0.0:
                 raise ValueError("Argument specific_stop_words_threshold must be between 0 and 1!")
             elif not self.is_float(test_size) or test_size > 1.0 or test_size < 0.0:
@@ -283,8 +285,8 @@ class IAFautomaticClassifier:
                 class_table, class_table_script, class_username, class_password, data_catalog, data_table, \
                 class_column, hierarchical_class, data_text_columns, data_numerical_columns, \
                 id_column, data_username, data_password, train, predict, mispredicted, use_stop_words, \
-                specific_stop_words_threshold, hex_encode, use_categorization, test_size, smote, \
-                undersample, algorithm, preprocessor, feature_selection, num_selected_features, \
+                specific_stop_words_threshold, hex_encode, use_categorization, category_text_columns, \
+                test_size, smote, undersample, algorithm, preprocessor, feature_selection, num_selected_features, \
                 scoring, max_iterations, verbose, redirect_output, model_path, model_name, debug_on, num_rows )
 
         # In case no specific row number was specified, fall back on the total 
@@ -324,6 +326,7 @@ class IAFautomaticClassifier:
         
         # Extract parameters that are not textual
         self.text_data = self.config.sql["data_text_columns"] != ""
+        self.force_categorization = self.config.mode["category_text_columns"] != ""
         self.numerical_data = self.config.sql["data_numerical_columns"] != ""
         self.use_feature_selection = self.config.mode["feature_selection"] != "NON"
         
@@ -381,11 +384,11 @@ class IAFautomaticClassifier:
                      hierarchical_class=False, data_text_columns="", data_numerical_columns="", \
                      id_column="", data_username="", data_password="", train=True, predict=False, \
                      mispredicted=False, use_stop_words=True, specific_stop_words_threshold=1.0, \
-                     hex_encode=True, use_categorization=True, test_size=0.2, smote=False, \
-                     undersample=False, algorithm="ALL", preprocessor="ALL", feature_selection="NON", \
-                     num_selected_features="", scoring="accuracy", max_iterations="20000", \
-                     verbose=True, redirect_output=False, model_path="", model_name="Model", \
-                     debug_on=True, num_rows="" ):  
+                     hex_encode=True, use_categorization=True, category_text_columns = "", \
+                     test_size=0.2, smote=False, undersample=False, algorithm="ALL", preprocessor="ALL", \
+                     feature_selection="NON", num_selected_features="", scoring="accuracy", \
+                     max_iterations="20000", verbose=True, redirect_output=False, model_path="", \
+                     model_name="Model", debug_on=True, num_rows="" ):  
 
             # Project information, will be used to distinguish data and generated model
             # from other
@@ -405,8 +408,8 @@ class IAFautomaticClassifier:
             self.mode = {"train": train, "predict": predict, "mispredicted": mispredicted, \
                 "use_stop_words": use_stop_words, "specific_stop_words_threshold": specific_stop_words_threshold, \
                 "hex_encode": hex_encode, "use_categorization": use_categorization, \
-                "test_size": test_size, "smote": smote, "undersample": undersample, \
-                "algorithm": algorithm, "preprocessor": preprocessor, \
+                "category_text_columns": category_text_columns, "test_size": test_size, "smote": smote, \
+                "undersample": undersample, "algorithm": algorithm, "preprocessor": preprocessor, \
                 "feature_selection": feature_selection, "num_selected_features": num_selected_features, \
                 "scoring": scoring, "max_iterations": max_iterations}
 
@@ -924,7 +927,8 @@ class IAFautomaticClassifier:
     # Find out if a DataFrame column contains categorical data or not
     def is_categorical_data(self, column):
 
-        is_categorical = column.value_counts().count() <= self.LIMIT_IS_CATEGORICAL
+        is_categorical = column.value_counts().count() <= self.LIMIT_IS_CATEGORICAL \
+            or (self.force_categorization and column.name in self.config.mode["category_text_columns"].split(","))
 
         return is_categorical
 
@@ -2199,6 +2203,7 @@ class IAFautomaticClassifier:
         if self.config.io["verbose"]: print(" * Material specific stop words threshold:  " + str(self.config.mode["specific_stop_words_threshold"]))
         if self.config.io["verbose"]: print(" * Hex encode text data:                    " + str(self.config.mode["hex_encode"]))
         if self.config.io["verbose"]: print(" * Categorize text data where applicable:   " + str(self.config.mode["use_categorization"]))
+        if self.config.io["verbose"]: print(" * Force categorization to these columns:   " + str(self.config.mode["category_text_columns"]))
         if self.config.io["verbose"]: print(" * Test size for trainings:                 " + str(self.config.mode["test_size"]))
         if self.config.io["verbose"]: print(" * Use SMOTE:                               " + str(self.config.mode["smote"]))
         if self.config.io["verbose"]: print(" * Use undersampling of majority class:     " + str(self.config.mode["undersample"]))

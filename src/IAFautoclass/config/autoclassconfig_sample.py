@@ -89,8 +89,11 @@ mode = {
     # Use hex encoding on text data before classification.
     "hex_encode": <hex_encode>,
 
-     # Use hex encoding on text data before classification.
+     # Use automatic categorization on text data before classification.
     "use_categorization": <use_categorization>,
+    
+    # Force the following columns to be categorized even though they are not automatically categorized
+    "category_text_columns": <category_text_columns>,
 
     # How large part, between 0 and 1, of already classified data
     # should be used for classification tests (the rest will be

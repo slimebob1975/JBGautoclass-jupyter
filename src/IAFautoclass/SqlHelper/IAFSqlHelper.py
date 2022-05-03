@@ -10,7 +10,7 @@ else:
 
 class IAFSqlHelper():
     """IAF SQL helper class, using ODBC to connect to database"""
-    standard_chunksize = 1024
+    standard_chunksize = 10000
     
     # Constructor with arguments
     def __init__(self, driver = "", host = "", catalog = "", \
