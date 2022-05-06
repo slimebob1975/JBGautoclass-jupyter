@@ -593,14 +593,12 @@ class IAFautomaticClassifier:
 
             # Take care of the special case of only training or only predictions
             if self.config.mode["train"] and not self.config.mode["predict"]:
-                query += " WHERE [" + self.config.sql["class_column"] + "] IS NOT NULL AND ([" + \
-                     self.config.sql["class_column"] + "] != \'\' OR [" + \
-                     self.config.sql["class_column"] + "] = 0)"
+                query += " WHERE [" + self.config.sql["class_column"] + "] IS NOT NULL AND [" + \
+                     self.config.sql["class_column"] + "] != \'\' " 
                 
             elif not self.config.mode["train"] and self.config.mode["predict"]:
                 query += " WHERE [" + self.config.sql["class_column"] + "] IS NULL OR [" + \
-                     self.config.sql["class_column"] + "] = \'\' AND [" + \
-                     self.config.sql["class_column"] + "] != 0)"
+                     self.config.sql["class_column"] + "] = \'\' " 
 
             # Since sorting the DataFrames directly does not seem to work right now (see below)
             # we sort the data in retreiving in directly in SQL. The "DESC" keyword makes sure
@@ -1776,7 +1774,7 @@ class IAFautomaticClassifier:
     def save_data(self, keys, Y, rates, prob_mode = 'U', labels='N/A', probabilities='N/A', alg = "Unknown"):
 
         try:
-            if self.config.io["verbose"]: print("Save to database...-please wait!")
+            if self.config.io["verbose"]: print("Save predictions to database...-please wait!")
 
             # Get a sql handler and connect to data database
             sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
@@ -1788,6 +1786,7 @@ class IAFautomaticClassifier:
 
             # Loop through the data
             num_lines = 0
+            percent_fetched = 0.0
             for i in range(len(keys)):
 
                 # Set together SQL code for the insert
@@ -1812,7 +1811,11 @@ class IAFautomaticClassifier:
                 # Delay the commit until the connection is closed
                 if sqlHelper.execute_query(query, get_data=False, commit=False):
                     num_lines += 1
+                    percent_fetched = round(100.0 * float(num_lines) / float(len(keys)))
+                    if self.config.io["verbose"]: print("Part of data saved: " + str(percent_fetched) + " %", end='\r')
 
+            if self.config.io["verbose"]: print("\n")
+                
             # Disconnect from database and commit all inserts
             sqlHelper.disconnect(commit=True)
 
