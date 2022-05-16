@@ -1,10 +1,10 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# General IAF code for automatic classification of texts and numbers in databases
+# General code for automatic classification of texts and numbers in databases
 #
-# Implemented by Robert Granat, March - May 2021
-# Updated by Robert Granat, August 2021 - February 2022.
+# Implemented by Robert Granat, IAF, March - May 2021
+# Updated by Robert Granat, August 2021 - May 2022.
 #
 # Major revisions:
 # 
@@ -121,7 +121,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 #warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
 
-class IAFautomaticClassifier:
+class IAFautomaticClassiphyer:
 
     # Internal constants
     ALGORITHMS = [ "ALL", "LRN", "KNN", "CART", "GNB", "MNB", "BNB", "CNB", "REC", "PCN", \
@@ -177,15 +177,11 @@ class IAFautomaticClassifier:
     # Constructor with arguments
     def __init__(self, config = None, name = "iris", \
         odbc_driver = "ODBC Driver 17 for SQL Server", \
-        host = "tcp:sql-stat.iaf.local", trusted_connection = False, \
-        class_catalog = "Arbetsdatabas", \
-        class_table = "aterkommande_automat.AutoKlassificering", \
-        class_table_script = "./sql/autoClassCreateTable.sql", \
-        class_username = "robert_tmp", class_password = "robert", \
-        data_catalog = "Arbetsdatabas", data_table = "aterkommande_automat.iris", \
-        class_column = "class", hierarchical_class = False, data_text_columns = "", \
-        data_numerical_columns = "petal-length,petal-width,sepal-length,sepal-width", \
-        id_column = "id", data_username = "robert_tmp", data_password = "robert", \
+        host = "", trusted_connection = True, \
+        class_catalog = "", class_table = "", class_table_script = "./sql/autoClassCreateTable.sql", \
+        class_username = "", class_password = "", data_catalog = "", data_table = "", \
+        class_column = "", hierarchical_class = False, data_text_columns = "", \
+        data_numerical_columns = "", id_column = "id", data_username = "", data_password = "", \
         train = True, predict = True, mispredicted = True, use_stop_words = True, \
         specific_stop_words_threshold = 1.0, hex_encode = True, use_categorization = True, \
         category_text_columns = "", test_size = 0.2, smote = False, undersample = False, \
@@ -373,7 +369,7 @@ class IAFautomaticClassifier:
     def __str__(self):
         return str(type(self))
 
-    # Internal configuration class, used by IAFautomaticClassifier. No default
+    # Internal configuration class, used by IAFautomaticClassiphyer. No default
     # arguments for this class constructor, since they are given in the outer class.
     class Config:
         
@@ -758,7 +754,7 @@ class IAFautomaticClassifier:
             # Use the unique id column from the data as the index column and take a copy, 
             # since it will not be used in the classification but only to reconnect each 
             # data row with classification results later on
-            keys = dataset[self.config.sql["id_column"]].copy(deep = True).apply(IAFautomaticClassifier.get_rid_of_decimals)
+            keys = dataset[self.config.sql["id_column"]].copy(deep = True).apply(IAFautomaticClassiphyer.get_rid_of_decimals)
             try:
                 dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True, \
                                   verify_integrity=False)
@@ -888,10 +884,10 @@ class IAFautomaticClassifier:
     @staticmethod
     def is_str(val):
         is_other_type = \
-            IAFautomaticClassifier.is_float(val) or \
-            IAFautomaticClassifier.is_int(val) or \
-            IAFautomaticClassifier.is_bool(val) or \
-            IAFautomaticClassifier.is_datetime(val)
+            IAFautomaticClassiphyer.is_float(val) or \
+            IAFautomaticClassiphyer.is_int(val) or \
+            IAFautomaticClassiphyer.is_bool(val) or \
+            IAFautomaticClassiphyer.is_datetime(val)
         return not is_other_type 
     
     @staticmethod
@@ -1161,7 +1157,7 @@ class IAFautomaticClassifier:
         with np.nditer(XX, op_flags=['readwrite'], flags=["refs_ok"]) as iterator:
             for x in iterator:
                 xval = str(x)
-                xhex = IAFautomaticClassifier.cipher_encode_string(xval)
+                xhex = IAFautomaticClassiphyer.cipher_encode_string(xval)
                 x[...] = xhex 
 
         return XX
@@ -2260,7 +2256,7 @@ def check_input_arguments(argv):
                 sys.exit();
             print("Importing specified configuration file:",arg)
             if not arg[0] == '.':
-                arg = IAFautomaticClassifier.convert_absolut_path_to_relative(arg)
+                arg = IAFautomaticClassiphyer.convert_absolut_path_to_relative(arg)
             file = arg.split('\\')[-1]
             filename = file.split('.')[0]
             filepath = '\\'.join(arg.split('\\')[:-1])
@@ -2294,7 +2290,7 @@ def main(argv):
 
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
-    myClassiphyer = IAFautomaticClassifier(config=config)
+    myClassiphyer = IAFautomaticClassiphyer(config=config)
     
     # Run the classifier
     myClassiphyer.run()
