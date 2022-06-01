@@ -178,7 +178,7 @@ class IAFautomaticClassiphyer:
     def __init__(self, config = None, name = "iris", \
         odbc_driver = "ODBC Driver 17 for SQL Server", \
         host = "", trusted_connection = True, \
-        class_catalog = "", class_table = "", class_table_script = "./sql/autoClassCreateTable.sql", \
+        class_catalog = "", class_table = "", class_table_script = "/sql/autoClassCreateTable.sql.txt", \
         class_username = "", class_password = "", data_catalog = "", data_table = "", \
         class_column = "", hierarchical_class = False, data_text_columns = "", \
         data_numerical_columns = "", id_column = "id", data_username = "", data_password = "", \
@@ -437,14 +437,21 @@ class IAFautomaticClassiphyer:
 
         # Read in the sql-query from file
         pwd = os.path.dirname(os.path.realpath(__file__))
-        sql_file = open(pwd + "/sql/autoClassCreateTable.sql.txt", mode="rt")
+        sql_file = open(pwd + self.config.sql["class_table_script"], mode="rt")
         query = ""
         nextline = sql_file.readline()
         while nextline:
             query += nextline.strip() + "\n"
             nextline = sql_file.readline()
         sql_file.close()
-
+        
+        # Make sure we create a classification table in the right place with the right name
+        #print("query=",query)
+        query = query.replace("<class_catalog>", self.config.sql["class_catalog"])
+        #print("query2=",query)
+        query = query.replace("<class_table>", self.config.sql["class_table"].replace(".", "].["))
+        #print("query3=",query)
+        
         if self.config.io["verbose"]: print("Creating classification table if not exists...")
 
         # Get a sql handler and connect to data database
