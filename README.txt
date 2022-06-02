@@ -6,11 +6,11 @@ To use the Jupyter GUI for IAF Python autoclassification script, do as follows:
     a) Use GIT:
         i) Install GIT, see https://github.com/git-guides/install-git 
         ii) Clone the code from the repository in a terminal window: 
-                git clone /srv/git/IAFautoclass-jupyter.git
+                git clone https://github.com/slimebob1975/IAFautoclass-jupyter
             into an appropriate directory
     b) Ask a friend to get a copy of the code
 
-2. Copy the file sql_config_sample.py to a new file called sql_config.py and change
+2. Copy the file example.env to a new file called .env and change
        the variables such that they reflect your SQL Server environment
 3. Download and install Anaconda from: https://www.anaconda.com/products/distribution
 

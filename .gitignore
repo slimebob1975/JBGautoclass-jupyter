@@ -6,3 +6,4 @@ autoclassconfig_*.py
 !autoclassconfig_sample.py
 src/IAFautoclass/output/*.csv
 src/IAFautoclass/model/*.sav
+.env
