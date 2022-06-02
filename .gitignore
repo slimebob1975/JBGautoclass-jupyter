@@ -1,3 +1,8 @@
 sql_config.py
 .ipynb_checkpoints/
-src/IAFautoclass/SqlHelper/__pycache__/
+__pycache__
+.vscode
+autoclassconfig_*.py
+!autoclassconfig_sample.py
+src/IAFautoclass/output/*.csv
+src/IAFautoclass/model/*.sav
