@@ -6,16 +6,26 @@
 import ipywidgets as widgets
 import os
 import sys
+import errno
 from pathlib import Path
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
+env_path = os.path.join(os.getcwd(), '.env')
 sys.path.append(base_dir)
 
 import IAFautomaticClassiphyer as autoclass
 import SqlHelper.IAFSqlHelper as sql
 from dotenv import load_dotenv
 
-load_dotenv()  # take environment variables from .env
+if os.path.isfile(env_path):
+    load_dotenv(env_path)  # take environment variables from .env
+else:
+    raise FileNotFoundError(
+        errno.ENOENT, 
+        os.strerror(errno.ENOENT), 
+        env_path
+    )
+
 
 
 # Class definition for the GUI
