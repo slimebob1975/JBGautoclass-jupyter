@@ -13,6 +13,7 @@ base_dir = os.path.dirname(os.path.realpath(__file__))
 env_path = os.path.join(os.getcwd(), '.env')
 sys.path.append(base_dir)
 
+# TODO: Refaktorera så att den bara används om den behövs
 import IAFautomaticClassiphyer as autoclass
 import SqlHelper.IAFSqlHelper as sql
 from dotenv import load_dotenv
@@ -58,6 +59,7 @@ class IAFautoclass_GUI:
         # We need a dictionary to keep track of datatypes
         self.datatype_dict = None
         
+        # TODO: Can we fix this in a neater way?
         # Some data elements might get lost unless we lock a few callback functions
         self.lock_observe_1 = False
         
@@ -85,15 +87,6 @@ class IAFautoclass_GUI:
             description_tooltip = 'Enter a distinct project name for the model'
         )
         
-        # A helper for SQL Server communications
-        self.sqlHelper = \
-            sql.IAFSqlHelper( driver = self.DEFAULT_ODBC_DRIVER, host = self.DEFAULT_HOST, \
-                              catalog = self.DEFAULT_DATA_CATALOG, trusted_connection = True )
-        try:
-            self.conn = self.sqlHelper.connect()
-        except Exception as ex:
-            sys.exit("GUI class could not connect to SQL Server: {0}".format(str(ex)))
-        
         # Database dropdown list
         self.database_dropdown = widgets.Dropdown(
             options = ['N/A'],
@@ -101,9 +94,6 @@ class IAFautoclass_GUI:
             description = 'Databases:',
             description_tooltip = 'These are the databases of choice'
         )
-        
-        # Update databases list
-        self.update_databases()
         
         # Tables dropdown list
         self.tables_dropdown = widgets.Dropdown(
@@ -260,7 +250,6 @@ class IAFautoclass_GUI:
                 width='auto',
             ),
         )
-        self.update_algorithm_form()
         
         # Two checkboxes related to SMOTE and undersampling of dominant class
         self.smote_checkbox = widgets.Checkbox(
@@ -424,6 +413,20 @@ class IAFautoclass_GUI:
             value = "No mispredicted training data was detected yet",
             description_tooltip = 'Use to manually inspect and correct mispredicted training data'
         )
+
+        # A helper for SQL Server communications
+        self.sqlHelper = \
+            sql.IAFSqlHelper( driver = self.DEFAULT_ODBC_DRIVER, host = self.DEFAULT_HOST, \
+                              catalog = self.DEFAULT_DATA_CATALOG, trusted_connection = True )
+        try:
+            self.conn = self.sqlHelper.connect()
+        except Exception as ex:
+            sys.exit("GUI class could not connect to SQL Server: {0}".format(str(ex)))
+            
+        # Update databases list
+        self.update_databases()
+        
+        self.update_algorithm_form()
                 
     # Destructor
     def __del__(self):
