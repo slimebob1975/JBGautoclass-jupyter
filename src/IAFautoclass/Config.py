@@ -1,12 +1,12 @@
 
-from dataclasses import dataclass
+import copy
+from dataclasses import dataclass, field
 import enum
 import getopt
 import importlib
 import os
 import sys
 
-from sympy import O
 
 """
 TODO: Once I know where that driver function fits
@@ -86,159 +86,224 @@ class Scoretype(enum.Enum):
 
 @dataclass
 class Config:
+    
+    MAX_ITERATIONS = 20000
+    LIMIT_IS_CATEGORICAL = 30
+
+    @dataclass
+    class Connection:
+        odbc_driver: str = "ODBC Driver 17 for SQL Server"
+        host: str = ""
+        trusted_connection: bool = True
+        class_catalog: str = ""
+        class_table: str = ""
+        class_table_script: str = "/sql/autoClassCreateTable.sql.txt"
+        class_username: str = ""
+        class_password: str = ""
+        data_catalog: str = ""
+        data_table: str = ""
+        class_column: str = ""
+        data_text_columns: str = ""
+        data_numerical_columns: str = ""
+        id_column: str = "id"
+        data_username: str = ""
+        data_password: str = ""
+                
+
+    @dataclass
+    class IO:
+        verbose: bool = True
+        redirect_output: bool = False
+        model_path: str = "./model/"
+        model_name: str = "iris"
+
+    @dataclass
+    class Mode:
+        train: bool = True
+        predict: bool = True
+        mispredicted: bool = True
+        use_stop_words: bool = True
+        specific_stop_words_threshold: float = 1.0
+        hex_encode: bool = True
+        use_categorization: bool = True
+        category_text_columns: str = ""
+        test_size: float = 0.2
+        smote: bool = False
+        undersample: bool = False
+        algorithm: Algorithm = Algorithm.ALL
+        preprocessor: Preprocess = Preprocess.NON
+        feature_selection: Reduction = Reduction.NON
+        num_selected_features: int = None
+        scoring: Scoretype = Scoretype.accuracy
+        max_iterations: int = None
+
+    @dataclass
+    class Debug:
+        debug_on: bool = True
+        num_rows: int = None
+    
+    connection: Connection = field(default_factory=Connection)
+    mode: Mode  = field(default_factory=Mode)
+    io: IO = field(default_factory=IO)
+    debug: Debug = field(default_factory=Debug)
     name: str = "iris"
-    odbc_driver: str = "ODBC Driver 17 for SQL Server"
-    host: str = ""
-    trusted_connection: bool = True
-    class_catalog: str = ""
-    class_table: str = ""
-    class_table_script: str = "/sql/autoClassCreateTable.sql.txt"
-    class_username: str = ""
-    class_password: str = ""
-    data_catalog: str = ""
-    data_table: str = ""
-    class_column: str = ""
-    data_text_columns: str = ""
-    data_numerical_columns: str = ""
-    id_column: str = "id"
-    data_username: str = ""
-    data_password: str = ""
-    train: bool = True
-    predict: bool = True
-    mispredicted: bool = True
-    use_stop_words: bool = True
-    specific_stop_words_threshold: float = 1.0
-    hex_encode: bool = True
-    use_categorization: bool = True
-    category_text_columns: str = ""
-    test_size: float = 0.2
-    smote: bool = False
-    undersample: bool = False
-    algorithm: Algorithm = Algorithm.ALL
-    preprocessor: Preprocess = Preprocess.NON
-    feature_selection: Reduction = Reduction.NON
-    num_selected_features: int = None
-    scoring: Scoretype = Scoretype.accuracy
-    max_iterations: int = None
-    verbose: bool = True
-    redirect_output: bool = False
-    model_path: str = "./model/"
-    model_name: str = "iris"
-    debug_on: bool = True
-    num_rows: int = None
 
     def __post_init__(self) -> None:
-        """List of params that need type checked"""
-        string_params = [
-            "name",
-            "category_text_columns"
-        ]
+        """Post init is called after init, which is the best place to check the types & values"""
 
-        bool_params = [
-            "trusted_connection",
-            "use_stop_words",
-            "hex_encode",
-            "verbose",
-            "redirect_output",
-            "smote",
-            "undersample"
-        ]
+        # 1: Top config params
+        if not isinstance(self.name, str):
+            raise TypeError(f"Argument name must be a string")
 
-        positive_int_params = [
-            "num_selected_features",
-            "max_iterations",
-            "num_rows"
-        ]
-
-        for item in string_params:
-            if not isinstance(getattr(self, item), str):
-                raise TypeError(f"Argument {item} must be a string")
-
-        for item in bool_params:
-            if not isinstance(getattr(self, item), bool):
-                raise TypeError(f"Argument {item} must be True or False")
-
-        for item in positive_int_params:
-            value = getattr(self, item)
-            if value is not None:
-                if not isinstance(value, int) or value < 0:
-                    raise ValueError(
-                        f"Argument {item} must be a positive integer")
-
-        # database connection information
+        # 2: Connection params
+        # 2.1: database connection information
         database_connection_information = [
-            isinstance(self.host, str),
-            isinstance(self.class_catalog, str),
-            isinstance(self.class_table, str),
-            isinstance(self.class_table_script, str),
-            isinstance(self.class_username, str),
-            isinstance(self.class_password, str),
-            isinstance(self.data_catalog, str),
-            isinstance(self.data_table, str)
+            isinstance(self.connection.host, str),
+            isinstance(self.connection.class_catalog, str),
+            isinstance(self.connection.class_table, str),
+            isinstance(self.connection.class_table_script, str),
+            isinstance(self.connection.class_username, str),
+            isinstance(self.connection.class_password, str),
+            isinstance(self.connection.data_catalog, str),
+            isinstance(self.connection.data_table, str),
+            isinstance(self.connection.class_column, str),
+            isinstance(self.connection.data_text_columns, str),
+            isinstance(self.connection.data_numerical_columns, str),
+            isinstance(self.connection.id_column, str),
+            isinstance(self.connection.trusted_connection, bool)
         ]
 
         if not all(database_connection_information):
             raise TypeError(
-                "Specified database connection information is invalid!")
+                "Specified database connection information is invalid")
 
-        # Login credentials
+        # 2.2: Login credentials
+        # TODO: Move in the "if trusted remove password etc" here?
         login_credentials = [
-            isinstance(self.data_username, str),
-            isinstance(self.data_password, str)
+            isinstance(self.connection.data_username, str),
+            isinstance(self.connection.data_password, str)
         ]
 
         if not all(login_credentials):
             raise TypeError("Specified login credentials are invalid!")
+        
+        # 3: Mode/training
+        if not isinstance(self.mode.category_text_columns, str):
+            raise TypeError(f"Argument category_text_columns must be a string")
+        
+        if not positive_int_or_none(self.mode.num_selected_features):
+            raise ValueError(
+                "Argument selected_features must be a positive integer")
 
-        # Training
-        # 1. Type checking + at least one is True
+        if self.mode.max_iterations is None:
+            self.mode.max_iterations = self.MAX_ITERATIONS
+        elif not positive_int_or_none(self.mode.max_iterations):
+            raise ValueError(
+                "Argument max_iterations must be a positive integer")
+
+        # Type checking + at least one is True
         mode_types = [
-            isinstance(self.train, bool),
-            isinstance(self.predict, bool),
-            isinstance(self.mispredicted, bool),
-            (self.train or self.predict or self.mispredicted)
+            isinstance(self.mode.train, bool),
+            isinstance(self.mode.predict, bool),
+            isinstance(self.mode.mispredicted, bool),
+            (self.mode.train or self.mode.predict),
+            (self.mode.mispredicted and self.mode.train)
         ]
         if not all(mode_types):
             raise ValueError(
-                "Class must be set for either training, predictions or mispredictions!")
+                "Class must be set for either training, predictions and/or mispredictions!")
 
-        # 2. Data columns valid for training/mispredicted
-        if self.train or self.mispredicted:
-            training_columns = [
-                isinstance(self.data_text_columns, str),
-                isinstance(self.data_numerical_columns, str),
-                isinstance(self.id_column, str),
-            ]
 
-            if not all(training_columns):
-                raise TypeError(
-                    "Specified data columns are invalid for training!")
+        # Stop words threshold and test size
+        if isinstance(self.mode.specific_stop_words_threshold, float):
+            if self.mode.specific_stop_words_threshold > 1.0 or self.mode.specific_stop_words_threshold < 0.0:
+                 raise ValueError(
+                    "Argument specific_stop_words_threshold must be between 0 and 1!")
+        else:
+            raise TypeError(
+                "Argument specific_stop_words_threshold must be a float between 0 and 1!")
 
-            # Stop words threshold and test size
-            if isinstance(self.specific_stop_words_threshold, float):
-                if self.specific_stop_words_threshold > 1.0 or self.specific_stop_words_threshold < 0.0:
-                    raise ValueError(
-                        "Argument specific_stop_words_threshold must be between 0 and 1!")
-            else:
-                raise TypeError(
-                    "Argument specific_stop_words_threshold must be a float between 0 and 1!")
+        
+        if isinstance(self.mode.test_size, float):
+            if self.mode.test_size > 1.0 or self.mode.test_size < 0.0:
+                raise ValueError(
+                    "Argument test_size must be between 0 and 1!")
+        else:
+            raise TypeError(
+                "Argument test_size must be a float between 0 and 1!")
 
-            if isinstance(self.test_size, float):
-                if self.test_size > 1.0 or self.test_size < 0.0:
-                    raise ValueError(
-                        "Argument test_size must be between 0 and 1!")
-            else:
-                raise TypeError(
-                    "Argument test_size must be a float between 0 and 1!")
+        if not (isinstance(self.mode.algorithm, Algorithm)):
+            raise TypeError("Argument algorithm is invalid")
 
-            if not (isinstance(self.algorithm, Algorithm)):
-                raise TypeError("Argument algorithm is invalid")
+        if not (isinstance(self.mode.preprocessor, Preprocess)):
+            raise TypeError("Argument preprocessor is invalid")
 
-            if not (isinstance(self.preprocessor, Preprocess)):
-                raise TypeError("Argument preprocessor is invalid")
+        if not (isinstance(self.mode.feature_selection, Reduction)):
+            raise TypeError("Argument feature_selection is invalid")
 
-            if not (isinstance(self.feature_selection, Reduction)):
-                raise TypeError("Argument feature_selection is invalid")
+        for item in [
+            "use_stop_words",
+            "hex_encode",
+            "smote",
+            "undersample"
+        ]:
+            if not isinstance(getattr(self.mode, item), bool):
+                raise TypeError(f"Argument {item} must be True or False")
+        
+        
+        # 4: IO
+        for item in [
+            "verbose",
+            "redirect_output"
+        ]:
+            if not isinstance(getattr(self.io, item), bool):
+                raise TypeError(f"Argument {item} must be True or False")
+
+        # 5: Debug
+        # TODO: Set the value based on count_data_rows(), but first decide where that method should be
+        if not positive_int_or_none(self.debug.num_rows):
+            raise ValueError(
+                "Argument num_rows must be a positive integer")
+
+        # Overriding values
+        if self.connection.trusted_connection:
+            self.connection.data_password = ""
+            self.connection.class_password = ""
+
+            # TODO: Change to not use os.getlogin()
+            username = os.getlogin()
+            self.connection.class_username = username
+            self.connection.data_username = username
+
+
+    # A help method to extract the config information to save
+    def get_configuration_to_save(self):
+        configuration = self.Config()
+        configuration.sql = copy.deepcopy(self.config.sql)
+        configuration.sql.pop("data_catalog")
+        configuration.sql.pop("data_table")
+        configuration.mode = copy.deepcopy(self.config.mode)
+        configuration.mode.pop("train")
+        configuration.mode.pop("predict")
+        configuration.mode.pop("mispredicted")
+        configuration.io = copy.deepcopy(self.config.io)
+        configuration.io.pop("model_name")
+        configuration.debug = copy.deepcopy(self.config.debug)
+        configuration.debug.pop("num_rows")
+        
+        return configuration
+
+
+
+    
+def positive_int_or_none(value: int) -> bool:
+    if value is None:
+        return True
+    
+    if isinstance(value, int) and value >= 0:
+        return True
+
+    return False
 
 
 # In case the user has specified some input arguments to command line call
@@ -291,52 +356,60 @@ def check_input_arguments(argv):
             print(command_line_instructions)
             sys.exit()
 
-
 def load_config_from_module(argv) -> Config:
     print(argv)
     module = check_input_arguments(sys.argv)
+    
     config = Config(
-        name=module.project["name"],
-        odbc_driver=module.sql["odbc_driver"],
-        host=module.sql["host"],
-        trusted_connection=module.sql["trusted_connection"],
-        class_catalog=module.sql["class_catalog"],
-        class_table=module.sql["class_table"],
-        class_table_script=module.sql["class_table_script"],
-        class_username=module.sql["class_username"],
-        class_password=module.sql["class_password"],
-        data_catalog=module.sql["data_catalog"],
-        data_table=module.sql["data_table"],
-        class_column=module.sql["class_column"],
-        data_text_columns=module.sql["data_text_columns"],
-        data_numerical_columns=module.sql["data_numerical_columns"],
-        id_column=module.sql["id_column"],
-        data_username=module.sql["data_username"],
-        data_password=module.sql["data_password"],
-        train=module.mode["train"],
-        predict=module.mode["predict"],
-        mispredicted=module.mode["mispredicted"],
-        use_stop_words=module.mode["use_stop_words"],
-        specific_stop_words_threshold=float(
-            module.mode["specific_stop_words_threshold"]),
-        hex_encode=module.mode["hex_encode"],
-        use_categorization=module.mode["use_categorization"],
-        category_text_columns=module.mode["category_text_columns"],
-        test_size=float(module.mode["test_size"]),
-        smote=module.mode["smote"],
-        undersample=module.mode["undersample"],
-        algorithm=Algorithm[module.mode["algorithm"]],
-        preprocessor=Preprocess[module.mode["preprocessor"]],
-        feature_selection=Reduction[module.mode["feature_selection"]],
-        num_selected_features=module.mode["num_selected_features"],
-        scoring=Scoretype[module.mode["scoring"]],
-        max_iterations=int(module.mode["max_iterations"]),
-        verbose=module.io["verbose"],
-        redirect_output=False,
-        model_path=module.io["model_path"],
-        model_name=module.io["model_name"],
-        debug_on=module.debug["debug_on"],
-        num_rows=int(module.debug["num_rows"])
+        Config.Connection(
+            odbc_driver=module.sql["odbc_driver"],
+            host=module.sql["host"],
+            trusted_connection=module.sql["trusted_connection"],
+            class_catalog=module.sql["class_catalog"],
+            class_table=module.sql["class_table"],
+            class_table_script=module.sql["class_table_script"],
+            class_username=module.sql["class_username"],
+            class_password=module.sql["class_password"],
+            data_catalog=module.sql["data_catalog"],
+            data_table=module.sql["data_table"],
+            class_column=module.sql["class_column"],
+            data_text_columns=module.sql["data_text_columns"],
+            data_numerical_columns=module.sql["data_numerical_columns"],
+            id_column=module.sql["id_column"],
+            data_username=module.sql["data_username"],
+            data_password=module.sql["data_password"]
+        ),
+        Config.Mode(
+            train=module.mode["train"],
+            predict=module.mode["predict"],
+            mispredicted=module.mode["mispredicted"],
+            use_stop_words=module.mode["use_stop_words"],
+            specific_stop_words_threshold=float(
+                module.mode["specific_stop_words_threshold"]),
+            hex_encode=module.mode["hex_encode"],
+            use_categorization=module.mode["use_categorization"],
+            category_text_columns=module.mode["category_text_columns"],
+            test_size=float(module.mode["test_size"]),
+            smote=module.mode["smote"],
+            undersample=module.mode["undersample"],
+            algorithm=Algorithm[module.mode["algorithm"]],
+            preprocessor=Preprocess[module.mode["preprocessor"]],
+            feature_selection=Reduction[module.mode["feature_selection"]],
+            num_selected_features=module.mode["num_selected_features"],
+            scoring=Scoretype[module.mode["scoring"]],
+            max_iterations=int(module.mode["max_iterations"])
+        ),
+        Config.IO(
+            verbose=module.io["verbose"],
+            redirect_output=False,
+            model_path=module.io["model_path"],
+            model_name=module.io["model_name"]
+        ),
+        Config.Debug(
+            debug_on=module.debug["debug_on"],
+            num_rows=int(module.debug["num_rows"])
+        ),
+        name=module.project["name"]
     )
 
     return config
@@ -346,6 +419,10 @@ def main():
     if len(sys.argv) > 1:
         config = load_config_from_module(sys.argv)
     else:
+        mode = Config.Mode(
+            train=False,
+            mispredicted=True
+        )
         config = Config()
 
     # print(Algorithm.ALL.value)
