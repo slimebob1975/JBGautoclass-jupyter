@@ -7,6 +7,8 @@ import importlib
 import os
 import sys
 
+from pathlib import Path
+
 
 """
 TODO: Once I know where that driver function fits
@@ -89,6 +91,61 @@ class Config:
     
     MAX_ITERATIONS = 20000
     LIMIT_IS_CATEGORICAL = 30
+    CONFIG_FILENAME_PATH = "./config/"
+    CONFIG_FILENAME_START = "autoclassconfig_"
+    CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py"
+
+    CONFIGURATION_TAGS = ["<name>", "<odbc_driver>", "<host>", "<trusted_connection>", "<class_catalog>", \
+                          "<class_table>", "<class_table_script>", "<class_username>", \
+                          "<class_password>", "<data_catalog>", "<data_table>", "<class_column>", \
+                          "<data_text_columns>", "<data_numerical_columns>", "<id_column>", \
+                          "<data_username>", "<data_password>", "<train>", "<predict>", "<mispredicted>", \
+                          "<use_stop_words>", "<specific_stop_words_threshold>", "<hex_encode>", \
+                          "<use_categorization>", "<category_text_columns>", "<test_size>", "<smote>", "<undersample>", \
+                          "<algorithm>", "<preprocessor>", "<feature_selection>", "<num_selected_features>", "<scoring>", \
+                          "<max_iterations>", "<verbose>", "<model_path>", "<model_name>",  "<debug_on>", "<num_rows>"]
+
+    TEMPLATE_TAGS = {
+        "name": "<name>",
+        "connection.odbc_driver": "<odbc_driver>",
+        "connection.host": "<host>",
+        "connection.trusted_connection": "<trusted_connection>",
+        "connection.class_catalog": "<class_catalog>", 
+        "connection.class_table": "<class_table>",
+        "connection.class_table_script": "<class_table_script>",
+        "connection.class_username": "<class_username>",
+        "connection.class_password": "<class_password>",
+        "connection.data_catalog": "<data_catalog>",
+        "connection.data_table": "<data_table>",
+        "connection.class_column": "<class_column>",
+        "connection.data_text_columns": "<data_text_columns>",
+        "connection.data_numerical_columns": "<data_numerical_columns>",
+        "connection.id_column": "<id_column>",
+        "connection.data_username": "<data_username>",
+        "connection.data_password": "<data_password>",
+        "mode.train": "<train>",
+        "mode.predict": "<predict>",
+        "mode.mispredicted": "<mispredicted>",
+        "mode.use_stop_words": "<use_stop_words>",
+        "mode.specific_stop_words_threshold": "<specific_stop_words_threshold>",
+        "mode.hex_encode": "<hex_encode>",
+        "mode.use_categorization": "<use_categorization>",
+        "mode.category_text_columns": "<category_text_columns>",
+        "mode.test_size": "<test_size>",
+        "mode.smote": "<smote>",
+        "mode.undersample": "<undersample>",
+        "mode.algorithm": "<algorithm>",
+        "mode.preprocessor": "<preprocessor>",
+        "mode.feature_selection": "<feature_selection>",
+        "mode.num_selected_features": "<num_selected_features>",
+        "mode.scoring": "<scoring>",
+        "mode.max_iterations": "<max_iterations>",
+        "io.verbose": "<verbose>",
+        "io.model_path": "<model_path>",
+        "io.model_name": "<model_name>",
+        "debug.debug_on": "<debug_on>",
+        "debug.num_rows": "<num_rows>"
+    }
 
     @dataclass
     class Connection:
@@ -147,8 +204,13 @@ class Config:
     io: IO = field(default_factory=IO)
     debug: Debug = field(default_factory=Debug)
     name: str = "iris"
+    config_path: str = field(init=False)
+    filename: str = field(init=False)
 
     def __post_init__(self) -> None:
+        pwd = os.path.dirname(os.path.realpath(__file__))
+        self.config_path = Path(pwd) / self.CONFIG_FILENAME_PATH
+        
         """Post init is called after init, which is the best place to check the types & values"""
 
         # 1: Top config params
@@ -193,7 +255,7 @@ class Config:
         
         if not positive_int_or_none(self.mode.num_selected_features):
             raise ValueError(
-                "Argument selected_features must be a positive integer")
+                "Argument num_selected_features must be a positive integer")
 
         if self.mode.max_iterations is None:
             self.mode.max_iterations = self.MAX_ITERATIONS
@@ -275,24 +337,55 @@ class Config:
             self.connection.class_username = username
             self.connection.data_username = username
 
+        self.filename = f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
 
-    # A help method to extract the config information to save
+
+    # Extracts the config information to save with a model
+    # TODO: rename: "get_clean_config"
     def get_configuration_to_save(self):
-        configuration = self.Config()
-        configuration.sql = copy.deepcopy(self.config.sql)
-        configuration.sql.pop("data_catalog")
-        configuration.sql.pop("data_table")
-        configuration.mode = copy.deepcopy(self.config.mode)
-        configuration.mode.pop("train")
-        configuration.mode.pop("predict")
-        configuration.mode.pop("mispredicted")
-        configuration.io = copy.deepcopy(self.config.io)
-        configuration.io.pop("model_name")
-        configuration.debug = copy.deepcopy(self.config.debug)
-        configuration.debug.pop("num_rows")
+        configuration = Config()
+        configuration.connection = copy.deepcopy(self.connection)
+        configuration.connection.data_catalog = ""
+        configuration.connection.data_table = ""
+        configuration.mode = copy.deepcopy(self.mode)
+        configuration.mode.train = None
+        configuration.mode.predict = None
+        configuration.mode.mispredicted = None
+        configuration.io = copy.deepcopy(self.io)
+        configuration.io.model_name = ""
+        configuration.debug = copy.deepcopy(self.debug)
+        configuration.debug.num_rows = 0
         
         return configuration
 
+    # Saves config to be read from the command line
+    # TODO: rename: "save_to_file"
+    def export_configuration_to_file(self) -> None:
+        with open(self.config_path / self.CONFIG_SAMPLE_FILE, "r", encoding="utf-8") as fin:
+            lines = fin.readlines()
+        
+        for tag in self.TEMPLATE_TAGS:
+            template = self.TEMPLATE_TAGS[tag]
+            location = tag.split(".")
+            
+            if (len(location) == 1):
+                replace = getattr(self, location[0])
+            else:
+                head = getattr(self, location[0])
+                replace = getattr(head, location[1])
+
+            # Check if it's one of the enum variables
+            if (isinstance(replace, enum.Enum)):
+                replace = replace.name
+
+            
+            for i in range(len(lines)):
+                lines[i] = lines[i].replace(template, str(replace))
+       
+        
+        with open(self.config_path / self.filename, "w", encoding="utf-8") as fout:
+           fout.writelines(lines)
+        
 
 
     
@@ -357,9 +450,85 @@ def check_input_arguments(argv):
             sys.exit()
 
 def load_config_from_module(argv) -> Config:
-    print(argv)
-    module = check_input_arguments(sys.argv)
+    module = check_input_arguments(argv)
+
+    version = '1.0'
+    if (hasattr(module, 'version')):
+        version = module.version
+
+    if (version == '1.0'):
+        return load_config_1(module)
     
+    if (version == '2.0'):
+        return load_config_2(module)
+    
+def set_none_or_int(value):
+    if value == "None":
+        return None
+
+    return int(value)
+
+def load_config_2(module) -> Config:
+    num_rows = set_none_or_int(module.debug["num_rows"])
+    num_selected_features = set_none_or_int(module.mode["num_selected_features"])
+    max_iterations = set_none_or_int(module.mode["max_iterations"])
+
+    config = Config(
+        Config.Connection(
+            odbc_driver=module.connection["odbc_driver"],
+            host=module.connection["host"],
+            trusted_connection=module.connection["trusted_connection"],
+            class_catalog=module.connection["class_catalog"],
+            class_table=module.connection["class_table"],
+            class_table_script=module.connection["class_table_script"],
+            class_username=module.connection["class_username"],
+            class_password=module.connection["class_password"],
+            data_catalog=module.connection["data_catalog"],
+            data_table=module.connection["data_table"],
+            class_column=module.connection["class_column"],
+            data_text_columns=module.connection["data_text_columns"],
+            data_numerical_columns=module.connection["data_numerical_columns"],
+            id_column=module.connection["id_column"],
+            data_username=module.connection["data_username"],
+            data_password=module.connection["data_password"]
+        ),
+        Config.Mode(
+            train=module.mode["train"],
+            predict=module.mode["predict"],
+            mispredicted=module.mode["mispredicted"],
+            use_stop_words=module.mode["use_stop_words"],
+            specific_stop_words_threshold=float(
+                module.mode["specific_stop_words_threshold"]),
+            hex_encode=module.mode["hex_encode"],
+            use_categorization=module.mode["use_categorization"],
+            category_text_columns=module.mode["category_text_columns"],
+            test_size=float(module.mode["test_size"]),
+            smote=module.mode["smote"],
+            undersample=module.mode["undersample"],
+            algorithm=Algorithm[module.mode["algorithm"]],
+            preprocessor=Preprocess[module.mode["preprocessor"]],
+            feature_selection=Reduction[module.mode["feature_selection"]],
+            num_selected_features=num_selected_features,
+            scoring=Scoretype[module.mode["scoring"]],
+            max_iterations=max_iterations
+        ),
+        Config.IO(
+            verbose=module.io["verbose"],
+            redirect_output=False,
+            model_path=module.io["model_path"],
+            model_name=module.io["model_name"]
+        ),
+        Config.Debug(
+            debug_on=module.debug["debug_on"],
+            num_rows=num_rows
+        ),
+        name=module.name
+    )
+
+    return config
+    
+    
+def load_config_1(module) -> Config:
     config = Config(
         Config.Connection(
             odbc_driver=module.sql["odbc_driver"],
@@ -419,12 +588,11 @@ def main():
     if len(sys.argv) > 1:
         config = load_config_from_module(sys.argv)
     else:
-        mode = Config.Mode(
-            train=False,
-            mispredicted=True
-        )
-        config = Config()
+       config = Config(name="foo")
 
+    #print(isinstance(config.mode.scoring, enum.Enum))
+    #print(config.mode.scoring.name)
+    #config.export_configuration_to_file()
     # print(Algorithm.ALL.value)
     print(config)
 
