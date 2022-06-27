@@ -1,42 +1,31 @@
 
 import copy
-from dataclasses import dataclass, field
 import enum
 import getopt
 import importlib
 import os
 import sys
-
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from sklearn.preprocessing import StandardScaler, MinMaxScaler, MaxAbsScaler, Normalizer, Binarizer
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, make_scorer, matthews_corrcoef
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
-from sklearn.svm import SVC
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.feature_extraction.text import TfidfTransformer
-from sklearn.linear_model import RidgeClassifier
-from sklearn.ensemble import BaggingClassifier, ExtraTreesClassifier, AdaBoostClassifier, GradientBoostingClassifier
-from sklearn.pipeline import Pipeline, make_pipeline
-from imblearn.over_sampling import SMOTE
-from imblearn.under_sampling import RandomUnderSampler
-from imblearn.pipeline import Pipeline as ImbPipeline
-from sklearn.svm import LinearSVC
-from sklearn.neural_network import MLPClassifier, MLPRegressor
-from sklearn.linear_model import SGDClassifier, Perceptron, PassiveAggressiveClassifier
-from sklearn.naive_bayes import GaussianNB, BernoulliNB, ComplementNB, MultinomialNB
+from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
+                                           QuadraticDiscriminantAnalysis)
+from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
+                              ExtraTreesClassifier, GradientBoostingClassifier,
+                              RandomForestClassifier)
+from sklearn.linear_model import (LogisticRegression,
+                                  PassiveAggressiveClassifier, Perceptron,
+                                  RidgeClassifier, SGDClassifier)
+from sklearn.naive_bayes import (BernoulliNB, ComplementNB, GaussianNB,
+                                 MultinomialNB)
 from sklearn.neighbors import KNeighborsClassifier, NearestCentroid
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.feature_selection import SelectFromModel, RFE
-from sklearn.decomposition import PCA, TruncatedSVD, FastICA
-from sklearn.random_projection import GaussianRandomProjection
-from sklearn.kernel_approximation import Nystroem
-from sklearn.exceptions import FitFailedWarning, ConvergenceWarning
-from sklearn.preprocessing import LabelBinarizer
-from sklearn.manifold import Isomap, LocallyLinearEmbedding
+from sklearn.neural_network import MLPClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import (Binarizer, MaxAbsScaler,
+                                   MinMaxScaler, Normalizer, StandardScaler)
+from sklearn.svm import SVC, LinearSVC
+from sklearn.tree import DecisionTreeClassifier
+
 
 class Algorithm(enum.Enum):
     ALL = "All"
@@ -74,67 +63,67 @@ class Algorithm(enum.Enum):
         return LogisticRegression(solver='liblinear', multi_class='ovr')
 
 
-    def do_KNN(self, max_iterations: int, size: int)-> None:
+    def do_KNN(self, max_iterations: int, size: int)-> KNeighborsClassifier:
         return KNeighborsClassifier()
 
 
-    def do_CART(self, max_iterations: int, size: int)-> None:
+    def do_CART(self, max_iterations: int, size: int)-> DecisionTreeClassifier:
         return DecisionTreeClassifier()
 
 
-    def do_GNB(self, max_iterations: int, size: int)-> None:
+    def do_GNB(self, max_iterations: int, size: int)-> GaussianNB:
         return GaussianNB()
 
 
-    def do_MNB(self, max_iterations: int, size: int)-> None:
+    def do_MNB(self, max_iterations: int, size: int)-> MultinomialNB:
         return MultinomialNB(alpha=.01)
 
 
-    def do_BNB(self, max_iterations: int, size: int)-> None:
+    def do_BNB(self, max_iterations: int, size: int)-> BernoulliNB:
         return BernoulliNB(alpha=.01)
 
 
-    def do_CNB(self, max_iterations: int, size: int)-> None:
+    def do_CNB(self, max_iterations: int, size: int)-> ComplementNB:
         return ComplementNB(alpha=.01)
 
 
-    def do_REC(self, max_iterations: int, size: int)-> None:
+    def do_REC(self, max_iterations: int, size: int)-> RidgeClassifier:
         return RidgeClassifier(tol=1e-2, solver="sag")
 
 
-    def do_PCN(self, max_iterations: int, size: int)-> None:
+    def do_PCN(self, max_iterations: int, size: int)-> Perceptron:
         return Perceptron(max_iter=max_iterations)
 
 
-    def do_PAC(self, max_iterations: int, size: int)-> None:
+    def do_PAC(self, max_iterations: int, size: int)-> PassiveAggressiveClassifier:
         return PassiveAggressiveClassifier(max_iter=max_iterations)
 
 
-    def do_RFC1(self, max_iterations: int, size: int)-> None:
+    def do_RFC1(self, max_iterations: int, size: int)-> RandomForestClassifier:
         return self.call_RandomForest("sqrt")
 
 
-    def do_RFC2(self, max_iterations: int, size: int)-> None:
+    def do_RFC2(self, max_iterations: int, size: int)-> RandomForestClassifier:
         return self.call_RandomForest("log2")
 
-    def call_RandomForest(self, max_features: str) -> None:
+    def call_RandomForest(self, max_features: str) -> RandomForestClassifier:
         return RandomForestClassifier(n_estimators=100, max_features=max_features)
 
 
-    def do_LIN1(self, max_iterations: int, size: int)-> None:
+    def do_LIN1(self, max_iterations: int, size: int)-> LinearSVC:
         return self.call_LinearSVC(max_iterations, "l1", False) 
 
 
-    def do_LIN2(self, max_iterations: int, size: int)-> None:  
+    def do_LIN2(self, max_iterations: int, size: int)-> LinearSVC:  
         return self.call_LinearSVC(max_iterations, "l2", False)
 
 
-    def do_LINP(self, max_iterations: int, size: int)-> None:
+    def do_LINP(self, max_iterations: int, size: int)-> Pipeline:
         return Pipeline([
             ('feature_selection', SelectFromModel(self.call_LinearSVC(max_iterations, "l1", False))),
             ('classification', self.call_LinearSVC(max_iterations, "l2"))])
     
-    def do_SVC(self, max_iterations: int, size: int) -> None:
+    def do_SVC(self, max_iterations: int, size: int):
         # TODO: Move this into the algorithms having a dict as a value with description/limit as keys and limit: None if no limit
         LIMIT_SVC = 10000
         if size < LIMIT_SVC:
@@ -145,67 +134,67 @@ class Algorithm(enum.Enum):
         return self.call_LinearSVC(max_iterations, "l1", False)
     
 
-    def call_LinearSVC(self, max_iterations: int, penalty: str, dual: bool = None, ):
+    def call_LinearSVC(self, max_iterations: int, penalty: str, dual: bool = None) -> LinearSVC:
         if dual is None:
             return LinearSVC(penalty=penalty, max_iter=max_iterations)
         
         return LinearSVC(penalty=penalty, dual=dual, tol=1e-3, max_iter=max_iterations)
 
-    def do_SGD(self, max_iterations: int, size: int)-> None:
+    def do_SGD(self, max_iterations: int, size: int)-> SGDClassifier:
         return self.call_SGD(max_iterations)    
 
 
-    def do_SGD1(self, max_iterations: int, size: int)-> None:
+    def do_SGD1(self, max_iterations: int, size: int)-> SGDClassifier:
         return self.call_SGD(max_iterations, "l1")  
         
 
-    def do_SGD2(self, max_iterations: int, size: int)-> None:
+    def do_SGD2(self, max_iterations: int, size: int)-> SGDClassifier:
         return self.call_SGD(max_iterations, "l2")
 
 
-    def do_SGDE(self, max_iterations: int, size: int)-> None:
+    def do_SGDE(self, max_iterations: int, size: int)-> SGDClassifier:
         return self.call_SGD(max_iterations, "elasticnet")
 
-    def call_SGD(self, max_iterations: int,  penalty: str = None) -> None:
+    def call_SGD(self, max_iterations: int,  penalty: str = None) -> SGDClassifier:
         if penalty is None:
            return  SGDClassifier()
         
         return SGDClassifier(alpha=.0001, max_iter=max_iterations, penalty=penalty)
 
-    def do_NCT(self, max_iterations: int, size: int)-> None:     
+    def do_NCT(self, max_iterations: int, size: int)-> NearestCentroid:     
         return NearestCentroid()
 
 
-    def do_LDA(self, max_iterations: int, size: int)-> None:     
+    def do_LDA(self, max_iterations: int, size: int)-> LinearDiscriminantAnalysis:     
         return LinearDiscriminantAnalysis()
 
 
-    def do_QDA(self, max_iterations: int, size: int)-> None:     
+    def do_QDA(self, max_iterations: int, size: int)-> QuadraticDiscriminantAnalysis:     
         return QuadraticDiscriminantAnalysis()
 
 
-    def do_BDT(self, max_iterations: int, size: int)-> None:     
+    def do_BDT(self, max_iterations: int, size: int)-> BaggingClassifier:     
         return BaggingClassifier(base_estimator=DecisionTreeClassifier(), n_estimators = 100, random_state = 7)
 
 
-    def do_ETC(self, max_iterations: int, size: int)-> None:     
+    def do_ETC(self, max_iterations: int, size: int)-> ExtraTreesClassifier:     
         return ExtraTreesClassifier(n_estimators = 100)
 
 
-    def do_ABC(self, max_iterations: int, size: int)-> None:     
+    def do_ABC(self, max_iterations: int, size: int)-> AdaBoostClassifier:     
         return AdaBoostClassifier(n_estimators = 30, random_state = 7)
 
 
-    def do_GBC(self, max_iterations: int, size: int)-> None:     
+    def do_GBC(self, max_iterations: int, size: int)-> GradientBoostingClassifier:     
         return GradientBoostingClassifier(n_estimators = 100, random_state = 7)
 
-    def do_MLPR(self, max_iterations: int, size: int)-> None:
+    def do_MLPR(self, max_iterations: int, size: int)-> MLPClassifier:
         return self.call_MLP(max_iterations, 'relu')  
 
-    def do_MLPL(self, max_iterations: int, size: int)-> None:
+    def do_MLPL(self, max_iterations: int, size: int)-> MLPClassifier:
         return self.call_MLP(max_iterations, 'logistic')
 
-    def call_MLP(self, max_iterations: int, activation: str) -> None:
+    def call_MLP(self, max_iterations: int, activation: str) -> MLPClassifier:
         return MLPClassifier(activation = activation, solver='adam', alpha=1e-5, hidden_layer_sizes=(100,), max_iter=max_iterations, random_state=1)
 
 
@@ -338,7 +327,7 @@ class Config:
         "io.verbose": "<verbose>",
         "io.model_path": "<model_path>",
         "io.model_name": "<model_name>",
-        "debug.debug_on": "<debug_on>",
+        "debug.on": "<on>",
         "debug.num_rows": "<num_rows>"
     }
 
@@ -360,7 +349,30 @@ class Config:
         id_column: str = "id"
         data_username: str = ""
         data_password: str = ""
-                
+
+        def __str__(self) -> str:
+            str_list = [
+                " 1. Database settings ",
+                f" * ODBC driver (when applicable):           {self.odbc_driver}",
+                f" * Classification Host:                     {self.host}",
+                f" * Trusted connection:                      {self.trusted_connection}",
+                f" * Classification Table:                    {self.class_catalog}",
+                f" * Classification Table:                    {self.class_table}",
+                f" * Classification Table creation script:    {self.class_table_script}",
+                f" * Classification Db username (optional):   {self.class_username}",
+                f" * Classification Db password (optional)    {self.class_password}\n",
+                f" * Data Catalog:                            {self.data_catalog}",
+                f" * Data Table:                              {self.data_table}",
+                f" * Classification column:                   {self.class_column}",
+                f" * Text Data columns (CSV):                 {self.data_text_columns}",
+                f" * Numerical Data columns (CSV):            {self.data_numerical_columns}",
+                f" * Unique data id column:                   {self.id_column}",
+                f" * Data username (optional):                {self.data_username}",
+                f" * Data password (optional):                {self.data_password}",
+            ]
+            
+            return "\n".join(str_list)
+
 
     @dataclass
     class IO:
@@ -368,6 +380,16 @@ class Config:
         redirect_output: bool = False
         model_path: str = "./model/"
         model_name: str = "iris"
+
+        def __str__(self) -> str:
+            str_list = [
+                " 3. I/O specifications ",
+                f" * Verbosity:                               {self.verbose}",
+                f" * Path where to save generated model:      {self.model_path}",
+                f" * Name of generated or loaded model:       {self.model_name}"
+            ]
+
+            return "\n".join(str_list)        
 
     @dataclass
     class Mode:
@@ -389,10 +411,43 @@ class Config:
         scoring: Scoretype = Scoretype.accuracy
         max_iterations: int = None
 
+        def __str__(self) -> str:
+            str_list = [
+                " 2. Classification mode settings ",
+                f" * Train new model:                         {self.train}",
+                f" * Make predictions with model:             {self.predict}",
+                f" * Display mispredicted training data:      {self.mispredicted}",
+                f" * Use stop words:                          {self.use_stop_words}",
+                f" * Material specific stop words threshold:  {self.specific_stop_words_threshold}",
+                f" * Hex encode text data:                    {self.hex_encode}",
+                f" * Categorize text data where applicable:   {self.use_categorization}",
+                f" * Force categorization to these columns:   {self.category_text_columns}",
+                f" * Test size for trainings:                 {self.test_size}",
+                f" * Use SMOTE:                               {self.smote}",
+                f" * Use undersampling of majority class:     {self.undersample}",
+                f" * Algorithm of choice:                     {self.algorithm.value}",
+                f" * Preprocessing method of choice:          {self.preprocessor.value}",
+                f" * Scoring method:                          {self.scoring.value}",
+                f" * Feature selection:                       {self.feature_selection.value}",
+                f" * Number of selected features:             {self.num_selected_features}",
+                f" * Maximum iterations (where applicable):   {self.max_iterations}"
+            ]
+
+            return "\n".join(str_list)
+
     @dataclass
     class Debug:
-        debug_on: bool = True
+        on: bool = True
         num_rows: int = None
+
+        def __str__(self) -> str:
+            str_list = [
+                " 4. Debug settings  ",
+                f" * Debugging on:                            {self.on}",
+                f" * How many data rows to consider:          {self.num_rows}"
+            ]
+
+            return "\n".join(str_list)   
     
     connection: Connection = field(default_factory=Connection)
     mode: Mode  = field(default_factory=Mode)
@@ -537,10 +592,18 @@ class Config:
 
         self.filename = f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
 
+    def __str__(self) -> str:
+        str_list = [
+            " -- Configuration settings --",
+            str(self.connection) + "\n",
+            str(self.mode) + "\n",
+            str(self.io) + "\n",
+            str(self.debug)
+        ]
+        return  "\n".join(str_list)
 
     # Extracts the config information to save with a model
-    # TODO: rename: "get_clean_config"
-    def get_configuration_to_save(self):
+    def get_clean_config(self):
         configuration = Config()
         configuration.connection = copy.deepcopy(self.connection)
         configuration.connection.data_catalog = ""
@@ -557,8 +620,7 @@ class Config:
         return configuration
 
     # Saves config to be read from the command line
-    # TODO: rename: "save_to_file"
-    def export_configuration_to_file(self) -> None:
+    def save_to_file(self) -> None:
         with open(self.config_path / self.CONFIG_SAMPLE_FILE, "r", encoding="utf-8") as fin:
             lines = fin.readlines()
         
@@ -583,8 +645,6 @@ class Config:
         
         with open(self.config_path / self.filename, "w", encoding="utf-8") as fout:
            fout.writelines(lines)
-        
-
 
     
 def positive_int_or_none(value: int) -> bool:
@@ -719,7 +779,7 @@ def load_config_2(module) -> Config:
             model_name=module.io["model_name"]
         ),
         Config.Debug(
-            debug_on=module.debug["debug_on"],
+            on=module.debug["on"],
             num_rows=num_rows
         ),
         name=module.name
@@ -779,7 +839,7 @@ def load_config_1(module) -> Config:
             model_name=module.io["model_name"]
         ),
         Config.Debug(
-            debug_on=module.debug["debug_on"],
+            on=module.debug["debug_on"],
             num_rows=num_rows
         ),
         name=module.project["name"]

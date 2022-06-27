@@ -136,7 +136,7 @@ io = {
 debug = {
 
     # Debugging on/off
-    "debug_on": <debug_on>,
+    "on": <on>,
     
     # Number of records to consider in data table
     "num_rows": "<num_rows>",    

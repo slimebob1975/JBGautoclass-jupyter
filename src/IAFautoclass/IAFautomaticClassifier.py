@@ -177,7 +177,7 @@ class IAFautomaticClassiphyer:
             self.model_filename = self.model_path / self.config.io.model_name
         
         # Redirect standard output to debug files
-        if self.config.debug.debug_on and self.config.io.redirect_output:
+        if self.config.debug.on and self.config.io.redirect_output:
             output_file = self.get_output_filename("output")
             error_file = self.get_output_filename("error")
 
@@ -191,7 +191,7 @@ class IAFautomaticClassiphyer:
         
         # Write configuration to file for easy start from command line
         if save_config_to_file:
-            self.config.export_configuration_to_file()
+            self.config.save_to_file()
     
         # Internal settings for panda
         pandas.set_option("max_columns", self.MAX_HEAD_COLUMNS)
@@ -243,7 +243,7 @@ class IAFautomaticClassiphyer:
             if self.config.io.verbose: print("Reading in dataset from database...-please wait!")
 
 
-            data, query, num_lines = self.datalayer.get_data(self.config.debug.num_rows, self.config.debug.debug_on, self.config.io.redirect_output, self.config.mode.train, self.config.mode.predict)
+            data, query, num_lines = self.datalayer.get_data(self.config.debug.num_rows, self.config.debug.on, self.config.io.redirect_output, self.config.mode.train, self.config.mode.predict)
 
             if data is None:
                 return pandas.DataFrame(), None, None, None
@@ -1077,7 +1077,7 @@ class IAFautomaticClassiphyer:
         feature_selection_transform, model_name, model, filename):
         
         try:
-            save_config = self.config.get_configuration_to_save()
+            save_config = self.config.get_clean_config()
             data = [save_config, label_binarizers, count_vectorizer, tfid_transformer, \
                 feature_selection_transform, model_name, model]
             pickle.dump(data, open(filename,'wb'))
@@ -1104,16 +1104,6 @@ class IAFautomaticClassiphyer:
         return label_binarizers, count_vectorizer, tfid_transformer, feature_selection_transform, \
             model_name, model
     
-    # TODO: Config
-    # Load only config object from pickle object with model
-    def load_config_from_model(self, filename):
-        try:
-            saved_config, *args = pickle.load(open(filename, 'rb'))
-        except Exception as ex:
-            print("Something went wrong on loading model configuration from file: {0}".format(str(ex)))
-
-        return saved_config
-
     # Make predictions on dataset
     def make_predictions(self, model, X):
 
@@ -1463,7 +1453,7 @@ class IAFautomaticClassiphyer:
         if self.ProgressBar: self.ProgressBar.value = 1.0
 
         # Close redirect of standard output in case of debugging
-        if self.config.debug.debug_on and self.config.io.redirect_output:
+        if self.config.debug.on and self.config.io.redirect_output:
             sys.stdout.close()
             sys.stderr.close()
             
@@ -1474,68 +1464,22 @@ class IAFautomaticClassiphyer:
     def _print_welcoming_message(self):
         
         # Print welcoming message
-        if self.config.io.verbose: print("\n *** WELCOME TO IAF AUTOMATIC CLASSIFICATION SCRIPT ***\n")
-        if self.config.io.verbose: print("Execution started at: {0:>30s} \n".format(str(self.date_now)))
+        print("\n *** WELCOME TO IAF AUTOMATIC CLASSIFICATION SCRIPT ***\n")
+        print("Execution started at: {0:>30s} \n".format(str(self.date_now)))
 
         # Print configuration settings
-        if self.config.io.verbose: print(" -- Configuration settings --")
-        if self.config.io.verbose: print(" 1. Database settings ")
-        if self.config.io.verbose: print(" * ODBC driver (when applicable):           " + self.config.connection.odbc_driver)
-        if self.config.io.verbose: print(" * Classification Host:                     " + self.config.connection.host)
-        if self.config.io.verbose: print(" * Trusted connection:                      " + str(self.config.connection.trusted_connection))
-        if self.config.io.verbose: print(" * Classification Table:                    " + self.config.connection.class_catalog)
-        if self.config.io.verbose: print(" * Classification Table:                    " + self.config.connection.class_table)
-        if self.config.io.verbose: print(" * Classification Table creation script:    " + self.config.connection.class_table_script)
-        if self.config.io.verbose: print(" * Classification Db username (optional):   " + self.config.connection.class_username)
-        if self.config.io.verbose: print(" * Classification Db password (optional)    " + self.config.connection.class_password)
-        if self.config.io.verbose: print("");
-        if self.config.io.verbose: print(" * Data Catalog:                            " + self.config.connection.data_catalog)
-        if self.config.io.verbose: print(" * Data Table:                              " + self.config.connection.data_table)
-        if self.config.io.verbose: print(" * Classification column:                   " + self.config.connection.class_column)
-        if self.config.io.verbose: print(" * Text Data columns (CSV):                 " + self.config.connection.data_text_columns)
-        if self.config.io.verbose: print(" * Numerical Data columns (CSV):            " + self.config.connection.data_numerical_columns)
-        if self.config.io.verbose: print(" * Unique data id column:                   " + self.config.connection.id_column)
-        if self.config.io.verbose: print(" * Data username (optional):                " + self.config.connection.data_username)
-        if self.config.io.verbose: print(" * Data password (optional):                " + self.config.connection.data_password)
-        if self.config.io.verbose: print("")
-        if self.config.io.verbose: print(" 2. Classification mode settings ")
-        if self.config.io.verbose: print(" * Train new model:                         " + str(self.config.mode.train))
-        if self.config.io.verbose: print(" * Make predictions with model:             " + str(self.config.mode.predict))
-        if self.config.io.verbose: print(" * Display mispredicted training data:      " + str(self.config.mode.mispredicted))
-        if self.config.io.verbose: print(" * Use stop words:                          " + str(self.config.mode.use_stop_words))
-        if self.config.io.verbose: print(" * Material specific stop words threshold:  " + str(self.config.mode.specific_stop_words_threshold))
-        if self.config.io.verbose: print(" * Hex encode text data:                    " + str(self.config.mode.hex_encode))
-        if self.config.io.verbose: print(" * Categorize text data where applicable:   " + str(self.config.mode.use_categorization))
-        if self.config.io.verbose: print(" * Force categorization to these columns:   " + str(self.config.mode.category_text_columns))
-        if self.config.io.verbose: print(" * Test size for trainings:                 " + str(self.config.mode.test_size))
-        if self.config.io.verbose: print(" * Use SMOTE:                               " + str(self.config.mode.smote))
-        if self.config.io.verbose: print(" * Use undersampling of majority class:     " + str(self.config.mode.undersample))
-        if self.config.io.verbose: print(" * Algorithm of choice:                     " + self.config.mode.algorithm.value)
-        if self.config.io.verbose: print(" * Preprocessing method of choice:          " + self.config.mode.preprocessor.value)
-        if self.config.io.verbose: print(" * Scoring method:                          " + self.config.mode.scoring.value)
-        if self.config.io.verbose: print(" * Feature selection:                       " + self.config.mode.feature_selection.value)
-        if self.config.io.verbose: print(" * Number of selected features:             " + str(self.config.mode.num_selected_features))
-        if self.config.io.verbose: print(" * Maximum iterations (where applicable):   " + str(self.config.mode.max_iterations))
-        if self.config.io.verbose: print("")
-        if self.config.io.verbose: print(" 3. I/O specifications ")
-        if self.config.io.verbose: print(" * Verbosity:                               " + str(self.config.io.verbose))
-        if self.config.io.verbose: print(" * Path where to save generated model:      " + self.config.io.model_path)
-        if self.config.io.verbose: print(" * Name of generated or loaded model:       " + self.config.io.model_name)
-        if self.config.io.verbose: print("")
-        if self.config.io.verbose: print(" 4. Debug settings ")
-        if self.config.io.verbose: print(" * Debugging on:                            " + str(self.config.debug.debug_on))
-        if self.config.io.verbose: print(" * How many data rows to consider:          " + str(self.config.debug.num_rows))
+        print(self.config)
 
         # Print out what mode we use: training a new model or not
         if self.config.mode.train:
-            if self.config.io.verbose: print(" -- We will train our ml model --")
+            print(" -- We will train our ml model --")
         else:
             try:
                 f = open(self.model_filename,'br')
             except IOError:
                 sys.exit("Aborting. No trained model exists at {0}".format(self.model_filename))
             else:
-                if self.config.io.verbose: print(" -- We will reload and use old model --")
+                print(" -- We will reload and use old model --")
 
 def get_rid_of_decimals(x):
     try:
@@ -1554,7 +1498,7 @@ def main(argv):
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
     myClassiphyer = IAFautomaticClassiphyer(config=config)
-    
+
     # Run the classifier
     myClassiphyer.run()
 
