@@ -30,6 +30,7 @@ class IAFSqlHelper():
             self.Password = password
         self.Connection = None
         self.Cursor = None
+        self.ignore_errors = ignore_errors
 
     # Destructor
     def __del__(self):

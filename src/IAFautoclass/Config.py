@@ -9,13 +9,34 @@ import sys
 
 from pathlib import Path
 
-
-"""
-TODO: Once I know where that driver function fits
-elif sql.IAFSqlHelper.drivers().find(odbc_driver) == -1:
-    raise ValueError("Specified ODBC driver cannot be found!")
-"""
-
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, MaxAbsScaler, Normalizer, Binarizer
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, make_scorer, matthews_corrcoef
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.discriminant_analysis import LinearDiscriminantAnalysis, QuadraticDiscriminantAnalysis
+from sklearn.svm import SVC
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn.linear_model import RidgeClassifier
+from sklearn.ensemble import BaggingClassifier, ExtraTreesClassifier, AdaBoostClassifier, GradientBoostingClassifier
+from sklearn.pipeline import Pipeline, make_pipeline
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.pipeline import Pipeline as ImbPipeline
+from sklearn.svm import LinearSVC
+from sklearn.neural_network import MLPClassifier, MLPRegressor
+from sklearn.linear_model import SGDClassifier, Perceptron, PassiveAggressiveClassifier
+from sklearn.naive_bayes import GaussianNB, BernoulliNB, ComplementNB, MultinomialNB
+from sklearn.neighbors import KNeighborsClassifier, NearestCentroid
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.feature_selection import SelectFromModel, RFE
+from sklearn.decomposition import PCA, TruncatedSVD, FastICA
+from sklearn.random_projection import GaussianRandomProjection
+from sklearn.kernel_approximation import Nystroem
+from sklearn.exceptions import FitFailedWarning, ConvergenceWarning
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.manifold import Isomap, LocallyLinearEmbedding
 
 class Algorithm(enum.Enum):
     ALL = "All"
@@ -49,6 +70,159 @@ class Algorithm(enum.Enum):
     MLPR = "ML Neural Network Relu"
     MLPL = "ML Neural Network Sigm"
 
+    def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
+        return LogisticRegression(solver='liblinear', multi_class='ovr')
+
+
+    def do_KNN(self, max_iterations: int, size: int)-> None:
+        return KNeighborsClassifier()
+
+
+    def do_CART(self, max_iterations: int, size: int)-> None:
+        return DecisionTreeClassifier()
+
+
+    def do_GNB(self, max_iterations: int, size: int)-> None:
+        return GaussianNB()
+
+
+    def do_MNB(self, max_iterations: int, size: int)-> None:
+        return MultinomialNB(alpha=.01)
+
+
+    def do_BNB(self, max_iterations: int, size: int)-> None:
+        return BernoulliNB(alpha=.01)
+
+
+    def do_CNB(self, max_iterations: int, size: int)-> None:
+        return ComplementNB(alpha=.01)
+
+
+    def do_REC(self, max_iterations: int, size: int)-> None:
+        return RidgeClassifier(tol=1e-2, solver="sag")
+
+
+    def do_PCN(self, max_iterations: int, size: int)-> None:
+        return Perceptron(max_iter=max_iterations)
+
+
+    def do_PAC(self, max_iterations: int, size: int)-> None:
+        return PassiveAggressiveClassifier(max_iter=max_iterations)
+
+
+    def do_RFC1(self, max_iterations: int, size: int)-> None:
+        return self.call_RandomForest("sqrt")
+
+
+    def do_RFC2(self, max_iterations: int, size: int)-> None:
+        return self.call_RandomForest("log2")
+
+    def call_RandomForest(self, max_features: str) -> None:
+        return RandomForestClassifier(n_estimators=100, max_features=max_features)
+
+
+    def do_LIN1(self, max_iterations: int, size: int)-> None:
+        return self.call_LinearSVC(max_iterations, "l1", False) 
+
+
+    def do_LIN2(self, max_iterations: int, size: int)-> None:  
+        return self.call_LinearSVC(max_iterations, "l2", False)
+
+
+    def do_LINP(self, max_iterations: int, size: int)-> None:
+        return Pipeline([
+            ('feature_selection', SelectFromModel(self.call_LinearSVC(max_iterations, "l1", False))),
+            ('classification', self.call_LinearSVC(max_iterations, "l2"))])
+    
+    def do_SVC(self, max_iterations: int, size: int) -> None:
+        # TODO: Move this into the algorithms having a dict as a value with description/limit as keys and limit: None if no limit
+        LIMIT_SVC = 10000
+        if size < LIMIT_SVC:
+            return SVC(gamma='auto', probability=True)
+        
+        # TODO: communicate with terminal to warn? 
+        # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
+        return self.call_LinearSVC(max_iterations, "l1", False)
+    
+
+    def call_LinearSVC(self, max_iterations: int, penalty: str, dual: bool = None, ):
+        if dual is None:
+            return LinearSVC(penalty=penalty, max_iter=max_iterations)
+        
+        return LinearSVC(penalty=penalty, dual=dual, tol=1e-3, max_iter=max_iterations)
+
+    def do_SGD(self, max_iterations: int, size: int)-> None:
+        return self.call_SGD(max_iterations)    
+
+
+    def do_SGD1(self, max_iterations: int, size: int)-> None:
+        return self.call_SGD(max_iterations, "l1")  
+        
+
+    def do_SGD2(self, max_iterations: int, size: int)-> None:
+        return self.call_SGD(max_iterations, "l2")
+
+
+    def do_SGDE(self, max_iterations: int, size: int)-> None:
+        return self.call_SGD(max_iterations, "elasticnet")
+
+    def call_SGD(self, max_iterations: int,  penalty: str = None) -> None:
+        if penalty is None:
+           return  SGDClassifier()
+        
+        return SGDClassifier(alpha=.0001, max_iter=max_iterations, penalty=penalty)
+
+    def do_NCT(self, max_iterations: int, size: int)-> None:     
+        return NearestCentroid()
+
+
+    def do_LDA(self, max_iterations: int, size: int)-> None:     
+        return LinearDiscriminantAnalysis()
+
+
+    def do_QDA(self, max_iterations: int, size: int)-> None:     
+        return QuadraticDiscriminantAnalysis()
+
+
+    def do_BDT(self, max_iterations: int, size: int)-> None:     
+        return BaggingClassifier(base_estimator=DecisionTreeClassifier(), n_estimators = 100, random_state = 7)
+
+
+    def do_ETC(self, max_iterations: int, size: int)-> None:     
+        return ExtraTreesClassifier(n_estimators = 100)
+
+
+    def do_ABC(self, max_iterations: int, size: int)-> None:     
+        return AdaBoostClassifier(n_estimators = 30, random_state = 7)
+
+
+    def do_GBC(self, max_iterations: int, size: int)-> None:     
+        return GradientBoostingClassifier(n_estimators = 100, random_state = 7)
+
+    def do_MLPR(self, max_iterations: int, size: int)-> None:
+        return self.call_MLP(max_iterations, 'relu')  
+
+    def do_MLPL(self, max_iterations: int, size: int)-> None:
+        return self.call_MLP(max_iterations, 'logistic')
+
+    def call_MLP(self, max_iterations: int, activation: str) -> None:
+        return MLPClassifier(activation = activation, solver='adam', alpha=1e-5, hidden_layer_sizes=(100,), max_iter=max_iterations, random_state=1)
+
+
+    def get_function_name(self) -> str:
+        return f"do_{self.name}"
+    
+    def call_algorithm(self, max_iterations: int, size: int):
+        do = self.get_function_name()
+        if hasattr(self, do) and callable(func := getattr(self, do)):
+            return func(max_iterations, size)
+        
+        return None
+
+    def has_algorithm_function(self) -> bool:
+        do = self.get_function_name()
+        return hasattr(self, do) and callable(getattr(self, do))
+    
 
 class Preprocess(enum.Enum):
     ALL = "All"
@@ -58,6 +232,36 @@ class Preprocess(enum.Enum):
     MMX = "Max-Absolute Scaler"
     NRM = "Normalizer"
     BIN = "Binarizer"
+
+    def do_STA(self) -> StandardScaler:
+        return StandardScaler(with_mean=False)
+
+    def do_MIX(self) -> MinMaxScaler:
+        return MinMaxScaler()
+
+    def do_MMX(self) -> MaxAbsScaler:
+        return MaxAbsScaler()
+
+    def do_NRM(self) -> Normalizer:
+        return Normalizer()
+
+    def do_BIN(self) -> Binarizer:
+        return Binarizer()
+
+    def get_function_name(self) -> str:
+        return f"do_{self.name}"
+    
+    def call_preprocess(self):
+        do = self.get_function_name()
+        if hasattr(self, do) and callable(func := getattr(self, do)):
+            return func()
+        
+        return None
+        
+
+    def has_preprocess_function(self) -> bool:
+        do = self.get_function_name()
+        return hasattr(self, do) and callable(getattr(self, do))
 
 
 class Reduction(enum.Enum):
@@ -75,7 +279,7 @@ class Reduction(enum.Enum):
 class Scoretype(enum.Enum):
     accuracy = "Accuracy"
     balanced_accuracy = "Balanced Accuracy"
-    f1_macro = "Balanced F1 Micro"
+    f1_micro = "Balanced F1 Micro"
     f1_weighted = "Balanced F1 Weighted"
     recall_micro = "Recall Micro"
     recall_macro = "Recall Macro"
@@ -95,15 +299,6 @@ class Config:
     CONFIG_FILENAME_START = "autoclassconfig_"
     CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py"
 
-    CONFIGURATION_TAGS = ["<name>", "<odbc_driver>", "<host>", "<trusted_connection>", "<class_catalog>", \
-                          "<class_table>", "<class_table_script>", "<class_username>", \
-                          "<class_password>", "<data_catalog>", "<data_table>", "<class_column>", \
-                          "<data_text_columns>", "<data_numerical_columns>", "<id_column>", \
-                          "<data_username>", "<data_password>", "<train>", "<predict>", "<mispredicted>", \
-                          "<use_stop_words>", "<specific_stop_words_threshold>", "<hex_encode>", \
-                          "<use_categorization>", "<category_text_columns>", "<test_size>", "<smote>", "<undersample>", \
-                          "<algorithm>", "<preprocessor>", "<feature_selection>", "<num_selected_features>", "<scoring>", \
-                          "<max_iterations>", "<verbose>", "<model_path>", "<model_name>",  "<debug_on>", "<num_rows>"]
 
     TEMPLATE_TAGS = {
         "name": "<name>",
@@ -154,7 +349,7 @@ class Config:
         trusted_connection: bool = True
         class_catalog: str = ""
         class_table: str = ""
-        class_table_script: str = "/sql/autoClassCreateTable.sql.txt"
+        class_table_script: str = "./sql/autoClassCreateTable.sql.txt"
         class_username: str = ""
         class_password: str = ""
         data_catalog: str = ""
@@ -239,8 +434,8 @@ class Config:
             raise TypeError(
                 "Specified database connection information is invalid")
 
+        
         # 2.2: Login credentials
-        # TODO: Move in the "if trusted remove password etc" here?
         login_credentials = [
             isinstance(self.connection.data_username, str),
             isinstance(self.connection.data_password, str)
@@ -268,13 +463,16 @@ class Config:
             isinstance(self.mode.train, bool),
             isinstance(self.mode.predict, bool),
             isinstance(self.mode.mispredicted, bool),
-            (self.mode.train or self.mode.predict),
-            (self.mode.mispredicted and self.mode.train)
+            (self.mode.train or self.mode.predict)
         ]
+        
         if not all(mode_types):
             raise ValueError(
                 "Class must be set for either training, predictions and/or mispredictions!")
 
+        if self.mode.mispredicted and not self.mode.train:
+            raise ValueError(
+                "Class must be set for training if it is set for misprediction")
 
         # Stop words threshold and test size
         if isinstance(self.mode.specific_stop_words_threshold, float):
@@ -398,6 +596,8 @@ def positive_int_or_none(value: int) -> bool:
 
     return False
 
+def get_model_name(algo: Algorithm, prepros: Preprocess)->str:
+    return f"{algo.name}-{prepros.name}"
 
 # In case the user has specified some input arguments to command line call
 def check_input_arguments(argv):
@@ -529,6 +729,10 @@ def load_config_2(module) -> Config:
     
     
 def load_config_1(module) -> Config:
+    num_rows = set_none_or_int(module.debug["num_rows"])
+    num_selected_features = set_none_or_int(module.mode["num_selected_features"])
+    max_iterations = set_none_or_int(module.mode["max_iterations"])
+
     config = Config(
         Config.Connection(
             odbc_driver=module.sql["odbc_driver"],
@@ -564,9 +768,9 @@ def load_config_1(module) -> Config:
             algorithm=Algorithm[module.mode["algorithm"]],
             preprocessor=Preprocess[module.mode["preprocessor"]],
             feature_selection=Reduction[module.mode["feature_selection"]],
-            num_selected_features=module.mode["num_selected_features"],
+            num_selected_features=num_selected_features,
             scoring=Scoretype[module.mode["scoring"]],
-            max_iterations=int(module.mode["max_iterations"])
+            max_iterations=max_iterations
         ),
         Config.IO(
             verbose=module.io["verbose"],
@@ -576,7 +780,7 @@ def load_config_1(module) -> Config:
         ),
         Config.Debug(
             debug_on=module.debug["debug_on"],
-            num_rows=int(module.debug["num_rows"])
+            num_rows=num_rows
         ),
         name=module.project["name"]
     )
@@ -588,7 +792,7 @@ def main():
     if len(sys.argv) > 1:
         config = load_config_from_module(sys.argv)
     else:
-       config = Config(name="foo")
+       config = Config()
 
     #print(isinstance(config.mode.scoring, enum.Enum))
     #print(config.mode.scoring.name)

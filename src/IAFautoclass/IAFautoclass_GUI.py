@@ -630,6 +630,7 @@ class IAFautoclass_GUI:
                                                class_column = self.class_column.value, \
                                                class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
                                                class_table = self.DEFAULT_CLASSIFICATION_TABLE )
+        # TODO: catch exception
         distrib = tc.count_class_distribution()
         del tc
         self.class_summary_text.value = \
@@ -710,6 +711,7 @@ class IAFautoclass_GUI:
                                                   class_column = self.DEFAULT_CLASS_COLUMN, \
                                                   class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
                                                   class_table = self.DEFAULT_CLASSIFICATION_TABLE  )
+        # Catch exception
         self.num_rows.value = tc.count_data_rows()
         del tc
         

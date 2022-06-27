@@ -1,17 +1,13 @@
 #!/usr/bin/env python
-import datetime
 
-# Project information, will be used to distinguish data and generated model
-# from other
-project = {
-    
-    # Name of the project
-    "name": "<name>",
+# Name of the project
+name = "<name>"
 
-    }
+version = "2.0"
+
 
 # Database configuration
-sql = {
+connection = {
 
     # If applicable in a Windows enviroment, use this database driver
     "odbc_driver": "<odbc_driver>",
@@ -45,10 +41,6 @@ sql = {
     # The columns in data table to be classified, in CSV-style.
     # First the classification column:
     "class_column": "<class_column>",
-
-    # If the class column should be treated as a hierarchical class
-    # this setting should be "true", otherwise false
-    "hierarchical_class": <hierarchical_class>,
 
     # Secondly, the data columns containing TEXT data, in CSV-style 
     # Set to "" (empty string) if none.
@@ -93,7 +85,7 @@ mode = {
     "use_categorization": <use_categorization>,
     
     # Force the following columns to be categorized even though they are not automatically categorized
-    "category_text_columns": <category_text_columns>,
+    "category_text_columns": "<category_text_columns>",
 
     # How large part, between 0 and 1, of already classified data
     # should be used for classification tests (the rest will be
