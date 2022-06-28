@@ -596,12 +596,12 @@ class IAFautomaticClassiphyer:
 
             # Take care of the special case of only training or only predictions
             if self.config.mode["train"] and not self.config.mode["predict"]:
-                query += " WHERE [" + self.config.sql["class_column"] + "] IS NOT NULL AND [" + \
-                     self.config.sql["class_column"] + "] != \'\' " 
+                query += " WHERE [" + self.config.sql["class_column"] + "] IS NOT NULL AND CAST([" + \
+                     self.config.sql["class_column"] + "] AS VARCHAR) != \'\' " 
                 
             elif not self.config.mode["train"] and self.config.mode["predict"]:
-                query += " WHERE [" + self.config.sql["class_column"] + "] IS NULL OR [" + \
-                     self.config.sql["class_column"] + "] = \'\' " 
+                query += " WHERE [" + self.config.sql["class_column"] + "] IS NULL OR CAST([" + \
+                     self.config.sql["class_column"] + "] AS VARCHAR) = \'\' " 
 
             # Since sorting the DataFrames directly does not seem to work right now (see below)
             # we sort the data in retreiving in directly in SQL. The "DESC" keyword makes sure
