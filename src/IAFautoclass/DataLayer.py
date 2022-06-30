@@ -59,8 +59,6 @@ class DataLayer:
         query = query.replace("<class_table>", self.connection.class_table.replace(".", "].["))
         #print("query3=",query)
         
-        if self.verbose: print("Creating classification table if not exists...")
-
         # Get a sql handler and connect to data database
         sqlHelper = self.get_sql_connection()
 
@@ -99,8 +97,6 @@ class DataLayer:
     def mark_execution_started(self) -> int:
 
         try:
-            if self.verbose: print("Marking execution started in database...-please wait!")
-
            # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
 
@@ -300,12 +296,14 @@ class DataLayer:
 
         # Take care of the special case of only training or only predictions
         if train and not predict:
-            query += " WHERE [" + self.connection.class_column + "] IS NOT NULL AND [" + \
-                self.connection.class_column + "] != \'\' "
+            query += " WHERE [" + self.connection.class_column + "] IS NOT NULL AND CAST([" + \
+                self.connection.class_column + "] AS VARCHAR) != \'\' "
 
         elif not train and predict:
-            query += " WHERE [" + self.connection.class_column + "] IS NULL OR [" + \
-                self.connection.class_column + "] = \'\' "
+            query += " WHERE [" + self.connection.class_column + "] IS NULL OR CAST([" + \
+                self.connection.class_column + "] AS VARCHAR) = \'\' "
+
+
 
         # Since sorting the DataFrames directly does not seem to work right now (see below)
         # we sort the data in retreiving in directly in SQL. The "DESC" keyword makes sure

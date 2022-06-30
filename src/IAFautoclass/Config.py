@@ -13,6 +13,7 @@ from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
 from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
                               ExtraTreesClassifier, GradientBoostingClassifier,
                               RandomForestClassifier)
+from sklearn.feature_selection import SelectFromModel
 from sklearn.linear_model import (LogisticRegression,
                                   PassiveAggressiveClassifier, Perceptron,
                                   RidgeClassifier, SGDClassifier)
