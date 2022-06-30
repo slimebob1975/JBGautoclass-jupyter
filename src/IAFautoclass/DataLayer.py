@@ -1,9 +1,11 @@
 
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 import numpy as np
 import pyodbc
 from Config import Config
+from IAFLogger import IAFLogger
 import SqlHelper.IAFSqlHelper as sql
 
 @dataclass
@@ -12,8 +14,8 @@ class DataLayer:
     SQL_USE_CHUNKS = True
 
     connection: Config.Connection
-    scriptpath: str
-    verbose: bool = False
+    logger: IAFLogger
+    scriptpath: str = field(init=False)
     text_data: bool = field(init=False)
     numerical_data: bool = field(init=False)
 
@@ -21,6 +23,8 @@ class DataLayer:
         # Extract parameters that are not textual
         self.text_data = self.connection.data_text_columns != ""
         self.numerical_data = self.connection.data_numerical_columns != ""
+        self.scriptpath = os.path.dirname(os.path.realpath(__file__))
+    
 
         if drivers().find(self.connection.odbc_driver) == -1:
             raise ValueError("Specified ODBC driver cannot be found!")
@@ -133,8 +137,6 @@ class DataLayer:
     def mark_execution_ended(self) -> int:
         
         try:
-            if self.verbose: print("Marking execution ended in database...")
-
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
 
@@ -231,7 +233,6 @@ class DataLayer:
     def save_data(self, keys, Y, rates, prob_mode = 'U', labels='N/A', probabilities='N/A', alg = "Unknown") -> int:
 
         try:
-            print(alg)
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
             
@@ -263,9 +264,11 @@ class DataLayer:
                 if sqlHelper.execute_query(query, get_data=False, commit=False):
                     num_lines += 1
                     percent_fetched = round(100.0 * float(num_lines) / float(len(keys)))
-                    if self.verbose: print("Part of data saved: " + str(percent_fetched) + " %", end='\r')
+                    # TODO: clean up
+                    if not self.logger.is_quiet(): print("Part of data saved: " + str(percent_fetched) + " %", end='\r')
 
-            if self.verbose: print("\n")
+
+            if not self.logger.is_quiet(): print("\n")
                 
             # Disconnect from database and commit all inserts
             sqlHelper.disconnect(commit=True)
@@ -315,7 +318,7 @@ class DataLayer:
         
         return query
 
-    def get_data(self, num_rows, debug, redirect_output, train, predict):
+    def get_data(self, num_rows, train, predict):
         try:
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
@@ -333,7 +336,7 @@ class DataLayer:
             non_ordered_query = query
             query += " ORDER BY [" +  str(self.connection.class_column) + "] DESC"
 
-            if self.verbose: print("Query for classification data: ", query)
+            self.logger.print_query("Query for classification data: ", query)
 
             # Now we are ready to execute the sql query
             # By default, all fetched data is placed in one long 1-dim list. The alternative is to read by chunks.
@@ -348,10 +351,11 @@ class DataLayer:
                     data = [elem for elem in row]
                     num_lines = 1
                     percent_fetched = round(100.0 * float(num_lines) / float(num_rows))
-                    if not redirect_output:
-                        print("Data fetched of available: " + str(percent_fetched) + " %", end='\r')
+                    
+                    # TODO: Samma som i huvudklassen, \r
+                    print("Data fetched of available: " + str(percent_fetched) + " %", end='\r')
                     while row:
-                        if debug and num_lines >= num_rows:
+                        if num_lines >= num_rows:
                             break;
                         row = sqlHelper.read_data()
                         if row:
@@ -359,7 +363,8 @@ class DataLayer:
                             num_lines += 1
                             old_percent_fetched = percent_fetched
                             percent_fetched = round(100.0 * float(num_lines) / float(num_rows))
-                            if not redirect_output and percent_fetched > old_percent_fetched:
+                            if percent_fetched > old_percent_fetched:
+                                # TODO: Samma som i huvudklassen, \r
                                 print("Data fetched of available: " + str(percent_fetched) + " %", end='\r')
 
                     # Rearrange the long 1-dim array into a 2-dim numpy array which resembles the
@@ -372,10 +377,11 @@ class DataLayer:
                     data = np.asarray(data_chunk)
                     num_lines = len(data_chunk)
                     percent_fetched = round(100.0 * float(num_lines) / float(num_rows))
-                    if self.verbose and not redirect_output:
+                    if not self.logger.is_quiet():
+                        # TODO: Samma som i huvudklassen, \r
                         print("Data fetched of available: " + str(percent_fetched) + " %", end='\r')
                     while data_chunk:
-                        if debug and num_lines >= num_rows:
+                        if num_lines >= num_rows:
                             break;
                         data_chunk = sqlHelper.read_many_data(chunksize=self.SQL_CHUNKSIZE)
                         if data_chunk:
@@ -383,10 +389,11 @@ class DataLayer:
                             num_lines += len(data_chunk)
                             old_percent_fetched = percent_fetched
                             percent_fetched = round(100.0 * float(num_lines) / float(num_rows))
-                            if self.verbose and not redirect_output and percent_fetched > old_percent_fetched:
+                            if not self.logger.is_quiet() and percent_fetched > old_percent_fetched:
+                                # TODO: Samma som i huvudklassen, \r
                                 print("Data fetched of available: " + str(percent_fetched) + " %", end='\r')
 
-            if self.verbose: print("\n--- Totally fetched {0} data rows ---".format(num_lines))
+            self.logger.print_formatted_info(f"Totally fetched {num_lines} data rows")
             
             # Disconnect from database
             sqlHelper.disconnect()
@@ -402,7 +409,7 @@ class DataLayer:
     
     def mispredicted_data_query(self, new_class: str, index: str) -> int:
         try:
-            if self.verbose: print("Changing data row {0} to {1}: ".format(index, new_class))
+            self.logger.print_info(f"Changing data row {index} to {new_class}: ")
 
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection
@@ -413,7 +420,7 @@ class DataLayer:
             query += " SET " + self.connection.class_column + " = \'" + new_class + "\'"  
             query += " WHERE " + self.connection.id_column + " = " + index
             
-            if self.verbose: print("Executing SQL code: {0}".format(query))
+            self.logger.print_query("mispredicted", query)
             
             # Execute a query without getting any data
             # Delay the commit until the connection is closed

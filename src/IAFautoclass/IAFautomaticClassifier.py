@@ -118,7 +118,7 @@ class IAFautomaticClassiphyer:
     MAX_HEAD_COLUMNS = 10
     
     # Constructor with arguments
-    def __init__(self, config: Config.Config, logger: IAFLogger.IAFLogger, save_config_to_file: bool = False):
+    def __init__(self, config: Config.Config, logger: IAFLogger.IAFLogger, datalayer: DataLayer.DataLayer, save_config_to_file: bool = False):
         self.config = config
 
         self.logger = logger
@@ -129,13 +129,12 @@ class IAFautomaticClassiphyer:
         self.logger.print_progress(message="Starting up ...", percent=self.progress)
         
         self.majorTask = 0
-        self.use_progress_bar = True
         
          # Init some internal variables
         self.scriptpath = os.path.dirname(os.path.realpath(__file__))
         self.scriptname = sys.argv[0][2:]
 
-        self.datalayer = DataLayer.DataLayer(config.connection, self.scriptpath, config.io.verbose)
+        self.datalayer = datalayer
 
         # Setting path for misplaced data output file
         if self.config.mode.mispredicted:
@@ -160,18 +159,7 @@ class IAFautomaticClassiphyer:
         else:
             self.model_filename = self.model_path / self.config.io.model_name
         
-        # Redirect standard output to debug files
-        if self.config.debug.on and self.config.io.redirect_output:
-            output_file = self.get_output_filename("output")
-            error_file = self.get_output_filename("error")
-
-            self.logger.print_info(f"Redirecting standard output to {output_file} and standard error to {error_file}")
-            try:
-                sys.stdout = open(output_file,'w')
-                sys.stderr = open(error_file,'w')
-            except Exception as e:
-                self.abort_cleanly(f"Something went wrong with redirection of standard output and error: {str(e)}")
-        
+        # TODO: This should probably be moved from here. In the GUI config it is always true
         # Write configuration to file for easy start from command line
         if save_config_to_file:
             self.config.save_to_file()
@@ -197,14 +185,6 @@ class IAFautomaticClassiphyer:
     # Function to simplify the paths/names of output files
     def get_output_filename(self, type: str) -> str:
         types = {
-            "output": {
-                "suffix": "txt",
-                "prefix": "output_"
-            },
-            "error": {
-                "suffix": "txt",
-                "prefix": "error_"
-            },
             "misplaced": {
                 "suffix": "csv",
                 "prefix": "misplaced_"
@@ -223,7 +203,7 @@ class IAFautomaticClassiphyer:
     def read_in_data(self):
 
         try:
-            data, query, num_lines = self.datalayer.get_data(self.config.debug.num_rows, self.config.debug.on, self.config.io.redirect_output, self.config.mode.train, self.config.mode.predict)
+            data, query, num_lines = self.datalayer.get_data(self.config.debug.num_rows, self.config.mode.train, self.config.mode.predict)
 
             if data is None:
                 return pandas.DataFrame(), None, None, None
@@ -260,7 +240,7 @@ class IAFautomaticClassiphyer:
                     old_percent_checked = percent_checked
                     percent_checked = round(100.0*float(index)/float(len(dataset.index)))
                     # TODO: \r is to have the Data checked updated, or some-such. Can it be moved?
-                    if self.config.io.verbose and not self.config.io.redirect_output and percent_checked > old_percent_checked:
+                    if self.config.io.verbose and percent_checked > old_percent_checked:
                         print("Data checked of fetched: " + str(percent_checked) + " %", end='\r')
                     for key in dataset.columns:
                         item = dataset.at[index,key]
@@ -1373,17 +1353,15 @@ class IAFautomaticClassiphyer:
 
         try:
             # Remove flag in database, signaling all was allright
+            self.logger.print_info("Marking execution ended in database...")
+
             self.datalayer.mark_execution_ended()
         except Exception as e:
-            self.abort_cleanly(f"Mark of executionend failed: {str(e)}")
+            self.abort_cleanly(f"Mark of execution-end failed: {str(e)}")
 
         # Make sure progressbar is completed if not before
         self.logger.print_progress(message="Process finished", percent=1.0)
 
-        # Close redirect of standard output in case of debugging
-        if self.config.debug.on and self.config.io.redirect_output:
-            sys.stdout.close()
-            sys.stderr.close()
             
         # Return positive signal
         return 0
@@ -1404,9 +1382,11 @@ def main(argv):
        config = Config.Config()
 
     logger = IAFLogger.IAFLogger(not config.io.verbose)
+    
+    datalayer = DataLayer.DataLayer(connection=config.connection, logger=logger)
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
-    myClassiphyer = IAFautomaticClassiphyer(config=config, logger=logger)
+    myClassiphyer = IAFautomaticClassiphyer(config=config, logger=logger, datalayer=datalayer)
 
     # Run the classifier
     myClassiphyer.run()

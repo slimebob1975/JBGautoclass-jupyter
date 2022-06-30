@@ -378,7 +378,6 @@ class Config:
     @dataclass
     class IO:
         verbose: bool = True
-        redirect_output: bool = False
         model_path: str = "./model/"
         model_name: str = "iris"
 
@@ -570,7 +569,6 @@ class Config:
         # 4: IO
         for item in [
             "verbose",
-            "redirect_output"
         ]:
             if not isinstance(getattr(self.io, item), bool):
                 raise TypeError(f"Argument {item} must be True or False")
@@ -775,7 +773,6 @@ def load_config_2(module) -> Config:
         ),
         Config.IO(
             verbose=module.io["verbose"],
-            redirect_output=False,
             model_path=module.io["model_path"],
             model_name=module.io["model_name"]
         ),
@@ -835,7 +832,6 @@ def load_config_1(module) -> Config:
         ),
         Config.IO(
             verbose=module.io["verbose"],
-            redirect_output=False,
             model_path=module.io["model_path"],
             model_name=module.io["model_name"]
         ),
