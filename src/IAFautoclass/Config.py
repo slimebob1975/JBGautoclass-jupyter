@@ -7,6 +7,7 @@ import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Type, TypeVar
 
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
@@ -279,6 +280,7 @@ class Scoretype(enum.Enum):
     precision_weighted = "Precision Weighted"
     mcc = "Matthews Corr. Coefficient"
 
+T = TypeVar('T', bound='Config')
 
 @dataclass
 class Config:
@@ -456,6 +458,8 @@ class Config:
     name: str = "iris"
     config_path: str = field(init=False)
     filename: str = field(init=False)
+    save: bool = True
+
 
     def __post_init__(self) -> None:
         pwd = os.path.dirname(os.path.realpath(__file__))
@@ -590,6 +594,10 @@ class Config:
             self.connection.data_username = username
 
         self.filename = f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
+        
+        # This is always True in the GUI and always False from config
+        if self.save:
+            self.save_to_file()
 
     def __str__(self) -> str:
         str_list = [
@@ -615,6 +623,7 @@ class Config:
         configuration.io.model_name = ""
         configuration.debug = copy.deepcopy(self.debug)
         configuration.debug.num_rows = 0
+        configuration.save = False
         
         return configuration
 
@@ -645,6 +654,137 @@ class Config:
         with open(self.config_path / self.filename, "w", encoding="utf-8") as fout:
            fout.writelines(lines)
 
+    @classmethod
+    def load_config_from_module(cls: Type[T], argv) -> T:
+        module = check_input_arguments(argv)
+        
+        version = '1.0'
+        if (hasattr(module, 'version')):
+            version = module.version
+
+        if (version == '1.0'):
+            return Config.load_config_1(module)
+        
+        if (version == '2.0'):
+            return Config.load_config_2(module)
+
+    @classmethod
+    def load_config_2(cls: Type[T], module) -> T:
+        num_rows = set_none_or_int(module.debug["num_rows"])
+        num_selected_features = set_none_or_int(module.mode["num_selected_features"])
+        max_iterations = set_none_or_int(module.mode["max_iterations"])
+
+        config = cls(
+            Config.Connection(
+                odbc_driver=module.connection["odbc_driver"],
+                host=module.connection["host"],
+                trusted_connection=module.connection["trusted_connection"],
+                class_catalog=module.connection["class_catalog"],
+                class_table=module.connection["class_table"],
+                class_table_script=module.connection["class_table_script"],
+                class_username=module.connection["class_username"],
+                class_password=module.connection["class_password"],
+                data_catalog=module.connection["data_catalog"],
+                data_table=module.connection["data_table"],
+                class_column=module.connection["class_column"],
+                data_text_columns=module.connection["data_text_columns"],
+                data_numerical_columns=module.connection["data_numerical_columns"],
+                id_column=module.connection["id_column"],
+                data_username=module.connection["data_username"],
+                data_password=module.connection["data_password"]
+            ),
+            Config.Mode(
+                train=module.mode["train"],
+                predict=module.mode["predict"],
+                mispredicted=module.mode["mispredicted"],
+                use_stop_words=module.mode["use_stop_words"],
+                specific_stop_words_threshold=float(
+                    module.mode["specific_stop_words_threshold"]),
+                hex_encode=module.mode["hex_encode"],
+                use_categorization=module.mode["use_categorization"],
+                category_text_columns=module.mode["category_text_columns"],
+                test_size=float(module.mode["test_size"]),
+                smote=module.mode["smote"],
+                undersample=module.mode["undersample"],
+                algorithm=Algorithm[module.mode["algorithm"]],
+                preprocessor=Preprocess[module.mode["preprocessor"]],
+                feature_selection=Reduction[module.mode["feature_selection"]],
+                num_selected_features=num_selected_features,
+                scoring=Scoretype[module.mode["scoring"]],
+                max_iterations=max_iterations
+            ),
+            Config.IO(
+                verbose=module.io["verbose"],
+                model_path=module.io["model_path"],
+                model_name=module.io["model_name"]
+            ),
+            Config.Debug(
+                on=module.debug["on"],
+                num_rows=num_rows
+            ),
+            name=module.name
+        )
+
+        return config
+        
+    @classmethod
+    def load_config_1(cls: Type[T], module) -> T:
+        num_rows = set_none_or_int(module.debug["num_rows"])
+        num_selected_features = set_none_or_int(module.mode["num_selected_features"])
+        max_iterations = set_none_or_int(module.mode["max_iterations"])
+
+        config = cls(
+            Config.Connection(
+                odbc_driver=module.sql["odbc_driver"],
+                host=module.sql["host"],
+                trusted_connection=module.sql["trusted_connection"],
+                class_catalog=module.sql["class_catalog"],
+                class_table=module.sql["class_table"],
+                class_table_script=module.sql["class_table_script"],
+                class_username=module.sql["class_username"],
+                class_password=module.sql["class_password"],
+                data_catalog=module.sql["data_catalog"],
+                data_table=module.sql["data_table"],
+                class_column=module.sql["class_column"],
+                data_text_columns=module.sql["data_text_columns"],
+                data_numerical_columns=module.sql["data_numerical_columns"],
+                id_column=module.sql["id_column"],
+                data_username=module.sql["data_username"],
+                data_password=module.sql["data_password"]
+            ),
+            Config.Mode(
+                train=module.mode["train"],
+                predict=module.mode["predict"],
+                mispredicted=module.mode["mispredicted"],
+                use_stop_words=module.mode["use_stop_words"],
+                specific_stop_words_threshold=float(
+                    module.mode["specific_stop_words_threshold"]),
+                hex_encode=module.mode["hex_encode"],
+                use_categorization=module.mode["use_categorization"],
+                category_text_columns=module.mode["category_text_columns"],
+                test_size=float(module.mode["test_size"]),
+                smote=module.mode["smote"],
+                undersample=module.mode["undersample"],
+                algorithm=Algorithm[module.mode["algorithm"]],
+                preprocessor=Preprocess[module.mode["preprocessor"]],
+                feature_selection=Reduction[module.mode["feature_selection"]],
+                num_selected_features=num_selected_features,
+                scoring=Scoretype[module.mode["scoring"]],
+                max_iterations=max_iterations
+            ),
+            Config.IO(
+                verbose=module.io["verbose"],
+                model_path=module.io["model_path"],
+                model_name=module.io["model_name"]
+            ),
+            Config.Debug(
+                on=module.debug["debug_on"],
+                num_rows=num_rows
+            ),
+            name=module.project["name"]
+        )
+
+        return config
     
 def positive_int_or_none(value: int) -> bool:
     if value is None:
@@ -708,146 +848,18 @@ def check_input_arguments(argv):
             print(command_line_instructions)
             sys.exit()
 
-def load_config_from_module(argv) -> Config:
-    module = check_input_arguments(argv)
 
-    version = '1.0'
-    if (hasattr(module, 'version')):
-        version = module.version
-
-    if (version == '1.0'):
-        return load_config_1(module)
     
-    if (version == '2.0'):
-        return load_config_2(module)
-    
-def set_none_or_int(value):
+def set_none_or_int(value) :
     if value == "None":
         return None
 
     return int(value)
 
-def load_config_2(module) -> Config:
-    num_rows = set_none_or_int(module.debug["num_rows"])
-    num_selected_features = set_none_or_int(module.mode["num_selected_features"])
-    max_iterations = set_none_or_int(module.mode["max_iterations"])
-
-    config = Config(
-        Config.Connection(
-            odbc_driver=module.connection["odbc_driver"],
-            host=module.connection["host"],
-            trusted_connection=module.connection["trusted_connection"],
-            class_catalog=module.connection["class_catalog"],
-            class_table=module.connection["class_table"],
-            class_table_script=module.connection["class_table_script"],
-            class_username=module.connection["class_username"],
-            class_password=module.connection["class_password"],
-            data_catalog=module.connection["data_catalog"],
-            data_table=module.connection["data_table"],
-            class_column=module.connection["class_column"],
-            data_text_columns=module.connection["data_text_columns"],
-            data_numerical_columns=module.connection["data_numerical_columns"],
-            id_column=module.connection["id_column"],
-            data_username=module.connection["data_username"],
-            data_password=module.connection["data_password"]
-        ),
-        Config.Mode(
-            train=module.mode["train"],
-            predict=module.mode["predict"],
-            mispredicted=module.mode["mispredicted"],
-            use_stop_words=module.mode["use_stop_words"],
-            specific_stop_words_threshold=float(
-                module.mode["specific_stop_words_threshold"]),
-            hex_encode=module.mode["hex_encode"],
-            use_categorization=module.mode["use_categorization"],
-            category_text_columns=module.mode["category_text_columns"],
-            test_size=float(module.mode["test_size"]),
-            smote=module.mode["smote"],
-            undersample=module.mode["undersample"],
-            algorithm=Algorithm[module.mode["algorithm"]],
-            preprocessor=Preprocess[module.mode["preprocessor"]],
-            feature_selection=Reduction[module.mode["feature_selection"]],
-            num_selected_features=num_selected_features,
-            scoring=Scoretype[module.mode["scoring"]],
-            max_iterations=max_iterations
-        ),
-        Config.IO(
-            verbose=module.io["verbose"],
-            model_path=module.io["model_path"],
-            model_name=module.io["model_name"]
-        ),
-        Config.Debug(
-            on=module.debug["on"],
-            num_rows=num_rows
-        ),
-        name=module.name
-    )
-
-    return config
-    
-    
-def load_config_1(module) -> Config:
-    num_rows = set_none_or_int(module.debug["num_rows"])
-    num_selected_features = set_none_or_int(module.mode["num_selected_features"])
-    max_iterations = set_none_or_int(module.mode["max_iterations"])
-
-    config = Config(
-        Config.Connection(
-            odbc_driver=module.sql["odbc_driver"],
-            host=module.sql["host"],
-            trusted_connection=module.sql["trusted_connection"],
-            class_catalog=module.sql["class_catalog"],
-            class_table=module.sql["class_table"],
-            class_table_script=module.sql["class_table_script"],
-            class_username=module.sql["class_username"],
-            class_password=module.sql["class_password"],
-            data_catalog=module.sql["data_catalog"],
-            data_table=module.sql["data_table"],
-            class_column=module.sql["class_column"],
-            data_text_columns=module.sql["data_text_columns"],
-            data_numerical_columns=module.sql["data_numerical_columns"],
-            id_column=module.sql["id_column"],
-            data_username=module.sql["data_username"],
-            data_password=module.sql["data_password"]
-        ),
-        Config.Mode(
-            train=module.mode["train"],
-            predict=module.mode["predict"],
-            mispredicted=module.mode["mispredicted"],
-            use_stop_words=module.mode["use_stop_words"],
-            specific_stop_words_threshold=float(
-                module.mode["specific_stop_words_threshold"]),
-            hex_encode=module.mode["hex_encode"],
-            use_categorization=module.mode["use_categorization"],
-            category_text_columns=module.mode["category_text_columns"],
-            test_size=float(module.mode["test_size"]),
-            smote=module.mode["smote"],
-            undersample=module.mode["undersample"],
-            algorithm=Algorithm[module.mode["algorithm"]],
-            preprocessor=Preprocess[module.mode["preprocessor"]],
-            feature_selection=Reduction[module.mode["feature_selection"]],
-            num_selected_features=num_selected_features,
-            scoring=Scoretype[module.mode["scoring"]],
-            max_iterations=max_iterations
-        ),
-        Config.IO(
-            verbose=module.io["verbose"],
-            model_path=module.io["model_path"],
-            model_name=module.io["model_name"]
-        ),
-        Config.Debug(
-            on=module.debug["debug_on"],
-            num_rows=num_rows
-        ),
-        name=module.project["name"]
-    )
-
-    return config
-
 
 def main():
     if len(sys.argv) > 1:
-        config = load_config_from_module(sys.argv)
+        config = Config.load_config_from_module(sys.argv)
     else:
        config = Config()
 

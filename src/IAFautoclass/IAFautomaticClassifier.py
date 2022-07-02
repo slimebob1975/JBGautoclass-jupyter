@@ -158,11 +158,6 @@ class IAFautomaticClassiphyer:
             self.model_filename = self.model_path / (self.config.name + ".sav")
         else:
             self.model_filename = self.model_path / self.config.io.model_name
-        
-        # TODO: This should probably be moved from here. In the GUI config it is always true
-        # Write configuration to file for easy start from command line
-        if save_config_to_file:
-            self.config.save_to_file()
     
         # Internal settings for panda
         pandas.set_option("max_columns", self.MAX_HEAD_COLUMNS)
@@ -1110,10 +1105,12 @@ class IAFautomaticClassiphyer:
                 class_count[elem] += 1
         return max(1, min(class_count.values()))
 
+    # Makes sure the GUI isn't left hanging if exceptions crash the program
     def abort_cleanly(self, message: str) -> None:
         self.logger.print_exit_error(message)
         sys.exit("Program aborted.")
 
+    # Updates the progress and notifies the logger
     def update_progress(self, percent: float, message: str = None) -> float:
         self.progress += percent
 
@@ -1131,6 +1128,8 @@ class IAFautomaticClassiphyer:
         self.logger.print_welcoming_message(config=self.config, date_now=self.date_now)
 
         # Print out what mode we use: training a new model or not
+        # TODO: This is a good place to start splitting. 
+        # Separate into two python files: one with train + "no if" and one with "no if" and not-train/predict
         if self.config.mode.train:
             self.logger.print_formatted_info("We will train our ml model")
         else:
@@ -1139,6 +1138,7 @@ class IAFautomaticClassiphyer:
             else:
                 self.abort_cleanly(f"No trained model exists at {self.model_filename}")
         
+        # TODO: Move the progress messages to the DataLayer
         # Create the classification table, if it does not exist already
         self.logger.print_progress(message="Create the classification table")
         self.datalayer.create_classification_table()
@@ -1152,7 +1152,7 @@ class IAFautomaticClassiphyer:
         except Exception as e:
             self.abort_cleanly(f"Mark of executionstart failed: {str(e)}")
 
-
+        # TODO: This is the beginning of the dataset so should be in a different class
         # Read in all data, with classifications or not
         self.logger.print_progress(message="Read in data from database")
         dataset, unique_keys, data_query, self.unique_classes = self.read_in_data()
@@ -1184,6 +1184,7 @@ class IAFautomaticClassiphyer:
         count_vectorizer = None
         tfid_transformer = None
         feature_selection_transform = None
+        # TODO: While we possibly load a trained model here, it itself is not used yet
         if not self.config.mode.train:
             label_binarizers, count_vectorizer, tfid_transformer, feature_selection_transform, \
                 trained_model_name, trained_model = self.load_model_from_file(self.model_filename)
@@ -1196,7 +1197,7 @@ class IAFautomaticClassiphyer:
             self.convert_textdata_to_numbers(dataset, label_binarizers, count_vectorizer, tfid_transformer)
 
         if self.text_data:
-            self.logger.print_info("After conversion of text data to numerical data:")
+            self.logger.print_formatted_info("After conversion of text data to numerical data")
             self.logger.investigate_dataset( X, False, False )
         
         self.update_progress(self.percentPermajorTask)
@@ -1275,6 +1276,7 @@ class IAFautomaticClassiphyer:
         if self.config.mode.train and (X_train.shape[0] + X_validation.shape[0]) > 0:
             self.logger.print_progress(message="Retrain model on whole dataset")
 
+            # TODO: We need a second load_model that doesn't give us all of these superfluous things
             _label_binarizers, _count_vectorizer, _tfid_transformer, _feature_selection_transform, \
                 _trained_model_name, cross_trained_model = self.load_model_from_file(self.model_filename)
             trained_model = \
@@ -1376,8 +1378,8 @@ def get_rid_of_decimals(x):
 # Main program
 def main(argv):
 
-    if len(sys.argv) > 1:
-        config = Config.load_config_from_module(argv)
+    if len(argv) > 1:
+        config = Config.Config.load_config_from_module(argv)
     else:
        config = Config.Config()
 
