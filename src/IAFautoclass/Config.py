@@ -4,29 +4,57 @@ import enum
 import getopt
 import importlib
 import os
+import pickle
+from random import Random
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Type, TypeVar
+from typing import Protocol, Type, TypeVar, Union
 
+import pandas
+from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
 from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
                               ExtraTreesClassifier, GradientBoostingClassifier,
                               RandomForestClassifier)
 from sklearn.feature_selection import SelectFromModel
+from sklearn.kernel_approximation import Nystroem
 from sklearn.linear_model import (LogisticRegression,
                                   PassiveAggressiveClassifier, Perceptron,
                                   RidgeClassifier, SGDClassifier)
+from sklearn.manifold import Isomap, LocallyLinearEmbedding
 from sklearn.naive_bayes import (BernoulliNB, ComplementNB, GaussianNB,
                                  MultinomialNB)
 from sklearn.neighbors import KNeighborsClassifier, NearestCentroid
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import (Binarizer, MaxAbsScaler,
-                                   MinMaxScaler, Normalizer, StandardScaler)
+from sklearn.preprocessing import (Binarizer, MaxAbsScaler, MinMaxScaler,
+                                   Normalizer, StandardScaler)
+from sklearn.random_projection import GaussianRandomProjection
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import make_scorer, matthews_corrcoef
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import Pipeline as ImbPipeline
+from imblearn.under_sampling import RandomUnderSampler
+
+
+
+class Logger(Protocol):
+    """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
+    def print_info(self, *args) -> None:
+        """printing info"""
+
+    def print_progress(self, message: str = None, percent: float = None) -> None:
+        """Printing progress"""
+
+    def print_components(self, component, components, exception = None) -> None:
+        """ Printing Reduction components"""
+    
+class ConfigException(Exception):
+    def __init__(self, message):
+        super().__init__(f"ConfigException: {message}")
 
 
 class Algorithm(enum.Enum):
@@ -266,6 +294,125 @@ class Reduction(enum.Enum):
     ISO = "Isometric Mapping"
     LLE = "Locally Linearized Embedding"
 
+    def call_transformation(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        do = self.get_function_name()
+        if hasattr(self, do) and callable(func := getattr(self, do)):
+            return func(logger, X, num_selected_features)
+        
+        return None
+
+    def get_function_name(self) -> str:
+        return f"do_{self.name}"
+
+    def has_transformation_function(self) -> bool:
+        do = self.get_function_name()
+        return hasattr(self, do) and callable(getattr(self, do))
+
+    def _do_transformation(self, logger: Logger, X: pandas.DataFrame, transformation, components):
+        try:
+            feature_selection_transform = transformation
+            feature_selection_transform.fit(X)
+            X = feature_selection_transform.transform(X)
+        except Exception as e:
+            logger.print_components(self.name, components, str(e))
+            feature_selection_transform = None
+        else:
+            # Else in a try-except clause means that there were no exceptions
+            logger.print_info(f"...new shape of data matrix is: ({X.shape[0]},{X.shape[1]})")
+
+        return X, feature_selection_transform
+
+    def do_PCA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        components = None
+        components_options = []
+        if num_selected_features != None and num_selected_features > 0:
+            components_options.append(num_selected_features)
+            components = num_selected_features
+        if X.shape[0] >= X.shape[1]:
+            components_options.append('mle')
+            components = 'mle'
+        components_options.append(Config.PCA_VARIANCE_EXPLAINED)
+        components_options.append(min(X.shape[0], X.shape[1]) - 1)
+        X_original = X
+        # Make transformation
+        for components in components_options:
+            logger.print_components("PCA", components)
+            transformation = PCA(n_components=components)
+            X, feature_selection_transform = self._do_transformation(logger=logger, X=X_original, transformation=transformation, components=components)
+            
+            if feature_selection_transform is not None:
+                break
+
+        return X, feature_selection_transform
+
+    def do_NYS(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        if num_selected_features != None and num_selected_features > 0:
+            components = num_selected_features
+        else:
+            components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
+            logger.print_components("Nystroem", components)
+        # Make transformation
+        transformation = Nystroem(n_components=components)
+        
+        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+
+    def do_TSVD(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        if num_selected_features != None and num_selected_features > 0:
+            components = num_selected_features
+        else:
+            components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
+            logger.print_components("Truncated SVD", components)
+        # Make transformation
+        transformation = TruncatedSVD(n_components=components)
+        
+        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+
+    def do_FICA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        if num_selected_features != None and num_selected_features > 0:
+            components = num_selected_features
+        else:
+            components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
+            logger.print_components("Fast ICA", components)
+            
+        # Make transformation
+        transformation = FastICA(n_components=components)
+        
+        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+
+
+    def do_GRP(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        if num_selected_features != None and num_selected_features > 0:
+            components = num_selected_features
+        else:
+            components = 'auto'
+            logger.print_components("GRP", components)
+        # Make transformation
+        transformation = GaussianRandomProjection(n_components=components)
+        
+        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+
+    def do_ISO(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        if num_selected_features != None and num_selected_features > 0:
+            components = num_selected_features
+        else:
+            components = Config.NON_LINEAR_REDUCTION_COMPONENTS
+            logger.print_components("ISO", components)
+        # Make transformation
+        transformation = Isomap(n_components=components)
+        
+        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+
+    def do_LLE(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        if num_selected_features != None and num_selected_features > 0:
+            components = num_selected_features
+        else:
+            components = Config.NON_LINEAR_REDUCTION_COMPONENTS
+            logger.print_components("LLE", components)
+        # Make transformation
+        transformation = LocallyLinearEmbedding(n_components=components)
+        
+        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+
 
 class Scoretype(enum.Enum):
     accuracy = "Accuracy"
@@ -280,16 +427,26 @@ class Scoretype(enum.Enum):
     precision_weighted = "Precision Weighted"
     mcc = "Matthews Corr. Coefficient"
 
+    def get_mechanism(self):
+        """ Returns the scoring mechanism based on the Scoretype"""
+        if self == Scoretype.mcc:
+            return make_scorer(matthews_corrcoef)
+
+        return self.name
+
 T = TypeVar('T', bound='Config')
 
 @dataclass
 class Config:
     
     MAX_ITERATIONS = 20000
-    LIMIT_IS_CATEGORICAL = 30
     CONFIG_FILENAME_PATH = "./config/"
     CONFIG_FILENAME_START = "autoclassconfig_"
     CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py"
+    PCA_VARIANCE_EXPLAINED = 0.999
+    LOWER_LIMIT_REDUCTION = 100
+    NON_LINEAR_REDUCTION_COMPONENTS = 2
+    
 
 
     TEMPLATE_TAGS = {
@@ -376,7 +533,6 @@ class Config:
             
             return "\n".join(str_list)
 
-
     @dataclass
     class IO:
         verbose: bool = True
@@ -458,7 +614,7 @@ class Config:
     name: str = "iris"
     config_path: str = field(init=False)
     filename: str = field(init=False)
-    save: bool = True
+    save: bool = False
 
 
     def __post_init__(self) -> None:
@@ -609,6 +765,17 @@ class Config:
         ]
         return  "\n".join(str_list)
 
+    def get_model_filename(self) -> str:
+        # Set the name and path of the model file depending on training or predictions
+        pwd = os.path.dirname(os.path.realpath(__file__))
+        model_path = Path(pwd) / self.io.model_path
+        
+        #return model_path / ("iris.sav")
+        if self.mode.train:
+            return model_path / (self.name + ".sav")
+        
+        return model_path / self.io.model_name
+
     # Extracts the config information to save with a model
     def get_clean_config(self):
         configuration = Config()
@@ -653,6 +820,26 @@ class Config:
         
         with open(self.config_path / self.filename, "w", encoding="utf-8") as fout:
            fout.writelines(lines)
+
+    @classmethod
+    def load_config_from_model_file(cls: Type[T], filename: str, config: T = None) -> T:
+        try:
+            file_values = pickle.load(open(filename, 'rb'))
+            saved_config = file_values[0]
+        except Exception as e:
+            raise ConfigException(f"Something went wrong on loading model from file: {e}")
+        
+        if config is not None:
+            saved_config.mode.train = config.mode.train
+            saved_config.mode.predict = config.mode.predict
+            saved_config.mode.mispredicted = config.mode.mispredicted
+            saved_config.connection.data_catalog = config.connection.data_catalog
+            saved_config.connection.data_table = config.connection.data_table
+            saved_config.io.model_name = config.io.model_name
+            saved_config.debug.num_rows = config.debug.num_rows
+        
+        return saved_config
+
 
     @classmethod
     def load_config_from_module(cls: Type[T], argv) -> T:
@@ -786,6 +973,189 @@ class Config:
 
         return config
     
+    # Methods to hide implementation of Config
+    def set_num_selected_features(self, num_features: int) -> None:
+        """ Updates the config with the number """
+        self.mode.num_selected_features = num_features
+
+    def is_text_data(self) -> bool:
+        return self.connection.data_text_columns != ""
+    
+    def is_numerical_data(self) -> bool:
+        return self.connection.data_numerical_columns != ""
+
+    def force_categorization(self) -> bool:
+        return  self.mode.category_text_columns != ""
+
+    def get_feature_selection(self) -> Reduction:
+        """ Gets the given feature selection Reduction """
+        return self.mode.feature_selection
+
+    def get_none_or_positive_value(self, attribute: str) -> int:
+        location = attribute.split(".")
+            
+        head = getattr(self, location[0])
+        value = getattr(head, location[1])
+        
+        if value is None or value == "":
+            return 0
+
+        return value
+
+    def get_num_selected_features(self) -> int:
+        return self.get_none_or_positive_value("mode.num_selected_features")
+        
+    def feature_selection_in(self, selection: list) -> bool:
+        """ Checks if the selection is one of the given Reductions"""
+        for reduction in selection:
+            if self.mode.feature_selection == reduction:
+                return True
+
+        return False
+
+    def use_feature_selection(self) -> bool:
+        """ Checks if feature selection should be used """
+        return self.mode.feature_selection != Reduction.NON
+
+    def get_test_size(self) -> float:
+        """ Gets the test_size """
+        return self.mode.test_size
+
+    def get_max_limit(self) -> int:
+        """ Get the max limit. Name might change depending on GUI names"""
+        return self.get_none_or_positive_value("debug.num_rows")
+
+    def get_max_iterations(self) -> int:
+        """ Get max iterations """
+        return self.get_none_or_positive_value("mode.max_iterations")
+
+    def is_verbose(self) -> bool:
+        """ Returns what the io.verbose is set to"""
+        return self.io.verbose
+
+    def get_column_names(self) -> list[str]:
+        """ Gets the column names based on connection columns """
+        column_names = [self.connection.id_column] + [self.connection.class_column] + self.get_text_column_names() + self.get_numerical_column_names()
+        try:
+            column_names.remove("") # Remove any empty column name
+        except Exception as e:
+            pass
+
+        return column_names
+
+
+    def get_text_column_names(self) -> list[str]:
+        """ Gets the specified text columns"""
+        column_names = self.connection.data_text_columns.split(",")
+
+        try:
+            column_names.remove("") # Remove any empty column name
+        except Exception as e:
+            pass
+
+        return column_names
+
+    def get_numerical_column_names(self) -> list[str]:
+        """ Gets the specified numerical columns"""
+        column_names = self.connection.data_numerical_columns.split(',')
+
+        try:
+            column_names.remove("") # Remove any empty column name
+        except Exception as e:
+            pass
+
+        return column_names
+
+    def get_class_column_name(self) -> str:
+        """ Gets the name of the column"""
+        return self.connection.class_column
+
+    def get_id_column_name(self) -> str:
+        """ Gets the name of the ID column"""
+        return self.connection.id_column
+
+    def is_categorical(self, column_name) -> bool:
+        """ Returns if a specific column is categorical"""
+        return self.force_categorization() and column_name in self.mode.category_text_columns.split(",")
+
+    def should_train(self) -> bool:
+        """ Returns if this is a training config """
+        return self.mode.train
+
+    def should_predict(self) -> bool:
+        """ Returns if this is a prediction config """
+        return self.mode.predict
+
+    def should_display_mispredicted(self) -> bool:
+        """ Returns if this is a misprediction config """
+        return self.mode.mispredicted
+
+    def use_stop_words(self) -> bool:
+        """ Returns whether stop words should be used """
+        return self.mode.use_stop_words
+
+    def get_stop_words_threshold(self) -> float:
+        """ Returns the threshold fo the stop words """
+        return self.mode.specific_stop_words_threshold
+
+    def should_hex_encode(self) -> bool:
+        """ Returns whether dataset should be hex encoded """
+        return self.mode.hex_encode
+
+    def use_categorization(self) -> bool:
+        """ Returns if categorization should be used """
+        return self.mode.use_categorization
+
+    def get_smote(self) -> Union[SMOTE, None]:
+        """ Gets the SMOTE for the model, or None if it shouldn't be """
+        if self.mode.smote:
+            return SMOTE(sampling_strategy='auto')
+
+        return None
+        
+    def get_undersampler(self) -> Union[RandomUnderSampler, None]:
+        """ Gets the UnderSampler, or None if there should be none"""
+        if self.mode.undersample:
+            return RandomUnderSampler(sampling_strategy='auto')
+
+        return None
+
+    def update_values(self, updates: dict,  type: str = None) -> bool:
+        """ Updates several values inside the config """
+
+        if type is None:
+            """ Attempts to find the fields based on a split, useful if values belong to different parts """
+            for attribute, value in updates.item():
+                location = attribute.split(".")
+
+                if len(location) == 1:
+                    setattr(self, attribute, value)
+                else:
+                    head = getattr(self, location[0])
+                    setattr(head, location[1], value)
+        else:
+            head = getattr(self, type)
+            for attribute, value in updates.items():
+                setattr(head, attribute, value)
+
+    def get_scoring_mechanism(self):
+        """ While the actual function is in the mechanism, this allows us to hide where Scoring is """
+        return self.mode.scoring.get_mechanism()
+
+    def get_algorithm(self) -> Algorithm:
+        """ Get algorithm from Config"""
+        return self.mode.algorithm
+
+    def get_preprocessor(self) -> Preprocess:
+        """ get preprocessor from Config """
+        return self.mode.preprocessor
+    
+    # Updated through here
+    
+   
+
+    
+
 def positive_int_or_none(value: int) -> bool:
     if value is None:
         return True

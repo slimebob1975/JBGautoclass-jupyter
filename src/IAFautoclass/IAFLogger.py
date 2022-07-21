@@ -1,7 +1,15 @@
 from datetime import datetime
+import sys
 import pandas
 import terminal
-import Config
+from typing import Protocol
+
+from IAFHandler import Model, PredictionsHandler
+
+# Using Protocol to simplify imports
+class Config(Protocol):
+    def __str__(self) -> str:
+        print("Config Protocol")
 
 class IAFLogger(terminal.Logger):
 
@@ -20,7 +28,7 @@ class IAFLogger(terminal.Logger):
         terminal.Logger.__init__(self, quiet=quiet)
         
 
-    def print_welcoming_message(self, config: Config.Config, date_now: datetime) -> None:
+    def print_welcoming_message(self, config: Config, date_now: datetime) -> None:
         
         # Print welcoming message
         self.print_unformatted("\n *** WELCOME TO IAF AUTOMATIC CLASSIFICATION SCRIPT ***\n")
@@ -28,6 +36,16 @@ class IAFLogger(terminal.Logger):
 
         # Print configuration settings
         self.print_unformatted(config)
+
+    def get_table_format(self) -> str:
+        return "{0:>4s}-{1:<6s}{2:>6s}{3:>8s}{4:>8s}{5:>11s}"
+
+    def print_table_row(self, items: list[str], divisor: str = None) -> None:
+        """ Prints a row with optional divisor"""
+        self.print_unformatted(self.get_table_format().format(*items))
+
+        if divisor is not None:
+            self.print_unformatted(divisor*45)
 
     def print_components(self, component, components, exception = None) -> None:
         if exception is None:
@@ -55,7 +73,7 @@ class IAFLogger(terminal.Logger):
         self.error(' '.join(args))
 
     def print_warning(self, *args) -> None:
-        self.warning(' '.join(args))
+        self.warn(' '.join(args))
 
     def print_exit_error(self, *args) -> None:
         self.print_error(' '.join(args))
@@ -124,8 +142,8 @@ class IAFLogger(terminal.Logger):
         self.print_unformatted("Skew of Univariate descriptions")
         self.print_unformatted(skew, "\n")
 
-    def print_classification_report(self, report: dict, model: tuple, num_features: int):
-        self.start(f"Classification report for {model[0].name}/{model[1].name} with #features: {num_features}")
+    def print_classification_report(self, report: dict, model: Model, num_features: int):
+        self.start(f"Classification report for {model.algorithm.name}/{model.preprocess.name} with #features: {num_features}")
         for key, value in report.items():
             self.print_unformatted(f"{key}: {value}")
 
@@ -145,9 +163,23 @@ class IAFLogger(terminal.Logger):
         
         return self.writeln('unformatted', *args)
 
+    #
+    def print_training_probabilities(self, ph: PredictionsHandler) -> None:
+        if not ph.could_predict_proba:
+            return
+        
+        mean, std = ph.get_probabilities(as_string = True)
+        self.print_info("Training Classification prob: Mean, Std.dev: ", mean, std)
+    
+
+    # Makes sure the GUI isn't left hanging if exceptions crash the program
+    def abort_cleanly(self, message: str) -> None:
+        self.print_exit_error(message)
+        sys.exit("Program aborted.")
+
 
 def main():
-    config = Config.Config()
+    config = Config()
     date_now = datetime.now()
     myLogger = IAFLogger(quiet=False)
 

@@ -44,7 +44,8 @@ class DataLayer:
     
     # Create the classification table
     def create_classification_table(self) -> None:
-
+        self.logger.print_progress(message="Create the classification table")
+        
         # Read in the sql-query from file
         sql_file = open(self.scriptpath + "\\" + str(Path(self.connection.class_table_script)), mode="rt")
         
@@ -99,6 +100,7 @@ class DataLayer:
     # This new row should be deleted before the program ends, which signals all is okay.
     #
     def mark_execution_started(self) -> int:
+        self.logger.print_progress(message="Marking execution started in database...-please wait!")
 
         try:
            # Get a sql handler and connect to data database
@@ -135,7 +137,8 @@ class DataLayer:
             raise
 
     def mark_execution_ended(self) -> int:
-        
+        self.logger.print_info("Marking execution ended in database...")
+
         try:
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
@@ -318,7 +321,7 @@ class DataLayer:
         
         return query
 
-    def get_data(self, num_rows, train, predict):
+    def get_dataset(self, num_rows: int, train: bool, predict: bool):
         try:
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
@@ -336,7 +339,7 @@ class DataLayer:
             non_ordered_query = query
             query += " ORDER BY [" +  str(self.connection.class_column) + "] DESC"
 
-            self.logger.print_query("Query for classification data: ", query)
+            self.logger.print_query("Classification data: ", query)
 
             # Now we are ready to execute the sql query
             # By default, all fetched data is placed in one long 1-dim list. The alternative is to read by chunks.

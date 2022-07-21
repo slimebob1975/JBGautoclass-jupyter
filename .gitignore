@@ -7,3 +7,4 @@ autoclassconfig_*.py
 src/IAFautoclass/output/*.csv
 src/IAFautoclass/model/*.sav
 .env
+.ideas
