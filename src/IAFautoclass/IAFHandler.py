@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import pickle
 import time
 import typing
@@ -16,7 +15,6 @@ from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from lexicalrichness import LexicalRichness
-from regex import R
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
@@ -28,6 +26,7 @@ from stop_words import get_stop_words
 
 from Config import Algorithm, Preprocess, Reduction, get_model_name
 from IAFExceptions import DatasetException, ModelException, HandlerException
+import Helpers
 
 
 class Logger(Protocol):
@@ -52,6 +51,9 @@ class Logger(Protocol):
 
     def print_table_row(self, items: list[str], divisor: str = None) -> None:
         """ Prints row of items, with optional divisor"""
+
+    def abort_cleanly(self, message: str) -> None:
+        """ Exits the process """
 
 class DataLayer(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -192,7 +194,7 @@ class IAFHandler:
         return PredictionsHandler(handler=self)
     
 
-    def get_handler(self, name: str):
+    def get_handler(self, name: str) -> Union[DatasetHandler, ModelHandler, PredictionsHandler]:
         if name in self.handlers:
             return self.handlers[name]
 
@@ -203,6 +205,29 @@ class IAFHandler:
         """ By putting this here, Datalayer does not need to be supplied to Dataset Handler"""
         # return data, non_ordered_query, num_lines
         return self.datalayer.get_dataset(self.config.get_max_limit(), self.config.should_train(), self.config.should_predict())
+
+    def save_classification_data(self) -> None:
+        # Save new classifications for X_unknown in classification database
+        self.logger.print_progress(message="Save new classifications in database")
+        dh = self.get_handler("dataset")
+        ph = self.get_handler("predictions")
+        mh = self.get_handler("model")
+
+        results = ph.get_prediction_results(dh.unpredicted_keys)
+
+        try:
+            results_saved = self.datalayer.save_data(
+                results,
+                class_rate_type=ph.get_rate_type(),
+                model= mh.model,
+                config=self.config
+            )
+            
+        except Exception as e:
+            self.logger.abort_cleanly(f"Save of predictions failed: {e}")
+        
+        saved_query = self.datalayer.get_sql_command_for_recently_classified_data(results_saved)
+        self.logger.print_info(f"Added {results_saved} rows to classification table. Get them with SQL query:\n\n{saved_query}")
 
     # Updates the progress and notifies the logger
     # Currently duplicated over Classifier and IAFHandler, but that's for later
@@ -290,7 +315,6 @@ class DatasetHandler:
                     print("Data checked of fetched: " + str(percent_checked) + " %", end='\r')
                 for key in self.dataset.columns:
                     item = self.dataset.at[index,key]
-                    print(f"{item=}, {index=}, {key=}")
                     # Set NoneType objects  as zero or empty strings
                     if (key in self.handler.config.get_numerical_column_names() or \
                         key in self.handler.config.get_text_column_names()) and item == None:
@@ -301,19 +325,19 @@ class DatasetHandler:
                         change = True
 
                     # Convert numerical datetime values to ordinals
-                    elif key in self.handler.config.get_numerical_column_names() and is_datetime(item):
+                    elif key in self.handler.config.get_numerical_column_names() and Helpers.is_datetime(item):
                         item = datetime.toordinal(item)
                         change = True
 
                     # Set remaining numerical values that cannot be casted as integer or floating point numbers to zero, i.e., do not
                     # take then into account
                     elif key in self.handler.config.get_numerical_column_names() and \
-                        not (is_int(item) or is_float(item)):
+                        not (Helpers.is_int(item) or Helpers.is_float(item)):
                         item = 0
                         change = True
 
                     # Set text values that cannot be casted as strings to empty strings
-                    elif key in self.handler.config.get_text_column_names() and type(item) != str and not is_str(item):
+                    elif key in self.handler.config.get_text_column_names() and type(item) != str and not Helpers.is_str(item):
                         item = ""
                         change = True
 
@@ -345,7 +369,7 @@ class DatasetHandler:
         # since it will not be used in the classification but only to reconnect each 
         # data row with classification results later on
         try:
-            keys = self.dataset[self.handler.config.get_id_column_name()].copy(deep = True).apply(get_rid_of_decimals)
+            keys = self.dataset[self.handler.config.get_id_column_name()].copy(deep = True).apply(Helpers.get_rid_of_decimals)
         except Exception as e:
             print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
             raise DatasetException(f"Could not convert integer: {e}")
@@ -509,7 +533,7 @@ class DatasetHandler:
 
         # Mask all material by encryption (optional)
         if (self.handler.config.should_hex_encode()):
-            X = do_hex_base64_encode_on_data(X)
+            X = Helpers.do_hex_base64_encode_on_data(X)
 
         # Text must be turned into numerical feature vectors ("bag-of-words"-technique).
         # If selected, remove stop words
@@ -522,7 +546,7 @@ class DatasetHandler:
                 self.handler.logger.print_info("Using standard stop words: ", str(my_stop_words))
                 if (self.handler.config.should_hex_encode()):
                     for word in my_stop_words:
-                        word = cipher_encode_string(str(word))
+                        word = Helpers.cipher_encode_string(str(word))
 
                 # Collect text specific stop words (already encrypted if encryption is on)
                 text_specific_stop_words = []
@@ -630,79 +654,6 @@ class DatasetHandler:
             if item == None or not str(item).strip(): # Corresponds to empty string and SQL NULL
                 num += 1
         return num
-
-# Convert dataset to unreadable hex code
-def do_hex_base64_encode_on_data(X):
-
-    XX = X.copy()
-
-    with np.nditer(XX, op_flags=['readwrite'], flags=["refs_ok"]) as iterator:
-        for x in iterator:
-            xval = str(x)
-            xhex = cipher_encode_string(xval)
-            x[...] = xhex 
-
-    return XX
-
-def cipher_encode_string(a):
-
-    aa = a.split()
-    b = ""
-    for i in range(len(aa)):
-        b += (str(
-                base64.b64encode(
-                    bytes(aa[i].encode("utf-8").hex(),"utf-8")
-                )
-            ) + " ")
-
-    return b.strip()
-
-def get_rid_of_decimals(x) -> int:
-    return int(round(float(x)))
-
-# Help routines for determining consistency of input data
-def is_float(val):
-    try:
-        float(val)
-    except ValueError:
-        return False
-    return True
-
-def is_int(val):
-    try:
-        int(val)
-    except ValueError:
-        return False
-    return True
-
-def is_bool(val):
-    return type(val)==bool
-
-def is_str(val):
-    is_other_type = \
-        is_float(val) or \
-        is_int(val) or \
-        is_bool(val) or \
-        is_datetime(val)
-    return not is_other_type 
-    
-def is_datetime(val):
-    try:
-        if isinstance(val, datetime): #Simple, is already instance of datetime
-            return True
-    except ValueError:
-        pass
-    # Harder: test the value for many different datetime formats and see if any is correct.
-    # If so, return true, otherwise, return false.
-    the_formats = ['%Y-%m-%d %H:%M:%S','%Y-%m-%d','%Y-%m-%d %H:%M:%S.%f','%Y-%m-%d %H:%M:%S,%f', \
-                    '%d/%m/%Y %H:%M:%S','%d/%m/%Y','%d/%m/%Y %H:%M:%S.%f', '%d/%m/%Y %H:%M:%S,%f']
-    for the_format in the_formats:
-        try:
-            date_time = datetime.strptime(str(val), the_format)
-            return isinstance(date_time, datetime)
-        except ValueError:
-            pass
-    return False
 
 @dataclass
 class Model:
@@ -1078,6 +1029,24 @@ class PredictionsHandler:
     model: str = field(init=False)
     class_report: dict = field(init=False)
 
+    def get_prediction_results(self, keys: pandas.Series) -> list:
+        
+        return_list = []
+        for k,y,r,p in zip(keys.values, self.predictions, self.rates, self.probabilites):
+            item = {
+                "key": k,
+                "prediction": y,
+                "rates": r,
+                "probabilities": ",".join([str(elem) for elem in p])
+            }
+
+            return_list.append(item)
+
+        return return_list
+
+    def get_mispredicted_dataframe(self) -> pandas.DataFrame:
+        return self.X_most_mispredicted
+
     # Evaluate predictions
     def evaluate_predictions(self, Y, message="Unknown") -> None:
         self.handler.logger.print_progress(message="Evaluate predictions")
@@ -1133,7 +1102,11 @@ class PredictionsHandler:
         return could_predict_proba
 
     # Gets the rate type
-    # TODO: Maybe enum? I = "", U = "Unknown", A =""
+    # TODO: Maybe enum?
+    # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
+    # A = Allmän bedömning. Modellen kan endast ge gemensam genomsnittlig sannolikhet för alla dataelementen tillsammans.
+    # U = Okänd. Lade jag till som en framtida utväg ifall ingen av de ovanstående fanns tillgängliga.
+
     def get_rate_type(self) -> str:
         if self.could_predict_proba:
             return "I"

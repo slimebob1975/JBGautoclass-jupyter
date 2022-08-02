@@ -5,7 +5,6 @@ import getopt
 import importlib
 import os
 import pickle
-from random import Random
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,9 +35,9 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import make_scorer, matthews_corrcoef
 from imblearn.over_sampling import SMOTE
-from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.under_sampling import RandomUnderSampler
 
+from IAFExceptions import ConfigException
 
 
 class Logger(Protocol):
@@ -52,10 +51,6 @@ class Logger(Protocol):
     def print_components(self, component, components, exception = None) -> None:
         """ Printing Reduction components"""
     
-class ConfigException(Exception):
-    def __init__(self, message):
-        super().__init__(f"ConfigException: {message}")
-
 
 class Algorithm(enum.Enum):
     ALL = "All"
@@ -446,8 +441,9 @@ class Config:
     PCA_VARIANCE_EXPLAINED = 0.999
     LOWER_LIMIT_REDUCTION = 100
     NON_LINEAR_REDUCTION_COMPONENTS = 2
-    
 
+    DEFAULT_MODELS_PATH =  ".\\src\\IAFautoclass\\model\\"
+    DEFAULT_MODEL_EXTENSION = ".sav"
 
     TEMPLATE_TAGS = {
         "name": "<name>",
@@ -615,7 +611,7 @@ class Config:
     config_path: str = field(init=False)
     filename: str = field(init=False)
     save: bool = False
-
+    
 
     def __post_init__(self) -> None:
         pwd = os.path.dirname(os.path.realpath(__file__))
@@ -644,7 +640,7 @@ class Config:
             isinstance(self.connection.id_column, str),
             isinstance(self.connection.trusted_connection, bool)
         ]
-
+        
         if not all(database_connection_information):
             raise TypeError(
                 "Specified database connection information is invalid")
@@ -751,7 +747,7 @@ class Config:
 
         self.filename = f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
         
-        # This is always True in the GUI and always False from config
+        # This is True if training in GUI, always False if not
         if self.save:
             self.save_to_file()
 
@@ -766,15 +762,11 @@ class Config:
         return  "\n".join(str_list)
 
     def get_model_filename(self) -> str:
-        # Set the name and path of the model file depending on training or predictions
+        # Set the name and path of the model file
         pwd = os.path.dirname(os.path.realpath(__file__))
         model_path = Path(pwd) / self.io.model_path
         
-        #return model_path / ("iris.sav")
-        if self.mode.train:
-            return model_path / (self.name + ".sav")
-        
-        return model_path / self.io.model_name
+        return model_path / (self.io.model_name + Config.DEFAULT_MODEL_EXTENSION)
 
     # Extracts the config information to save with a model
     def get_clean_config(self):
@@ -813,7 +805,6 @@ class Config:
             if (isinstance(replace, enum.Enum)):
                 replace = replace.name
 
-            
             for i in range(len(lines)):
                 lines[i] = lines[i].replace(template, str(replace))
        
@@ -1021,6 +1012,10 @@ class Config:
         """ Gets the test_size """
         return self.mode.test_size
 
+    def get_test_size_percentage(self) -> int:
+        """ Gets the test_size as a percentage """
+        return int(self.mode.test_size * 100.0)
+
     def get_max_limit(self) -> int:
         """ Get the max limit. Name might change depending on GUI names"""
         return self.get_none_or_positive_value("debug.num_rows")
@@ -1043,7 +1038,17 @@ class Config:
 
         return column_names
 
+    def get_categorical_text_column_names(self) -> list[str]:
+        """ Gets the specified categorical text columns"""
+        column_names = self.mode.category_text_columns.split(",")
 
+        try:
+            column_names.remove("") # Remove any empty column name
+        except Exception as e:
+            pass
+
+        return column_names
+        
     def get_text_column_names(self) -> list[str]:
         """ Gets the specified text columns"""
         column_names = self.connection.data_text_columns.split(",")
@@ -1059,6 +1064,16 @@ class Config:
         """ Gets the specified numerical columns"""
         column_names = self.connection.data_numerical_columns.split(',')
 
+        try:
+            column_names.remove("") # Remove any empty column name
+        except Exception as e:
+            pass
+
+        return column_names
+
+    def get_data_column_names(self) -> list[str]:
+        """ Gets data columns, so not Class or ID """
+        column_names = self.get_text_column_names() + self.get_numerical_column_names()
         try:
             column_names.remove("") # Remove any empty column name
         except Exception as e:
@@ -1095,8 +1110,12 @@ class Config:
         return self.mode.use_stop_words
 
     def get_stop_words_threshold(self) -> float:
-        """ Returns the threshold fo the stop words """
+        """ Returns the threshold for the stop words """
         return self.mode.specific_stop_words_threshold
+
+    def get_stop_words_threshold_percentage(self) -> int:
+        """ Returns the threshold as an integer between 0-100"""
+        return int(self.mode.specific_stop_words_threshold * 100.0)
 
     def should_hex_encode(self) -> bool:
         """ Returns whether dataset should be hex encoded """
@@ -1150,7 +1169,22 @@ class Config:
         """ get preprocessor from Config """
         return self.mode.preprocessor
     
-    # Updated through here
+    def get_class_table(self) -> str:
+        """ Gets the class table with database """
+        return f"{self.connection.class_catalog}.{self.connection.class_table}"
+    
+    def get_data_catalog(self) -> str:
+        """ Gets the data catalog """
+        return self.connection.data_catalog
+
+    def get_data_table(self) -> str:
+        """ Gets the data table """
+        return self.connection.data_table
+
+    def get_data_username(self) -> str:
+        """ Gets the data user name """
+        return self.connection.data_username
+
     
    
 

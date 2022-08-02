@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 #import ipywidgets as widgets
 
 import pandas
-from pandas import concat
+from pandas import DataFrame, concat
 from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
 
 # Imports of local help class for communication with SQL Server
@@ -107,16 +107,6 @@ class IAFautomaticClassiphyer:
 
         return output_path + type_dict["prefix"] + output_name + "." + type_dict["suffix"]
 
-
-    # TODO: used in GUI
-    # Get a list of pretrained models
-    def get_trained_models(self):
-        models = []
-        for file in os.listdir(self.model_path):
-            if file[-len(self.DEFAULT_MODEL_FILE_EXTENSION):] == self.DEFAULT_MODEL_FILE_EXTENSION:
-                models.append(file)
-        return models
-
     # Updates the progress and notifies the logger
     def update_progress(self, percent: float, message: str = None) -> float:
         self.progression["progress"] += percent
@@ -130,24 +120,19 @@ class IAFautomaticClassiphyer:
 
     # The main classification function for the class
     def run(self):
-        
-        # Print a welcoming message for the audience
-        self.logger.print_welcoming_message(config=self.config, date_now=self.date_now)
-
         if not self.config.should_train():
             self.config = Config.Config.load_config_from_model_file(self.config.get_model_filename(), config=self.config)
         
         # TODO: This should be broken out into it's own function, creating IAFHandler and the necessary handlers
-        handler = IAFHandler(self.datalayer, self.config, self.logger, self.progression)
-        dh = handler.add_handler("dataset")
-        mh = handler.add_handler("model")
-        ph = handler.add_handler("predictions")
+        self.handler = IAFHandler(self.datalayer, self.config, self.logger, self.progression)
+        dh = self.handler.add_handler("dataset")
+        mh = self.handler.add_handler("model")
+        ph = self.handler.add_handler("predictions")
         
+        # Print a welcoming message for the audience
+        self.logger.print_welcoming_message(config=self.config, date_now=self.date_now)
 
         # Print out what mode we use: training a new model or not
-        # TODO: This is a good place to start splitting. 
-        # Separate into two python files: one with train + "no if" and one with "no if" and not-train/predict
-        # This turned out to be a bad idea at it's core, so starting with dividing things into dataset vs model instead
         if self.config.should_train():
             self.logger.print_formatted_info("We will train our ml model")
         elif self.config.should_predict():
@@ -162,12 +147,7 @@ class IAFautomaticClassiphyer:
         self.datalayer.create_classification_table()
         self.update_progress(self.progression["percentPerMajorTask"])
 
-        try:
-            # Set a flag in the classification database that execution has started
-            self.datalayer.mark_execution_started()
-        except Exception as e:
-            self.logger.abort_cleanly(f"Mark of executionstart failed: {e}")
-
+        self.pre_run()
 
         try:
             if not dh.read_in_data(): #should return true or false
@@ -180,14 +160,12 @@ class IAFautomaticClassiphyer:
 
         dh.set_training_data()
         
-        
         # Rearrange dataset such that all text columns are merged into one single
         # column, and convert text to numbers. Return the data in left-hand and
         # right hand side parts
         self.logger.print_progress(message="Rearrange dataset for possible textclassification, etc.")
         mh.model.update_fields(fields=["label_binarizers", "count_vectorizer", "tfid_transformer"], update_function=dh.convert_textdata_to_numbers)
 
-        
         self.update_progress(self.progression["percentPerMajorTask"])
 
         mh.model.update_field("transform", dh.perform_feature_selection(mh.model))
@@ -201,11 +179,9 @@ class IAFautomaticClassiphyer:
             num_selected_features = mh.model.transform.n_components_
 
         self.config.set_num_selected_features(num_selected_features)
-
         
         # Split dataset for machine learning
         dh.split_dataset()
-       
 
         self.update_progress(self.progression["percentPerMajorTask"])
 
@@ -228,7 +204,7 @@ class IAFautomaticClassiphyer:
                 # Make predictions on known testdata
                 self.logger.print_progress(message="Make predictions on known testdata")
                 
-                could_proba = ph.make_predictions(mh.model.model, dh.X_validation)
+                ph.make_predictions(mh.model.model, dh.X_validation)
 
                 self.logger.print_training_probabilities(ph)
                 
@@ -266,7 +242,7 @@ class IAFautomaticClassiphyer:
             ph.make_predictions(mh.model.model, dh.X_unknown)
             
             self.logger.print_formatted_info("Predictions for the unknown data")
-            self.logger.print_info("Predictions:", str(dh.Y_unknown))
+            self.logger.print_info("Predictions:", str(ph.probabilites))
             
             self.logger.print_training_probabilities(ph)
             
@@ -274,26 +250,21 @@ class IAFautomaticClassiphyer:
            
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
-            # Save new classifications for X_unknown in classification database
-            self.logger.print_progress(message="Save new classifications in database")
-            try:
-                results_saved = self.datalayer.save_data(
-                    dh.unpredicted_keys.values,
-                    dh.Y_unknown,
-                    ph.probabilites,
-                    ph.get_rate_type(),
-                    mh.model.model.classes_,
-                    ph.probabilites,
-                    mh.model.get_name()
-                )
-            except Exception as e:
-                self.logger.abort_cleanly(f"Save of predictions failed: {e}")
-            
-            saved_query = self.datalayer.get_sql_command_for_recently_classified_data(results_saved)
-            self.logger.print_info(f"Added {results_saved} rows to classification table. Get them with SQL query:\n\n{saved_query}")
+            self.handler.save_classification_data()
 
         self.update_progress(percent=self.progression["percentPerMajorTask"])
 
+        return self.post_run()
+        
+
+    def pre_run(self) -> None:
+        try:
+            # Set a flag in the classification database that execution has started
+            self.datalayer.mark_execution_started()
+        except Exception as e:
+            self.logger.abort_cleanly(f"Mark of executionstart failed: {e}")
+
+    def post_run(self) -> int:
         elapsed_time = time.time() - self.clock1
         date_again = str(datetime.now())
         self.logger.print_formatted_info(f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again}")
@@ -309,6 +280,21 @@ class IAFautomaticClassiphyer:
 
         # Return positive signal
         return 0
+
+    def no_mispredicted_elements(self) -> bool:
+        ph = self.handler.get_handler("predictions")
+        
+        return ph.num_mispredicted == 0
+
+    def get_mispredicted_dataframe(self) -> DataFrame:
+        ph = self.handler.get_handler("predictions")
+
+        return ph.get_mispredicted_dataframe()
+
+    def get_unique_classes(self) -> list[str]:
+        dh = self.handler.get_handler("dataset")
+
+        return dh.classes
     
 # Main program
 def main(argv):

@@ -1,7 +1,9 @@
+from msilib.schema import ODBCAttribute
 import sys
 import os
 import platform
 import importlib
+from typing import List
 
 if platform.system() == 'Windows':
     import pyodbc
@@ -48,7 +50,7 @@ class IAFSqlHelper():
                self.Username + ", " + self.Password
 
     # Make a connection to database
-    def connect(self):
+    def connect(self) -> pyodbc.Connection:
         if not self.Trusted_connection:
             connect_string = \
                 "DRIVER=" + self.Driver + ";" + \
@@ -129,7 +131,7 @@ class IAFSqlHelper():
                 self.end_program( func, str(ex) )
 
     # Read all (remaining) lines of data, if possible
-    def read_all_data(self):
+    def read_all_data(self) -> List[pyodbc.Row]:
 
         try:
             data = self.Cursor.fetchall()

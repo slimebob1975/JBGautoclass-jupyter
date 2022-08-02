@@ -2,11 +2,15 @@
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
+import sys
+from collections import OrderedDict
 import numpy as np
 import pyodbc
 from Config import Config
+from IAFHandler import Model
 from IAFLogger import IAFLogger
 import SqlHelper.IAFSqlHelper as sql
+from IAFExceptions import DataLayerException
 
 @dataclass
 class DataLayer:
@@ -25,10 +29,14 @@ class DataLayer:
         self.numerical_data = self.connection.data_numerical_columns != ""
         self.scriptpath = os.path.dirname(os.path.realpath(__file__))
     
-
         if drivers().find(self.connection.odbc_driver) == -1:
             raise ValueError("Specified ODBC driver cannot be found!")
-        
+    
+    def update_connection(self, connection: Config.Connection) -> None:
+        """ Allows us to update the connection to match the Config """
+        self.connection = connection
+        self.__post_init__()
+    
     # get the SQL handler
     def get_sql_connection(self) -> sql.IAFSqlHelper:
         # Get a sql handler and connect to data database
@@ -37,11 +45,58 @@ class DataLayer:
             trusted_connection = self.connection.trusted_connection, \
             username = self.connection.class_username, \
             password = self.connection.class_password)
-        sqlHelper.connect()
+        
+        #sqlHelper.Connection = sqlHelper.connect()
 
         return sqlHelper
 
+    # Update the text_data if not set when the DataLayer is created
+    def update_text_data(self, text_data:bool) -> None:
+        self.text_data = text_data
+
+    # Update the numerical_data if not set when the DataLayer is created
+    def update_numerical_data(self, numerical_data:bool) -> None:
+        self.numerical_data = numerical_data
     
+    # generic function to get data from any query
+    def get_data_from_query(self, query: str) -> list:
+        sqlHelper = self.get_sql_connection()
+        try:
+            sqlHelper.execute_query(query, get_data = True)
+        except Exception as ex:
+            sys.exit("Query \"{0}\" failed: {1}".format(query,str(ex)))
+        
+        return sqlHelper.read_all_data()
+
+    # Used in the GUI, to get the databases to choose from
+    def get_databases(self):
+        query = "SELECT name FROM sys.databases"
+        
+        return self.get_data_from_query(query)
+
+    # Used in the GUI, to get the tables to choose from
+    def get_tables(self):
+        query = "SELECT TABLE_SCHEMA,TABLE_NAME FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA,TABLE_NAME"
+        
+        return self.get_data_from_query(query)
+
+    def get_id_columns(self, database: str, table: str):
+        query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_CATALOG = " \
+            + "\'" + database + "\' AND CONCAT(CONCAT(TABLE_SCHEMA,'.'),TABLE_NAME) = " \
+            + "\'" + table + "\'" + " ORDER BY DATA_TYPE DESC"
+        
+        return self.get_data_from_query(query)
+        
+
+    # Get a list of pretrained models
+    def get_trained_models(self, model_path: str, model_file_extension: str):
+        models = []
+        for file in os.listdir(model_path):
+            if file[-len(model_file_extension):] == model_file_extension:
+                models.append(file)
+
+        return models
+
     # Create the classification table
     def create_classification_table(self) -> None:
         self.logger.print_progress(message="Create the classification table")
@@ -133,8 +188,9 @@ class DataLayer:
 
             # Return the number of inserted rows
             return 1
-        except Exception:
-            raise
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DataLayerException(f"Marking execution start failed: {e}")
 
     def mark_execution_ended(self) -> int:
         self.logger.print_info("Marking execution ended in database...")
@@ -164,16 +220,17 @@ class DataLayer:
 
             # Return the number of inserted rows
             return 1
-        except Exception:
-            raise
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DataLayerException(f"Marking execution end failed: {e}")
 
     # Function for counting the number of rows in data to classify
-    def count_data_rows(self) -> int:
-
+    def count_data_rows(self, data_catalog=str, data_table=str) -> int:
         try:
-
+            self.connection.data_catalog = data_catalog
+            self.connection.data_table = data_table
             # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection()()
+            sqlHelper = self.get_sql_connection()
             
             #
             query = "SELECT COUNT(*) FROM "
@@ -185,19 +242,19 @@ class DataLayer:
             # Disconnect from database
             sqlHelper.disconnect()
 
-        except Exception:
-            raise
-            # TODO: throw error and let GUI catch
-            #print("Count of dataset failed: " + str(e))
-            #if self.ProgressBar: self.ProgressBar.value = 1.0
-            #sys.exit("Program aborted.")
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DataLayerException(f"Count of dataset failed: {str(e)}")
 
         # Return 
         return count
 
      # Function for counting the number of rows in data corresponding to each class
-    def count_class_distribution(self) -> dict:
+    def count_class_distribution(self, class_column: str, data_catalog: str, data_table: str) -> dict:
         try:
+            self.connection.class_column = class_column
+            self.connection.data_catalog = data_catalog
+            self.connection.data_table = data_table
 
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
@@ -222,19 +279,20 @@ class DataLayer:
             # Disconnect from database
             sqlHelper.disconnect()
 
-        except Exception:
-            raise
-            # TODO: throw error and let GUI catch
-            #print("Count of dataset distribution failed: " + str(e))
-            #if self.ProgressBar: self.ProgressBar.value = 1.0
-            #sys.exit("Program aborted.")
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DataLayerException(f"Count of dataset distribution failed: {str(e)}")
 
         # Return 
         return dict
 
     # For saving results in database
-    def save_data(self, keys, Y, rates, prob_mode = 'U', labels='N/A', probabilities='N/A', alg = "Unknown") -> int:
-
+    def save_data(self,
+        results: list,
+        class_rate_type: str,
+        model: Model,
+        config: Config)-> int:
+        
         try:
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
@@ -242,47 +300,61 @@ class DataLayer:
             # Loop through the data
             num_lines = 0
             percent_fetched = 0.0
-            for i in range(len(keys)):
+            result_num = len(results)
+            
+            columns = OrderedDict({
+                "catalog_name": config.get_data_catalog(),
+                "table_name": config.get_data_table(),
+                "column_names": ",".join(config.get_data_column_names()), 
+                "unique_key": "", # keys[i]
+                "class_result": "", # Y[i]
+                "class_rate": "", # rates[i]
+                "class_rate_type": class_rate_type,
+                "class_labels": ",".join(model.model.classes_),
+                "class_probabilities": "", #','.join([str(elem) for elem in probabilities[i].tolist()])
+                "class_algorithm": model.get_name(),
+                "class_script": self.scriptpath,
+                "class_user": config.get_data_username()
+            })
+            
+            # Build up the base query outside of the range
+            base_query = f"INSERT INTO {config.get_class_table()} "
+            column_names = ",".join([column for column in columns.keys()])
+            base_query += f"({column_names})"
+            
+            for row in results:
+                columns["unique_key"] = row["key"]
+                columns["class_result"] = row["prediction"]
+                columns["class_rate"] = row["rates"]
+                columns["class_probabilities"] = row["probabilities"]
 
-                # Set together SQL code for the insert
-                query = "INSERT INTO " + self.connection.class_catalog + "." 
-                query +=  self.connection.class_table + " (catalog_name,table_name,column_names," 
-                query +=  "unique_key,class_result,class_rate,class_rate_type,"
-                query += "class_labels,class_probabilities,class_algorithm," 
-                query +=  "class_script,class_user) VALUES(\'" + self.connection.data_catalog + "\'," 
-                query +=  "\'" + self.connection.data_table + "\',\'" 
-                if self.text_data:
-                    query += self.connection.data_text_columns
-                if self.text_data and self.numerical_data:
-                    query += ","
-                if self.numerical_data:
-                    query +=  self.connection.data_numerical_columns  
-                query += "\'," + str(keys[i]) + ",\'" + str(Y[i]) + "\'," + str(rates[i]) + "," 
-                query += "\'" + prob_mode + "\'," + "\'" + ','.join(labels) + "\'," + "\'" + \
-                    ','.join([str(elem) for elem in probabilities[i].tolist()]) + "\',"
-                query += "\'" + alg + "\',\'" + self.scriptpath + "\',\'" + self.connection.data_username + "\')"
+                values = ",".join([to_quoted_string(elem) for elem in columns.values()])
+                query = base_query + f" VALUES ({values})"
 
                 # Execute a query without getting any data
                 # Delay the commit until the connection is closed
                 if sqlHelper.execute_query(query, get_data=False, commit=False):
                     num_lines += 1
-                    percent_fetched = round(100.0 * float(num_lines) / float(len(keys)))
+                    percent_fetched = round(100.0 * float(num_lines) / float(result_num))
                     # TODO: clean up
                     if not self.logger.is_quiet(): print("Part of data saved: " + str(percent_fetched) + " %", end='\r')
-
 
             if not self.logger.is_quiet(): print("\n")
                 
             # Disconnect from database and commit all inserts
-            sqlHelper.disconnect(commit=True)
+            sqlHelper.disconnect(commit=True) #TODO: Reactivate once debug done
 
             # Return the number of inserted rows
             return num_lines
-
-        except Exception:
-            raise
+        except KeyError as ke:
+            print(ke)
+            raise DataLayerException(f"Something went wrong when saving data ({ke})")
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DataLayerException(f"Something went wrong when saving data ({e})")
 
     def get_data_query(self, num_rows, train, predict) -> str:
+        print(self.connection)
         query = "SELECT "
         query += "TOP(" + str(num_rows) + ") "
         column_groups = (self.connection.id_column, self.connection.class_column,
@@ -407,21 +479,22 @@ class DataLayer:
             
             return data, non_ordered_query, num_lines
 
-        except Exception:
-            raise
-    
-    def mispredicted_data_query(self, new_class: str, index: str) -> int:
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DataLayerException(f"Something went wrong when fetching dataset ({e})")
+
+    def correct_mispredicted_data(self, new_class: str, index: int) -> int:
         try:
             self.logger.print_info(f"Changing data row {index} to {new_class}: ")
 
             # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection
+            sqlHelper = self.get_sql_connection()
 
             # Set together SQL code for the insert
             query =  "UPDATE [" + self.connection.data_catalog + "]."
             query += "[" + "].[".join(self.connection.data_table.split('.')) + "]"
             query += " SET " + self.connection.class_column + " = \'" + new_class + "\'"  
-            query += " WHERE " + self.connection.id_column + " = " + index
+            query += " WHERE " + self.connection.id_column + " = " + str(index)
             
             self.logger.print_query("mispredicted", query)
             
@@ -438,13 +511,14 @@ class DataLayer:
             # Return the number of inserted rows
             return num_lines, query
 
-        except Exception:
-            raise #GUI's responsibility
-            #print("Correction of mispredicted data: {0} failed: {1}".format(query,str(e)))
-
-           
-
-
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DataLayerException(f"Correction of mispredicted data: {query} failed: {e}")
 
 def drivers():
         return str(pyodbc.drivers())
+
+def to_quoted_string(x, quotes:str = '\'') -> str:
+    value = str(x)
+
+    return quotes + value + quotes

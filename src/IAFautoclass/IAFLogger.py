@@ -22,8 +22,8 @@ class IAFLogger(terminal.Logger):
         # Setup any widgets to report to
         self.widgets = {}
         if progress is not None:
-            self.widget["progress_bar"] = progress[0]
-            self.widget["progress_label"] = progress[1]
+            self.widgets["progress_bar"] = progress[0]
+            self.widgets["progress_label"] = progress[1]
 
         terminal.Logger.__init__(self, quiet=quiet)
         

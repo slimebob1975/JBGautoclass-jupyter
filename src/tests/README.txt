@@ -1,0 +1,1 @@
+To run all tests, make sure you are in `src` and run `python -m pytest`

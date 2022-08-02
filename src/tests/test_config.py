@@ -1,4 +1,4 @@
-import Config as Config
+import IAFautoclass.Config as Config
 
 def test_defaults():
     config = Config.Config()

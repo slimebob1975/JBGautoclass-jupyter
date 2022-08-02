@@ -2,21 +2,27 @@
 # Written by: Robert Granat, Jan-Feb 2022.
 # Broken into module by: Marie Hogebrandt June 2022
 
-# Imports
-import ipywidgets as widgets
+import errno
 import os
 import sys
-import errno
 from pathlib import Path
+
+# Imports
+import ipywidgets as widgets
+from sklearn.utils import Bunch
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
 env_path = os.path.join(os.getcwd(), '.env')
 sys.path.append(base_dir)
 
-# TODO: Refaktorera så att den bara används om den behövs
-import IAFautomaticClassiphyer as autoclass
-import SqlHelper.IAFSqlHelper as sql
 from dotenv import load_dotenv
+
+import Helpers
+from IAFExceptions import DataLayerException
+from IAFLogger import IAFLogger
+import IAFautomaticClassifier as autoclass
+from Config import Algorithm, Config, Preprocess, Reduction, Scoretype
+from DataLayer import DataLayer
 
 if os.path.isfile(env_path):
     load_dotenv(env_path)  # take environment variables from .env
@@ -26,8 +32,6 @@ else:
         os.strerror(errno.ENOENT), 
         env_path
     )
-
-
 
 # Class definition for the GUI
 class IAFautoclass_GUI:
@@ -42,17 +46,17 @@ class IAFautoclass_GUI:
 
     DEFAULT_DATA_COLUMNS = "petal-width,sepal-length,petal-length,sepal-width"
     DEFAULT_CLASS_COLUMN = "class"
-    DEFAULT_MODELS_PATH =  ".\\src\\IAFautoclass\\model\\"
-    DEFAULT_MODEL_EXTENSION = ".sav"
     DEFAULT_TRAIN_OPTION = "Train a new model!"
     TEXT_WIDGET_LIMIT = 30
     TEXT_AREA_LIMIT = 60
     NULL = "NULL"
     IMAGE_FILE = base_dir + "/images/iaf-logo.png"
     TEXT_DATATYPES = ["nvarchar", "varchar", "char", "text", "enum", "set"]
-    
+
+
     # Constructor
-    def __init__(self):
+    def __init__(self):    
+        self.config = None
         # The classifier object is a data element in our GUI
         self.the_classifier = None
         
@@ -66,6 +70,37 @@ class IAFautoclass_GUI:
         # Keep track of if this is a rerun or not
         self.rerun = False
         
+        # All the widgets moved into this function to be able to be hidden easier
+        self.setup_GUI()
+        self.logger = IAFLogger(False, (self.progress_bar, self.progress_label))
+        connection = Config.Connection(
+            odbc_driver=os.environ.get("DEFAULT_ODBC_DRIVER"),
+            host=os.environ.get("DEFAULT_HOST"),
+            class_catalog=os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
+            class_table=os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
+            data_catalog=os.environ.get("DEFAULT_DATA_CATALOG"),
+            data_table=os.environ.get("DEFAULT_DATA_TABLE")
+            )
+        self.data_layer = DataLayer(connection, self.logger)
+        try:
+            self.data_layer.get_sql_connection() # This checks so that the SQL connection works
+        except Exception as ex:
+            sys.exit("GUI class could not connect to SQL Server: {0}".format(str(ex)))
+        
+        # Update databases list
+        self.update_databases()
+        
+        self.update_algorithm_form()
+                
+    # Destructor
+    def __del__(self):
+        pass
+    
+    # Print the class 
+    def __str__(self):
+        return str(type(self))
+
+    def setup_GUI(self) -> None:
         # We put a logo on top
         image_file = open(self.IMAGE_FILE, "rb")
         self.logo = widgets.Image(
@@ -413,185 +448,137 @@ class IAFautoclass_GUI:
             value = "No mispredicted training data was detected yet",
             description_tooltip = 'Use to manually inspect and correct mispredicted training data'
         )
-
-        # A helper for SQL Server communications
-        self.sqlHelper = \
-            sql.IAFSqlHelper( driver = self.DEFAULT_ODBC_DRIVER, host = self.DEFAULT_HOST, \
-                              catalog = self.DEFAULT_DATA_CATALOG, trusted_connection = True )
-        try:
-            self.conn = self.sqlHelper.connect()
-        except Exception as ex:
-            sys.exit("GUI class could not connect to SQL Server: {0}".format(str(ex)))
-            
-        # Update databases list
-        self.update_databases()
-        
-        self.update_algorithm_form()
-                
-    # Destructor
-    def __del__(self):
-        pass
-    
-    # Print the class 
-    def __str__(self):
-        return str(type(self))
     
     # Internal methods used to populate or update widget settings
-    def update_databases(self, *args):
-        query = "SELECT name FROM sys.databases"
-        try:
-            self.sqlHelper.execute_query(query, get_data = True)
-        except Exception as ex:
-            sys.exit("Query \"{0}\" failed: {1}".format(query,str(ex)))
-        data = self.sqlHelper.read_all_data()
+    def update_databases(self) -> None:
+        data = self.data_layer.get_databases()
         database_list = [''] + [database[0] for database in data]
         self.database_dropdown.options = database_list
         self.database_dropdown.value = database_list[0]
         
-        self.database_dropdown.observe(self.update_tables)
-    
-    def update_tables(self, *args):
-        if not self.lock_observe_1:
-            self.sqlHelper.disconnect()
-            self.sqlHelper = sql.IAFSqlHelper( driver = self.DEFAULT_ODBC_DRIVER, \
-                                               host = self.DEFAULT_HOST, \
-                                               catalog = self.database_dropdown.value, \
-                                               trusted_connection = True )
-            try:
-                self.conn = self.sqlHelper.connect()
-            except Exception as ex:
-                sys.exit("GUI class could not connect to SQL Server: {0}".format(str(ex)))
-            query = "SELECT TABLE_SCHEMA,TABLE_NAME FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA,TABLE_NAME"
-            self.sqlHelper.execute_query(query, get_data = True)
-            tables = self.sqlHelper.read_all_data()
-            tables_list = [""] + [table[0]+'.'+table[1] for table in tables]
-            self.tables_dropdown.options = tables_list
-            self.tables_dropdown.value = tables_list[0]
-            self.tables_dropdown.disabled = False
-
-            self.tables_dropdown.observe(self.update_models)
+        self.database_dropdown.observe(handler=self.update_tables)
+                
+    def update_tables(self, event: Bunch) -> None:
+        """ Handler: This updates the tables dropdown when the database dropdown changes. """
+        if self.lock_observe_1:
+            return
         
-    def update_models(self, *args):
-        if not self.lock_observe_1 and self.tables_dropdown.value != "":
-            tc = autoclass.IAFautomaticClassiphyer( odbc_driver = self.DEFAULT_ODBC_DRIVER, \
-                                                  host = self.DEFAULT_HOST, \
-                                                  data_catalog = self.DEFAULT_DATA_CATALOG, \
-                                                  data_table = self.DEFAULT_DATA_TABLE, \
-                                                  data_numerical_columns = self.DEFAULT_DATA_COLUMNS, \
-                                                  class_column = self.DEFAULT_CLASS_COLUMN, \
-                                                  class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
-                                                  class_table = self.DEFAULT_CLASSIFICATION_TABLE)
-            models_list = [""] + [self.DEFAULT_TRAIN_OPTION] + tc.get_trained_models()
-            del tc
-            self.models_dropdown.options = models_list
-            self.models_dropdown.value = models_list[0]
-            self.models_dropdown.disabled = False
+        tables = self.data_layer.get_tables()
+        tables_list = [""] + [table[0]+'.'+table[1] for table in tables]
+        self.tables_dropdown.options = tables_list
+        self.tables_dropdown.value = tables_list[0]
+        self.tables_dropdown.disabled = False
 
-            self.models_dropdown.observe(self.use_old_model_or_train_new)
+        self.tables_dropdown.observe(handler=self.update_models)
+        
+    def update_models(self, event: Bunch) -> None:
+        """ Handler: This updates the models dropdown when the tables dropdown changes. """
+        if self.lock_observe_1 or self.tables_dropdown.value == "":
+            return
+        
+        models_list = [""] + [self.DEFAULT_TRAIN_OPTION] + self.data_layer.get_trained_models(Config.DEFAULT_MODELS_PATH, Config.DEFAULT_MODEL_EXTENSION)
+        self.models_dropdown.options = models_list
+        self.models_dropdown.value = models_list[0]
+        self.models_dropdown.disabled = False
+
+        self.models_dropdown.observe(handler=self.use_old_model_or_train_new) # TODO: Rework this to a "model_handler method"
     
-    def use_old_model_or_train_new(self, *args):
+    def use_old_model_or_train_new(self, event: Bunch) -> None:
+        """ Handler: Sets the GUI to a new or existing model, as necessary. """
         self.update_class_id_data_columns()
         if self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION:
             self.continuation_button.disabled = True
-        elif self.models_dropdown.value != "":
-            tc = autoclass.IAFautomaticClassiphyer( odbc_driver = self.DEFAULT_ODBC_DRIVER, \
-                                                  host = self.DEFAULT_HOST, \
-                                                  data_catalog = self.DEFAULT_DATA_CATALOG, \
-                                                  data_table = self.DEFAULT_DATA_TABLE, \
-                                                  data_numerical_columns = self.DEFAULT_DATA_COLUMNS, \
-                                                  class_column = self.DEFAULT_CLASS_COLUMN, \
-                                                  class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
-                                                  class_table = self.DEFAULT_CLASSIFICATION_TABLE)
-            model_path = Path(self.DEFAULT_MODELS_PATH) / self.models_dropdown.value
-            tc_config = tc.load_config_from_model(model_path)
-            del tc
-            try:
-                self.class_column.value = tc_config.sql["class_column"]
-            except Exception as ex:
-                print("Could not set class column as: {0} because of exception: {1}". \
-                     format(tc_config.sql["class_column"], str(ex)))
-            self.class_column.disabled = True
-            try:
-                self.id_column.value = tc_config.sql["id_column"]
-            except Exception as ex:
-                print("Could not set id column as: {0} because of exception: {1}". \
-                     format(tc_config.sql["id_column"], str(ex)))
-            self.id_column.disabled = True 
-            temp_numerical_columns = []
-            if tc_config.sql["data_numerical_columns"] != '':
-                temp_numerical_columns = tc_config.sql["data_numerical_columns"].split(',')
-            temp_text_columns = []
-            if tc_config.sql["data_text_columns"] != '':
-                temp_text_columns = tc_config.sql["data_text_columns"].split(',')
-            try:
-                self.data_columns.value = temp_numerical_columns + temp_text_columns
-            except Exception as ex:
-                print("Could not set data columns as: {0} because of exception: {1}". \
-                     format(temp_numerical_columns + temp_text_columns, str(ex)))
-            self.data_columns.disabled = True
-            try:
-                self.text_columns.value = temp_text_columns
-            except Exception as ex:
-                print("Could not set text columns as: {0} because of exception: {1}". \
-                     format(temp_text_columns, str(ex)))
-            self.text_columns.disabled = True
-
-            self.algorithm_dropdown.value = tc_config.mode["algorithm"]
-            self.preprocessor_dropdown.value = tc_config.mode["preprocessor"]
-            self.reduction_dropdown.value = tc_config.mode["feature_selection"]
-            self.num_variables.value = tc_config.mode["num_selected_features"]
-            self.filter_checkbox.value = tc_config.mode["use_stop_words"]
-            self.filter_slider.value = int(tc_config.mode["specific_stop_words_threshold"] * 100.0)
-            self.encryption_checkbox.value = tc_config.mode["hex_encode"]
-            self.categorize_checkbox.value = tc_config.mode["use_categorization"]
-            self.categorize_columns.options = self.text_columns.value
-            
-            temp_category_columns = []
-            if tc_config.mode["category_text_columns"] != '':
-                temp_category_columns = tc_config.mode["category_text_columns"].split(',')
-            try:
-                self.categorize_columns.value =  temp_category_columns
-            except Exception as ex:
-                print("Could not set category columns as: {0} because of exception: {1}". \
-                     format(temp_category_columns, str(ex)))
-            self.categorize_columns.disabled = True
-            
-            self.testdata_slider.value = int(tc_config.mode["test_size"] * 100.0)
-            self.smote_checkbox.value = False
-            self.undersample_checkbox.value = False
-            
-            self.continuation_button.on_click(callback=self.continuation_button_was_clicked)
-            self.continuation_button.disabled = False
+            return
         
-    def update_class_id_data_columns(self, *args):
-        if not self.lock_observe_1: 
-            query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_CATALOG = " \
-                + "\'" + self.database_dropdown.value + "\' AND CONCAT(CONCAT(TABLE_SCHEMA,'.'),TABLE_NAME) = " \
-                + "\'" + self.tables_dropdown.value + "\'" + " ORDER BY DATA_TYPE DESC"
-            self.sqlHelper.execute_query(query, get_data = True)
-            columns = self.sqlHelper.read_all_data()
-            columns_list = [column[0] for column in columns]
-            self.datatype_dict = {column[0]:column[1] for column in columns}
+        if not self.models_dropdown.value:
+            return
 
-            if len(columns_list) >= 3:
-                self.class_column.options = columns_list
-                self.class_column.value = columns_list[0]
-                self.class_column.disabled = False
-                self.class_column.observe(self.update_id_and_data_columns)
+        model_path = Path(Config.DEFAULT_MODELS_PATH) / self.models_dropdown.value
+        tc_config = Config.load_config_from_model_file(model_path)
+        
+        try:
+            self.class_column.value = tc_config.get_class_column_name()
+        except Exception as ex:
+            print("Could not set class column as: {0} because of exception: {1}". \
+                    format(tc_config.get_class_column_name(), str(ex)))
+        self.class_column.disabled = True
+        try:
+            self.id_column.value = tc_config.get_id_column_name()
+        except Exception as ex:
+            print("Could not set id column as: {0} because of exception: {1}". \
+                    format(tc_config.get_id_column_name(), str(ex)))
+        self.id_column.disabled = True 
+        
+        
+        try:
+            temp_numerical_columns = tc_config.get_numerical_column_names()
+            temp_text_columns = tc_config.get_text_column_names()
+        
+            self.data_columns.value = temp_numerical_columns + temp_text_columns
+        except Exception as ex:
+            print("Could not set data columns as: {0} because of exception: {1}". \
+                    format(temp_numerical_columns + temp_text_columns, str(ex)))
+        self.data_columns.disabled = True
+        try:
+            self.text_columns.value = temp_text_columns
+        except Exception as ex:
+            print("Could not set text columns as: {0} because of exception: {1}". \
+                    format(temp_text_columns, str(ex)))
+        self.text_columns.disabled = True
 
-                self.id_column.options = columns_list[1:]
-                self.id_column.value = columns_list[1]
-                self.id_column.disabled = False
-                self.id_column.observe(self.update_data_columns)
+        self.algorithm_dropdown.value = tc_config.get_algorithm().name
+        self.preprocessor_dropdown.value = tc_config.get_preprocessor().name
+        self.reduction_dropdown.value = tc_config.get_feature_selection().name
+        self.num_variables.value = tc_config.get_num_selected_features()
+        self.filter_checkbox.value = tc_config.use_stop_words()
+        self.filter_slider.value = tc_config.get_stop_words_threshold_percentage()
+        self.encryption_checkbox.value = tc_config.should_hex_encode()
+        self.categorize_checkbox.value = tc_config.use_categorization()
+        self.categorize_columns.options = self.text_columns.value
+        
+        try:
+            self.categorize_columns.value =  tc_config.get_categorical_text_column_names()
+        except Exception as ex:
+            print("Could not set category columns as: {0} because of exception: {1}". \
+                    format(tc_config.get_categorical_text_column_names(), str(ex)))
+        self.categorize_columns.disabled = True
+        
+        self.testdata_slider.value = tc_config.get_test_size_percentage()
+        self.smote_checkbox.value = False
+        self.undersample_checkbox.value = False
+        
+        self.continuation_button.on_click(callback=self.continuation_button_was_clicked)
+        self.continuation_button.disabled = False
+        
+    def update_class_id_data_columns(self) -> None:
+        """ Updates the options for class, id and data_columns"""
+        if self.lock_observe_1:
+            return
+        
+        columns = self.data_layer.get_id_columns(self.database_dropdown.value, self.tables_dropdown.value)
+        columns_list = [column[0] for column in columns]
+        self.datatype_dict = {column[0]:column[1] for column in columns}
 
-                self.data_columns.options = columns_list[2:]
-                self.data_columns.value = []
-                self.data_columns.disabled = False
-                self.data_columns.observe(self.update_text_columns_and_enable_button)
-            else:
-                sys.exit("Selected data table has to few columns. Minimum is three (3).")
+        if len(columns_list) >= 3:
+            self.class_column.options = columns_list
+            self.class_column.value = columns_list[0]
+            self.class_column.disabled = False
+            self.class_column.observe(handler=self.update_id_and_data_columns)
+
+            self.id_column.options = columns_list[1:]
+            self.id_column.value = columns_list[1]
+            self.id_column.disabled = False
+            self.id_column.observe(handler=self.update_data_columns)
+
+            self.data_columns.options = columns_list[2:]
+            self.data_columns.value = []
+            self.data_columns.disabled = False
+            self.data_columns.observe(handler=self.update_text_columns_and_enable_button)
+        else:
+            sys.exit("Selected data table has to few columns. Minimum is three (3).")
             
-    def update_id_and_data_columns(self, *args):
+    def update_id_and_data_columns(self, event:Bunch) -> None:
+        """ Handler: Changes the id and data columns when the class option is changed. """
         try:
             self.update_class_summary()
         except Exception as ex:
@@ -599,45 +586,49 @@ class IAFautoclass_GUI:
                 format(self.class_column.value, str(ex)))
         self.id_column.options = \
             [option for option in self.class_column.options if option != self.class_column.value]
-        self.update_data_columns(*args)
+        self.update_data_columns()
 
-    def update_data_columns(self, *args):
-        if not self.lock_observe_1: 
-            self.data_columns.options = \
-                [option for option in self.id_column.options if option != self.id_column.value]
+    def update_data_columns(self, event:Bunch) -> None:
+        """ Handler: Updates the data column option when id is changed. """
+        if self.lock_observe_1: 
+            return
+
+        self.data_columns.options = \
+            [option for option in self.id_column.options if option != self.id_column.value]
             
-    def update_text_columns_and_enable_button(self, *args):
-        if not self.lock_observe_1:
-            self.text_columns.options = self.data_columns.value
-            self.text_columns.value = \
-                [col for col in self.data_columns.value if self.datatype_dict[col] in self.TEXT_DATATYPES]
-            self.text_columns.disabled = False
+    def update_text_columns_and_enable_button(self, event:Bunch) -> None:
+        """ Updates the text columns and continuation_button states when data options changes. """
+        if self.lock_observe_1:
+            return
 
-            self.num_variables.value = len(self.data_columns.value)
-            if self.num_variables.value >= 1:
-                self.continuation_button.disabled = False
-                self.continuation_button.on_click(callback=self.continuation_button_was_clicked)
-            else:
-                self.continuation_button.disabled = True
+        self.text_columns.options = self.data_columns.value
+        self.text_columns.value = \
+            [col for col in self.data_columns.value if self.datatype_dict[col] in self.TEXT_DATATYPES]
+        self.text_columns.disabled = False
+
+        self.num_variables.value = len(self.data_columns.value)
+        if self.num_variables.value >= 1:
+            self.continuation_button.disabled = False
+            self.continuation_button.on_click(callback=self.continuation_button_was_clicked)
+        else:
+            self.continuation_button.disabled = True
                 
-    def update_class_summary(self, *args):
-        tc = \
-            autoclass.IAFautomaticClassiphyer( odbc_driver = self.DEFAULT_ODBC_DRIVER, \
-                                               host = self.DEFAULT_HOST, \
-                                               data_catalog = self.database_dropdown.value, \
-                                               data_table = self.tables_dropdown.value, \
-                                               data_numerical_columns = self.DEFAULT_DATA_COLUMNS, \
-                                               class_column = self.class_column.value, \
-                                               class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
-                                               class_table = self.DEFAULT_CLASSIFICATION_TABLE )
-        # TODO: catch exception
-        distrib = tc.count_class_distribution()
-        del tc
+    def update_class_summary(self):
+        """ Updates the data_layer's connection values too """
+        try:
+            distrib = self.data_layer.count_class_distribution(
+                class_column=self.class_column.value,
+                data_catalog=self.database_dropdown.value,
+                data_table=self.tables_dropdown.value)
+        except DataLayerException as e:
+            self.logger.abort_cleanly(str(e))
+        
         self.class_summary_text.value = \
             "Class column: \'{0}\', with distribution: {2}, in total: {1} rows". \
             format(self.class_column.value, sum(distrib.values()), str(distrib)[1:-1])
         
-    def continuation_button_was_clicked(self, *args):
+    def continuation_button_was_clicked(self, event:Bunch) -> None:
+        """ Callback: Sets various states based on the value in models dropdown. """
         self.lock_observe_1 = True
         if self.models_dropdown.value != self.DEFAULT_TRAIN_OPTION:
             self.train_checkbox.value = False
@@ -682,40 +673,22 @@ class IAFautoclass_GUI:
         self.start_button.disabled = False
         self.start_button.on_click(callback = self.start_button_was_clicked)
         
-    def update_algorithm_form(self, *args):
-        tc = autoclass.IAFautomaticClassiphyer(   odbc_driver = self.DEFAULT_ODBC_DRIVER, \
-                                                  host = self.DEFAULT_HOST, \
-                                                  data_catalog = self.DEFAULT_DATA_CATALOG, \
-                                                  data_table = self.DEFAULT_DATA_TABLE, \
-                                                  data_numerical_columns = self.DEFAULT_DATA_COLUMNS, \
-                                                  class_column = self.DEFAULT_CLASS_COLUMN, \
-                                                  class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
-                                                  class_table = self.DEFAULT_CLASSIFICATION_TABLE  )
-        self.reduction_dropdown.options = \
-            [(tc.REDUCTION_NAMES[i],tc.REDUCTIONS[i]) for i in range(len(tc.REDUCTIONS))]
-        self.algorithm_dropdown.options = \
-             [(tc.ALGORITHM_NAMES[i],tc.ALGORITHMS[i]) for i in range(len(tc.ALGORITHMS))]
-        self.preprocessor_dropdown.options = \
-            [(tc.PREPROCESS_NAMES[i],tc.PREPROCESS[i]) for i in range(len(tc.PREPROCESS))]
-        self.metric_dropdown.options = \
-            [(tc.SCORETYPE_NAMES[i],tc.SCORETYPES[i]) for i in range(len(tc.SCORETYPES))]
-        del tc
+    def update_algorithm_form(self):
+        self.reduction_dropdown.options = sorted([(reduction.value, reduction.name) for reduction in Reduction])
+        self.algorithm_dropdown.options = sorted([(algo.value, algo.name) for algo in Algorithm])
+        self.preprocessor_dropdown.options = sorted([(preprocess.value, preprocess.name) for preprocess in Preprocess])
+        self.metric_dropdown.options = sorted([(st.value, st.name) for st in Scoretype])
         
-    def update_num_rows(self, *args):
-        tc = \
-            autoclass.IAFautomaticClassiphyer(   odbc_driver = self.DEFAULT_ODBC_DRIVER, \
-                                                  host = self.DEFAULT_HOST, \
-                                                  data_catalog = self.database_dropdown.value, \
-                                                  data_table = self.tables_dropdown.value, \
-                                                  data_numerical_columns = self.DEFAULT_DATA_COLUMNS, \
-                                                  class_column = self.DEFAULT_CLASS_COLUMN, \
-                                                  class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
-                                                  class_table = self.DEFAULT_CLASSIFICATION_TABLE  )
-        # Catch exception
-        self.num_rows.value = tc.count_data_rows()
-        del tc
         
-    def start_button_was_clicked(self, *args):
+    def update_num_rows(self):
+        try:
+            self.num_rows.value = self.data_layer.count_data_rows(data_catalog=self.database_dropdown.value, data_table=self.tables_dropdown.value)
+        except DataLayerException as e:
+             self.logger.abort_cleanly(str(e))
+        
+        
+    def start_button_was_clicked(self, event:Bunch) -> None:
+        """ Callback: Changes the state to be read-only, starts the classifier (or the class summary) """
         self.train_checkbox.disabled = True
         self.predict_checkbox.disabled = True
         self.mispredicted_checkbox.disabled = True
@@ -743,84 +716,59 @@ class IAFautoclass_GUI:
         
         self.output.clear_output(wait=True)
         self.start_classifier()
-        
-    def start_classifier(self, *args):
+    
+    def start_classifier(self):
         data_numerical_columns = \
                 [col for col in self.data_columns.value if not col in self.text_columns.value]
-        if self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION:
-            self.the_classifier = \
-                autoclass.IAFautomaticClassiphyer( \
-                    config = None, \
-                    name = self.project.value, \
-                    odbc_driver = self.DEFAULT_ODBC_DRIVER, \
-                    host = self.DEFAULT_HOST, \
-                    trusted_connection = True, \
-                    data_catalog = self.database_dropdown.value, \
-                    data_table = self.tables_dropdown.value, \
-                    class_column = self.class_column.value, \
-                    class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
-                    class_table = self.DEFAULT_CLASSIFICATION_TABLE, \
-                    data_text_columns = ','.join(list(self.text_columns.value)), \
-                    data_numerical_columns = ','.join(data_numerical_columns), \
-                    id_column = self.id_column.value, \
-                    train = self.train_checkbox.value, \
-                    predict = self.predict_checkbox.value, \
-                    mispredicted = self.mispredicted_checkbox.value, \
-                    use_stop_words = self.filter_checkbox.value, \
-                    specific_stop_words_threshold = float(self.filter_slider.value) / 100.0, \
-                    hex_encode = self.encryption_checkbox.value, \
-                    use_categorization = self.categorize_checkbox.value, \
-                    category_text_columns = ','.join(list(self.categorize_columns.value)),
-                    test_size = float(self.testdata_slider.value) / 100.0, \
-                    smote = self.smote_checkbox.value, \
-                    undersample = self.undersample_checkbox.value, \
-                    algorithm = self.algorithm_dropdown.value, \
-                    preprocessor = self.preprocessor_dropdown.value, \
-                    feature_selection = self.reduction_dropdown.value, \
-                    num_selected_features = None, \
-                    scoring = self.metric_dropdown.value, \
-                    max_iterations = self.iterations_slider.value, \
-                    verbose = self.verbose_checkbox.value, \
-                    redirect_output = False, \
-                    model_name = self.project.value, \
-                    debug_on = True, \
-                    num_rows = self.num_rows.value, \
-                    progress_bar = self.progress_bar, \
-                    progress_label = self.progress_label, \
-                    save_config_to_file = True                            
-                ) 
-        else:
-            self.the_classifier = \
-                autoclass.IAFautomaticClassiphyer( \
-                    config = None, \
-                    name = self.project.value, \
-                    odbc_driver = self.DEFAULT_ODBC_DRIVER, \
-                    host = self.DEFAULT_HOST, \
-                    trusted_connection = True, \
-                    data_catalog = self.database_dropdown.value, \
-                    data_table = self.tables_dropdown.value, \
-                    class_column = self.class_column.value, \
-                    class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG, \
-                    class_table = self.DEFAULT_CLASSIFICATION_TABLE, \
-                    data_text_columns = ','.join(list(self.text_columns.value)), \
-                    data_numerical_columns = ','.join(data_numerical_columns), \
-                    id_column = self.id_column.value, \
-                    train = self.train_checkbox.value, \
-                    predict = self.predict_checkbox.value, \
-                    mispredicted = self.mispredicted_checkbox.value, \
-                    algorithm = self.algorithm_dropdown.value, \
-                    preprocessor = self.preprocessor_dropdown.value, \
-                    feature_selection = self.reduction_dropdown.value, \
-                    num_selected_features = self.num_variables.value, \
-                    verbose = self.verbose_checkbox.value, \
-                    redirect_output = False, \
-                    model_name = self.models_dropdown.value, \
-                    debug_on = True, \
-                    num_rows = self.num_rows.value, \
-                    progress_bar = self.progress_bar, \
-                    progress_label = self.progress_label, \
-                    save_config_to_file = False                                          
-                )
+        connection = Config.Connection(
+                odbc_driver = self.DEFAULT_ODBC_DRIVER,
+                host = self.DEFAULT_HOST,
+                trusted_connection = True,
+                data_catalog = self.database_dropdown.value,
+                data_table = self.tables_dropdown.value,
+                class_column = self.class_column.value,
+                class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG,
+                class_table = self.DEFAULT_CLASSIFICATION_TABLE,
+                data_text_columns = ','.join(list(self.text_columns.value)),
+                data_numerical_columns = ','.join(data_numerical_columns),
+                id_column = self.id_column.value
+            )
+        config = Config(
+            connection,
+            Config.Mode(
+                train = self.train_checkbox.value,
+                predict = self.predict_checkbox.value,
+                mispredicted = self.mispredicted_checkbox.value,
+                use_stop_words = self.filter_checkbox.value,
+                specific_stop_words_threshold = float(self.filter_slider.value) / 100.0,
+                hex_encode = self.encryption_checkbox.value,
+                use_categorization = self.categorize_checkbox.value,
+                category_text_columns = ','.join(list(self.categorize_columns.value)),
+                test_size = float(self.testdata_slider.value) / 100.0,
+                smote = self.smote_checkbox.value,
+                undersample = self.undersample_checkbox.value,
+                algorithm = Algorithm[self.algorithm_dropdown.value],
+                preprocessor = Preprocess[self.preprocessor_dropdown.value],
+                feature_selection = Reduction[self.reduction_dropdown.value],
+                num_selected_features = None,
+                scoring = Scoretype[self.metric_dropdown.value],
+                max_iterations = self.iterations_slider.value
+            ),
+            Config.IO(
+                verbose=self.verbose_checkbox.value,
+                model_name=self.project.value
+            ),
+            Config.Debug(
+                on=True,
+                num_rows=self.num_rows.value
+            ),
+            name=self.project.value,
+            save=(self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION),
+        )
+        
+        self.data_layer.update_connection(connection)
+        self.the_classifier = autoclass.IAFautomaticClassiphyer(config=config, logger=self.logger, datalayer=self.data_layer)
+        
         with self.output:
             worked = self.the_classifier.run()
             if worked == -1:
@@ -833,43 +781,45 @@ class IAFautoclass_GUI:
         self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
         self.start_button.disabled = False
         self.verbose_checkbox.disabled = False
-            
-    def update_mispredicted_gridbox(self, *args):    
-        if self.the_classifier and not self.the_classifier.X_most_mispredicted.empty:
-            print("\nNotice! There are mispredicted training data elements:")
-            items = [widgets.Label(self.the_classifier.X_most_mispredicted.index.name)] + \
-                [widgets.Label(item) for item in self.the_classifier.X_most_mispredicted.columns] + \
-                [widgets.Label("Reclassify as")]
-            cols = len(items)
-            for i in self.the_classifier.X_most_mispredicted.index:
-                row = self.the_classifier.X_most_mispredicted.loc[i]
-                row_items = [widgets.Label(str(row.name))]
-                for item in row.index:
-                    elem = row[item]
-                    if self.the_classifier.is_str(elem) and len(str(elem)) > self.TEXT_AREA_LIMIT:
-                        row_items.append(widgets.Textarea(value=str(elem), Placeholder=self.NULL))
-                    elif self.the_classifier.is_str(elem) and len(str(elem)) > self.TEXT_WIDGET_LIMIT:
-                        row_items.append(widgets.Text(value=str(elem), Placeholder=self.NULL))
-                    else:
-                        if self.the_classifier.is_float(elem):
-                            elem = round(float(elem), 2)
-                        row_items.append(widgets.Label(str(elem)))
-                dropdown_options = [('Keep', 0)]
-                for label in self.the_classifier.unique_classes:
-                    dropdown_options.append((label, (label, row.name)))
-                reclassify_dropdown = widgets.Dropdown(options = dropdown_options, value = 0, description = '', disabled = False)
-                reclassify_dropdown.observe(self.changed_class,'value')
-                row_items += [reclassify_dropdown]
-                items += row_items 
-            gridbox_layout = widgets.Layout(grid_template_columns="repeat("+ str(cols) +", auto)", border="4px solid grey")
-            self.mispredicted_gridbox = widgets.GridBox(items, layout=gridbox_layout)
-        else:
-            pass
     
-    def changed_class(self, change, *args):
+    def update_mispredicted_gridbox(self): 
+        if not self.the_classifier or self.the_classifier.no_mispredicted_elements():
+            return   
+        
+        mispredicted = self.the_classifier.get_mispredicted_dataframe()
+        print("\nNotice! There are mispredicted training data elements:")
+        items = [widgets.Label(mispredicted.index.name)] + \
+            [widgets.Label(item) for item in mispredicted.columns] + \
+            [widgets.Label("Reclassify as")]
+        cols = len(items)
+        for i in mispredicted.index:
+            row = mispredicted.loc[i]
+            row_items = [widgets.Label(str(row.name))]
+            for item in row.index: 
+                elem = row[item]
+                if Helpers.is_str(elem) and len(str(elem)) > self.TEXT_AREA_LIMIT:
+                    row_items.append(widgets.Textarea(value=str(elem), Placeholder=self.NULL))
+                elif Helpers.is_str(elem) and len(str(elem)) > self.TEXT_WIDGET_LIMIT:
+                    row_items.append(widgets.Text(value=str(elem), Placeholder=self.NULL))
+                else:
+                    if Helpers.is_float(elem):
+                        elem = round(float(elem), 2)
+                    row_items.append(widgets.Label(str(elem)))
+            dropdown_options = [('Keep', 0)]
+            for label in self.the_classifier.get_unique_classes():
+                dropdown_options.append((label, (label, row.name)))
+            reclassify_dropdown = widgets.Dropdown(options = dropdown_options, value = 0, description = '', disabled = False)
+            reclassify_dropdown.observe(self.changed_class,'value')
+            row_items += [reclassify_dropdown]
+            items += row_items 
+        gridbox_layout = widgets.Layout(grid_template_columns="repeat("+ str(cols) +", auto)", border="4px solid grey")
+        self.mispredicted_gridbox = widgets.GridBox(items, layout=gridbox_layout)
+        
+    
+    def changed_class(self, change):
         if change.new != 0 and change.old != change.new:
             new_class, new_index = change.new
-            self.the_classifier.correct_mispredicted_data(new_index, new_class)
+            self.data_layer.correct_mispredicted_data(new_class, new_index)
 
     def display_gui(self) -> None:
         elements = [
@@ -895,3 +845,10 @@ class IAFautoclass_GUI:
         for element in elements:
             display(getattr(self, element))
         
+
+def main():
+    gui = IAFautoclass_GUI()
+
+
+if __name__ == "__main__":
+    main()
