@@ -8,3 +8,4 @@ src/IAFautoclass/output/*.csv
 src/IAFautoclass/model/*.sav
 .env
 .ideas
+.pytest_cache
