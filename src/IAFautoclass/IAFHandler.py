@@ -147,7 +147,7 @@ class Config(Protocol):
     def get_undersampler(self) -> Union[RandomUnderSampler, None]:
         """ Gets the UnderSampler, or None if there should be none"""
 
-    def update_values(self, updates: dict,  type: str = None) -> bool:
+    def update_values(self, updates: dict,  type: str = None) -> None:
         """ Updates several values inside the config """
 
     def get_scoring_mechanism(self):

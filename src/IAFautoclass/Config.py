@@ -1,14 +1,12 @@
 
 import copy
 import enum
-import getopt
-import importlib
 import os
 import pickle
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol, Type, TypeVar, Union
+from typing import Callable, Protocol, Type, TypeVar, Union
 
 import pandas
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
@@ -38,6 +36,7 @@ from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
 from IAFExceptions import ConfigException
+import Helpers
 
 
 class Logger(Protocol):
@@ -422,7 +421,7 @@ class Scoretype(enum.Enum):
     precision_weighted = "Precision Weighted"
     mcc = "Matthews Corr. Coefficient"
 
-    def get_mechanism(self):
+    def get_mechanism(self) -> Union[str, Callable]:
         """ Returns the scoring mechanism based on the Scoretype"""
         if self == Scoretype.mcc:
             return make_scorer(matthews_corrcoef)
@@ -435,7 +434,6 @@ T = TypeVar('T', bound='Config')
 class Config:
     
     MAX_ITERATIONS = 20000
-    CONFIG_FILENAME_PATH = "./config/"
     CONFIG_FILENAME_START = "autoclassconfig_"
     CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py"
     PCA_VARIANCE_EXPLAINED = 0.999
@@ -608,14 +606,19 @@ class Config:
     io: IO = field(default_factory=IO)
     debug: Debug = field(default_factory=Debug)
     name: str = "iris"
-    config_path: str = field(init=False)
-    filename: str = field(init=False)
+    config_path: str = None
+    filename: str = None
     save: bool = False
     
 
     def __post_init__(self) -> None:
-        pwd = os.path.dirname(os.path.realpath(__file__))
-        self.config_path = Path(pwd) / self.CONFIG_FILENAME_PATH
+        if self.config_path is None:
+            pwd = os.path.dirname(os.path.realpath(__file__))
+            self.config_path = Path(pwd) / "./config/"
+
+        if self.filename is None:
+            self.filename = f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
+        
         
         """Post init is called after init, which is the best place to check the types & values"""
 
@@ -745,11 +748,12 @@ class Config:
             self.connection.class_username = username
             self.connection.data_username = username
 
-        self.filename = f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
-        
         # This is True if training in GUI, always False if not
         if self.save:
             self.save_to_file()
+
+   
+
 
     def __str__(self) -> str:
         str_list = [
@@ -761,9 +765,13 @@ class Config:
         ]
         return  "\n".join(str_list)
 
-    def get_model_filename(self) -> str:
-        # Set the name and path of the model file
-        pwd = os.path.dirname(os.path.realpath(__file__))
+    def get_model_filename(self, pwd: str = None) -> str:
+        """ Set the name and path of the model file
+            The second parameter allows for injecting the path for reliable testing
+        """
+        if pwd is None:
+            pwd = os.path.dirname(os.path.realpath(__file__))
+        
         model_path = Path(pwd) / self.io.model_path
         
         return model_path / (self.io.model_name + Config.DEFAULT_MODEL_EXTENSION)
@@ -787,8 +795,10 @@ class Config:
         return configuration
 
     # Saves config to be read from the command line
-    def save_to_file(self) -> None:
-        with open(self.config_path / self.CONFIG_SAMPLE_FILE, "r", encoding="utf-8") as fin:
+    def save_to_file(self, filename: str = None, username: str = None) -> None:
+        template_path = self.config_path / self.CONFIG_SAMPLE_FILE
+        
+        with open(template_path, "r", encoding="utf-8") as fin:
             lines = fin.readlines()
         
         for tag in self.TEMPLATE_TAGS:
@@ -801,15 +811,21 @@ class Config:
                 head = getattr(self, location[0])
                 replace = getattr(head, location[1])
 
+                # Exception for class/data username, if given
+                if username is not None and "username" in location[1]:
+                    replace = username
+
             # Check if it's one of the enum variables
             if (isinstance(replace, enum.Enum)):
                 replace = replace.name
 
+
             for i in range(len(lines)):
                 lines[i] = lines[i].replace(template, str(replace))
        
-        
-        with open(self.config_path / self.filename, "w", encoding="utf-8") as fout:
+        if filename is None:
+            filename = self.config_path / self.filename
+        with open(filename, "w", encoding="utf-8") as fout:
            fout.writelines(lines)
 
     @classmethod
@@ -834,13 +850,14 @@ class Config:
 
     @classmethod
     def load_config_from_module(cls: Type[T], argv) -> T:
-        module = check_input_arguments(argv)
+        module = Helpers.check_input_arguments(argv)
         
         version = '1.0'
         if (hasattr(module, 'version')):
             version = module.version
 
         if (version == '1.0'):
+            # Will not write test case for this, since it's deprecated
             return Config.load_config_1(module)
         
         if (version == '2.0'):
@@ -965,10 +982,7 @@ class Config:
         return config
     
     # Methods to hide implementation of Config
-    def set_num_selected_features(self, num_features: int) -> None:
-        """ Updates the config with the number """
-        self.mode.num_selected_features = num_features
-
+    # TODO: Change these three to lists and the implementation accordingly
     def is_text_data(self) -> bool:
         return self.connection.data_text_columns != ""
     
@@ -983,20 +997,39 @@ class Config:
         return self.mode.feature_selection
 
     def get_none_or_positive_value(self, attribute: str) -> int:
-        location = attribute.split(".")
-            
-        head = getattr(self, location[0])
-        value = getattr(head, location[1])
+        value = self.get_attribute(attribute)
         
         if value is None or value == "":
             return 0
 
         return value
 
+    def get_attribute(self, attribute: str):
+        location = attribute.split(".")
+        length = len(location)
+        if length > 2:
+            raise ConfigException(f"Invalid format {attribute}")
+
+        if length == 1:
+            try:
+                value = getattr(self, attribute)
+            except AttributeError:
+                raise ConfigException(f"There is no attribute {attribute}")
+
+            return value
+
+        try:
+            head = getattr(self, location[0])
+            value = getattr(head, location[1])
+        except AttributeError:
+            raise ConfigException(f"There is no attribute {attribute}")
+
+        return value    
+    
     def get_num_selected_features(self) -> int:
         return self.get_none_or_positive_value("mode.num_selected_features")
         
-    def feature_selection_in(self, selection: list) -> bool:
+    def feature_selection_in(self, selection: list[Reduction]) -> bool:
         """ Checks if the selection is one of the given Reductions"""
         for reduction in selection:
             if self.mode.feature_selection == reduction:
@@ -1028,58 +1061,44 @@ class Config:
         """ Returns what the io.verbose is set to"""
         return self.io.verbose
 
+    def clean_column_names_list(self, column_names: str) -> list[str]:
+        """ This takes a comma-delimeted string and returns the list with no empty values"""
+        splitted = column_names.split(",")
+
+        return [ elem for elem in splitted if elem != ""] # Removes all empty column names
+        
     def get_column_names(self) -> list[str]:
         """ Gets the column names based on connection columns """
-        column_names = [self.connection.id_column] + [self.connection.class_column] + self.get_text_column_names() + self.get_numerical_column_names()
-        try:
-            column_names.remove("") # Remove any empty column name
-        except Exception as e:
-            pass
+        columns = self.get_data_column_names()
 
-        return column_names
+        if id_column := self.get_id_column_name():
+            columns.append(id_column)
+
+        if class_column := self.get_class_column_name():
+            columns.append(class_column)
+        
+        return columns
+        
 
     def get_categorical_text_column_names(self) -> list[str]:
         """ Gets the specified categorical text columns"""
-        column_names = self.mode.category_text_columns.split(",")
-
-        try:
-            column_names.remove("") # Remove any empty column name
-        except Exception as e:
-            pass
-
-        return column_names
+        return self.clean_column_names_list(self.mode.category_text_columns)
+        
         
     def get_text_column_names(self) -> list[str]:
         """ Gets the specified text columns"""
-        column_names = self.connection.data_text_columns.split(",")
+        return self.clean_column_names_list(self.connection.data_text_columns)
 
-        try:
-            column_names.remove("") # Remove any empty column name
-        except Exception as e:
-            pass
-
-        return column_names
 
     def get_numerical_column_names(self) -> list[str]:
         """ Gets the specified numerical columns"""
-        column_names = self.connection.data_numerical_columns.split(',')
+        return self.clean_column_names_list(self.connection.data_numerical_columns)
 
-        try:
-            column_names.remove("") # Remove any empty column name
-        except Exception as e:
-            pass
-
-        return column_names
 
     def get_data_column_names(self) -> list[str]:
         """ Gets data columns, so not Class or ID """
-        column_names = self.get_text_column_names() + self.get_numerical_column_names()
-        try:
-            column_names.remove("") # Remove any empty column name
-        except Exception as e:
-            pass
-
-        return column_names
+        return self.get_text_column_names() + self.get_numerical_column_names()
+       
 
     def get_class_column_name(self) -> str:
         """ Gets the name of the column"""
@@ -1089,9 +1108,9 @@ class Config:
         """ Gets the name of the ID column"""
         return self.connection.id_column
 
-    def is_categorical(self, column_name) -> bool:
+    def is_categorical(self, column_name: str) -> bool:
         """ Returns if a specific column is categorical"""
-        return self.force_categorization() and column_name in self.mode.category_text_columns.split(",")
+        return self.force_categorization() and column_name in self.get_categorical_text_column_names()
 
     def should_train(self) -> bool:
         """ Returns if this is a training config """
@@ -1139,23 +1158,62 @@ class Config:
 
         return None
 
-    def update_values(self, updates: dict,  type: str = None) -> bool:
-        """ Updates several values inside the config """
+    def set_num_selected_features(self, num_features: int) -> None:
+        """ Updates the config with the number """
+        self.mode.num_selected_features = num_features
+    
 
-        if type is None:
-            """ Attempts to find the fields based on a split, useful if values belong to different parts """
-            for attribute, value in updates.item():
-                location = attribute.split(".")
+    def update_attribute(self, attribute: Union[str, dict], new_value) -> None:
+        """ attribute is either a string on the form 'name.subname' 
+        or a dict on the form { "name" : "subname", "type": "name"}
+        """
+        
+        if isinstance(attribute, dict):
+            try:
+                head = getattr(self, attribute["type"])
+                setattr(head, attribute["name"], new_value)
+            except KeyError:
+                raise ConfigException(f"Incorrect attribute format { attribute }")
+            except AttributeError:
+                raise ConfigException(f"There is no attribute { attribute }")
 
-                if len(location) == 1:
-                    setattr(self, attribute, value)
+            return
+
+        location = attribute.split(".")
+
+        if len(location) > 2:
+            raise ConfigException(f"There is no attribute {attribute}")
+        try:
+            if len(location) == 1:
+                if hasattr(self, attribute):
+                    setattr(self, attribute, new_value)
                 else:
-                    head = getattr(self, location[0])
-                    setattr(head, location[1], value)
-        else:
-            head = getattr(self, type)
-            for attribute, value in updates.items():
-                setattr(head, attribute, value)
+                    raise ConfigException(f"There is no attribute {attribute}")
+            else:
+                head = getattr(self, location[0])
+                if hasattr(head, location[1]):
+                    setattr(head, location[1], new_value)
+                else:
+                    raise ConfigException(f"There is no attribute {attribute}")
+                
+        except AttributeError:
+            raise ConfigException(f"There is no attribute {attribute}")
+
+    # TODO: Rename to match the above
+    def update_values(self, updates: dict,  type: str = None) -> None:
+        """ Updates several values inside the config """
+        try:
+            if type is None:
+                """ Attempts to find the fields based on a split, useful if values belong to different parts """
+                for attribute, value in updates.items():
+                    self.update_attribute(attribute, value)
+            else:
+                attribute_dict = {"type": type}
+                for attribute, value in updates.items():
+                    attribute_dict["name"] = attribute
+                    self.update_attribute(attribute_dict, value)
+        except ConfigException:
+            raise
 
     def get_scoring_mechanism(self):
         """ While the actual function is in the mechanism, this allows us to hide where Scoring is """
@@ -1189,7 +1247,7 @@ class Config:
    
 
     
-
+# TODO: Move to helper?
 def positive_int_or_none(value: int) -> bool:
     if value is None:
         return True
@@ -1199,63 +1257,18 @@ def positive_int_or_none(value: int) -> bool:
 
     return False
 
+# TODO: Move to algorithm?
 def get_model_name(algo: Algorithm, prepros: Preprocess)->str:
     return f"{algo.name}-{prepros.name}"
 
-# In case the user has specified some input arguments to command line call
-def check_input_arguments(argv):
-
-    command_line_instructions = \
-        f"Usage: {argv[0] } [-h/--help] [-f/--file <configfilename>]"
-
-    try:
-        short_options = "hf:"
-        long_options = ["help", "file"]
-        opts, args = getopt.getopt(argv[1:], short_options, long_options)
-    except getopt.GetoptError:
-        print(command_line_instructions)
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt == '-h' or opt == '--help':
-            print(command_line_instructions)
-            sys.exit()
-        elif opt == '-f' or opt == '--file':
-            if arg.count("..") > 0:
-                print(
-                    "Configuration file must be in a subfolder to {0}".format(argv[0]))
-                sys.exit()
-            print("Importing specified configuration file:", arg)
-            if not arg[0] == '.':
-                arg = os.path.relpath(arg)
-
-            file = arg.split('\\')[-1]
-            filename = file.split('.')[0]
-            filepath = '\\'.join(arg.split('\\')[:-1])
-            paths = arg.split('\\')[:-1]
-            try:
-                paths.pop(paths.index('.'))
-            except Exception as e:
-                print("Filepath {0} does not seem to be relative (even after conversion)".format(
-                    filepath))
-                sys.exit()
-            pack = '.'.join(paths)
-            sys.path.insert(0, filepath)
-            try:
-                module = importlib.import_module(pack+"."+filename)
-                return module
-            except Exception as e:
-                print("Filename {0} and pack {1} could not be imported dynamically".format(
-                    filename, pack))
-                sys.exit(str(e))
-        else:
-            print("Illegal argument to " + argv[0] + "!")
-            print(command_line_instructions)
-            sys.exit()
 
 
-    
-def set_none_or_int(value) :
+# TODO: Move to Helpers?
+def set_none_or_int(value) -> int:
     if value == "None":
+        return None
+
+    if int(value) < 0:
         return None
 
     return int(value)

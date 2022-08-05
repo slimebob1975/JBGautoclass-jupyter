@@ -1,1 +1,3 @@
-To run all tests, make sure you are in `src` and run `python -m pytest`
+# README
+
+- To run test: pytest (in root, src or tests)

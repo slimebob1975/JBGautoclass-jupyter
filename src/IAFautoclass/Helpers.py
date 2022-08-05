@@ -1,5 +1,9 @@
 import base64
 from datetime import datetime
+import getopt
+import importlib
+import os
+import sys
 
 
 import numpy as np
@@ -73,3 +77,63 @@ def cipher_encode_string(a):
 
 def get_rid_of_decimals(x) -> int:
     return int(round(float(x)))
+
+# In case the user has specified some input arguments to command line call
+# As written, you need to call on the class in the src\IAFautoclass dir, with
+# the configfilename on the format of ".\config\filename.py", where it has to be
+# a subfolder in the src\IAFautoclass dir
+# This complicates testing a Config loaded from a file 
+def check_input_arguments(argv: list):
+    command_line_instructions = \
+        f"Usage: {argv[0] } [-h/--help] [-f/--file <configfilename>]"
+
+    try:
+        short_options = "hf:"
+        long_options = ["help", "file"]
+        opts, args = getopt.getopt(argv[1:], short_options, long_options)
+    except getopt.GetoptError:
+        print(command_line_instructions)
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h' or opt == '--help':
+            print(command_line_instructions)
+            sys.exit()
+        elif opt == '-f' or opt == '--file':
+            if arg.count("..") > 0:
+                # This throws an error if you write the filename in the form of ..\
+                print(
+                    "Configuration file must be in a subfolder to {0}".format(argv[0]))
+                sys.exit()
+            print("Importing specified configuration file:", arg)
+            
+            # TODO: This does nothing as it currently stands
+            if not arg[0] == '.': 
+                arg = os.path.relpath(arg)
+            
+            file = arg.split('\\')[-1]
+            filename = file.split('.')[0]
+            filepath = '\\'.join(arg.split('\\')[:-1])
+            paths = arg.split('\\')[:-1] # This is expected to be [".", "directory"]
+            try:
+                # This removes the "." from the above list
+                paths.pop(paths.index('.'))
+            except Exception as e:
+                # Why is this an error? 
+                # If there is no "." in the above list, then it's done without needing to pop it
+                print("Filepath {0} does not seem to be relative (even after conversion)".format(
+                    filepath))
+                sys.exit()
+            pack = '.'.join(paths)
+            sys.path.insert(0, filepath)
+            try:
+                # This expects ex "config.filename"
+                module = importlib.import_module(pack+"."+filename)
+                return module
+            except Exception as e:
+                print("Filename {0} and pack {1} could not be imported dynamically".format(
+                    filename, pack))
+                sys.exit(str(e))
+        else:
+            print("Illegal argument to " + argv[0] + "!")
+            print(command_line_instructions)
+            sys.exit()
