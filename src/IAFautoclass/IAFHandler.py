@@ -61,12 +61,18 @@ class DataLayer(Protocol):
     def get_dataset(self, num_rows: int, train: bool, predict: bool):
         """ Get the dataset, query and number of rows"""
 
+    def save_data(self, results: list, class_rate_type: str, model: Model, config: Config)-> int:
+        """ Saves classification for X_unknown in classification database """
+
+    def get_sql_command_for_recently_classified_data(self, num_rows: int) -> str:
+        """ What name says """
+
 class Config(Protocol):
     # Methods to hide implementation of Config
     def set_num_selected_features(self, num_features: int) -> None:
         """ Updates the config with the number """
 
-    def get_model_filename(self) -> str:
+    def get_model_filename(self, pwd: str = None) -> str:
         """ Set the filename based on prediction or training """
 
     def is_text_data(self) -> bool:
@@ -147,10 +153,10 @@ class Config(Protocol):
     def get_undersampler(self) -> Union[RandomUnderSampler, None]:
         """ Gets the UnderSampler, or None if there should be none"""
 
-    def update_values(self, updates: dict,  type: str = None) -> None:
+    def update_attributes(self, updates: dict,  type: str = None) -> None:
         """ Updates several values inside the config """
 
-    def get_scoring_mechanism(self):
+    def get_scoring_mechanism(self) -> Union[str, Callable]:
         """ While the actual function is in the mechanism, this allows us to hide where Scoring is """
 
     def get_algorithm(self) -> Algorithm:
@@ -195,6 +201,7 @@ class IAFHandler:
     
 
     def get_handler(self, name: str) -> Union[DatasetHandler, ModelHandler, PredictionsHandler]:
+        name = name.lower()
         if name in self.handlers:
             return self.handlers[name]
 
@@ -209,11 +216,18 @@ class IAFHandler:
     def save_classification_data(self) -> None:
         # Save new classifications for X_unknown in classification database
         self.logger.print_progress(message="Save new classifications in database")
-        dh = self.get_handler("dataset")
-        ph = self.get_handler("predictions")
-        mh = self.get_handler("model")
 
-        results = ph.get_prediction_results(dh.unpredicted_keys)
+        try:
+            dh = self.get_handler("dataset")
+            ph = self.get_handler("predictions")
+            mh = self.get_handler("model")
+        except HandlerException as e:
+            raise e
+        
+        try:
+            results = ph.get_prediction_results(dh.unpredicted_keys)
+        except AttributeError as e: 
+            raise HandlerException(e)
 
         try:
             results_saved = self.datalayer.save_data(
@@ -224,7 +238,8 @@ class IAFHandler:
             )
             
         except Exception as e:
-            self.logger.abort_cleanly(f"Save of predictions failed: {e}")
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise HandlerException(e)
         
         saved_query = self.datalayer.get_sql_command_for_recently_classified_data(results_saved)
         self.logger.print_info(f"Added {results_saved} rows to classification table. Get them with SQL query:\n\n{saved_query}")
@@ -232,14 +247,14 @@ class IAFHandler:
     # Updates the progress and notifies the logger
     # Currently duplicated over Classifier and IAFHandler, but that's for later
     def update_progress(self, percent: float, message: str = None) -> float:
-        self.progression.progress += percent
+        self.progression["progress"] += percent
 
         if message is None:
-            self.handler.logger.print_progress(percent = self.progression.progress)
+            self.logger.print_progress(percent = self.progression["progress"])
         else:
-            self.handler.logger.print_progress(message=message, percent = self.progression.progress)
+            self.logger.print_progress(message=message, percent = self.progression["progress"])
 
-        return self.progression.progress
+        return self.progression["progress"]
 
     
 
@@ -268,6 +283,10 @@ class DatasetHandler:
     def __post_init__(self) -> None:
         """ Empty for now """
     
+    # Sets the unpredicted keys
+    def set_unpredicted_keys(self, keys: pandas.Series) -> None:
+        self.unpredicted_keys = keys
+
     # Function for reading in data to classify from database
     def read_in_data(self) -> bool:
         
@@ -978,7 +997,7 @@ class ModelHandler:
                             best_feature_selection = num_features
 
         updates = {"algorithm": algorithm, "preprocessor" : pprocessor, "num_selected_features": best_feature_selection}
-        self.handler.config.update_values(type="mode", updates=updates)
+        self.handler.config.update_attributes(type="mode", updates=updates)
         
         model = self.model
         model.algorithm = algorithm
@@ -1020,7 +1039,7 @@ class PredictionsHandler:
     LIMIT_MISPREDICTED = 20
     
     handler: IAFHandler
-    could_predict_proba: bool = field(init=False)
+    could_predict_proba: bool = False
     probabilites: np.ndarray = field(init=False)
     predictions: np.ndarray = field(init=False)
     rates: np.ndarray = field(init=False)
@@ -1032,15 +1051,18 @@ class PredictionsHandler:
     def get_prediction_results(self, keys: pandas.Series) -> list:
         
         return_list = []
-        for k,y,r,p in zip(keys.values, self.predictions, self.rates, self.probabilites):
-            item = {
-                "key": k,
-                "prediction": y,
-                "rates": r,
-                "probabilities": ",".join([str(elem) for elem in p])
-            }
+        try:
+            for k,y,r,p in zip(keys.values, self.predictions, self.rates, self.probabilites):
+                item = {
+                    "key": k,
+                    "prediction": y,
+                    "rates": r,
+                    "probabilities": ",".join([str(elem) for elem in p])
+                }
 
-            return_list.append(item)
+                return_list.append(item)
+        except AttributeError:
+            return []
 
         return return_list
 

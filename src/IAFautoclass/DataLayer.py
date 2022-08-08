@@ -46,8 +46,6 @@ class DataLayer:
             username = self.connection.class_username, \
             password = self.connection.class_password)
         
-        #sqlHelper.Connection = sqlHelper.connect()
-
         return sqlHelper
 
     # Update the text_data if not set when the DataLayer is created
@@ -354,7 +352,6 @@ class DataLayer:
             raise DataLayerException(f"Something went wrong when saving data ({e})")
 
     def get_data_query(self, num_rows, train, predict) -> str:
-        print(self.connection)
         query = "SELECT "
         query += "TOP(" + str(num_rows) + ") "
         column_groups = (self.connection.id_column, self.connection.class_column,

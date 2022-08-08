@@ -16,6 +16,8 @@
 import os
 import sys
 
+from IAFExceptions import HandlerException
+
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
     
 # General imports
@@ -250,7 +252,10 @@ class IAFautomaticClassiphyer:
            
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
-            self.handler.save_classification_data()
+            try:
+                self.handler.save_classification_data()
+            except HandlerException as e:
+                self.logger.abort_cleanly(f"Save of predictions failed: {e}")
 
         self.update_progress(percent=self.progression["percentPerMajorTask"])
 

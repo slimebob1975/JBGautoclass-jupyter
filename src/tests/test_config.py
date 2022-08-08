@@ -191,9 +191,6 @@ def get_fixture_content_as_string(filename: str) -> str:
 
     return content
 
-# HERE BE DRAGONS (for future): Python does not have constants, so allows redefinition of everything
-# In this case, we will be using that to be able to load models/configs from the fixtures dir rather than
-# the model/config. Perhaps this is a sign that we want to rewrite some of the constants to be not?
 class TestConfig:
     def test_defaults(self):
         config = Config()
@@ -336,15 +333,15 @@ class TestConfig:
             default_config.update_attribute({"type": "does_not_exist", "name":"test_size"}, "test_name")
         
         # updates = {"algorithm": algorithm, "preprocessor" : pprocessor, "num_selected_features": best_feature_selection}
-        #self.handler.config.update_values(type="mode", updates=updates)
+        #self.handler.config.update_attributes(type="mode", updates=updates)
         # Test update_values
         # 1. Type = None (updates has keys on form "x.y")
-        default_config.update_values({"name": "new_name", "connection.class_column": "foo"})
+        default_config.update_attributes({"name": "new_name", "connection.class_column": "foo"})
         assert default_config.name == "new_name"
         assert default_config.connection.class_column == "foo"
 
         # 2. type is not none
-        default_config.update_values({"id_column": "id_column", "class_column": "class_column"}, "connection")
+        default_config.update_attributes({"id_column": "id_column", "class_column": "class_column"}, "connection")
         assert default_config.connection.id_column == "id_column"
         assert default_config.connection.class_column == "class_column"
 

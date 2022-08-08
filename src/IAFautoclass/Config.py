@@ -1199,9 +1199,8 @@ class Config:
         except AttributeError:
             raise ConfigException(f"There is no attribute {attribute}")
 
-    # TODO: Rename to match the above
-    def update_values(self, updates: dict,  type: str = None) -> None:
-        """ Updates several values inside the config """
+    def update_attributes(self, updates: dict,  type: str = None) -> None:
+        """ Updates several attributes inside the config """
         try:
             if type is None:
                 """ Attempts to find the fields based on a split, useful if values belong to different parts """
@@ -1215,7 +1214,7 @@ class Config:
         except ConfigException:
             raise
 
-    def get_scoring_mechanism(self):
+    def get_scoring_mechanism(self)  -> Union[str, Callable]:
         """ While the actual function is in the mechanism, this allows us to hide where Scoring is """
         return self.mode.scoring.get_mechanism()
 
