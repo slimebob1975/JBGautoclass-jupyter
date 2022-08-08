@@ -8,8 +8,8 @@ from IAFExceptions import ConfigException
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
-
-def get_valid_iris_config(filename: str = None) -> Config:
+@pytest.fixture
+def valid_iris_config(filename: str = None) -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
@@ -63,7 +63,8 @@ def get_valid_iris_config(filename: str = None) -> Config:
 
     return config
 
-def get_bare_iris_config() -> Config:
+@pytest.fixture
+def bare_iris_config() -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
@@ -126,7 +127,8 @@ def get_bare_iris_config() -> Config:
 
     return config
 
-def get_saved_with_valid_iris_config() -> Config:
+@pytest.fixture
+def saved_with_valid_iris_config() -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
@@ -197,10 +199,8 @@ class TestConfig:
         
         assert config.name == 'iris'
 
-    def test_column_names(self):
+    def test_column_names(self, valid_iris_config):
         """ This will test known values with various functions that return column names"""
-        valid_iris_config = get_valid_iris_config()
-
         # removes single empty value
         column_names = "a,,b"
         cleaned = valid_iris_config.clean_column_names_list(column_names)
@@ -238,10 +238,8 @@ class TestConfig:
         
         assert valid_iris_config.get_categorical_text_column_names() == []
 
-    def test_calculated_booleans(self):
+    def test_calculated_booleans(self, valid_iris_config):
         """ This tests that calculated booleans are calculated correctly """
-        valid_iris_config = get_valid_iris_config()
-        
         # Expected values
         is_text_data = False
         is_numerical_data = True
@@ -262,9 +260,7 @@ class TestConfig:
         assert valid_iris_config.feature_selection_in([Reduction.NON]) is False
         
 
-    def test_smote_and_undersampler(self):
-        valid_iris_config = get_valid_iris_config()
-
+    def test_smote_and_undersampler(self, valid_iris_config):
         # Using the default both smote and undersampler are False and should return None
         assert valid_iris_config.get_smote() is None
         assert valid_iris_config.get_undersampler() is None
@@ -276,10 +272,8 @@ class TestConfig:
         assert isinstance(valid_iris_config.get_smote(), SMOTE)
         assert isinstance(valid_iris_config.get_undersampler(), RandomUnderSampler)
         
-    def test_none_or_positive_int(self):
+    def test_none_or_positive_int(self, valid_iris_config):
         """ Some values return either an int or None """
-        valid_iris_config = get_valid_iris_config()
-
         assert valid_iris_config.get_num_selected_features() == 0 # None returns 0
         assert valid_iris_config.get_max_iterations() == 20000
         assert valid_iris_config.get_max_limit() == 150
@@ -345,10 +339,7 @@ class TestConfig:
         assert default_config.connection.id_column == "id_column"
         assert default_config.connection.class_column == "class_column"
 
-    def test_get_attribute(self):
-        # Using this to know exactly what values to expect
-        valid_iris_config = get_valid_iris_config()
-
+    def test_get_attribute(self, valid_iris_config):
         # 1: Get name
         assert valid_iris_config.get_attribute("name") == "test"
         # 2. Get connection.id_column
@@ -367,11 +358,8 @@ class TestConfig:
         with pytest.raises(ConfigException):
             valid_iris_config.get_attribute("mode.does_not_exist")
 
-    def test_get_calculated_values(self):
+    def test_get_calculated_values(self, valid_iris_config):
         """ Testing simple calculated values """
-        # Using this to know exactly what values to expect
-        valid_iris_config = get_valid_iris_config()
-        
         expected = "DatabaseOne.ResultTable"
         assert valid_iris_config.get_class_table() == expected
 
@@ -380,13 +368,11 @@ class TestConfig:
         assert valid_iris_config.get_test_size_percentage() == 20        
     
 
-    def test_get_named_attributes(self):
+    def test_get_named_attributes(self, valid_iris_config):
         """ 
         Several of the functions are just wrappers around getting a single, named attribute.
         This tests them, just to make sure nothing weird is happening
         """
-        valid_iris_config = get_valid_iris_config()
-
         assert valid_iris_config.get_feature_selection() == Reduction.PCA
         
         assert valid_iris_config.get_test_size() == 0.2
@@ -421,33 +407,20 @@ class TestConfig:
 
         assert valid_iris_config.get_data_table() == "InputTable"
 
-    def test_get_model_filename(self):
+    def test_get_model_filename(self, valid_iris_config):
         """ Tests the model filename functionality with injected dependency"""
-        # Using this to know exactly what values to expect
-        valid_iris_config = get_valid_iris_config()
-        
         expected = "fake_path\\model\\test.sav"
         real = valid_iris_config.get_model_filename(pwd="fake_path")
         assert str(real) == expected
 
-    def test_clean_config(self):
+    def test_clean_config(self, valid_iris_config, bare_iris_config):
         """ gets a stripped down version for saving with the .sav file """
-        # Using this to know exactly what values to expect
-        valid_iris_config = get_valid_iris_config()
-
-        expected_config = get_bare_iris_config()
-        
         cleaned_config = valid_iris_config.get_clean_config()
 
-        assert cleaned_config == expected_config
+        assert cleaned_config == bare_iris_config
 
-    def test_saving_config(self, tmp_path):
+    def test_saving_config(self, tmp_path, valid_iris_config, saved_with_valid_iris_config):
         """ Tests saving the config to a temporary directory """
-        valid_iris_config = get_valid_iris_config()
-
-        #with open(get_fixture_path() / "test-iris-saved.py") as f:
-        #    content = f.read()
-
         d = tmp_path / "config"
         d.mkdir()
         p = d / "config.py"
@@ -455,7 +428,7 @@ class TestConfig:
         valid_iris_config.save_to_file(p, "some_fake_name")
         assert p.read_text() == get_fixture_content_as_string("test-iris-saved.py")
 
-    def test_load_config_from_model_file(self):
+    def test_load_config_from_model_file(self, valid_iris_config, bare_iris_config, saved_with_valid_iris_config):
         """ Loads config from a .sav file """
 
         # 1. Exception if there's something wrong, ex missing file
@@ -465,14 +438,13 @@ class TestConfig:
         filename = get_fixture_path() / "config-save.sav"
         # 2. Without a config
         new_config = Config.load_config_from_model_file(filename)
-        assert new_config == get_bare_iris_config()
+        assert new_config == bare_iris_config
 
         # 3. With a config
-        valid_iris_config = get_valid_iris_config()
         new_config = Config.load_config_from_model_file(filename, valid_iris_config)
-        assert new_config == get_saved_with_valid_iris_config()
+        assert new_config == saved_with_valid_iris_config
 
-    def test_load_config_from_module(self):
+    def test_load_config_from_module(self, valid_iris_config):
         """ While it uses the load_config_from_module, it mainly checks load_config_2 """
         argv = [
             "test_config.py",
@@ -482,7 +454,7 @@ class TestConfig:
 
         loaded_config = Config.load_config_from_module(argv)
 
-        assert loaded_config == get_valid_iris_config()
+        assert loaded_config == valid_iris_config
 
     def test_scoring_mechanism(self):
         """ This has two results: string or Callable """
