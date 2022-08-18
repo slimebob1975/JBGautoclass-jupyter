@@ -7,47 +7,57 @@ import sys
 
 
 import numpy as np
+import pandas
 
 # Help routines for determining consistency of input data
-def is_float(val):
+def is_float(val) -> bool:
+    """ In DatasetHandler.read_data() """
     try:
         float(val)
     except ValueError:
         return False
     return True
 
-def is_int(val):
+def is_int(val) -> bool:
+    """ In DatasetHandler.read_data() """
     try:
         int(val)
     except ValueError:
         return False
     return True
 
-def is_str(val):
+def is_str(val) -> bool:
+    """ In DatasetHandler.read_data() """
+    val_is_datetime = get_datetime(val)
     is_other_type = \
         is_float(val) or \
         is_int(val) or \
         isinstance(val, bool) or \
-        is_datetime(val)
+        val_is_datetime is not None
     return not is_other_type 
     
-def is_datetime(val):
+def get_datetime(val) -> datetime:
+    """ In DatasetHandler.read_data() """
     try:
         if isinstance(val, datetime): #Simple, is already instance of datetime
-            return True
+            return val
     except ValueError:
         pass
     # Harder: test the value for many different datetime formats and see if any is correct.
-    # If so, return true, otherwise, return false.
-    the_formats = ['%Y-%m-%d %H:%M:%S','%Y-%m-%d','%Y-%m-%d %H:%M:%S.%f','%Y-%m-%d %H:%M:%S,%f', \
-                    '%d/%m/%Y %H:%M:%S','%d/%m/%Y','%d/%m/%Y %H:%M:%S.%f', '%d/%m/%Y %H:%M:%S,%f']
+    # If so, return it, otherwise, return None.
+    the_formats = [
+        '%Y-%m-%d %H:%M:%S','%Y-%m-%d','%Y-%m-%d %H:%M:%S.%f','%Y-%m-%d %H:%M:%S,%f', 
+        '%d/%m/%Y %H:%M:%S','%d/%m/%Y','%d/%m/%Y %H:%M:%S.%f', '%d/%m/%Y %H:%M:%S,%f',
+        '%m/%d/%Y %H:%M:%S','%m/%d/%Y','%m/%d/%Y %H:%M:%S.%f', '%m/%d/%Y %H:%M:%S,%f'
+    ]
     for the_format in the_formats:
         try:
             date_time = datetime.strptime(str(val), the_format)
-            return isinstance(date_time, datetime)
+            if isinstance(date_time, datetime):
+                return date_time
         except ValueError:
             pass
-    return False
+    return None
 
 # Convert dataset to unreadable hex code
 def do_hex_base64_encode_on_data(X):
@@ -77,6 +87,15 @@ def cipher_encode_string(a):
 
 def get_rid_of_decimals(x) -> int:
     return int(round(float(x)))
+
+def find_smallest_class_number(Y: pandas.DataFrame) -> int:
+    class_count = {}
+    for elem in Y:
+        if elem not in class_count:
+            class_count[elem] = 1
+        else:
+            class_count[elem] += 1
+    return max(1, min(class_count.values()))
 
 # In case the user has specified some input arguments to command line call
 # As written, you need to call on the class in the src\IAFautoclass dir, with

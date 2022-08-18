@@ -9,7 +9,7 @@ from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
 @pytest.fixture
-def valid_iris_config(filename: str = None) -> Config:
+def valid_iris_config() -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
@@ -58,7 +58,7 @@ def valid_iris_config(filename: str = None) -> Config:
             num_rows=150
         ),
         name="test",
-        filename=filename
+        filename="autoclassconfig_test_some_fake_name.py"
     )
 
     return config
@@ -258,6 +258,16 @@ class TestConfig:
         assert valid_iris_config.feature_selection_in([Reduction.PCA]) is True
         # 2. False
         assert valid_iris_config.feature_selection_in([Reduction.NON]) is False
+
+        # Checks if the key exists in the specific set of columns
+        # 1. Valid numerical
+        assert valid_iris_config.column_is_numeric("sepal-width") is True
+
+        # 2. Invalid numerical
+        assert valid_iris_config.column_is_numeric("none-such-exists") is False
+
+        # 3. There are no text columns
+        assert valid_iris_config.column_is_text("none-such-exists") is False 
         
 
     def test_smote_and_undersampler(self, valid_iris_config):
@@ -365,7 +375,8 @@ class TestConfig:
 
         assert valid_iris_config.get_stop_words_threshold_percentage() == 100
 
-        assert valid_iris_config.get_test_size_percentage() == 20        
+        assert valid_iris_config.get_test_size_percentage() == 20
+   
     
 
     def test_get_named_attributes(self, valid_iris_config):
@@ -419,7 +430,7 @@ class TestConfig:
 
         assert cleaned_config == bare_iris_config
 
-    def test_saving_config(self, tmp_path, valid_iris_config, saved_with_valid_iris_config):
+    def test_saving_config(self, tmp_path, valid_iris_config):
         """ Tests saving the config to a temporary directory """
         d = tmp_path / "config"
         d.mkdir()
@@ -494,3 +505,69 @@ class TestConfig:
     def test_model_name(self):
         assert get_model_name(Algorithm.LDA, Preprocess.STA) == "LDA-STA"
 
+class TestAlgorithm:
+    """ Tests the Enum Algorithm functions """
+
+    def test_list_algorithms(self):
+        """ Class Method that gets all callable algorithms and their function """
+        models = Algorithm.list_callable_algorithms(size=5, max_iterations=10)
+        # 29 callable algorithms
+        assert len(models) == 29
+
+        # It's a list of tuples
+        assert all(isinstance(x,tuple) for x in models)
+
+        # Each tuple have two elements
+        assert all(len(x) == 2 for x in models)
+
+        # The first element in each tuple is an Algorithm enum
+        assert all(isinstance(x[0], Algorithm) for x in models)
+
+        # The second element in each tuple must have the "fit" function
+        assert all(hasattr(x[1], "fit") and callable(getattr(x[1], "fit")) for x in models)
+
+class TestPreprocess:
+    """ Tests the Enum Preprocess functions """,
+
+    def test_list_callable_preprocessors(self):
+        """ There's two cases here, whether it's text_data or not """
+
+        # 1. No textdata
+        preprocessors = Preprocess.list_callable_preprocessors(is_text_data=False)
+
+        # 1a: 5 elements (not BIN, but includes NON)
+        assert len(preprocessors) == 5
+
+        # 1b: It's a list of tuples
+        assert all(isinstance(x,tuple) for x in preprocessors)
+
+        # 1c: Each tuple have two elements
+        assert all(len(x) == 2 for x in preprocessors)
+
+        # 1d: The first element in each tuple is an Preprocess enum
+        assert all(isinstance(x[0], Preprocess) for x in preprocessors)
+
+        # 1e: This uses the sublist of not-None and only 1 element is None
+        callables = [x[1] for x in preprocessors if x[1] is not None]
+        assert all(hasattr(x, "fit") and callable(getattr(x, "fit")) for x in callables)
+        assert len(callables) == 4
+
+        # 2. Is textdata
+        preprocessors = Preprocess.list_callable_preprocessors(is_text_data=True)
+
+        # 2a: 5 elements (includes BIN and NON)
+        assert len(preprocessors) == 6
+
+        # 2b: It's a list of tuples
+        assert all(isinstance(x,tuple) for x in preprocessors)
+
+        # 2c: Each tuple have two elements
+        assert all(len(x) == 2 for x in preprocessors)
+
+        # 2d: The first element in each tuple is an Preprocess enum
+        assert all(isinstance(x[0], Preprocess) for x in preprocessors)
+
+        # 2e: This uses the sublist of not-None and only 1 element is None
+        callables = [x[1] for x in preprocessors if x[1] is not None]
+        assert all(hasattr(x, "fit") and callable(getattr(x, "fit")) for x in callables)
+        assert len(callables) == 5

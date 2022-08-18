@@ -163,6 +163,12 @@ class IAFLogger(terminal.Logger):
         
         return self.writeln('unformatted', *args)
 
+    def print_percentage_checked(self, text: str, old_percent, percent_checked) -> None:
+        if self._enable_quiet or old_percent <= percent_checked:
+            return
+
+        print(f"{text}: " + str(percent_checked) + " %", end='\r')
+
     #
     def print_training_probabilities(self, ph: PredictionsHandler) -> None:
         if not ph.could_predict_proba:

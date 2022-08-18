@@ -137,11 +137,14 @@ class IAFautomaticClassiphyer:
         # Print out what mode we use: training a new model or not
         if self.config.should_train():
             self.logger.print_formatted_info("We will train our ml model")
+            mh.load_model()
         elif self.config.should_predict():
-            if os.path.exists(self.config.get_model_filename()):
+            model_path = self.config.get_model_filename()
+            if os.path.exists(model_path):
                 self.logger.print_formatted_info("We will reload and use old model")
+                mh.load_model(model_path)
             else:
-                self.logger.abort_cleanly(f"No trained model exists at {self.config.get_model_filename()}")
+                self.logger.abort_cleanly(f"No trained model exists at {model_path}")
         else:
             self.logger.abort_cleanly("User must choose either to train a new model or use an old one for predictions")
         
@@ -154,7 +157,7 @@ class IAFautomaticClassiphyer:
         try:
             if not dh.read_in_data(): #should return true or false
                 self.logger.print_progress(message="Process finished", percent=1.0)
-                return -1
+                return -1 # Kanske inte behövs?
         except Exception as e:
             self.logger.abort_cleanly(f"Load of dataset failed: {e}")
 
@@ -183,6 +186,7 @@ class IAFautomaticClassiphyer:
         self.config.set_num_selected_features(num_selected_features)
         
         # Split dataset for machine learning
+        # TODO: Byt namn?
         dh.split_dataset()
 
         self.update_progress(self.progression["percentPerMajorTask"])
@@ -235,7 +239,7 @@ class IAFautomaticClassiphyer:
                 # TODO: maybe replace Y with dh.Y
                 ph.most_mispredicted(dh.X_original, trained_model, cross_trained_model, dh.X_transformed, Y)
 
-                ph.evaluate_mispredictions(dh.queries["read_data"], self.get_output_filename("misplaced"))
+                ph.evaluate_mispredictions(self.handler.queries["read_data"], self.get_output_filename("misplaced"))
             
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 

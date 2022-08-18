@@ -50,6 +50,14 @@ class Logger(Protocol):
     def print_components(self, component, components, exception = None) -> None:
         """ Printing Reduction components"""
     
+class RateType(enum.Enum):
+    # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
+    I = "Individual"
+    # A = Allmän bedömning. Modellen kan endast ge gemensam genomsnittlig sannolikhet för alla dataelementen tillsammans.
+    A = "General"
+    # U = Okänd. Lade jag till som en framtida utväg ifall ingen av de ovanstående fanns tillgängliga.
+    U = "Unknown"
+
 
 class Algorithm(enum.Enum):
     ALL = "All"
@@ -82,6 +90,13 @@ class Algorithm(enum.Enum):
     GBC = "Gradient Boosting Classifier"
     MLPR = "ML Neural Network Relu"
     MLPL = "ML Neural Network Sigm"
+
+    @classmethod
+    def list_callable_algorithms(cls, size: int, max_iterations: int) -> list[tuple]:
+        """ Gets a list of algorithms that are callable
+            in the form (algorithm, called function)
+        """
+        return [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_algorithm_function()]
 
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
         return LogisticRegression(solver='liblinear', multi_class='ovr')
@@ -245,6 +260,17 @@ class Preprocess(enum.Enum):
     MMX = "Max-Absolute Scaler"
     NRM = "Normalizer"
     BIN = "Binarizer"
+
+    @classmethod
+    def list_callable_preprocessors(cls, is_text_data: bool) -> list[tuple]:
+        """ Gets a list of preprocessors that are callable (including NON -> None)
+            in the form (preprocessor, called function)
+        """
+        return [(pp, pp.call_preprocess()) for pp in cls if pp.has_preprocess_function() and (pp.name != "BIN" or is_text_data)]
+
+    def do_NON(self) -> None:
+        """ While this return is superfluos, it helps with the listings of preprocessors """
+        return None
 
     def do_STA(self) -> StandardScaler:
         return StandardScaler(with_mean=False)
@@ -991,6 +1017,14 @@ class Config:
 
     def force_categorization(self) -> bool:
         return  self.mode.category_text_columns != ""
+
+    def column_is_numeric(self, column: str) -> bool:
+        """ Checks if the column is numerical """
+        return column in self.get_numerical_column_names()
+
+    def column_is_text(self, column: str) -> bool:
+        """ Checks if the column is text based """
+        return column in self.get_text_column_names()
 
     def get_feature_selection(self) -> Reduction:
         """ Gets the given feature selection Reduction """

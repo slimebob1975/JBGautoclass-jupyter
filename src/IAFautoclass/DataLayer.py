@@ -6,7 +6,7 @@ import sys
 from collections import OrderedDict
 import numpy as np
 import pyodbc
-from Config import Config
+from Config import Config, RateType
 from IAFHandler import Model
 from IAFLogger import IAFLogger
 import SqlHelper.IAFSqlHelper as sql
@@ -287,7 +287,7 @@ class DataLayer:
     # For saving results in database
     def save_data(self,
         results: list,
-        class_rate_type: str,
+        class_rate_type: RateType,
         model: Model,
         config: Config)-> int:
         
@@ -307,7 +307,7 @@ class DataLayer:
                 "unique_key": "", # keys[i]
                 "class_result": "", # Y[i]
                 "class_rate": "", # rates[i]
-                "class_rate_type": class_rate_type,
+                "class_rate_type": class_rate_type.name,
                 "class_labels": ",".join(model.model.classes_),
                 "class_probabilities": "", #','.join([str(elem) for elem in probabilities[i].tolist()])
                 "class_algorithm": model.get_name(),
@@ -472,9 +472,9 @@ class DataLayer:
 
             # Quick return if no data was fetched
             if num_lines == 0:
-                return None, None, None
+                return None, None
             
-            return data, non_ordered_query, num_lines
+            return data, non_ordered_query # list, string
 
         except Exception as e:
             print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down

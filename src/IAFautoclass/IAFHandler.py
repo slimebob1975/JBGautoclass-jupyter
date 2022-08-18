@@ -24,7 +24,7 @@ from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
-from Config import Algorithm, Preprocess, Reduction, get_model_name
+from Config import Algorithm, Preprocess, Reduction, RateType, get_model_name
 from IAFExceptions import DatasetException, ModelException, HandlerException
 import Helpers
 
@@ -42,6 +42,9 @@ class Logger(Protocol):
 
     def print_formatted_info(self, message: str) -> None:
         """ Printing info with """
+
+    def print_percentage_checked(self, text: str, old_percent, percent_checked) -> None:
+        """ Uses print() to update the line rather than new line"""
 
     def investigate_dataset(self, dataset: pandas.DataFrame, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
         """ Print information about dataset """
@@ -61,7 +64,7 @@ class DataLayer(Protocol):
     def get_dataset(self, num_rows: int, train: bool, predict: bool):
         """ Get the dataset, query and number of rows"""
 
-    def save_data(self, results: list, class_rate_type: str, model: Model, config: Config)-> int:
+    def save_data(self, results: list, class_rate_type: RateType, model: Model, config: Config)-> int:
         """ Saves classification for X_unknown in classification database """
 
     def get_sql_command_for_recently_classified_data(self, num_rows: int) -> str:
@@ -83,6 +86,12 @@ class Config(Protocol):
 
     def force_categorization(self) -> bool:
         """True or False"""
+
+    def column_is_numeric(self, column: str) -> bool:
+        """ Checks if the column is numerical """
+        
+    def column_is_text(self, column: str) -> bool:
+        """ Checks if the column is text based """
 
     def use_feature_selection(self) -> bool:
         """True or False"""
@@ -176,6 +185,8 @@ class IAFHandler:
     progression: dict
 
     handlers: dict = field(default_factory=dict, init=False)
+    queries: dict = field(default_factory=dict)
+    
 
     # This is defined this way so that VS code can find the different methods
     def add_handler(self, name: str) -> Union[DatasetHandler, ModelHandler, PredictionsHandler]:
@@ -210,8 +221,11 @@ class IAFHandler:
 
     def get_dataset(self):
         """ By putting this here, Datalayer does not need to be supplied to Dataset Handler"""
-        # return data, non_ordered_query, num_lines
-        return self.datalayer.get_dataset(self.config.get_max_limit(), self.config.should_train(), self.config.should_predict())
+        data, query =  self.datalayer.get_dataset(self.config.get_max_limit(), self.config.should_train(), self.config.should_predict())
+        
+        self.queries["read_data"] = query
+
+        return data
 
     def save_classification_data(self) -> None:
         # Save new classifications for X_unknown in classification database
@@ -266,12 +280,11 @@ class DatasetHandler:
     handler: IAFHandler
     dataset: pandas.DataFrame = field(init=False)
     classes: list[str] = field(init=False)
-    queries: dict = field(default_factory=dict)
     keys: pandas.Series = field(init=False)
     unpredicted_keys: pandas.Series = field(init=False)
     X_original: pandas.DataFrame = field(init=False)
     X: pandas.DataFrame = field(init=False)
-    Y: pandas.DataFrame = field(init=False)
+    Y: pandas.Series = field(init=False)
     X_train: pandas.DataFrame = field(init=False)
     X_validation: pandas.DataFrame = field(init=False)
     Y_train: pandas.DataFrame = field(init=False)
@@ -291,168 +304,193 @@ class DatasetHandler:
     def read_in_data(self) -> bool:
         
         try:
-            data, query, num_lines = self.handler.get_dataset()
+            data = self.handler.get_dataset()
         except Exception as e:
             print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
             raise DatasetException(e)
 
         if data is None:
             return False
-
-
+        
         # Set the column names of the data array
         column_names = self.handler.config.get_column_names()
-        
-        
-        self.dataset = pandas.DataFrame(data, columns = column_names)
-        
-        # Make sure the class column is a categorical variable by setting it as string
         class_column = self.handler.config.get_class_column_name()
-        try:
-            self.dataset.astype({class_column: 'str'}, copy=False)
-        except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
-            raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
-            
+        id_column = self.handler.config.get_id_column_name()
+
+        # TODO: validate_dataset should probably do a report of potentional issues, or lead into the function that does
+        dataset = self.validate_dataset(data, column_names, class_column)
+
+        # TODO: Drop if we've confirmed it's not needed
+        dataset = self.shuffle_dataset(dataset)
+        
+        self.dataset, self.keys = self.split_keys_from_dataset(dataset, id_column)
+        
         # Extract unique class labels from dataset
-        unique_classes = list(set(self.dataset[class_column].tolist()))
+        self.classes = list(set(self.dataset[class_column].tolist()))
 
-        #TODO: Clean up the clean-up
-        # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
-        # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
-        # or similar from a certain starting point, if any are left after the conversion above.
-        self.handler.logger.print_formatted_info(message="Consistency check")
-        change = False
-        percent_checked = 0
-        index_length = float(len(self.dataset.index))
-        try:
-            for index in self.dataset.index:
-                old_percent_checked = percent_checked
-                percent_checked = round(100.0*float(index)/index_length)
-                # TODO: \r is to have the Data checked updated, or some-such. Can it be moved?
-                if self.handler.config.is_verbose() and percent_checked > old_percent_checked:
-                    print("Data checked of fetched: " + str(percent_checked) + " %", end='\r')
-                for key in self.dataset.columns:
-                    item = self.dataset.at[index,key]
-                    # Set NoneType objects  as zero or empty strings
-                    if (key in self.handler.config.get_numerical_column_names() or \
-                        key in self.handler.config.get_text_column_names()) and item == None:
-                        if key in self.handler.config.get_numerical_column_names():
-                            item = 0
-                        else:
-                            item = ""
-                        change = True
-
-                    # Convert numerical datetime values to ordinals
-                    elif key in self.handler.config.get_numerical_column_names() and Helpers.is_datetime(item):
-                        item = datetime.toordinal(item)
-                        change = True
-
-                    # Set remaining numerical values that cannot be casted as integer or floating point numbers to zero, i.e., do not
-                    # take then into account
-                    elif key in self.handler.config.get_numerical_column_names() and \
-                        not (Helpers.is_int(item) or Helpers.is_float(item)):
-                        item = 0
-                        change = True
-
-                    # Set text values that cannot be casted as strings to empty strings
-                    elif key in self.handler.config.get_text_column_names() and type(item) != str and not Helpers.is_str(item):
-                        item = ""
-                        change = True
-
-                    # Remove line breaks from text strings
-                    if key in self.handler.config.get_text_column_names():
-                        item = item.replace('\n'," ").replace('\r'," ").strip()
-                        change = True
-
-                    # Save new value
-                    if change:
-                        self.dataset.at[index,key] = item
-                        change = False
-        except Exception as e:
-            print(e)
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
-            raise DatasetException(f"Something went wrong in inconsistency check at {key}: {item} ({e})")
-    
-        # Shuffle the upper part of the data, such that all already classified material are
-        # put in random order keeping the unclassified material in the bottom
-        # Notice: perhaps this operation is now obsolete, since we now use a NEWID() in the 
-        # data query above
-        self.handler.logger.print_formatted_info("Shuffle data")
-        num_un_pred = self.get_num_unpredicted_rows()
-        self.dataset['rnd'] = np.concatenate([np.random.rand(num_lines - num_un_pred), [num_lines]*num_un_pred])
-        self.dataset.sort_values(by = 'rnd', inplace = True )
-        self.dataset.drop(['rnd'], axis = 1, inplace = True )
-
-        # Use the unique id column from the data as the index column and take a copy, 
-        # since it will not be used in the classification but only to reconnect each 
-        # data row with classification results later on
-        try:
-            keys = self.dataset[self.handler.config.get_id_column_name()].copy(deep = True).apply(Helpers.get_rid_of_decimals)
-        except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
-            raise DatasetException(f"Could not convert integer: {e}")
-            
+        # Pick out the classification column. This is the "right hand side" of the problem.
+        self.Y = self.dataset[class_column]
         
-        try:
-            self.dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True, verify_integrity=False)
-        except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
-            raise DatasetException(f"Could not set index for dataset: {e}")
-        
-        self.dataset = self.dataset.drop([self.handler.config.get_id_column_name()], axis = 1)
-
-
-        self.keys = keys
-        self.queries["read_data"] = query
-        self.classes = unique_classes
-
         if self.handler.config.should_train():
             self.handler.logger.investigate_dataset(self.dataset) # Returns True if the investigation/printing was not suppressed
         
         return True
 
+    def validate_dataset(self, data: list, column_names: list, class_column: str) -> pandas.DataFrame:
+        dataset = pandas.DataFrame(data, columns = column_names)
+        
+        # Make sure the class column is a categorical variable by setting it as string
+        try:
+            dataset.astype({class_column: 'str'}, copy=False)
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
+            
+        # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
+        # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
+        # or similar from a certain starting point, if any are left after the conversion above.
+        #self.handler.logger.print_formatted_info(message="Consistency check")
+        percent_checked = 0
+        index_length = float(len(dataset.index))
+        try:
+            for index in dataset.index:
+                old_percent_checked = percent_checked
+                percent_checked = round(100.0*float(index)/index_length)
+                self.handler.logger.print_percentage_checked("Data checked of fetched", old_percent_checked, percent_checked)
+                
+                for key in dataset.columns:
+                    item = dataset.at[index,key]
+                    #print(f"{index=}, {key=}, {item=}")
+                    column_is_text = self.handler.config.column_is_text(key)
+                    column_is_numeric = self.handler.config.column_is_numeric(key)
+                    
+                    if column_is_text or column_is_numeric:
+                        checked_item = self.sanitize_value(item, column_is_text)
+                    
+                        # Save new value
+                        if checked_item != item:
+                            dataset.at[index,key] = checked_item
+        except Exception as e:
+            print(e)
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DatasetException(f"Something went wrong in inconsistency check at {key}: {item} ({e})")
+
+        return dataset
+
+    def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
+        """ Impossible to test, due to random being random """
+        # Shuffle the upper part of the data, such that all already classified material are
+        # put in random order keeping the unclassified material in the bottom
+        # Notice: perhaps this operation is now obsolete, since we now use a NEWID() in the 
+        # data query above
+        # Addendum: När man får in data så vill man att de olika klasserna i träningsdata 
+        # ska vara jämt utspridda över hela träningsdata, inte först 50 iris-setosa och sen 
+        # 50 iris-virginica, etc. Utan man vill ha lite slumpmässig utspridning. 
+        # Kommentera bort rnd-mojen och kolla med att köra dataset.head(20) eller något sånt, 
+        # om du tycker att class-variablen är hyfsat jämt utspridd för iris före och efter bortkommenteringen, ta bort rnd
+        self.handler.logger.print_formatted_info("Shuffle data")
+        num_un_pred = self.get_num_unpredicted_rows(dataset) 
+        num_lines = len(dataset.index)
+        dataset['rnd'] = np.concatenate([np.random.rand(num_lines - num_un_pred), [num_lines]*num_un_pred])
+        dataset.sort_values(by = 'rnd', inplace = True )
+        dataset.drop(['rnd'], axis = 1, inplace = True )
+
+        return dataset
+    
+    def split_keys_from_dataset(self, dataset: pandas.DataFrame, id_column: str) -> tuple[pandas.DataFrame, pandas.Series]:
+        # Use the unique id column from the data as the index column and take a copy, 
+        # since it will not be used in the classification but only to reconnect each 
+        # data row with classification results later on
+        try:
+            keys = dataset[id_column].copy(deep = True).apply(Helpers.get_rid_of_decimals)
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DatasetException(f"Could not convert to integer: {e}")
+            
+        
+        try:
+            dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True, verify_integrity=False)
+        except Exception as e:
+            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            raise DatasetException(f"Could not set index for dataset: {e}")
+        
+        dataset = dataset.drop([id_column], axis = 1)
+        
+        return dataset, keys
+
+    def sanitize_value(self, value, column_is_text: bool) -> Union[str, int, float]:
+        """ Massages a value into a proper value """
+        #print(f"{type(item)=}, {item=}")
+        
+        # Set NoneType objects as zero or empty strings
+        if value is None:
+            return "" if column_is_text else 0
+
+        if column_is_text:
+            # TODO: I'm unsure on how this should be done. What values breaks this so badly?
+            # Helpers.is_str() should maybe check the type of the value?
+            # Set text values that cannot be casted as strings to empty strings
+            if type(value) != str and not Helpers.is_str(value):
+                #print(f"{item=} casted to empty string")
+                return ""
+
+            # Remove line breaks and superfluous blank spaces from text strings
+            return " ".join(value.split())
+
+        # Only numerical values left now
+        # Convert datetime values to ordinals
+        if datetime_value := Helpers.get_datetime(value):
+            return datetime.toordinal(datetime_value)
+        
+
+        # Set remaining numerical values that cannot be casted as integer or floating point numbers to zero, i.e., do not
+        # take them into account
+        if not (Helpers.is_int(value) or Helpers.is_float(value)):
+            return 0
+
+
+        return float(value)
+
     # Collapse all data text columns into a new column, which is necessary
     # for word-in-a-bag-technique
-    def convert_textdata_to_numbers(self, model: Model): #, label_binarizers:dict = {}, count_vectorizer: CountVectorizer = None, tfid_transformer: TfidfTransformer = None ) -> tuple:
-
-        # Pick out the classification column. This is the 
-        # "right hand side" of the problem.
-        self.Y = self.dataset[self.handler.config.get_class_column_name()]
-
+    def convert_textdata_to_numbers(self, model: Model):
+        """ This divides the columns, recreating them as self.X (dataframe) in the end """
         # Continue with "left hand side":
-        # Prepare two empty DataFrames
+        # Prepare empty DataFrames
         text_dataset = pandas.DataFrame()
         num_dataset = pandas.DataFrame()
         categorical_dataset = pandas.DataFrame()
         binarized_dataset = pandas.DataFrame()
+
+        text_data = self.handler.config.is_text_data()
+        numerical_data = self.handler.config.is_numerical_data()
+        train_and_categorize = self.handler.config.should_train() and self.handler.config.use_categorization()
+        
 
         # While we could use model.* directly, I prefer using local variable and then return to be updated
         label_binarizers = model.label_binarizers
         count_vectorizer = model.count_vectorizer
         tfid_transformer = model.tfid_transformer
 
-        # First, separate all the text data from the numerical data, and
-        # make sure to find the categorical data automatically
-        if self.handler.config.is_text_data():
-            text_columns = self.handler.config.get_text_column_names()
-            for column in text_columns:
-                if (self.handler.config.should_train() and self.handler.config.use_categorization() and  \
-                    self.is_categorical_data(self.dataset[column])) or column in label_binarizers.keys():
+        # Create the numerical dataset
+        for column in self.handler.config.get_numerical_column_names():
+            num_dataset = pandas.concat([num_dataset, self.dataset[column]], axis = 1)
+
+        if text_data:
+            # Make sure to find the categorical data automatically
+            for column in self.handler.config.get_text_column_names():
+                # TODO: Simplify this if. Possibly move all to is_categorical_data?
+                if (train_and_categorize and self.is_categorical_data(self.dataset[column])) or column in label_binarizers.keys():
                     categorical_dataset = pandas.concat([categorical_dataset, self.dataset[column]], axis = 1)
-                    self.handler.logger.print_info("Text data picked for categorization: ", column)
+                    picked = "picked"
                 else:
                     text_dataset = pandas.concat([text_dataset, self.dataset[column]], axis = 1)
-                    self.handler.logger.print_info("Text data NOT picked for categorization: ", column)
-                 
-        if self.handler.config.is_numerical_data():
-            num_columns = self.handler.config.get_numerical_column_names()
-            for column in num_columns:
-                num_dataset = pandas.concat([num_dataset, self.dataset[column]], axis = 1)
+                    picked = "not picked"
+                
+                self.handler.logger.print_info(f"Text data {picked} for categorization: ", column)
 
-        # For concatenation, we need to make sure all text data are 
-        # really treated as text, and categorical data as categories
-        if self.handler.config.is_text_data():
+             # For concatenation, we need to make sure all text data are 
+            # really treated as text, and categorical data as categories
             self.handler.logger.print_info("Text Columns:", str(text_dataset.columns))
             if len(text_dataset.columns) > 0:
 
@@ -490,26 +528,35 @@ class DatasetHandler:
                         self.handler.logger.print_warning(f"Column {column} could not be binarized: {e}")
                     binarized_dataset = pandas.concat([binarized_dataset, lb_results_df], axis = 1 )
 
-        self.X = pandas.DataFrame()
-        if self.handler.config.is_text_data() and text_dataset.shape[1] > 0:
-            text_dataset.set_index(self.dataset.index, drop=False, append=False, inplace=True, \
-                                   verify_integrity=False)
-            self.X = pandas.concat([text_dataset, self.X], axis = 1)
-        if self.handler.config.is_numerical_data() and num_dataset.shape[1] > 0:
-            num_dataset.set_index(self.dataset.index, drop=False, append=False, inplace=True, \
-                                  verify_integrity=False)
-            self.X = pandas.concat([num_dataset, self.X], axis = 1)
-        if self.handler.config.is_text_data() and binarized_dataset.shape[1] > 0:
-            binarized_dataset.set_index(self.dataset.index, drop=False, append=False, inplace=True, \
-                                        verify_integrity=False)
-            self.X = pandas.concat([binarized_dataset, self.X], axis = 1)
+        self.X = self.create_X(text_dataset, num_dataset, binarized_dataset)
 
-        if self.handler.config.is_text_data():
+        if text_data:
             self.handler.logger.print_formatted_info("After conversion of text data to numerical data")
             self.handler.logger.investigate_dataset( self.X, False, False )
 
         return label_binarizers, count_vectorizer, tfid_transformer
     
+    def create_X(self, text: pandas.DataFrame, numerical: pandas.DataFrame, binary: pandas.DataFrame, index: pandas.Int64Index = None) -> pandas.DataFrame:
+        """ Creates a dataframe from text and numerical data """
+        if index is None:
+            index = self.dataset.index
+        
+        X = pandas.DataFrame()
+        
+        X = self.concat_with_index(X, text, index)
+        X = self.concat_with_index(X, binary, index)
+        X = self.concat_with_index(X, numerical, index)
+        
+        return X
+
+    def concat_with_index(self, X: pandas.DataFrame, concat: pandas.DataFrame, index: pandas.Int64Index) -> pandas.DataFrame:
+        if concat.shape[1] <= 0:
+            return X
+        
+        concat.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        
+        return pandas.concat([concat, X], axis = 1)
+
     def set_training_data(self) -> None:
         # We need to know the number of data rows that are currently not
         # classified (assuming that they are last in the dataset because they
@@ -525,84 +572,104 @@ class DatasetHandler:
             self.X_original = self.dataset.copy(deep=True)
 
     # Use the bag of words technique to convert text corpus into numbers
-    def word_in_a_bag_conversion(self, dataset: pandas.DataFrame, model: Model = None ) -> tuple:
+    def word_in_a_bag_conversion(self, dataset: pandas.DataFrame, model: Model ) -> tuple:
 
         # Start working with datavalues in array
         X = dataset.values
-
-        # Find actual languange if stop words are used
-        if model.count_vectorizer == None:
-            my_language = None
-            if self.handler.config.use_stop_words():
-                try:
-                    my_language = langdetect.detect(' '.join(X))
-                except Exception as e:
-                    my_language = self.STANDARD_LANG
-                    self.handler.logger.print_warning(f"Language could not be detected automatically: {e}. Fallback option, use: {my_language}.")
-                else:
-                    self.handler.logger.print_info(f"Detected language is: {my_language}")
-
-            
-            # Calculate the lexical richness
-            try:
-                lex = LexicalRichness(' '.join(X)) 
-                self.handler.logger.print_info("#Words, #Terms and TTR for original text is {0}, {1}, {2:5.2f} %".format(lex.words,lex.terms,100*float(lex.ttr)))
-            except Exception as e:
-                self.handler.logger.print_warning(f"Could not calculate lexical richness: {e}")
-
+        
+        count_vectorizer = self.get_count_vectorizer_from_dataset(model.count_vectorizer, X)
+        
         # Mask all material by encryption (optional)
         if (self.handler.config.should_hex_encode()):
             X = Helpers.do_hex_base64_encode_on_data(X)
 
-        # Text must be turned into numerical feature vectors ("bag-of-words"-technique).
-        # If selected, remove stop words
-        if model.count_vectorizer == None:
-            my_stop_words = None
-            if self.handler.config.use_stop_words():
-
-                # Get the languange specific stop words and encrypt them if necessary
-                my_stop_words = get_stop_words(my_language)
-                self.handler.logger.print_info("Using standard stop words: ", str(my_stop_words))
-                if (self.handler.config.should_hex_encode()):
-                    for word in my_stop_words:
-                        word = Helpers.cipher_encode_string(str(word))
-
-                # Collect text specific stop words (already encrypted if encryption is on)
-                text_specific_stop_words = []
-                threshold = self.handler.config.get_stop_words_threshold()
-                if threshold < 1.0:
-                    try:
-                        stop_vectorizer = CountVectorizer(min_df = threshold)
-                        stop_vectorizer.fit_transform(X)
-                        text_specific_stop_words = stop_vectorizer.get_feature_names()
-                        self.handler.logger.print_info("Using specific stop words: ", text_specific_stop_words)
-                    except ValueError as e:
-                        self.handler.logger.print_warning(f"Specified stop words threshold at {threshold} generated no stop words.")
-                    
-                    my_stop_words = sorted(set(my_stop_words + text_specific_stop_words))
-                    self.handler.logger.print_info("Total list of stop words:", my_stop_words)
-
-            # Use the stop words and count the words in the matrix        
-            count_vectorizer = CountVectorizer(stop_words = my_stop_words)
-            count_vectorizer.fit(X)
-
         # Do the word in a bag now
         X = count_vectorizer.transform(X)
 
-        # Also generate frequencies instead of occurences to normalize the information.
-        if model.tfid_transformer == None:
-            tfid_transformer = TfidfTransformer(use_idf = False)
-            tfid_transformer.fit(X) 
-
+        tfid_transformer = self.get_tfid_transformer_from_dataset(model.tfid_transformer, X)
+        
         # Generate the sequences
         X = (tfid_transformer.transform(X)).toarray()
 
         return pandas.DataFrame(X), count_vectorizer, tfid_transformer
 
+    def get_tfid_transformer_from_dataset(self, tfid_transformer: TfidfTransformer, dataset: np.ndarray) -> TfidfTransformer:
+        """ Generate frequencies, assuming tfid_transformer is not yet set """
+        if tfid_transformer is not None:
+            return tfid_transformer
+
+        # Also generate frequencies instead of occurences to normalize the information.
+        tfid_transformer = TfidfTransformer(use_idf = False)
+        tfid_transformer.fit(dataset)
+
+        return tfid_transformer
+
+    def get_count_vectorizer_from_dataset(self, count_vectorizer: CountVectorizer, dataset: np.ndarray) -> CountVectorizer:
+        """ Transform things, if there is no count_vectorizer """
+        if count_vectorizer is not None:
+            return count_vectorizer
+
+        # Find actual languange if stop words are used
+        my_language = None
+        if self.handler.config.use_stop_words():
+            try:
+                my_language = langdetect.detect(' '.join(dataset))
+            except Exception as e:
+                my_language = self.STANDARD_LANG
+                self.handler.logger.print_warning(f"Language could not be detected automatically: {e}. Fallback option, use: {my_language}.")
+            else:
+                self.handler.logger.print_info(f"Detected language is: {my_language}")
+
+        # Calculate the lexical richness
+        try:
+            lex = LexicalRichness(' '.join(dataset)) 
+            self.handler.logger.print_info("#Words, #Terms and TTR for original text is {0}, {1}, {2:5.2f} %".format(lex.words,lex.terms,100*float(lex.ttr)))
+        except Exception as e:
+            self.handler.logger.print_warning(f"Could not calculate lexical richness: {e}")
+
+        # TODO: Does this have to be here, or could it be before or after the function?
+        # Mask all material by encryption (optional)
+        if (self.handler.config.should_hex_encode()):
+            dataset = Helpers.do_hex_base64_encode_on_data(dataset)
+
+        # Text must be turned into numerical feature vectors ("bag-of-words"-technique).
+        # If selected, remove stop words
+        my_stop_words = None
+        if self.handler.config.use_stop_words():
+
+            # Get the languange specific stop words and encrypt them if necessary
+            my_stop_words = get_stop_words(my_language)
+            self.handler.logger.print_info("Using standard stop words: ", str(my_stop_words))
+            if (self.handler.config.should_hex_encode()):
+                for word in my_stop_words:
+                    word = Helpers.cipher_encode_string(str(word))
+
+            # Collect text specific stop words (already encrypted if encryption is on)
+            text_specific_stop_words = []
+            threshold = self.handler.config.get_stop_words_threshold()
+            if threshold < 1.0:
+                try:
+                    stop_vectorizer = CountVectorizer(min_df = threshold)
+                    stop_vectorizer.fit_transform(dataset)
+                    text_specific_stop_words = stop_vectorizer.get_feature_names()
+                    self.handler.logger.print_info("Using specific stop words: ", text_specific_stop_words)
+                except ValueError as e:
+                    self.handler.logger.print_warning(f"Specified stop words threshold at {threshold} generated no stop words.")
+                
+                my_stop_words = sorted(set(my_stop_words + text_specific_stop_words))
+                self.handler.logger.print_info("Total list of stop words:", my_stop_words)
+
+        # Use the stop words and count the words in the matrix        
+        count_vectorizer = CountVectorizer(stop_words = my_stop_words)
+        count_vectorizer.fit(dataset)
+
+        return count_vectorizer
+
+        
     # Feature selection (reduction) function for PCA or Nystroem transformation of data.
     # (RFE feature selection is built into the model while training and does not need to be
     # considered here.)
-    # NB: This used to take number_of_compponents, from mode.num_selected_features
+    # NB: This used to take number_of_components, from mode.num_selected_features
     def perform_feature_selection(self, model: Model ):
         # Early return if we shouldn't use feature election, or the selection is RFE
         if self.handler.config.feature_selection_in([Reduction.NON, Reduction.RFE]):
@@ -662,14 +729,16 @@ class DatasetHandler:
         return True
         
     # Find out if a DataFrame column contains categorical data or not
-    def is_categorical_data(self, column):
+    def is_categorical_data(self, column: pandas.Series) -> bool:
         return column.value_counts().count() <= self.LIMIT_IS_CATEGORICAL or self.handler.config.is_categorical(column.name)
 
 
      # Calculate the number of unclassified rows in data matrix
-    def get_num_unpredicted_rows(self):
+    def get_num_unpredicted_rows(self, dataset: pandas.DataFrame = None) -> int:
+        if dataset is None:
+            dataset = self.dataset
         num = 0
-        for item in self.dataset[self.handler.config.get_class_column_name()]:
+        for item in dataset[self.handler.config.get_class_column_name()]:
             if item == None or not str(item).strip(): # Corresponds to empty string and SQL NULL
                 num += 1
         return num
@@ -684,7 +753,8 @@ class Model:
     model: Pipeline = field(default=None)
     transform: typing.Any = field(default=None)
 
-    def update_fields(self, fields: list[str], update_function: Callable = None) -> bool:
+    def update_fields(self, fields: list[str], update_function: Callable) -> bool:
+        """ Updates fields, getting the values from a Callable (ex dh.convert_textdata_to_numbers) """
         values = update_function(self)
 
         try:
@@ -714,15 +784,14 @@ class ModelHandler:
     text_data: bool = field(init=False)
     
     def __post_init__(self) -> None:
-        self.model = self.load_model()
-
-    # Loads model based on config
-    def load_model(self) -> Model:
-        if self.handler.config.should_train():
-            return self.load_empty_model()
-        
-        return self.load_model_from_file(self.handler.config.get_model_filename())
-            
+        """ Empty for now """
+    
+    def load_model(self, filename: str = None) -> None:
+        """ Called explicitly in run() """
+        if filename is None:
+            self.model = self.load_empty_model()
+        else:
+            self.model = self.load_model_from_file(filename)
 
     # Load ml model
     def load_model_from_file(self, filename: str) -> Model:
@@ -771,7 +840,7 @@ class ModelHandler:
         self.save_model_to_file(self.handler.config.get_model_filename())
 
     def get_model_from(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame) -> Model:
-        k = min(10, find_smallest_class_number(Y_train))
+        k = min(10, Helpers.find_smallest_class_number(Y_train))
         if k < 10:
             self.handler.logger.print_info(f"Using non-standard k-value for spotcheck of algorithms: {k}")
         
@@ -815,27 +884,6 @@ class ModelHandler:
 
         return False
 
-    def prepare_models_preprocessors(self, size) -> tuple[list, list]:
-        # Add all algorithms in a list
-        self.handler.logger.print_info("Spot check ml algorithms...")
-        models = []
-        for algo in Algorithm:
-            if algo.has_algorithm_function():
-                models.append((algo, algo.call_algorithm(max_iterations=self.handler.config.mode.max_iterations, size=size)))
-        
-
-        # Add different preprocessing methods in another list
-        preprocessors = []
-        for preprocessor in Preprocess:
-            # This checks that the preprocessor has the function, and also that BIN is only added if there is text_data
-            if preprocessor.has_preprocess_function() and (preprocessor.name != "BIN" or self.handler.config.is_text_data()):
-                preprocessors.append((preprocessor, preprocessor.call_preprocess()))
-                
-        
-        preprocessors.append((Preprocess.NON, None)) # In case they choose no preprocessor in config
-
-        return models, preprocessors
-
     def get_feature_selection(self, max_features_selection: int) -> tuple(int, int):
         max_features_selection = max_features_selection
         
@@ -858,8 +906,14 @@ class ModelHandler:
 
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
-        models, preprocessors = self.prepare_models_preprocessors(size=X_train.shape[0])
+        self.handler.logger.print_info("Spot check ml algorithms...")
+        
+        models = Algorithm.list_callable_algorithms(
+            size=X_train.shape[0], 
+            max_iterations=self.handler.config.get_max_iterations()
+        )
 
+        preprocessors = Preprocess.list_callable_preprocessors(is_text_data=self.handler.config.is_text_data())
         # Evaluate each model in turn in combination with all preprocessing methods
         names = []
         best_mean = 0.0
@@ -1025,14 +1079,7 @@ class ModelHandler:
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on saving model to file: {e}")
 
-def find_smallest_class_number(Y):
-    class_count = {}
-    for elem in Y:
-        if elem not in class_count:
-            class_count[elem] = 1
-        else:
-            class_count[elem] += 1
-    return max(1, min(class_count.values()))
+
 
 @dataclass
 class PredictionsHandler:
@@ -1049,7 +1096,10 @@ class PredictionsHandler:
     class_report: dict = field(init=False)
 
     def get_prediction_results(self, keys: pandas.Series) -> list:
-        
+        """ 
+            Creates a list combining the values from the set prediction,
+            using a given key. It is used to simplify saving the data
+        """
         return_list = []
         try:
             for k,y,r,p in zip(keys.values, self.predictions, self.rates, self.probabilites):
@@ -1124,19 +1174,14 @@ class PredictionsHandler:
         return could_predict_proba
 
     # Gets the rate type
-    # TODO: Maybe enum?
-    # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
-    # A = Allmän bedömning. Modellen kan endast ge gemensam genomsnittlig sannolikhet för alla dataelementen tillsammans.
-    # U = Okänd. Lade jag till som en framtida utväg ifall ingen av de ovanstående fanns tillgängliga.
-
-    def get_rate_type(self) -> str:
+    def get_rate_type(self) -> RateType:
         if self.could_predict_proba:
-            return "I"
+            return RateType.I
 
         if not self.handler.config.should_train():
-            return "U"
+            return RateType.U
         
-        return "A"
+        return RateType.A
 
     # Calculate the probability if the machine could not
     def calculate_probability(self) -> None:
