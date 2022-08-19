@@ -526,10 +526,10 @@ class TestAlgorithm:
         # The second element in each tuple must have the "fit" function
         assert all(hasattr(x[1], "fit") and callable(getattr(x[1], "fit")) for x in models)
 
-    def test_get_sorted(self):
+    def test_get_sorted_list(self):
         """ This function gives a list of tuples: (value, name) """
-        sorted_list_default = Algorithm.get_sorted(none_all_first=False)
-        sorted_list_all_first = Algorithm.get_sorted()
+        sorted_list_default = Algorithm.get_sorted_list(none_all_first=False)
+        sorted_list_all_first = Algorithm.get_sorted_list()
 
         assert len(sorted_list_default) == 30
         assert len(sorted_list_all_first) == 30
@@ -601,10 +601,10 @@ class TestPreprocess:
         assert all(hasattr(x, "fit") and callable(getattr(x, "fit")) for x in callables)
         assert len(callables) == 5
 
-    def test_get_sorted(self):
+    def test_get_sorted_list(self):
         """ This function gives a list of tuples: (value, name) """
-        sorted_list_default = Preprocess.get_sorted(none_all_first=False)
-        sorted_list_all_first = Preprocess.get_sorted()
+        sorted_list_default = Preprocess.get_sorted_list(none_all_first=False)
+        sorted_list_all_first = Preprocess.get_sorted_list()
 
         assert len(sorted_list_default) == 7
         assert len(sorted_list_all_first) == 7
@@ -634,11 +634,10 @@ class TestPreprocess:
 
 class TestReduction:
     """ Tests the Enum Reduction functions """
-
-    def test_get_sorted(self):
+    def test_get_sorted_list(self):
         """ This function gives a list of tuples: (value, name) """
-        sorted_list_default = Reduction.get_sorted(none_all_first=False)
-        sorted_list_all_first = Reduction.get_sorted()
+        sorted_list_default = Reduction.get_sorted_list(none_all_first=False)
+        sorted_list_all_first = Reduction.get_sorted_list()
 
         assert len(sorted_list_default) == 9
         assert len(sorted_list_all_first) == 9
@@ -666,12 +665,11 @@ class TestReduction:
 
 class TestScoretype:
     """ Tests the Enum Scoretype functions """
-
-    def test_get_sorted(self):
+    def test_get_sorted_list(self):
         """ This function gives a list of tuples: (value, name) """
         # For Scoretype there is no difference between these two, as there is no NON or ALL
-        sorted_list_default = Scoretype.get_sorted(none_all_first=False)
-        sorted_list_all_first = Scoretype.get_sorted()
+        sorted_list_default = Scoretype.get_sorted_list(none_all_first=False)
+        sorted_list_all_first = Scoretype.get_sorted_list()
 
         assert sorted_list_default == sorted_list_all_first
         assert len(sorted_list_default) == 11

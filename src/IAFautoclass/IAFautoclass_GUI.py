@@ -674,14 +674,10 @@ class IAFautoclass_GUI:
         self.start_button.on_click(callback = self.start_button_was_clicked)
         
     def update_algorithm_form(self):
-        #self.reduction_dropdown.options = sorted([(reduction.value, reduction.name) for reduction in Reduction])
-        self.reduction_dropdown.options = Reduction.get_sorted()
-        #self.algorithm_dropdown.options = sorted([(algo.value, algo.name) for algo in Algorithm])
-        self.algorithm_dropdown.options = Algorithm.get_sorted()
-        #self.preprocessor_dropdown.options = sorted([(preprocess.value, preprocess.name) for preprocess in Preprocess])
-        self.preprocessor_dropdown.options = Preprocess.get_sorted()
-        #self.metric_dropdown.options = sorted([(st.value, st.name) for st in Scoretype])
-        self.metric_dropdown.options = Scoretype.get_sorted()
+        self.reduction_dropdown.options = Reduction.get_sorted_list()
+        self.algorithm_dropdown.options = Algorithm.get_sorted_list()
+        self.preprocessor_dropdown.options = Preprocess.get_sorted_list()
+        self.metric_dropdown.options = Scoretype.get_sorted_list()
         
         
     def update_num_rows(self):
