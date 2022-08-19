@@ -14,6 +14,7 @@
 #
 # Standard imports
 import os
+from pathlib import Path
 import sys
 
 from IAFExceptions import HandlerException
@@ -311,7 +312,14 @@ def main(argv):
     if len(argv) > 1:
         config = Config.Config.load_config_from_module(argv)
     else:
-       config = Config.Config()
+        config = Config.Config()
+        #pwd = os.path.dirname(os.path.realpath(__file__))
+        #
+        #model_path = Path(pwd) / "./model/"
+        #
+        #filename =  model_path / "hpl_förutsättningar_2020.sav"
+        #config = Config.Config.load_config_from_model_file(filename)
+        #config.io.model_name = "hpl_förutsättningar_2020"
 
     logger = IAFLogger.IAFLogger(not config.io.verbose)
     

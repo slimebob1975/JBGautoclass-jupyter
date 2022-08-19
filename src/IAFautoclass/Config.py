@@ -98,6 +98,17 @@ class Algorithm(enum.Enum):
         """
         return [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_algorithm_function()]
 
+    @classmethod
+    def get_sorted(cls, none_all_first: bool = True) -> list[tuple[str, str]]:
+        if not none_all_first:
+            return sorted([(algo.value, algo.name) for algo in cls])
+
+        listed_algorithms = sorted([(algo.value, algo.name) for algo in cls if algo is not cls.ALL])
+        listed_algorithms.insert(0, (cls.ALL.value, cls.ALL.name))
+        
+        return listed_algorithms
+    
+    
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
         return LogisticRegression(solver='liblinear', multi_class='ovr')
 
@@ -250,6 +261,7 @@ class Algorithm(enum.Enum):
     def has_algorithm_function(self) -> bool:
         do = self.get_function_name()
         return hasattr(self, do) and callable(getattr(self, do))
+
     
 
 class Preprocess(enum.Enum):
@@ -267,6 +279,15 @@ class Preprocess(enum.Enum):
             in the form (preprocessor, called function)
         """
         return [(pp, pp.call_preprocess()) for pp in cls if pp.has_preprocess_function() and (pp.name != "BIN" or is_text_data)]
+
+    @classmethod
+    def get_sorted(cls, none_all_first: bool = True) -> list[tuple[str, str]]:
+        if not none_all_first:
+            return sorted([(pp.value, pp.name) for pp in cls])
+
+        listed_preprocessors = sorted([(pp.value, pp.name) for pp in cls if pp not in [cls.ALL, cls.NON]])
+        
+        return [(cls.ALL.value, cls.ALL.name),(cls.NON.value, cls.NON.name) ] + listed_preprocessors
 
     def do_NON(self) -> None:
         """ While this return is superfluos, it helps with the listings of preprocessors """
@@ -313,6 +334,15 @@ class Reduction(enum.Enum):
     GRP = "Gaussion Random Projection"
     ISO = "Isometric Mapping"
     LLE = "Locally Linearized Embedding"
+
+    @classmethod
+    def get_sorted(cls, none_all_first: bool = True) -> list[tuple[str, str]]:
+        if not none_all_first:
+            return sorted([(r.value, r.name) for r in cls])
+
+        listed_reductions = sorted([(r.value, r.name) for r in cls if r is not cls.NON])
+        
+        return [(cls.NON.value, cls.NON.name) ] + listed_reductions
 
     def call_transformation(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
         do = self.get_function_name()
@@ -446,6 +476,12 @@ class Scoretype(enum.Enum):
     precision_macro = "Precision Macro"
     precision_weighted = "Precision Weighted"
     mcc = "Matthews Corr. Coefficient"
+
+    @classmethod
+    def get_sorted(cls, none_all_first: bool = True) -> list[tuple[str, str]]:
+        return sorted([(st.value, st.name) for st in cls])
+
+        
 
     def get_mechanism(self) -> Union[str, Callable]:
         """ Returns the scoring mechanism based on the Scoretype"""

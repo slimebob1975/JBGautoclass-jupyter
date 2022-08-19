@@ -147,6 +147,7 @@ def check_input_arguments(argv: list):
             try:
                 # This expects ex "config.filename"
                 module = importlib.import_module(pack+"."+filename)
+                
                 return module
             except Exception as e:
                 print("Filename {0} and pack {1} could not be imported dynamically".format(

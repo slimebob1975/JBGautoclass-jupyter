@@ -508,7 +508,7 @@ class TestConfig:
 class TestAlgorithm:
     """ Tests the Enum Algorithm functions """
 
-    def test_list_algorithms(self):
+    def test_list_callable_algorithms(self):
         """ Class Method that gets all callable algorithms and their function """
         models = Algorithm.list_callable_algorithms(size=5, max_iterations=10)
         # 29 callable algorithms
@@ -526,8 +526,37 @@ class TestAlgorithm:
         # The second element in each tuple must have the "fit" function
         assert all(hasattr(x[1], "fit") and callable(getattr(x[1], "fit")) for x in models)
 
+    def test_get_sorted(self):
+        """ This function gives a list of tuples: (value, name) """
+        sorted_list_default = Algorithm.get_sorted(none_all_first=False)
+        sorted_list_all_first = Algorithm.get_sorted()
+
+        assert len(sorted_list_default) == 30
+        assert len(sorted_list_all_first) == 30
+
+        # They are a list of tuples
+        assert all(isinstance(x,tuple) for x in sorted_list_default)
+        assert all(isinstance(x,tuple) for x in sorted_list_all_first)
+
+        # Each tuple have two elements
+        assert all(len(x) == 2 for x in sorted_list_default)
+        assert all(len(x) == 2 for x in sorted_list_all_first)
+
+        # Each tuple have two strings as elements
+        assert all(isinstance(x[0], str) for x in sorted_list_default)
+        assert all(isinstance(x[1], str) for x in sorted_list_default)
+
+        assert all(isinstance(x[0], str) for x in sorted_list_all_first)
+        assert all(isinstance(x[1], str) for x in sorted_list_all_first)
+
+        # When sorted, ADC is first
+        assert sorted_list_default[0] == ("Ada Boost Classifier", "ABC")
+        
+        # When sorted, ALL is first
+        assert sorted_list_all_first[0] == ("All", "ALL")
+
 class TestPreprocess:
-    """ Tests the Enum Preprocess functions """,
+    """ Tests the Enum Preprocess functions """
 
     def test_list_callable_preprocessors(self):
         """ There's two cases here, whether it's text_data or not """
@@ -571,3 +600,91 @@ class TestPreprocess:
         callables = [x[1] for x in preprocessors if x[1] is not None]
         assert all(hasattr(x, "fit") and callable(getattr(x, "fit")) for x in callables)
         assert len(callables) == 5
+
+    def test_get_sorted(self):
+        """ This function gives a list of tuples: (value, name) """
+        sorted_list_default = Preprocess.get_sorted(none_all_first=False)
+        sorted_list_all_first = Preprocess.get_sorted()
+
+        assert len(sorted_list_default) == 7
+        assert len(sorted_list_all_first) == 7
+
+        # They are a list of tuples
+        assert all(isinstance(x,tuple) for x in sorted_list_default)
+        assert all(isinstance(x,tuple) for x in sorted_list_all_first)
+
+        # Each tuple have two elements
+        assert all(len(x) == 2 for x in sorted_list_default)
+        assert all(len(x) == 2 for x in sorted_list_all_first)
+
+        # Each tuple have two strings as elements
+        assert all(isinstance(x[0], str) for x in sorted_list_default)
+        assert all(isinstance(x[1], str) for x in sorted_list_default)
+
+        assert all(isinstance(x[0], str) for x in sorted_list_all_first)
+        assert all(isinstance(x[1], str) for x in sorted_list_all_first)
+
+        # When sorted, ALL is first, BIN
+        assert sorted_list_default[0] == ("All", "ALL")
+        assert sorted_list_default[1] == ("Binarizer", "BIN")
+        
+        # When sorted, ALL is first, NONE is second
+        assert sorted_list_all_first[0] == ("All", "ALL")
+        assert sorted_list_all_first[1] == ("None", "NON")
+
+class TestReduction:
+    """ Tests the Enum Reduction functions """
+
+    def test_get_sorted(self):
+        """ This function gives a list of tuples: (value, name) """
+        sorted_list_default = Reduction.get_sorted(none_all_first=False)
+        sorted_list_all_first = Reduction.get_sorted()
+
+        assert len(sorted_list_default) == 9
+        assert len(sorted_list_all_first) == 9
+
+        # They are a list of tuples
+        assert all(isinstance(x,tuple) for x in sorted_list_default)
+        assert all(isinstance(x,tuple) for x in sorted_list_all_first)
+
+        # Each tuple have two elements
+        assert all(len(x) == 2 for x in sorted_list_default)
+        assert all(len(x) == 2 for x in sorted_list_all_first)
+
+        # Each tuple have two strings as elements
+        assert all(isinstance(x[0], str) for x in sorted_list_default)
+        assert all(isinstance(x[1], str) for x in sorted_list_default)
+
+        assert all(isinstance(x[0], str) for x in sorted_list_all_first)
+        assert all(isinstance(x[1], str) for x in sorted_list_all_first)
+
+        # When sorted, FICA is first
+        assert sorted_list_default[0] == ("Fast Indep. Component Analysis", "FICA")
+        
+        # When sorted, NONE is first
+        assert sorted_list_all_first[0] == ("None", "NON")
+
+class TestScoretype:
+    """ Tests the Enum Scoretype functions """
+
+    def test_get_sorted(self):
+        """ This function gives a list of tuples: (value, name) """
+        # For Scoretype there is no difference between these two, as there is no NON or ALL
+        sorted_list_default = Scoretype.get_sorted(none_all_first=False)
+        sorted_list_all_first = Scoretype.get_sorted()
+
+        assert sorted_list_default == sorted_list_all_first
+        assert len(sorted_list_default) == 11
+        
+        # They are a list of tuples
+        assert all(isinstance(x,tuple) for x in sorted_list_default)
+        
+        # Each tuple have two elements
+        assert all(len(x) == 2 for x in sorted_list_default)
+        
+        # Each tuple have two strings as elements
+        assert all(isinstance(x[0], str) for x in sorted_list_default)
+        assert all(isinstance(x[1], str) for x in sorted_list_default)
+
+        # When sorted, accuracy is first
+        assert sorted_list_default[0] == ("Accuracy", "accuracy")

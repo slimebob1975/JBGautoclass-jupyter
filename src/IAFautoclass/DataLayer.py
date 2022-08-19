@@ -354,8 +354,7 @@ class DataLayer:
     def get_data_query(self, num_rows, train, predict) -> str:
         query = "SELECT "
         query += "TOP(" + str(num_rows) + ") "
-        column_groups = (self.connection.id_column, self.connection.class_column,
-                            self.connection.data_text_columns, self.connection.data_numerical_columns)
+        column_groups = (self.connection.data_text_columns, self.connection.data_numerical_columns, self.connection.id_column, self.connection.class_column)
         for column_group in column_groups:
                 columns = column_group.split(',')
                 for column in columns:

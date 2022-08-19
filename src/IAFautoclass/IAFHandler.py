@@ -316,10 +316,10 @@ class DatasetHandler:
         column_names = self.handler.config.get_column_names()
         class_column = self.handler.config.get_class_column_name()
         id_column = self.handler.config.get_id_column_name()
-
+        
         # TODO: validate_dataset should probably do a report of potentional issues, or lead into the function that does
         dataset = self.validate_dataset(data, column_names, class_column)
-
+        
         # TODO: Drop if we've confirmed it's not needed
         dataset = self.shuffle_dataset(dataset)
         
@@ -930,6 +930,7 @@ class ModelHandler:
 
         # Make evaluation of model
         try:
+            #if k < 2: # What to do?
             kfold = StratifiedKFold(n_splits=k, random_state=1, shuffle=True)
         except Exception as e:
             print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down

@@ -586,7 +586,7 @@ class IAFautoclass_GUI:
                 format(self.class_column.value, str(ex)))
         self.id_column.options = \
             [option for option in self.class_column.options if option != self.class_column.value]
-        self.update_data_columns()
+        self.update_data_columns(event)
 
     def update_data_columns(self, event:Bunch) -> None:
         """ Handler: Updates the data column option when id is changed. """
@@ -674,10 +674,14 @@ class IAFautoclass_GUI:
         self.start_button.on_click(callback = self.start_button_was_clicked)
         
     def update_algorithm_form(self):
-        self.reduction_dropdown.options = sorted([(reduction.value, reduction.name) for reduction in Reduction])
-        self.algorithm_dropdown.options = sorted([(algo.value, algo.name) for algo in Algorithm])
-        self.preprocessor_dropdown.options = sorted([(preprocess.value, preprocess.name) for preprocess in Preprocess])
-        self.metric_dropdown.options = sorted([(st.value, st.name) for st in Scoretype])
+        #self.reduction_dropdown.options = sorted([(reduction.value, reduction.name) for reduction in Reduction])
+        self.reduction_dropdown.options = Reduction.get_sorted()
+        #self.algorithm_dropdown.options = sorted([(algo.value, algo.name) for algo in Algorithm])
+        self.algorithm_dropdown.options = Algorithm.get_sorted()
+        #self.preprocessor_dropdown.options = sorted([(preprocess.value, preprocess.name) for preprocess in Preprocess])
+        self.preprocessor_dropdown.options = Preprocess.get_sorted()
+        #self.metric_dropdown.options = sorted([(st.value, st.name) for st in Scoretype])
+        self.metric_dropdown.options = Scoretype.get_sorted()
         
         
     def update_num_rows(self):
@@ -718,6 +722,15 @@ class IAFautoclass_GUI:
         self.start_classifier()
     
     def start_classifier(self):
+        
+        # This isn't pretty and probably needs to be tweaked, but it works for now
+        # Sometimes you want to load the config from a different place than the name of the project
+        if self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION:
+            model_name = self.project.value
+        else:
+            model_name = self.models_dropdown.value.replace(Config.DEFAULT_MODEL_EXTENSION, "")
+        
+        
         data_numerical_columns = \
                 [col for col in self.data_columns.value if not col in self.text_columns.value]
         connection = Config.Connection(
@@ -756,7 +769,7 @@ class IAFautoclass_GUI:
             ),
             Config.IO(
                 verbose=self.verbose_checkbox.value,
-                model_name=self.project.value
+                model_name=model_name
             ),
             Config.Debug(
                 on=True,
