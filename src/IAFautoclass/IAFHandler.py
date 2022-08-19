@@ -1028,7 +1028,7 @@ class ModelHandler:
                         # Print results to screen
                         if self.handler.config.is_verbose(): # TODO: print prettier
                             print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} s.".
-                                  format(name,preprocessor_name,num_features,temp_score,temp_stdev,t))
+                                  format(name.name,preprocessor_name.name,num_features,temp_score,temp_stdev,t))
 
                         # Evaluate if feature selection changed accuracy or not. 
                         # Notice: Better or same score with less variables are both seen as an improvement,
