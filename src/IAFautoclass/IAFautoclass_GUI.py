@@ -82,6 +82,7 @@ class IAFautoclass_GUI:
             data_table=os.environ.get("DEFAULT_DATA_TABLE")
             )
         self.data_layer = DataLayer(connection, self.logger)
+        
         try:
             self.data_layer.get_sql_connection() # This checks so that the SQL connection works
         except Exception as ex:

@@ -194,7 +194,7 @@ class IAFautomaticClassiphyer:
         # Split dataset for machine learning
         # TODO: Byt namn?
         dh.split_dataset()
-
+        
         self.update_progress(self.progression["percentPerMajorTask"])
 
          # This is where the Model starts

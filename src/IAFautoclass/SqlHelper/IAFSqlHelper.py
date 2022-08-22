@@ -74,7 +74,7 @@ class IAFSqlHelper():
     
     # Disconnect from SQL server and close cursor
     def disconnect(self, commit = False):
-        if commit:
+        if commit and self.Connection:
             self.Connection.commit()
         if self.Cursor:
             self.Cursor.close()

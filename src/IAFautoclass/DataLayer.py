@@ -48,7 +48,18 @@ class DataLayer:
         
         return sqlHelper
 
-    # Update the text_data if not set when the DataLayer is created
+    def can_connect(self, verbose: bool = False) -> bool:
+        try:
+            self.get_sql_connection() # This checks so that the SQL connection works
+        except Exception as e:
+            if verbose:
+                self.logger.print_warning(f"Exception when connectiong to SQL server: {e}")
+            
+            return False
+        
+        return True
+
+# Update the text_data if not set when the DataLayer is created
     def update_text_data(self, text_data:bool) -> None:
         self.text_data = text_data
 
@@ -338,10 +349,11 @@ class DataLayer:
                     if not self.logger.is_quiet(): print("Part of data saved: " + str(percent_fetched) + " %", end='\r')
 
             if not self.logger.is_quiet(): print("\n")
-                
-            # Disconnect from database and commit all inserts
-            sqlHelper.disconnect(commit=True) #TODO: Reactivate once debug done
-
+            
+            if num_lines > 0:
+                # Disconnect from database and commit all inserts
+                sqlHelper.disconnect(commit=True)
+            
             # Return the number of inserted rows
             return num_lines
         except KeyError as ke:

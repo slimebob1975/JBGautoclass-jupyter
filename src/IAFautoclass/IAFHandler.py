@@ -709,7 +709,6 @@ class DatasetHandler:
 
         # Split-out validation dataset from the upper part (do not use random order here)
         testsize = self.handler.config.get_test_size()
-        
         self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
             X_upper, Y_upper, test_size = testsize, shuffle = False, random_state = None, stratify = None
             )
@@ -717,7 +716,7 @@ class DatasetHandler:
         self.Y_unknown = Y_lower
         self.X_unknown = X_lower
         
-        
+        pandas.testing.assert_series_equal(Y_upper, pandas.concat([self.Y_train, self.Y_validation], axis = 0) )
         return True
         
     # Find out if a DataFrame column contains categorical data or not
@@ -1103,14 +1102,23 @@ class PredictionsHandler:
                     "key": k,
                     "prediction": y,
                     "rates": r,
-                    "probabilities": ",".join([str(elem) for elem in p.tolist()])
+                    #"probabilities": ",".join([str(elem) for elem in p])
+                    "probabilities": self.get_probablities_as_string(p)
                 }
 
                 return_list.append(item)
-        except AttributeError:
+        except AttributeError as ae:
             return []
-
+        
         return return_list
+
+    def get_probablities_as_string(self, item) -> str:
+        """ Gets a probabilities list as a comma-delimited string """
+        try:
+            iter(item)
+            return ",".join([str(elem) for elem in item])
+        except TypeError:
+            return item
 
     def get_mispredicted_dataframe(self) -> pandas.DataFrame:
         return self.X_most_mispredicted
