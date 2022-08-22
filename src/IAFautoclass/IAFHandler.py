@@ -247,7 +247,7 @@ class IAFHandler:
             results_saved = self.datalayer.save_data(
                 results,
                 class_rate_type=ph.get_rate_type(),
-                model= mh.model,
+                model=mh.model,
                 config=self.config
             )
             
@@ -320,7 +320,6 @@ class DatasetHandler:
         # TODO: validate_dataset should probably do a report of potentional issues, or lead into the function that does
         dataset = self.validate_dataset(data, column_names, class_column)
         
-        # TODO: Drop if we've confirmed it's not needed
         dataset = self.shuffle_dataset(dataset)
         
         self.dataset, self.keys = self.split_keys_from_dataset(dataset, id_column)
@@ -463,9 +462,6 @@ class DatasetHandler:
         binarized_dataset = pandas.DataFrame()
 
         text_data = self.handler.config.is_text_data()
-        numerical_data = self.handler.config.is_numerical_data()
-        train_and_categorize = self.handler.config.should_train() and self.handler.config.use_categorization()
-        
 
         # While we could use model.* directly, I prefer using local variable and then return to be updated
         label_binarizers = model.label_binarizers
@@ -479,8 +475,7 @@ class DatasetHandler:
         if text_data:
             # Make sure to find the categorical data automatically
             for column in self.handler.config.get_text_column_names():
-                # TODO: Simplify this if. Possibly move all to is_categorical_data?
-                if (train_and_categorize and self.is_categorical_data(self.dataset[column])) or column in label_binarizers.keys():
+                if self.is_categorical_data(self.dataset[column]) or column in label_binarizers.keys():
                     categorical_dataset = pandas.concat([categorical_dataset, self.dataset[column]], axis = 1)
                     picked = "picked"
                 else:
@@ -528,7 +523,7 @@ class DatasetHandler:
                         self.handler.logger.print_warning(f"Column {column} could not be binarized: {e}")
                     binarized_dataset = pandas.concat([binarized_dataset, lb_results_df], axis = 1 )
 
-        self.X = self.create_X(text_dataset, num_dataset, binarized_dataset)
+        self.X = self.create_X([text_dataset, num_dataset, binarized_dataset])
 
         if text_data:
             self.handler.logger.print_formatted_info("After conversion of text data to numerical data")
@@ -536,24 +531,23 @@ class DatasetHandler:
 
         return label_binarizers, count_vectorizer, tfid_transformer
     
-    def create_X(self, text: pandas.DataFrame, numerical: pandas.DataFrame, binary: pandas.DataFrame, index: pandas.Int64Index = None) -> pandas.DataFrame:
+    def create_X(self, frames: list[pandas.DataFrame], index: pandas.Int64Index = None) -> pandas.DataFrame:
         """ Creates a dataframe from text and numerical data """
         if index is None:
             index = self.dataset.index
         
         X = pandas.DataFrame()
-        
-        X = self.concat_with_index(X, text, index)
-        X = self.concat_with_index(X, binary, index)
-        X = self.concat_with_index(X, numerical, index)
+        for df in frames:
+            X = self.concat_with_index(X, df, index)
         
         return X
 
     def concat_with_index(self, X: pandas.DataFrame, concat: pandas.DataFrame, index: pandas.Int64Index) -> pandas.DataFrame:
-        if concat.shape[1] <= 0:
+        """ The try/except ensures that the dataframe added has the right number of rows """
+        try:
+            concat.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        except ValueError:
             return X
-        
-        concat.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
         
         return pandas.concat([concat, X], axis = 1)
 
@@ -715,25 +709,25 @@ class DatasetHandler:
 
         # Split-out validation dataset from the upper part (do not use random order here)
         testsize = self.handler.config.get_test_size()
-        X_train, X_validation, Y_train, Y_validation = train_test_split( 
+        
+        self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
             X_upper, Y_upper, test_size = testsize, shuffle = False, random_state = None, stratify = None
             )
 
-        self.X_train = X_train
-        self.X_validation = X_validation
-        self.Y_train = Y_train
-        self.Y_validation = Y_validation
         self.Y_unknown = Y_lower
         self.X_unknown = X_lower
+        
         
         return True
         
     # Find out if a DataFrame column contains categorical data or not
     def is_categorical_data(self, column: pandas.Series) -> bool:
+        if not (self.handler.config.should_train() and self.handler.config.use_categorization()):
+            return False
+        
         return column.value_counts().count() <= self.LIMIT_IS_CATEGORICAL or self.handler.config.is_categorical(column.name)
-
-
-     # Calculate the number of unclassified rows in data matrix
+        
+    # Calculate the number of unclassified rows in data matrix
     def get_num_unpredicted_rows(self, dataset: pandas.DataFrame = None) -> int:
         if dataset is None:
             dataset = self.dataset
@@ -1102,13 +1096,14 @@ class PredictionsHandler:
             using a given key. It is used to simplify saving the data
         """
         return_list = []
+        
         try:
             for k,y,r,p in zip(keys.values, self.predictions, self.rates, self.probabilites):
                 item = {
                     "key": k,
                     "prediction": y,
                     "rates": r,
-                    "probabilities": ",".join([str(elem) for elem in p])
+                    "probabilities": ",".join([str(elem) for elem in p.tolist()])
                 }
 
                 return_list.append(item)

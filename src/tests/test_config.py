@@ -255,19 +255,19 @@ class TestConfig:
 
         # Feature selection is Reduction.PCA, so let's test two cases for feature_selection_in
         # 1: True
-        assert valid_iris_config.feature_selection_in([Reduction.PCA]) is True
+        assert valid_iris_config.feature_selection_in([Reduction.PCA])
         # 2. False
-        assert valid_iris_config.feature_selection_in([Reduction.NON]) is False
+        assert not valid_iris_config.feature_selection_in([Reduction.NON])
 
         # Checks if the key exists in the specific set of columns
         # 1. Valid numerical
-        assert valid_iris_config.column_is_numeric("sepal-width") is True
+        assert valid_iris_config.column_is_numeric("sepal-width")
 
         # 2. Invalid numerical
-        assert valid_iris_config.column_is_numeric("none-such-exists") is False
+        assert not valid_iris_config.column_is_numeric("none-such-exists")
 
         # 3. There are no text columns
-        assert valid_iris_config.column_is_text("none-such-exists") is False 
+        assert not valid_iris_config.column_is_text("none-such-exists") 
         
 
     def test_smote_and_undersampler(self, valid_iris_config):
@@ -388,23 +388,23 @@ class TestConfig:
         
         assert valid_iris_config.get_test_size() == 0.2
 
-        assert valid_iris_config.is_verbose() is True
+        assert valid_iris_config.is_verbose()
 
         assert valid_iris_config.get_id_column_name() == "id"
 
-        assert valid_iris_config.should_train() is False
+        assert not valid_iris_config.should_train()
 
-        assert valid_iris_config.should_predict() is True
+        assert valid_iris_config.should_predict()
         
-        assert valid_iris_config.should_display_mispredicted() is False
+        assert not valid_iris_config.should_display_mispredicted()
         
-        assert valid_iris_config.use_stop_words() is False
+        assert not valid_iris_config.use_stop_words()
 
         assert valid_iris_config.get_stop_words_threshold() == 1.0
 
-        assert valid_iris_config.should_hex_encode() is True
+        assert valid_iris_config.should_hex_encode()
 
-        assert valid_iris_config.use_categorization() is True
+        assert valid_iris_config.use_categorization()
 
         assert valid_iris_config.get_algorithm() == Algorithm.LDA
 
@@ -480,13 +480,13 @@ class TestConfig:
     def test_positive_int_or_none(self):
         """ Help function to test input params"""
         # 1. None
-        assert positive_int_or_none(None) is True
+        assert positive_int_or_none(None)
         # 2. 3
-        assert positive_int_or_none(3) is True
+        assert positive_int_or_none(3)
         # 3. -2
-        assert positive_int_or_none(-2) is False
+        assert not positive_int_or_none(-2)
         # 4. 3.5
-        assert positive_int_or_none(3.5) is False
+        assert not positive_int_or_none(3.5)
     
     def test_set_none_or_int(self):
         """ Help function for loading input params from file """

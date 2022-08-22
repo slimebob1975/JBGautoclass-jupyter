@@ -116,11 +116,13 @@ class MockConfig():
         """ Gets data columns, so not Class or ID """
         return self.get_text_column_names() + self.get_numerical_column_names()
 
-    def is_categorical(self, column_name) -> bool:
+    def is_categorical(self, column_name: str) -> bool:
         """ Returns if a specific column is categorical """
+        return column_name == "is_categorical" # To be able to mock the response
 
     def should_train(self) -> bool:
         """ Returns if this is a training config """
+        return True
 
     def should_predict(self) -> bool:
         """ Returns if this is a prediction config """
@@ -139,6 +141,7 @@ class MockConfig():
 
     def use_categorization(self) -> bool:
         """ Returns if categorization should be used """
+        return True
 
     def get_smote(self) -> Union[SMOTE, None]:
         """ Gets the SMOTE for the model, or None if it shouldn't be """
@@ -286,18 +289,18 @@ class TestDatasetHandler():
         """ This doesn't test the content of the items, but tests that they're generally proper """
 
         # Before anything runs, dataset, keys and classes should not be set
-        assert hasattr(default_dataset_handler, "dataset") is False
-        assert hasattr(default_dataset_handler, "keys") is False
-        assert hasattr(default_dataset_handler, "classes") is False
-        assert hasattr(default_dataset_handler, "Y") is False
+        assert not hasattr(default_dataset_handler, "dataset")
+        assert not hasattr(default_dataset_handler, "keys")
+        assert not hasattr(default_dataset_handler, "classes")
+        assert not hasattr(default_dataset_handler, "Y")
 
         default_dataset_handler.read_in_data()
 
         # After it runs, dataset, keys and classes should be set
-        assert hasattr(default_dataset_handler, "dataset") is True
-        assert hasattr(default_dataset_handler, "keys") is True
-        assert hasattr(default_dataset_handler, "classes") is True
-        assert hasattr(default_dataset_handler, "Y") is True
+        assert hasattr(default_dataset_handler, "dataset")
+        assert hasattr(default_dataset_handler, "keys")
+        assert hasattr(default_dataset_handler, "classes")
+        assert hasattr(default_dataset_handler, "Y")
 
         assert isinstance(default_dataset_handler.dataset, pandas.DataFrame)
         assert isinstance(default_dataset_handler.keys, pandas.Series)
@@ -396,7 +399,7 @@ class TestDatasetHandler():
         expected_dataset = pandas.DataFrame(data, columns = column_names)
         dataset = default_dataset_handler.validate_dataset(data, column_names, class_column)
 
-        assert isinstance(dataset, pandas.DataFrame) is True
+        assert isinstance(dataset, pandas.DataFrame)
         pandas.testing.assert_frame_equal(dataset, expected_dataset)
 
         # This should (doesn't?) have some values that needs fixing
@@ -417,7 +420,7 @@ class TestDatasetHandler():
 
         dataset = default_dataset_handler.validate_dataset(data, column_names, class_column)
 
-        assert isinstance(dataset, pandas.DataFrame) is True
+        assert isinstance(dataset, pandas.DataFrame)
         pandas.testing.assert_frame_equal(dataset, expected_dataset)
 
     def test_concat_with_index(self, default_dataset_handler):
@@ -507,7 +510,7 @@ class TestDatasetHandler():
         expected_dataframe = pandas.DataFrame(expected_data, columns = expected_columns)
         expected_dataframe.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
 
-        actual_dataframe = default_dataset_handler.create_X(text, numerical, binary, index=index)
+        actual_dataframe = default_dataset_handler.create_X([text, numerical, binary], index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)
 
         # 2. No numerical data
@@ -518,7 +521,7 @@ class TestDatasetHandler():
         expected_dataframe = pandas.DataFrame(expected_data, columns = expected_columns)
         expected_dataframe.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
 
-        actual_dataframe = default_dataset_handler.create_X(text, pandas.DataFrame(), binary,  index=index)
+        actual_dataframe = default_dataset_handler.create_X([text, binary],  index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)
 
         # 3. No text data
@@ -529,7 +532,7 @@ class TestDatasetHandler():
         expected_dataframe = pandas.DataFrame(expected_data, columns = expected_columns)
         expected_dataframe.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
 
-        actual_dataframe = default_dataset_handler.create_X(pandas.DataFrame(), numerical, binary, index=index)
+        actual_dataframe = default_dataset_handler.create_X([numerical, binary], index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)
 
         # 4. No binary data
@@ -540,16 +543,43 @@ class TestDatasetHandler():
         expected_dataframe = pandas.DataFrame(expected_data, columns = expected_columns)
         expected_dataframe.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
 
-        actual_dataframe = default_dataset_handler.create_X(text, numerical, pandas.DataFrame(), index=index)
+        actual_dataframe = default_dataset_handler.create_X([text, numerical], index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)
 
         # 5. No sets at all
         expected_dataframe = pandas.DataFrame()
         
-        actual_dataframe = default_dataset_handler.create_X(pandas.DataFrame(), pandas.DataFrame(), pandas.DataFrame(), index=index)
+        actual_dataframe = default_dataset_handler.create_X([], index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)
         
+    def test_is_categorical_data(self, default_dataset_handler):
+        """ 
+            1. If either should_train or use_categorization is False, this is False (will be True in these tests)
+            2. If either the count is less-or-equal to 30 _or_ the column is stated as is_categorical, this    
+        """
+        series_longer = pandas.Series(range(1,32))
+        series_shorter = pandas.Series(range(1, 5))
+        # Because I want to make sure my premises are correct
+        assert series_longer.value_counts().count() > 30
+        assert series_shorter.value_counts().count() <= 30
+        assert default_dataset_handler.handler.config.is_categorical("is_categorical")
+        assert not default_dataset_handler.handler.config.is_categorical("is_not_categorical")
         
+        # 1. Series longer than 30 (LIMIT_IS_CATEGORICAL) [False], is_categorical [True] = True
+        case_1 = series_longer.rename("is_categorical")
+        assert default_dataset_handler.is_categorical_data(column=case_1)
+        
+        # 2. Series longer than 30 (LIMIT_IS_CATEGORICAL) [False], is_categorical [False] = False
+        case_2 = series_longer.rename("is_not_categorical")
+        assert not default_dataset_handler.is_categorical_data(column=case_2)
+        
+        # 3. Series shorter than 30 (LIMIT_IS_CATEGORICAL) [True], is_categorical [False] = True
+        case_3 = series_shorter.rename("is_not_categorical")
+        assert default_dataset_handler.is_categorical_data(column=case_3)
+
+        # 4. Series short than 30 (LIMIT_IS_CATEGORICAL) [True], is_categorical [True] = True
+        case_4 = series_shorter.rename("is_categorical")
+        assert default_dataset_handler.is_categorical_data(column=case_4)
         
     def test_split_keys_from_dataset(self, default_dataset_handler):
         """ Tests that given data X with given column names, it returns the right dataset and keys """
@@ -570,10 +600,10 @@ class TestDatasetHandler():
         dataset, keys = default_dataset_handler.split_keys_from_dataset(input_dataset, id_column)
 
         # First return, the dataset (minus keys)
-        assert isinstance(dataset, pandas.DataFrame) is True
+        assert isinstance(dataset, pandas.DataFrame)
         
         # Second return, the keys (id_column)
-        assert isinstance(keys, pandas.Series) is True
+        assert isinstance(keys, pandas.Series)
         difference = set(keys) ^ expected_keys
         assert not difference
 
@@ -610,7 +640,7 @@ class TestDatasetHandler():
         assert default_dataset_handler.get_num_unpredicted_rows(df) == 2
 
         # Just making sure our data isn't accidentally saved
-        assert hasattr(default_dataset_handler, "dataset") is False
+        assert not hasattr(default_dataset_handler, "dataset")
 
         # 2. Same dataset, but this time given to the handler beforehand
         default_dataset_handler.dataset = df
