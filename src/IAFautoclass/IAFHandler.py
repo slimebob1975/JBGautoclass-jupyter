@@ -102,6 +102,9 @@ class Config(Protocol):
     def get_feature_selection(self) -> Reduction:
         """ Returns the chosen feature selection """
 
+    def use_RFE(self) -> bool:
+        """ Gets whether RFE is used or not """
+
     def get_num_selected_features(self) -> int:
         """ Gets the number of selected features--0 if None"""
 
@@ -877,21 +880,6 @@ class ModelHandler:
 
         return False
 
-    def get_feature_selection(self, max_features_selection: int) -> tuple(int, int):
-        max_features_selection = max_features_selection
-        
-        # Make sure all numbers are propely set for feature selection interval
-        if self.handler.config.use_feature_selection():
-            min_features_selection = self.handler.config.get_num_selected_features()
-
-            if min_features_selection > 0:
-                max_features_selection = min_features_selection
-
-            return max_features_selection, min_features_selection
-
-        
-        return max_features_selection, max_features_selection # No or minimal number of features are eliminated
-    
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
@@ -953,9 +941,9 @@ class ModelHandler:
 
                 # Add feature selection if selected, i.e., the option of reducing the number of variables used.
                 # Make a binary search for the optimal dimensions.
-                max_features_selection, min_features_selection = self.get_feature_selection(X_train.shape[1])
+                max_features_selection = X_train.shape[1]
+                min_features_selection = 0 if self.handler.config.use_RFE() else max_features_selection
                 
-
                 # Loop over feature selections span: break this loop when min and max reach the same value
                 score = 0.0                                                 # Save the best values
                 stdev = 1.0                                                 # so far.
@@ -968,7 +956,7 @@ class ModelHandler:
                     # Update limits for binary search and break loop if we are done
                     if not first_feature_selection:
                         num_features = ceil((min_features_selection+max_features_selection) / 2)
-                        if num_features == max_features_selection:          
+                        if num_features == max_features_selection:
                             break
                     else:
                         first_feature_selection = False
@@ -981,7 +969,7 @@ class ModelHandler:
                     # If feature selection is not applicable, set a flag to the loop is 
                     # ending after one iteration
                     temp_model = model
-                    if self.handler.config.use_feature_selection() and self.handler.config.get_feature_selection() == Reduction.RFE:     
+                    if self.handler.config.use_RFE():     
                         try:
                             rfe = RFE(temp_model, n_features_to_select=num_features)
                             temp_model = rfe.fit(X_train, Y_train)
@@ -1003,7 +991,6 @@ class ModelHandler:
                                 ('preprocessor', preprocessor), ('model', temp_model)]
                         pipe = ImbPipeline(steps=steps)
                         
-
                     # Now make kfolded cross evaluation
                     cv_results = None
                     try:
@@ -1199,6 +1186,7 @@ class PredictionsHandler:
         # TODO: range(len) is generally not ideal
         for i in range(len(self.predictions)):
             try:
+                # This should probably be a list of a float, not a float
                 prob = prob + [self.class_report[self.predictions[i]]['precision']]
             except KeyError as e:
                 self.handler.logger.print_warning(f"probability collection failed for key {self.predictions[i]} with error {e}")

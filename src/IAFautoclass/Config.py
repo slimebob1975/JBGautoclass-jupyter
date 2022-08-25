@@ -1093,6 +1093,10 @@ class Config:
 
         return False
 
+    def use_RFE(self) -> bool:
+        """ Gets whether RFE is used or not """
+        return self.mode.feature_selection == Reduction.RFE
+
     def use_feature_selection(self) -> bool:
         """ Checks if feature selection should be used """
         return self.mode.feature_selection != Reduction.NON

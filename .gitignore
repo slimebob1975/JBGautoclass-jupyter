@@ -9,3 +9,4 @@ src/IAFautoclass/model/*.sav
 .env
 .ideas
 .pytest_cache
+__test.py
