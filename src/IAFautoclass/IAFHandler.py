@@ -226,7 +226,7 @@ class IAFHandler:
         self.queries["read_data"] = query
 
         return data
-
+   
     def save_classification_data(self) -> None:
         # Save new classifications for X_unknown in classification database
         self.logger.print_progress(message="Save new classifications in database")
@@ -1101,13 +1101,12 @@ class PredictionsHandler:
                 item = {
                     "key": k,
                     "prediction": y,
-                    "rates": r,
-                    #"probabilities": ",".join([str(elem) for elem in p])
+                    "rate": r,
                     "probabilities": self.get_probablities_as_string(p)
                 }
 
                 return_list.append(item)
-        except AttributeError as ae:
+        except AttributeError:
             return []
         
         return return_list
@@ -1118,6 +1117,7 @@ class PredictionsHandler:
             iter(item)
             return ",".join([str(elem) for elem in item])
         except TypeError:
+            # This only happens if the model couldn't predict, så uses the mean
             return item
 
     def get_mispredicted_dataframe(self) -> pandas.DataFrame:
@@ -1169,7 +1169,7 @@ class PredictionsHandler:
             self.handler.logger.print_warning(f"Probablity prediction not available for current model: {e}")
             probabilities = np.array([[-1.0]*len(model.classes_)]*X.shape[0])
             rates = np.array([-1.0]*X.shape[0])
-
+        
         self.could_predict_proba = could_predict_proba
         self.probabilites = probabilities
         self.predictions = predictions
@@ -1186,13 +1186,17 @@ class PredictionsHandler:
             return RateType.U
         
         return RateType.A
-
+    
     # Calculate the probability if the machine could not
     def calculate_probability(self) -> None:
         if not self.handler.config.should_train():
             return
 
+        if self.could_predict_proba:
+            return 
+        
         prob = []
+        # TODO: range(len) is generally not ideal
         for i in range(len(self.predictions)):
             try:
                 prob = prob + [self.class_report[self.predictions[i]]['precision']]
@@ -1201,13 +1205,12 @@ class PredictionsHandler:
     
         self.handler.logger.print_info("Probabilities:", str(prob))
         self.probabilites = prob
-
         
     
     # Returns a list of mean and standard deviation
-    def get_probabilities(self, as_string: bool = False) -> list:
-        mean = np.mean(self.probabilites)
-        std = np.std(self.probabilites)
+    def get_rates(self, as_string: bool = False) -> list:
+        mean = np.mean(self.rates)
+        std = np.std(self.rates)
         
         if as_string:
             return [str(mean), str(std)]

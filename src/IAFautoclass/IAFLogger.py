@@ -170,12 +170,12 @@ class IAFLogger(terminal.Logger):
         print(f"{text}: " + str(percent_checked) + " %", end='\r')
 
     #
-    def print_training_probabilities(self, ph: PredictionsHandler) -> None:
+    def print_training_rates(self, ph: PredictionsHandler) -> None:
         if not ph.could_predict_proba:
             return
         
-        mean, std = ph.get_probabilities(as_string = True)
-        self.print_info("Training Classification prob: Mean, Std.dev: ", mean, std)
+        mean, std = ph.get_rates(as_string = True)
+        self.print_info("Training Classification Rates: Mean, Std.dev: ", mean, std)
     
 
     # Makes sure the GUI isn't left hanging if exceptions crash the program

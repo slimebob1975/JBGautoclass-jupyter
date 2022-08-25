@@ -1696,7 +1696,7 @@ class IAFautomaticClassiphyer:
             probabilities = np.array([[-1.0]*len(model.classes_)]*X.shape[0])
             rates = np.array([-1.0]*X.shape[0])
         return predictions, could_predict_proba, rates, probabilities
-
+    
     # Evaluate predictions
     def evaluate_predictions(self, predictions, Y, message="Unknown"):
         print("\nEvaluation performed with evaluation data: " + message)
@@ -2109,7 +2109,7 @@ class IAFautomaticClassiphyer:
                     
                 if self.config.io["verbose"]: print("Probabilities:",Y_prob)
             if self.ProgressBar: self.ProgressBar.value += self.percentPermajorTask
-
+            
             # Save new classifications for X_unknown in classification database
             if self.ProgressLabel: self.ProgressLabel.value = "Save new classifications in database"
             results_saved = self.save_data( unpred_keys.values, Y_unknown, Y_prob, rate_type, \

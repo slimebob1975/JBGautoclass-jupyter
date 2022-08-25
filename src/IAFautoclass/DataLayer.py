@@ -301,7 +301,7 @@ class DataLayer:
         class_rate_type: RateType,
         model: Model,
         config: Config)-> int:
-        
+
         try:
             # Get a sql handler and connect to data database
             sqlHelper = self.get_sql_connection()
@@ -320,11 +320,12 @@ class DataLayer:
                 "class_rate": "", # rates[i]
                 "class_rate_type": class_rate_type.name,
                 "class_labels": ",".join(model.model.classes_),
-                "class_probabilities": "", #','.join([str(elem) for elem in probabilities[i].tolist()])
+                "class_probabilities": "", #probabilities[i]
                 "class_algorithm": model.get_name(),
                 "class_script": self.scriptpath,
                 "class_user": config.get_data_username()
             })
+            
             
             # Build up the base query outside of the range
             base_query = f"INSERT INTO {config.get_class_table()} "
@@ -334,7 +335,7 @@ class DataLayer:
             for row in results:
                 columns["unique_key"] = row["key"]
                 columns["class_result"] = row["prediction"]
-                columns["class_rate"] = row["rates"]
+                columns["class_rate"] = row["rate"]
                 columns["class_probabilities"] = row["probabilities"]
 
                 values = ",".join([to_quoted_string(elem) for elem in columns.values()])

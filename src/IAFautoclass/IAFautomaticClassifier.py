@@ -218,7 +218,7 @@ class IAFautomaticClassiphyer:
                 
                 ph.make_predictions(mh.model.model, dh.X_validation)
 
-                self.logger.print_training_probabilities(ph)
+                self.logger.print_training_rates(ph)
                 
                 # Evaluate predictions (optional)
                 ph.evaluate_predictions(dh.Y_validation, "ML algorithm: " + ml_algorithm)
@@ -255,10 +255,12 @@ class IAFautomaticClassiphyer:
             ph.make_predictions(mh.model.model, dh.X_unknown)
             
             self.logger.print_formatted_info("Predictions for the unknown data")
-            self.logger.print_info("Predictions:", str(ph.probabilites))
+            self.logger.print_info("Predictions:", str(ph.predictions))
             
-            self.logger.print_training_probabilities(ph)
+            self.logger.print_training_rates(ph)
             
+            # TODO: move this into make_predictions, since this is backup if predictions
+            # couldn't be made (IE predict_proba == False)
             ph.calculate_probability()
            
             self.update_progress(percent=self.progression["percentPerMajorTask"])
