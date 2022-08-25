@@ -315,12 +315,12 @@ class DataLayer:
                 "catalog_name": config.get_data_catalog(),
                 "table_name": config.get_data_table(),
                 "column_names": ",".join(config.get_data_column_names()), 
-                "unique_key": "", # keys[i]
-                "class_result": "", # Y[i]
-                "class_rate": "", # rates[i]
+                "unique_key": "", # dict["key"]
+                "class_result": "", # dict["prediction"]
+                "class_rate": "", # dict["rate"]
                 "class_rate_type": class_rate_type.name,
                 "class_labels": ",".join(model.model.classes_),
-                "class_probabilities": "", #probabilities[i]
+                "class_probabilities": "", # dict["probabilities"]
                 "class_algorithm": model.get_name(),
                 "class_script": self.scriptpath,
                 "class_user": config.get_data_username()
