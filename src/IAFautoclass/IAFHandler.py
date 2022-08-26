@@ -23,6 +23,7 @@ from sklearn.model_selection import (StratifiedKFold, cross_val_score,
 from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
+from skclean.detectors import KDN
 
 from Config import Algorithm, Preprocess, Reduction, RateType, get_model_name
 from IAFExceptions import DatasetException, ModelException, HandlerException
@@ -685,7 +686,7 @@ class DatasetHandler:
             feature_selection = self.handler.config.get_feature_selection()
             num_selected_features = self.handler.config.get_num_selected_features()
             if feature_selection.has_transformation_function():
-                self.handler.logger.print_info(f"{feature_selection.value} transformation of dataset under way...")
+                self.handler.logger.print_info(f"{feature_selection.full_name} transformation of dataset under way...")
                 self.X, feature_selection_transform = feature_selection.call_transformation(
                     self.handler.logger, self.X, num_selected_features)
 
@@ -841,6 +842,7 @@ class ModelHandler:
             self.handler.logger.print_info(f"Using non-standard k-value for spotcheck of algorithms: {k}")
         
         model = self.spot_check_ml_algorithms(X_train, Y_train, k)
+        
         model.model.fit(X_train, Y_train)
 
         return model
@@ -889,7 +891,7 @@ class ModelHandler:
         standardProgressText = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot check ml algorithms...")
         
-        models = Algorithm.list_callable_algorithms(
+        algorithms = Algorithm.list_callable_algorithms(
             size=X_train.shape[0], 
             max_iterations=self.handler.config.get_max_iterations()
         )
@@ -904,8 +906,6 @@ class ModelHandler:
         algorithm = None
         pprocessor = None
         
-        scorer_mechanism = self.handler.config.get_scoring_mechanism()
-
         smote = self.handler.config.get_smote()
         undersampler = self.handler.config.get_undersampler()
 
@@ -921,18 +921,20 @@ class ModelHandler:
         first_round = True
         self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time"], divisor="=")
 
-        numMinorTasks = len(models) * len(preprocessors)
+        numMinorTasks = len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
         
         # Loop over the models
-        for name, model in models:
+        for algorithm, algorithm_callable in algorithms:
             # Loop over pre-processing methods
-            for preprocessor_name, preprocessor in preprocessors:
-                if not self.should_run_computation(name, preprocessor_name):
-                    #self.handler.logger.print_progress(message=f"Skipping ({name.name}-{preprocessor_name.name}) due to config")
+            for preprocessor, preprocessor_callable in preprocessors:
+                if not self.should_run_computation(algorithm, preprocessor):
+                    if algorithm == Algorithm.WBDT:
+                        print ("should not run")
+                    #self.handler.logger.print_progress(message=f"Skipping ({algorithm.name}-{preprocessor.name}) due to config")
                     continue
                 # Update progressbar percent and label
-                self.handler.logger.print_progress(message=f"{standardProgressText} ({name.name}-{preprocessor_name.name})")
+                self.handler.logger.print_progress(message=f"{standardProgressText} ({algorithm.name}-{preprocessor.name})")
                 if not first_round: 
                     self.handler.update_progress(percent=percentAddPerMinorTask)
                 else:
@@ -957,6 +959,8 @@ class ModelHandler:
                     if not first_feature_selection:
                         num_features = ceil((min_features_selection+max_features_selection) / 2)
                         if num_features == max_features_selection:
+                            if algorithm == Algorithm.WBDT:
+                                print (f"{num_features=} and {max_features_selection=}")
                             break
                     else:
                         first_feature_selection = False
@@ -968,35 +972,36 @@ class ModelHandler:
                     # Apply feature selection to current model and number of features.
                     # If feature selection is not applicable, set a flag to the loop is 
                     # ending after one iteration
-                    temp_model = model
+                    temp_model = algorithm_callable
                     if self.handler.config.use_RFE():     
                         try:
                             rfe = RFE(temp_model, n_features_to_select=num_features)
                             temp_model = rfe.fit(X_train, Y_train)
                         except ValueError as e:
+                            if algorithm == Algorithm.WBDT:
+                                print (f"ValueError {e}")
                             break
 
                     # Both algorithm and preprocessor should be used. Move on.
                     # Build pipline of model and preprocessor.
-                    names.append((name,preprocessor_name))
+                    names.append((algorithm,preprocessor))
                     if smote is None and undersampler is None:
-                        if preprocessor is not None:
-                            pipe = make_pipeline(preprocessor, temp_model)
+                        if preprocessor_callable is not None:
+                            pipe = make_pipeline(preprocessor_callable, temp_model)
                         else:
                             pipe = temp_model
 
                     # For use SMOTE and undersampling, different Pipeline is used
                     else:
                         steps = [('smote', smote ), ('under', undersampler), \
-                                ('preprocessor', preprocessor), ('model', temp_model)]
+                                ('preprocessor', preprocessor_callable), ('model', temp_model)]
                         pipe = ImbPipeline(steps=steps)
                         
                     # Now make kfolded cross evaluation
-                    cv_results = None
-                    try:
-                        cv_results = cross_val_score(pipe, X_train, Y_train, cv=kfold, scoring=scorer_mechanism) 
-                    except ValueError as e:
-                        self.handler.logger.print_warning(f"Model {names[-1]} raised a ValueError in cross_val_score. Skipping to next")
+                    cv_results = self.get_cross_val_score(pipe, X_train, Y_train, kfold, algorithm)
+
+                    if cv_results is None:
+                        self.handler.logger.print_warning(f"Pipeline ({algorithm.name}-{preprocessor.name}) raised a ValueError in cross_val_score. Skipping to next")
                     else:
                         # Stop the stopwatch
                         t = time.time() - t0
@@ -1008,7 +1013,7 @@ class ModelHandler:
                         # Print results to screen
                         if self.handler.config.is_verbose(): # TODO: print prettier
                             print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} s.".
-                                  format(name.name,preprocessor_name.name,num_features,temp_score,temp_stdev,t))
+                                  format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t))
 
                         # Evaluate if feature selection changed accuracy or not. 
                         # Notice: Better or same score with less variables are both seen as an improvement,
@@ -1025,8 +1030,8 @@ class ModelHandler:
                         if temp_score > best_mean or \
                            (temp_score == best_mean and temp_stdev < best_std):
                             trained_model = pipe
-                            algorithm = name
-                            pprocessor = preprocessor_name
+                            algorithm = algorithm
+                            pprocessor = preprocessor
                             best_mean = temp_score
                             best_std = temp_stdev
                             best_feature_selection = num_features
@@ -1034,12 +1039,33 @@ class ModelHandler:
         updates = {"algorithm": algorithm, "preprocessor" : pprocessor, "num_selected_features": best_feature_selection}
         self.handler.config.update_attributes(type="mode", updates=updates)
         
-        model = self.model
-        model.algorithm = algorithm
-        model. preprocess = pprocessor
-        model.model = trained_model
+        algorithm_callable = self.model
+        algorithm_callable.algorithm = algorithm
+        algorithm_callable. preprocess = pprocessor
+        algorithm_callable.model = trained_model
         # Return best model for start making predictions
-        return model
+        return algorithm_callable
+
+    def get_cross_val_score(self, pipeline: Pipeline, X_train: pandas.DataFrame, Y_train: pandas.DataFrame, kfold, algorithm: Algorithm) -> Union[np.ndarray,None]:
+        """ Allows to change call to cross_val_score based on algorithm. """
+        # Now make kfolded cross evaluation
+        scorer_mechanism = self.handler.config.get_scoring_mechanism()
+        fit_params = {}
+        
+        for key, function_name in algorithm.fit_params.items():
+            if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
+                fit_params[key] = func(X_train, Y_train)
+
+        try:
+            return cross_val_score(pipeline, X_train, Y_train, cv=kfold, scoring=scorer_mechanism, fit_params=fit_params) 
+        except ValueError as e:
+            print(str(e))
+            return
+
+    def do_kdn(self, X: pandas.DataFrame, y: pandas.DataFrame):
+        """ Used in fit_params as a sample_weight option, via Algorithm """
+        return KDN().detect(X, y)
+
 
     # Save ml model and corresponding configuration
     def save_model_to_file(self, filename):

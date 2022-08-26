@@ -32,6 +32,11 @@ from sklearn.random_projection import GaussianRandomProjection
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import make_scorer, matthews_corrcoef
+# Imports from scikit clean
+from skclean.simulate_noise import flip_labels_uniform
+from skclean.models import RobustForest, RobustLR
+from skclean.detectors import KDN
+from skclean.handlers import WeightedBagging
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
@@ -60,10 +65,17 @@ class RateType(enum.Enum):
 
 
 class MetaEnum(enum.Enum):
+    @property
+    def full_name(self):
+        if isinstance(self.value, dict):
+            return self.value["full_name"]
+        
+        return self.value
+    
     @classmethod
     def get_sorted_list(cls, none_all_first: bool = True) -> list[tuple[str, str]]:
         if not none_all_first:
-            return sorted([(item.value, item.name) for item in cls])
+            return sorted([(item.full_name, item.name) for item in cls])
 
         excluded_enums = []
         for name in ["NON", "ALL"]:
@@ -74,43 +86,60 @@ class MetaEnum(enum.Enum):
             else:
                 excluded_enums.insert(0, item)
         
-        listed_enums = sorted([(item.value, item.name) for item in cls if item not in excluded_enums])
+        listed_enums = sorted([(item.full_name, item.name) for item in cls if item not in excluded_enums])
 
-        prefix_list = [(item.value, item.name) for item in excluded_enums]
+        prefix_list = [(item.full_name, item.name) for item in excluded_enums]
         
         return prefix_list + listed_enums
 
 class Algorithm(MetaEnum):
-    ALL = "All"
-    LRN = "Logistic Regression"
-    KNN = "K-Neighbors Classifier"
-    CART = "Decision Tree Classifier"
-    GNB = "Gaussian Naive Bayes"
-    MNB = "Multinomial Naive Bayes"
-    BNB = "Bernoulli Naive Bayes"
-    CNB = "Complement Naive Bayes"
-    REC = "Ridge Classifier"
-    PCN = "Perceptron"
-    PAC = "Passive Aggressive Classifier"
-    RFC1 = "Random Forest Classifier 1"
-    RFC2 = "Random Forest Classifier 2"
-    LIN1 = "Linear Support Vector L1"
-    LIN2 = "Linear Support Vector L2"
-    LINP = "Linear SV L1+L2"
-    SGD = "Stochastic Gradient Descent"
-    SGD1 = "Stochastic GD L1"
-    SGD2 = "Stochastic GD L2"
-    SGDE = "Stochastic GD Elast."
-    NCT = "Nearest Centroid"
-    SVC = "Support Vector Classification"
-    LDA = "Linear Discriminant Analysis"
-    QDA = "Quadratic Discriminant Analysis"
-    BDT = "Bagging CLassifier"
-    ETC = "Extra Trees Classifier"
-    ABC = "Ada Boost Classifier"
-    GBC = "Gradient Boosting Classifier"
-    MLPR = "ML Neural Network Relu"
-    MLPL = "ML Neural Network Sigm"
+    ALL = { "full_name": "All", "limit": None, "fit_params": {}}
+    #RCART = { "full_name": "Robust Tree Classifier", "limit": None, "fit_params": {}}
+    #RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "fit_params": {}}
+    #WBDT = { "full_name":  "Weighted Bagging Classifier", "limit": None, "fit_params": {"sample_weight": "do_kdn"}}
+    LRN = { "full_name": "Logistic Regression", "limit": None, "fit_params": {}}
+    KNN = { "full_name": "K-Neighbors Classifier", "limit": None, "fit_params": {}}
+    CART = { "full_name": "Decision Tree Classifier", "limit": None, "fit_params": {}}
+    GNB = { "full_name": "Gaussian Naive Bayes", "limit": None, "fit_params": {}}
+    MNB = { "full_name": "Multinomial Naive Bayes", "limit": None, "fit_params": {}}
+    BNB = { "full_name": "Bernoulli Naive Bayes", "limit": None, "fit_params": {}}
+    CNB = { "full_name": "Complement Naive Bayes", "limit": None, "fit_params": {}}
+    REC = { "full_name": "Ridge Classifier", "limit": None, "fit_params": {}}
+    PCN = { "full_name": "Perceptron", "limit": None, "fit_params": {}}
+    PAC = { "full_name": "Passive Aggressive Classifier", "limit": None, "fit_params": {}}
+    RFC1 = { "full_name": "Random Forest Classifier 1", "limit": None, "fit_params": {}}
+    RFC2 = { "full_name": "Random Forest Classifier 2", "limit": None, "fit_params": {}}
+    LIN1 = { "full_name":  "Linear Support Vector L1", "limit": None, "fit_params": {}}
+    LIN2 = { "full_name": "Linear Support Vector L2", "limit": None, "fit_params": {}}
+    LINP = { "full_name": "Linear SV L1+L2", "limit": None, "fit_params": {}}
+    SGD = { "full_name": "Stochastic Gradient Descent", "limit": None, "fit_params": {}}
+    SGD1 = { "full_name": "Stochastic GD L1", "limit": None, "fit_params": {}}
+    SGD2 = { "full_name": "Stochastic GD L2", "limit": None, "fit_params": {}}
+    SGDE = { "full_name": "Stochastic GD Elast.", "limit": None, "fit_params": {}}
+    NCT = { "full_name": "Nearest Centroid", "limit": None, "fit_params": {}}
+    SVC = { "full_name": "Support Vector Classification", "limit": 10000, "fit_params": {}}
+    LDA = { "full_name": "Linear Discriminant Analysis", "limit": None, "fit_params": {}}
+    QDA = { "full_name": "Quadratic Discriminant Analysis", "limit": None, "fit_params": {}}
+    BDT = { "full_name": "Bagging Classifier", "limit": None, "fit_params": {}}
+    ETC = { "full_name": "Extra Trees Classifier", "limit": None, "fit_params": {}}
+    ABC = { "full_name": "Ada Boost Classifier", "limit": None, "fit_params": {}}
+    GBC = { "full_name": "Gradient Boosting Classifier", "limit": None, "fit_params": {}}
+    MLPR = { "full_name": "ML Neural Network Relu", "limit": None, "fit_params": {}}
+    MLPL = { "full_name": "ML Neural Network Sigm", "limit": None, "fit_params": {}}
+
+    @property
+    def limit(self):
+        if isinstance(self.value, dict):
+            return self.value["limit"]
+        
+        return None
+
+    @property
+    def fit_params(self):
+        if isinstance(self.value, dict):
+            return self.value["fit_params"]
+        
+        return {}
 
     @classmethod
     def list_callable_algorithms(cls, size: int, max_iterations: int) -> list[tuple]:
@@ -119,9 +148,20 @@ class Algorithm(MetaEnum):
         """
         return [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_algorithm_function()]
 
+    #RCART = "Robust Tree Classifier"# RobustTree(), RobustLR() och WeightedBagging()
+    #RLRN = "Robust Logistic Regression"
+    #WBDT = "Weighted Bagging Classifier"
+    def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
+        return RobustLR()
+    
+    def do_RCART(self, max_iterations: int, size: int)-> RobustForest:
+        return RobustForest()
+
+    def do_WBDT(self, max_iterations: int, size: int)-> WeightedBagging:
+        return WeightedBagging()
+
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
         return LogisticRegression(solver='liblinear', multi_class='ovr')
-
 
     def do_KNN(self, max_iterations: int, size: int)-> KNeighborsClassifier:
         return KNeighborsClassifier()
@@ -184,9 +224,7 @@ class Algorithm(MetaEnum):
             ('classification', self.call_LinearSVC(max_iterations, "l2"))])
     
     def do_SVC(self, max_iterations: int, size: int):
-        # TODO: Move this into the algorithms having a dict as a value with description/limit as keys and limit: None if no limit
-        LIMIT_SVC = 10000
-        if size < LIMIT_SVC:
+        if size < self.limit:
             return SVC(gamma='auto', probability=True)
         
         # TODO: communicate with terminal to warn? 
@@ -625,10 +663,10 @@ class Config:
                 f" * Test size for trainings:                 {self.test_size}",
                 f" * Use SMOTE:                               {self.smote}",
                 f" * Use undersampling of majority class:     {self.undersample}",
-                f" * Algorithm of choice:                     {self.algorithm.value}",
-                f" * Preprocessing method of choice:          {self.preprocessor.value}",
-                f" * Scoring method:                          {self.scoring.value}",
-                f" * Feature selection:                       {self.feature_selection.value}",
+                f" * Algorithm of choice:                     {self.algorithm.full_name}",
+                f" * Preprocessing method of choice:          {self.preprocessor.full_name}",
+                f" * Scoring method:                          {self.scoring.full_name}",
+                f" * Feature selection:                       {self.feature_selection.full_name}",
                 f" * Number of selected features:             {self.num_selected_features}",
                 f" * Maximum iterations (where applicable):   {self.max_iterations}"
             ]
