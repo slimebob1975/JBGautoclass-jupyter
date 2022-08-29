@@ -33,10 +33,8 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import make_scorer, matthews_corrcoef
 # Imports from scikit clean
-from skclean.simulate_noise import flip_labels_uniform
-from skclean.models import RobustForest, RobustLR
-from skclean.detectors import KDN
-from skclean.handlers import WeightedBagging
+from skclean.models import RobustForest, RobustLR, Centroid
+
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
@@ -94,9 +92,9 @@ class MetaEnum(enum.Enum):
 
 class Algorithm(MetaEnum):
     ALL = { "full_name": "All", "limit": None, "fit_params": {}}
-    #RCART = { "full_name": "Robust Tree Classifier", "limit": None, "fit_params": {}}
-    #RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "fit_params": {}}
-    #WBDT = { "full_name":  "Weighted Bagging Classifier", "limit": None, "fit_params": {"sample_weight": "do_kdn"}}
+    RCART = { "full_name": "Robust Tree Classifier", "limit": None, "fit_params": {}}
+    RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "fit_params": {}}
+    RCT = { "full_name": "Robus Centroid", "limit": None, "fit_params": {}}
     LRN = { "full_name": "Logistic Regression", "limit": None, "fit_params": {}}
     KNN = { "full_name": "K-Neighbors Classifier", "limit": None, "fit_params": {}}
     CART = { "full_name": "Decision Tree Classifier", "limit": None, "fit_params": {}}
@@ -148,17 +146,14 @@ class Algorithm(MetaEnum):
         """
         return [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_algorithm_function()]
 
-    #RCART = "Robust Tree Classifier"# RobustTree(), RobustLR() och WeightedBagging()
-    #RLRN = "Robust Logistic Regression"
-    #WBDT = "Weighted Bagging Classifier"
     def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
         return RobustLR()
     
     def do_RCART(self, max_iterations: int, size: int)-> RobustForest:
         return RobustForest()
 
-    def do_WBDT(self, max_iterations: int, size: int)-> WeightedBagging:
-        return WeightedBagging()
+    def do_RCT(self, max_iterations: int, size: int)-> Centroid:
+        return Centroid()
 
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
         return LogisticRegression(solver='liblinear', multi_class='ovr')

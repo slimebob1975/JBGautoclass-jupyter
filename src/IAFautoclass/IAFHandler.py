@@ -1168,7 +1168,7 @@ class PredictionsHandler:
                                 errors='strict')
     
     # Make predictions on dataset
-    def make_predictions(self, model: Pipeline, X: pandas.DataFrame) -> bool:
+    def make_predictions(self, model: Pipeline, X: pandas.DataFrame, classes: pandas.Series) -> bool:
         could_predict_proba = False
         try:
             predictions = model.predict(X)
@@ -1180,7 +1180,7 @@ class PredictionsHandler:
             could_predict_proba = True
         except Exception as e:
             self.handler.logger.print_warning(f"Probablity prediction not available for current model: {e}")
-            probabilities = np.array([[-1.0]*len(model.classes_)]*X.shape[0])
+            probabilities = np.array([[-1.0]*len(classes)]*X.shape[0]) # TODO: remove model.classes_
             rates = np.array([-1.0]*X.shape[0])
         
         self.could_predict_proba = could_predict_proba
