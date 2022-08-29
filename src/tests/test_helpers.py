@@ -5,6 +5,59 @@ import pytest
 import Helpers
 
 # Since this is a series of functions, seems fitting to not put the tests into a class
+
+def test_column_operations():
+    # removes single empty value
+    column_names = "a,,b"
+    cleaned = Helpers.clean_column_names_list(column_names)
+    assert cleaned == ["a", "b"]
+    
+    # Removes multiple empty values
+    column_names = "a,,b,"
+    cleaned = Helpers.clean_column_names_list(column_names)
+    assert cleaned == ["a", "b"]
+
+    # should return an empty list
+    column_names = ""
+    assert Helpers.clean_column_names_list(column_names) == []
+
+    column_names = "a,,b"
+    cleaned = Helpers.get_from_string_or_list(column_names)
+    assert cleaned == ["a", "b"]
+
+    column_names = ["a", "", "b"]
+    cleaned = Helpers.get_from_string_or_list(column_names)
+    assert cleaned == ["a", "b"]
+
+    column_names = ["a", "b"]
+    cleaned = Helpers.get_from_string_or_list(column_names)
+    assert cleaned == ["a", "b"]
+    
+def test_positive_int_or_none():
+        """ Help function to test input params"""
+        # 1. None
+        assert Helpers.positive_int_or_none(None)
+        # 2. 3
+        assert Helpers.positive_int_or_none(3)
+        # 3. -2
+        assert not Helpers.positive_int_or_none(-2)
+        # 4. 3.5
+        assert not Helpers.positive_int_or_none(3.5)
+    
+def test_set_none_or_int():
+    """ Help function for loading input params from file """
+    # 1: "None"
+    assert Helpers.set_none_or_int("None") is None
+    # 2. "5"
+    value = Helpers.set_none_or_int("5")
+    assert value == 5 and isinstance(value, int)
+    # 3. 4
+    assert Helpers.set_none_or_int(4) == 4
+    # 4. -3
+    assert Helpers.set_none_or_int(-3) is None
+    # 5. -3.5
+    assert Helpers.set_none_or_int(-3.5) is None
+
 def test_is_float():
     """ Check a few different values to see what it can and can't handler"""
     

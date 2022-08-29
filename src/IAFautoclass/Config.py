@@ -579,8 +579,8 @@ class Config:
         data_catalog: str = ""
         data_table: str = ""
         class_column: str = ""
-        data_text_columns: str = ""
-        data_numerical_columns: str = ""
+        data_text_columns: list = field(default_factory=list)
+        data_numerical_columns: list = field(default_factory=list)
         id_column: str = "id"
         data_username: str = ""
         data_password: str = ""
@@ -599,8 +599,8 @@ class Config:
                 f" * Data Catalog:                            {self.data_catalog}",
                 f" * Data Table:                              {self.data_table}",
                 f" * Classification column:                   {self.class_column}",
-                f" * Text Data columns (CSV):                 {self.data_text_columns}",
-                f" * Numerical Data columns (CSV):            {self.data_numerical_columns}",
+                f" * Text Data columns (CSV):                 {', '.join(self.data_text_columns)}",
+                f" * Numerical Data columns (CSV):            {', '.join(self.data_numerical_columns)}",
                 f" * Unique data id column:                   {self.id_column}",
                 f" * Data username (optional):                {self.data_username}",
                 f" * Data password (optional):                {self.data_password}",
@@ -633,7 +633,7 @@ class Config:
         specific_stop_words_threshold: float = 1.0
         hex_encode: bool = True
         use_categorization: bool = True
-        category_text_columns: str = ""
+        category_text_columns: list = field(default_factory=list)
         test_size: float = 0.2
         smote: bool = False
         undersample: bool = False
@@ -654,7 +654,7 @@ class Config:
                 f" * Material specific stop words threshold:  {self.specific_stop_words_threshold}",
                 f" * Hex encode text data:                    {self.hex_encode}",
                 f" * Categorize text data where applicable:   {self.use_categorization}",
-                f" * Force categorization to these columns:   {self.category_text_columns}",
+                f" * Force categorization to these columns:   {', '.join(self.category_text_columns)}",
                 f" * Test size for trainings:                 {self.test_size}",
                 f" * Use SMOTE:                               {self.smote}",
                 f" * Use undersampling of majority class:     {self.undersample}",
@@ -719,8 +719,8 @@ class Config:
             isinstance(self.connection.data_catalog, str),
             isinstance(self.connection.data_table, str),
             isinstance(self.connection.class_column, str),
-            isinstance(self.connection.data_text_columns, str),
-            isinstance(self.connection.data_numerical_columns, str),
+            isinstance(self.connection.data_text_columns, list),
+            isinstance(self.connection.data_numerical_columns, list),
             isinstance(self.connection.id_column, str),
             isinstance(self.connection.trusted_connection, bool)
         ]
@@ -728,6 +728,11 @@ class Config:
         if not all(database_connection_information):
             raise TypeError(
                 "Specified database connection information is invalid")
+
+        if not all(isinstance(x,str) for x in self.connection.data_text_columns):
+            raise TypeError("Data text columns needs to be a list of strings")
+        if not all(isinstance(x,str) for x in self.connection.data_numerical_columns):
+            raise TypeError("Data numerical columns needs to be a list of strings")
 
         
         # 2.2: Login credentials
@@ -740,16 +745,19 @@ class Config:
             raise TypeError("Specified login credentials are invalid!")
         
         # 3: Mode/training
-        if not isinstance(self.mode.category_text_columns, str):
-            raise TypeError(f"Argument category_text_columns must be a string")
+        if not isinstance(self.mode.category_text_columns, list):
+            raise TypeError(f"Argument category_text_columns must be a list of strings")
+
+        if not all(isinstance(x,str) for x in self.mode.category_text_columns):
+            raise TypeError(f"Argument category_text_columns must be a list of strings")
         
-        if not positive_int_or_none(self.mode.num_selected_features):
+        if not Helpers.positive_int_or_none(self.mode.num_selected_features):
             raise ValueError(
                 "Argument num_selected_features must be a positive integer")
 
         if self.mode.max_iterations is None:
             self.mode.max_iterations = self.MAX_ITERATIONS
-        elif not positive_int_or_none(self.mode.max_iterations):
+        elif not Helpers.positive_int_or_none(self.mode.max_iterations):
             raise ValueError(
                 "Argument max_iterations must be a positive integer")
 
@@ -815,7 +823,7 @@ class Config:
 
         # 5: Debug
         # TODO: Set the value based on count_data_rows(), but first decide where that method should be
-        if not positive_int_or_none(self.debug.num_rows):
+        if not Helpers.positive_int_or_none(self.debug.num_rows):
             raise ValueError(
                 "Argument num_rows must be a positive integer")
 
@@ -900,6 +908,9 @@ class Config:
             if (isinstance(replace, enum.Enum)):
                 replace = replace.name
 
+            # Replace the lists with text representations
+            if (isinstance(replace, list)):
+                replace = ",".join(replace)
 
             for i in range(len(lines)):
                 lines[i] = lines[i].replace(template, str(replace))
@@ -946,10 +957,13 @@ class Config:
 
     @classmethod
     def load_config_2(cls: Type[T], module) -> T:
-        num_rows = set_none_or_int(module.debug["num_rows"])
-        num_selected_features = set_none_or_int(module.mode["num_selected_features"])
-        max_iterations = set_none_or_int(module.mode["max_iterations"])
-
+        num_rows = Helpers.set_none_or_int(module.debug["num_rows"])
+        num_selected_features = Helpers.set_none_or_int(module.mode["num_selected_features"])
+        max_iterations = Helpers.set_none_or_int(module.mode["max_iterations"])
+        data_text_columns = Helpers.get_from_string_or_list(module.connection["data_text_columns"])
+        data_numerical_columns = Helpers.get_from_string_or_list( module.connection["data_numerical_columns"])
+        category_text_columns = Helpers.get_from_string_or_list(module.mode["category_text_columns"])
+       
         config = cls(
             Config.Connection(
                 odbc_driver=module.connection["odbc_driver"],
@@ -963,8 +977,8 @@ class Config:
                 data_catalog=module.connection["data_catalog"],
                 data_table=module.connection["data_table"],
                 class_column=module.connection["class_column"],
-                data_text_columns=module.connection["data_text_columns"],
-                data_numerical_columns=module.connection["data_numerical_columns"],
+                data_text_columns=data_text_columns,
+                data_numerical_columns=data_numerical_columns,
                 id_column=module.connection["id_column"],
                 data_username=module.connection["data_username"],
                 data_password=module.connection["data_password"]
@@ -978,7 +992,7 @@ class Config:
                     module.mode["specific_stop_words_threshold"]),
                 hex_encode=module.mode["hex_encode"],
                 use_categorization=module.mode["use_categorization"],
-                category_text_columns=module.mode["category_text_columns"],
+                category_text_columns=category_text_columns,
                 test_size=float(module.mode["test_size"]),
                 smote=module.mode["smote"],
                 undersample=module.mode["undersample"],
@@ -1005,10 +1019,14 @@ class Config:
         
     @classmethod
     def load_config_1(cls: Type[T], module) -> T:
-        num_rows = set_none_or_int(module.debug["num_rows"])
-        num_selected_features = set_none_or_int(module.mode["num_selected_features"])
-        max_iterations = set_none_or_int(module.mode["max_iterations"])
-
+        num_rows = Helpers.set_none_or_int(module.debug["num_rows"])
+        num_selected_features = Helpers.set_none_or_int(module.mode["num_selected_features"])
+        max_iterations = Helpers.set_none_or_int(module.mode["max_iterations"])
+        
+        data_text_columns = Helpers.clean_column_names_list(module.sql["data_text_columns"])
+        data_numerical_columns = Helpers.clean_column_names_list( module.sql["data_numerical_columns"])
+        category_text_columns = Helpers.clean_column_names_list(module.mode["category_text_columns"])
+        
         config = cls(
             Config.Connection(
                 odbc_driver=module.sql["odbc_driver"],
@@ -1022,8 +1040,8 @@ class Config:
                 data_catalog=module.sql["data_catalog"],
                 data_table=module.sql["data_table"],
                 class_column=module.sql["class_column"],
-                data_text_columns=module.sql["data_text_columns"],
-                data_numerical_columns=module.sql["data_numerical_columns"],
+                data_text_columns=data_text_columns,
+                data_numerical_columns=data_numerical_columns,
                 id_column=module.sql["id_column"],
                 data_username=module.sql["data_username"],
                 data_password=module.sql["data_password"]
@@ -1037,7 +1055,7 @@ class Config:
                     module.mode["specific_stop_words_threshold"]),
                 hex_encode=module.mode["hex_encode"],
                 use_categorization=module.mode["use_categorization"],
-                category_text_columns=module.mode["category_text_columns"],
+                category_text_columns=category_text_columns,
                 test_size=float(module.mode["test_size"]),
                 smote=module.mode["smote"],
                 undersample=module.mode["undersample"],
@@ -1065,13 +1083,13 @@ class Config:
     # Methods to hide implementation of Config
     # TODO: Change these three to lists and the implementation accordingly
     def is_text_data(self) -> bool:
-        return self.connection.data_text_columns != ""
+        return len(self.connection.data_text_columns) > 0
     
     def is_numerical_data(self) -> bool:
-        return self.connection.data_numerical_columns != ""
+        return len(self.connection.data_numerical_columns) > 0
 
     def force_categorization(self) -> bool:
-        return  self.mode.category_text_columns != ""
+        return  len(self.mode.category_text_columns) > 0
 
     def column_is_numeric(self, column: str) -> bool:
         """ Checks if the column is numerical """
@@ -1153,12 +1171,6 @@ class Config:
     def is_verbose(self) -> bool:
         """ Returns what the io.verbose is set to"""
         return self.io.verbose
-
-    def clean_column_names_list(self, column_names: str) -> list[str]:
-        """ This takes a comma-delimeted string and returns the list with no empty values"""
-        splitted = column_names.split(",")
-
-        return [ elem for elem in splitted if elem != ""] # Removes all empty column names
         
     def get_column_names(self) -> list[str]:
         """ Gets the column names based on connection columns """
@@ -1175,17 +1187,17 @@ class Config:
 
     def get_categorical_text_column_names(self) -> list[str]:
         """ Gets the specified categorical text columns"""
-        return self.clean_column_names_list(self.mode.category_text_columns)
+        return self.mode.category_text_columns
         
         
     def get_text_column_names(self) -> list[str]:
         """ Gets the specified text columns"""
-        return self.clean_column_names_list(self.connection.data_text_columns)
+        return self.connection.data_text_columns
 
 
     def get_numerical_column_names(self) -> list[str]:
         """ Gets the specified numerical columns"""
-        return self.clean_column_names_list(self.connection.data_numerical_columns)
+        return self.connection.data_numerical_columns
 
 
     def get_data_column_names(self) -> list[str]:
@@ -1335,19 +1347,6 @@ class Config:
         """ Gets the data user name """
         return self.connection.data_username
 
-    
-   
-
-    
-# TODO: Move to helper?
-def positive_int_or_none(value: int) -> bool:
-    if value is None:
-        return True
-    
-    if isinstance(value, int) and value >= 0:
-        return True
-
-    return False
 
 # TODO: Move to algorithm?
 def get_model_name(algo: Algorithm, prepros: Preprocess)->str:
@@ -1355,15 +1354,7 @@ def get_model_name(algo: Algorithm, prepros: Preprocess)->str:
 
 
 
-# TODO: Move to Helpers?
-def set_none_or_int(value) -> int:
-    if value == "None":
-        return None
 
-    if int(value) < 0:
-        return None
-
-    return int(value)
 
 
 def main():

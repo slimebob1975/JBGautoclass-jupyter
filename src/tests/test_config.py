@@ -3,7 +3,7 @@ from typing import Callable
 from path import Path
 import pytest
 from Config import (Algorithm, Config, Preprocess, Reduction, Scoretype,
-                    get_model_name, positive_int_or_none, set_none_or_int)
+                    get_model_name)
 from IAFExceptions import ConfigException
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -23,8 +23,8 @@ def valid_iris_config() -> Config:
             data_catalog="DatabaseTwo",
             data_table="InputTable",
             class_column="class",
-            data_text_columns="",
-            data_numerical_columns="sepal-length,sepal-width,petal-length,petal-width",
+            data_text_columns=[],
+            data_numerical_columns=["sepal-length","sepal-width","petal-length", "petal-width"],
             id_column="id",
             data_username="some_fake_name",
             data_password=""
@@ -37,7 +37,7 @@ def valid_iris_config() -> Config:
             specific_stop_words_threshold=1.0,
             hex_encode=True,
             use_categorization=True,
-            category_text_columns="",
+            category_text_columns=[],
             test_size=0.2,
             smote=False,
             undersample=False,
@@ -78,8 +78,8 @@ def bare_iris_config() -> Config:
             data_catalog="DatabaseTwo",
             data_table="InputTable",
             class_column="class",
-            data_text_columns="",
-            data_numerical_columns="sepal-length,sepal-width,petal-length,petal-width",
+            data_text_columns=[],
+            data_numerical_columns=["sepal-length","sepal-width","petal-length","petal-width"],
             id_column="id",
             data_username="some_fake_name",
             data_password=""
@@ -92,7 +92,7 @@ def bare_iris_config() -> Config:
             specific_stop_words_threshold=1.0,
             hex_encode=True,
             use_categorization=True,
-            category_text_columns="",
+            category_text_columns=[],
             test_size=0.2,
             smote=False,
             undersample=False,
@@ -142,8 +142,8 @@ def saved_with_valid_iris_config() -> Config:
             data_catalog="DatabaseTwo",
             data_table="InputTable",
             class_column="class",
-            data_text_columns="",
-            data_numerical_columns="sepal-length,sepal-width,petal-length,petal-width",
+            data_text_columns=[],
+            data_numerical_columns=["sepal-length","sepal-width","petal-length","petal-width"],
             id_column="id",
             data_username="some_fake_name",
             data_password=""
@@ -156,7 +156,7 @@ def saved_with_valid_iris_config() -> Config:
             specific_stop_words_threshold=1.0,
             hex_encode=True,
             use_categorization=True,
-            category_text_columns="",
+            category_text_columns=[],
             test_size=0.2,
             smote=False,
             undersample=False,
@@ -201,19 +201,6 @@ class TestConfig:
 
     def test_column_names(self, valid_iris_config):
         """ This will test known values with various functions that return column names"""
-        # removes single empty value
-        column_names = "a,,b"
-        cleaned = valid_iris_config.clean_column_names_list(column_names)
-        assert cleaned == ["a", "b"]
-        
-        # Removes multiple empty values
-        column_names = "a,,b,"
-        cleaned = valid_iris_config.clean_column_names_list(column_names)
-        assert cleaned == ["a", "b"]
-
-        # should return an empty list
-        column_names = ""
-        assert valid_iris_config.clean_column_names_list(column_names) == []
 
         # As this config has no categorical or text columns, these are the relevant lists
         data_numerical_columns = ["sepal-length","sepal-width","petal-length","petal-width"]
@@ -448,12 +435,12 @@ class TestConfig:
 
         filename = get_fixture_path() / "config-save.sav"
         # 2. Without a config
-        #new_config = Config.load_config_from_model_file(filename)
-        #assert new_config == bare_iris_config
+        new_config = Config.load_config_from_model_file(filename)
+        assert new_config == bare_iris_config
 
         # 3. With a config
-        #new_config = Config.load_config_from_model_file(filename, valid_iris_config)
-        #assert new_config == saved_with_valid_iris_config
+        new_config = Config.load_config_from_model_file(filename, valid_iris_config)
+        assert new_config == saved_with_valid_iris_config
 
     def test_load_config_from_module(self, valid_iris_config):
         """ While it uses the load_config_from_module, it mainly checks load_config_2 """
@@ -477,30 +464,6 @@ class TestConfig:
         config.mode.scoring = Scoretype.mcc
         assert isinstance(config.get_scoring_mechanism(), Callable)
 
-    def test_positive_int_or_none(self):
-        """ Help function to test input params"""
-        # 1. None
-        assert positive_int_or_none(None)
-        # 2. 3
-        assert positive_int_or_none(3)
-        # 3. -2
-        assert not positive_int_or_none(-2)
-        # 4. 3.5
-        assert not positive_int_or_none(3.5)
-    
-    def test_set_none_or_int(self):
-        """ Help function for loading input params from file """
-        # 1: "None"
-        assert set_none_or_int("None") is None
-        # 2. "5"
-        value = set_none_or_int("5")
-        assert value == 5 and isinstance(value, int)
-        # 3. 4
-        assert set_none_or_int(4) == 4
-        # 4. -3
-        assert set_none_or_int(-3) is None
-        # 5. -3.5
-        assert set_none_or_int(-3.5) is None
     
     def test_model_name(self):
         assert get_model_name(Algorithm.LDA, Preprocess.STA) == "LDA-STA"

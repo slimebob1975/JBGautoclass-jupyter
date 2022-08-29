@@ -9,6 +9,40 @@ import sys
 import numpy as np
 import pandas
 
+def positive_int_or_none(value: int) -> bool:
+    if value is None:
+        return True
+    
+    if isinstance(value, int) and value >= 0:
+        return True
+
+    return False
+
+def set_none_or_int(value) -> int:
+    if value == "None":
+        return None
+
+    if int(value) < 0:
+        return None
+
+    return int(value)
+
+# Returns a list
+def get_from_string_or_list(value) -> list:
+    if isinstance(value, str):
+        return clean_column_names_list(value)
+
+    if isinstance(value, list):
+        return [ elem for elem in value if elem != ""]
+    
+
+# Turns a comma-delinated text string into a list of strings
+def clean_column_names_list(column_names: str) -> list[str]:
+        """ This takes a comma-delimeted string and returns the list with no empty values"""
+        splitted = column_names.split(",")
+
+        return [ elem for elem in splitted if elem != ""] # Removes all empty column names
+
 # Help routines for determining consistency of input data
 def is_float(val) -> bool:
     """ In DatasetHandler.read_data() """

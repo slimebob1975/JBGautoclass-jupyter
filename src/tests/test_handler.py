@@ -703,7 +703,7 @@ class TestModelHandler():
         assert default_model_handler.load_model_from_file(filename) == None
         
         path = get_fixture_path() / "model-save.sav"
-
+        
         assert default_model_handler.load_model_from_file(path) == Model()
 
     def test_load_pipeline_from_file(self, default_model_handler):
