@@ -94,7 +94,7 @@ class Algorithm(MetaEnum):
     ALL = { "full_name": "All", "limit": None, "fit_params": {}}
     RCART = { "full_name": "Robust Tree Classifier", "limit": None, "fit_params": {}}
     RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "fit_params": {}}
-    RCT = { "full_name": "Robus Centroid", "limit": None, "fit_params": {}}
+    RCT = { "full_name": "Robust Centroid", "limit": None, "fit_params": {}}
     LRN = { "full_name": "Logistic Regression", "limit": None, "fit_params": {}}
     KNN = { "full_name": "K-Neighbors Classifier", "limit": None, "fit_params": {}}
     CART = { "full_name": "Decision Tree Classifier", "limit": None, "fit_params": {}}
