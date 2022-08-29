@@ -1,0 +1,159 @@
+import base64
+from datetime import datetime
+import getopt
+import importlib
+import os
+import sys
+
+
+import numpy as np
+import pandas
+
+# Help routines for determining consistency of input data
+def is_float(val) -> bool:
+    """ In DatasetHandler.read_data() """
+    try:
+        float(val)
+    except ValueError:
+        return False
+    return True
+
+def is_int(val) -> bool:
+    """ In DatasetHandler.read_data() """
+    try:
+        int(val)
+    except ValueError:
+        return False
+    return True
+
+def is_str(val) -> bool:
+    """ In DatasetHandler.read_data() """
+    val_is_datetime = get_datetime(val)
+    is_other_type = \
+        is_float(val) or \
+        is_int(val) or \
+        isinstance(val, bool) or \
+        val_is_datetime is not None
+    return not is_other_type 
+    
+def get_datetime(val) -> datetime:
+    """ In DatasetHandler.read_data() """
+    try:
+        if isinstance(val, datetime): #Simple, is already instance of datetime
+            return val
+    except ValueError:
+        pass
+    # Harder: test the value for many different datetime formats and see if any is correct.
+    # If so, return it, otherwise, return None.
+    the_formats = [
+        '%Y-%m-%d %H:%M:%S','%Y-%m-%d','%Y-%m-%d %H:%M:%S.%f','%Y-%m-%d %H:%M:%S,%f', 
+        '%d/%m/%Y %H:%M:%S','%d/%m/%Y','%d/%m/%Y %H:%M:%S.%f', '%d/%m/%Y %H:%M:%S,%f',
+        '%m/%d/%Y %H:%M:%S','%m/%d/%Y','%m/%d/%Y %H:%M:%S.%f', '%m/%d/%Y %H:%M:%S,%f'
+    ]
+    for the_format in the_formats:
+        try:
+            date_time = datetime.strptime(str(val), the_format)
+            if isinstance(date_time, datetime):
+                return date_time
+        except ValueError:
+            pass
+    return None
+
+# Convert dataset to unreadable hex code
+def do_hex_base64_encode_on_data(X):
+
+    XX = X.copy()
+
+    with np.nditer(XX, op_flags=['readwrite'], flags=["refs_ok"]) as iterator:
+        for x in iterator:
+            xval = str(x)
+            xhex = cipher_encode_string(xval)
+            x[...] = xhex 
+
+    return XX
+
+def cipher_encode_string(a):
+
+    aa = a.split()
+    b = ""
+    for i in range(len(aa)):
+        b += (str(
+                base64.b64encode(
+                    bytes(aa[i].encode("utf-8").hex(),"utf-8")
+                )
+            ) + " ")
+
+    return b.strip()
+
+def get_rid_of_decimals(x) -> int:
+    return int(round(float(x)))
+
+def find_smallest_class_number(Y: pandas.DataFrame) -> int:
+    class_count = {}
+    for elem in Y:
+        if elem not in class_count:
+            class_count[elem] = 1
+        else:
+            class_count[elem] += 1
+    return max(1, min(class_count.values()))
+
+# In case the user has specified some input arguments to command line call
+# As written, you need to call on the class in the src\IAFautoclass dir, with
+# the configfilename on the format of ".\config\filename.py", where it has to be
+# a subfolder in the src\IAFautoclass dir
+# This complicates testing a Config loaded from a file 
+def check_input_arguments(argv: list):
+    command_line_instructions = \
+        f"Usage: {argv[0] } [-h/--help] [-f/--file <configfilename>]"
+
+    try:
+        short_options = "hf:"
+        long_options = ["help", "file"]
+        opts, args = getopt.getopt(argv[1:], short_options, long_options)
+    except getopt.GetoptError:
+        print(command_line_instructions)
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h' or opt == '--help':
+            print(command_line_instructions)
+            sys.exit()
+        elif opt == '-f' or opt == '--file':
+            if arg.count("..") > 0:
+                # This throws an error if you write the filename in the form of ..\
+                print(
+                    "Configuration file must be in a subfolder to {0}".format(argv[0]))
+                sys.exit()
+            print("Importing specified configuration file:", arg)
+            
+            # TODO: This does nothing as it currently stands
+            if not arg[0] == '.': 
+                arg = os.path.relpath(arg)
+            
+            file = arg.split('\\')[-1]
+            filename = file.split('.')[0]
+            filepath = '\\'.join(arg.split('\\')[:-1])
+            paths = arg.split('\\')[:-1] # This is expected to be [".", "directory"]
+            try:
+                # This removes the "." from the above list
+                paths.pop(paths.index('.'))
+            except Exception as e:
+                # Why is this an error? 
+                # If there is no "." in the above list, then it's done without needing to pop it
+                print("Filepath {0} does not seem to be relative (even after conversion)".format(
+                    filepath))
+                sys.exit()
+            pack = '.'.join(paths)
+            sys.path.insert(0, filepath)
+            try:
+                # This expects ex "config.filename"
+                module = importlib.import_module(pack+"."+filename)
+                
+                return module
+            except Exception as e:
+                print("Filename {0} and pack {1} could not be imported dynamically".format(
+                    filename, pack))
+                sys.exit(str(e))
+        else:
+            print("Illegal argument to " + argv[0] + "!")
+            print(command_line_instructions)
+            sys.exit()
