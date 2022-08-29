@@ -737,19 +737,19 @@ class TestPredictionsHandler:
             {
                 "key": "key1",
                 "prediction": "pred1",
-                "rates": "rate1",
+                "rate": "rate1",
                 "probabilities": "prob1a,prob1b"
             },
             {
                 "key": "key2",
                 "prediction": "pred2",
-                "rates": "rate2",
+                "rate": "rate2",
                 "probabilities": "prob2a,prob2b"
             },
             {
                 "key": "key3",
                 "prediction": "pred3",
-                "rates": "rate3",
+                "rate": "rate3",
                 "probabilities": "prob3a,prob3b"
             }
         ]

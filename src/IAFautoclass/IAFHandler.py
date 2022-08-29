@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pickle
 import time
+import psutil
 import typing
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -1057,7 +1058,7 @@ class ModelHandler:
                 fit_params[key] = func(X_train, Y_train)
 
         try:
-            return cross_val_score(pipeline, X_train, Y_train, cv=kfold, scoring=scorer_mechanism, fit_params=fit_params) 
+            return cross_val_score(pipeline, X_train, Y_train, n_jobs=psutil.cpu_count(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params) 
         except ValueError as e:
             print(str(e))
             return

@@ -49,11 +49,12 @@ class DataLayer:
         return sqlHelper
 
     def can_connect(self, verbose: bool = False) -> bool:
+        """ This wraps the test in a function, to not show the inner functionality """
         try:
             self.get_sql_connection() # This checks so that the SQL connection works
         except Exception as e:
             if verbose:
-                self.logger.print_warning(f"Exception when connectiong to SQL server: {e}")
+                self.logger.print_warning(f"Exception when connecting to SQL server: {e}")
             
             return False
         

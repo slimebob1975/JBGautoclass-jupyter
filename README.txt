@@ -10,6 +10,8 @@ To use the Jupyter GUI for IAF Python autoclassification script, do as follows:
             into an appropriate directory
     b) Ask a friend to get a copy of the code
 
+    There are two versions of this. The legacy (if wanted) is tagged v1.0, and the main branch is version 2.
+
 2. Copy the file example.env to a new file called .env and change
        the variables such that they reflect your SQL Server environment
 3. Download and install Anaconda from: https://www.anaconda.com/products/distribution
