@@ -1295,7 +1295,7 @@ class PredictionsHandler:
         try:
             the_classes = the_model.classes_
         except AttributeError as e:
-            print(f"No classes_ attribute in model, using original classes as fallback: {e}"))
+            print(f"No classes_ attribute in model, using original classes as fallback: {e}")
             the_classes = set(Y)
 
         if not could_predict_proba:
