@@ -579,8 +579,9 @@ class DatasetHandler:
         count_vectorizer = self.get_count_vectorizer_from_dataset(model.count_vectorizer, X)
         
         # Mask all material by encryption (optional)
-        if (self.handler.config.should_hex_encode()):
-            X = Helpers.do_hex_base64_encode_on_data(X)
+         # Commented out since this is likely copypasta
+        #if (self.handler.config.should_hex_encode()):
+        #    X = Helpers.do_hex_base64_encode_on_data(X)
 
         # Do the word in a bag now
         X = count_vectorizer.transform(X)
@@ -626,7 +627,6 @@ class DatasetHandler:
         except Exception as e:
             self.handler.logger.print_warning(f"Could not calculate lexical richness: {e}")
 
-        # TODO: Does this have to be here, or could it be before or after the function?
         # Mask all material by encryption (optional)
         if (self.handler.config.should_hex_encode()):
             dataset = Helpers.do_hex_base64_encode_on_data(dataset)
@@ -930,8 +930,6 @@ class ModelHandler:
             # Loop over pre-processing methods
             for preprocessor, preprocessor_callable in preprocessors:
                 if not self.should_run_computation(algorithm, preprocessor):
-                    if algorithm == Algorithm.WBDT:
-                        print ("should not run")
                     #self.handler.logger.print_progress(message=f"Skipping ({algorithm.name}-{preprocessor.name}) due to config")
                     continue
                 # Update progressbar percent and label
@@ -1181,7 +1179,7 @@ class PredictionsHandler:
             could_predict_proba = True
         except Exception as e:
             self.handler.logger.print_warning(f"Probablity prediction not available for current model: {e}")
-            probabilities = np.array([[-1.0]*len(classes)]*X.shape[0]) # TODO: remove model.classes_
+            probabilities = np.array([[-1.0]*len(classes)]*X.shape[0])
             rates = np.array([-1.0]*X.shape[0])
         
         self.could_predict_proba = could_predict_proba
@@ -1294,9 +1292,15 @@ class PredictionsHandler:
         
         # Add probabilities and sort only if they could be calculated above, otherwise
         # return a random sample of mispredicted
+        try:
+            the_classes = the_model.classes_
+        except AttributeError as e:
+            print(f"No classes_ attribute in model, using original classes as fallback: {e}"))
+            the_classes = set(Y)
+
         if not could_predict_proba:
-            for i in range(len(the_model.classes_)):
-                X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", "N/A")
+            for i in range(len(the_classes)): # TODO: possibly rewrite this for loop
+                X_mispredicted.insert(0, "P(" + the_classes[i] + ")", "N/A")
             n_limit = min(self.LIMIT_MISPREDICTED, X_mispredicted.shape[0])
 
             self.X_most_mispredicted = X_mispredicted.sample(n=n_limit)
@@ -1304,7 +1308,7 @@ class PredictionsHandler:
         
         Y_prob_max = np.amax(Y_prob, axis = 1)
         for i in reversed(range(Y_prob.shape[1])):
-            X_mispredicted.insert(0, "P(" + the_model.classes_[i] + ")", Y_prob[:,i])
+            X_mispredicted.insert(0, "P(" + the_classes[i] + ")", Y_prob[:,i])
         X_mispredicted.insert(0, "__Sort__", Y_prob_max)
 
         # Sort the dataframe on the first column and remove it

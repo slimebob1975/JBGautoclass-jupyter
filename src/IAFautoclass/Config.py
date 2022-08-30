@@ -144,7 +144,9 @@ class Algorithm(MetaEnum):
         """ Gets a list of algorithms that are callable
             in the form (algorithm, called function)
         """
-        return [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_algorithm_function()]
+        algorithms =  [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_algorithm_function()]
+        algorithms.sort(key=lambda algotuple: algotuple[0].name)
+        return algorithms
 
     def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
         return RobustLR()
@@ -304,8 +306,7 @@ class Algorithm(MetaEnum):
     def has_algorithm_function(self) -> bool:
         do = self.get_function_name()
         return hasattr(self, do) and callable(getattr(self, do))
-
-    
+ 
 
 class Preprocess(MetaEnum):
     ALL = "All"
