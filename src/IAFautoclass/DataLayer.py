@@ -25,8 +25,8 @@ class DataLayer:
 
     def __post_init__(self) -> None:
         # Extract parameters that are not textual
-        self.text_data = self.connection.data_text_columns != ""
-        self.numerical_data = self.connection.data_numerical_columns != ""
+        self.text_data = len(self.connection.data_text_columns) > 0
+        self.numerical_data = len(self.connection.data_numerical_columns) > 0
         self.scriptpath = os.path.dirname(os.path.realpath(__file__))
     
         if drivers().find(self.connection.odbc_driver) == -1:
@@ -140,12 +140,25 @@ class DataLayer:
     # Produces an SQL command that can be executed to get a hold of the recently classified
     # data elements
     def get_sql_command_for_recently_classified_data(self, num_rows: int) -> str:
+        colstring = self.connection.id_column + "," + ",".join(self.connection.data_numerical_columns) + "," + ",".join(self.connection.data_text_columns)
         
+        #selcols = (
+        #    "A.[" + "], A.[".join(colstring.split(',')) "], "
+        #).replace("A.[]", "").replace(",,",",").replace(", ,",",")
+
         selcols = ("A.[" + \
-            "], A.[".join((self.connection.id_column + "," + \
-            self.connection.data_numerical_columns + "," + \
-            self.connection.data_text_columns).split(',')) + \
+            "], A.[".join(
+                (self.connection.id_column + "," + ",".join(self.connection.data_numerical_columns) + "," + ",".join(self.connection.data_text_columns)).split(',')
+            ) + \
             "], ").replace("A.[]", "").replace(",,",",").replace(", ,",",")
+
+        #selcols = ("A.[" + \
+        #    "], A.[".join(
+        #        (self.connection.id_column + "," + \
+        #    self.connection.data_numerical_columns + "," + \
+        #    self.connection.data_text_columns).split(',')
+        #    ) + \
+        #    "], ").replace("A.[]", "").replace(",,",",").replace(", ,",",")
         
         query = \
             "SELECT TOP(" + str(num_rows) + ") " + selcols +  \
@@ -181,11 +194,11 @@ class DataLayer:
             query +=  "class_script,class_user) VALUES(\'" + self.connection.data_catalog + "\'," 
             query +=  "\'" + self.connection.data_table + "\',\'" 
             if self.text_data:
-                query += self.connection.data_text_columns
+                query += ",".join(self.connection.data_text_columns)
             if self.text_data and self.numerical_data:
                 query += ","
             if self.numerical_data:
-                query +=  self.connection.data_numerical_columns  
+                query +=  ".".join(self.connection.data_numerical_columns)
             query +=  "\',-1" + ",\' N/A \',0.0," 
             query +=  "" + "\'U\',\' N/A \',\' N/A \',\'" + "Not set" + "\',\'" 
             query += self.scriptpath + "\',\'" + self.connection.data_username + "\')"
@@ -368,7 +381,7 @@ class DataLayer:
     def get_data_query(self, num_rows, train, predict) -> str:
         query = "SELECT "
         query += "TOP(" + str(num_rows) + ") "
-        column_groups = (self.connection.data_text_columns, self.connection.data_numerical_columns, self.connection.id_column, self.connection.class_column)
+        column_groups = (",".join(self.connection.data_text_columns), ",".join(self.connection.data_numerical_columns), self.connection.id_column, self.connection.class_column)
         for column_group in column_groups:
                 columns = column_group.split(',')
                 for column in columns:
