@@ -739,8 +739,8 @@ class IAFautoclass_GUI:
                 class_column = self.class_column.value,
                 class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG,
                 class_table = self.DEFAULT_CLASSIFICATION_TABLE,
-                data_text_columns = ','.join(list(self.text_columns.value)),
-                data_numerical_columns = ','.join(data_numerical_columns),
+                data_text_columns = list(self.text_columns.value),
+                data_numerical_columns = data_numerical_columns,
                 id_column = self.id_column.value
             )
         config = Config(
@@ -753,7 +753,7 @@ class IAFautoclass_GUI:
                 specific_stop_words_threshold = float(self.filter_slider.value) / 100.0,
                 hex_encode = self.encryption_checkbox.value,
                 use_categorization = self.categorize_checkbox.value,
-                category_text_columns = ','.join(list(self.categorize_columns.value)),
+                category_text_columns = list(self.categorize_columns.value),
                 test_size = float(self.testdata_slider.value) / 100.0,
                 smote = self.smote_checkbox.value,
                 undersample = self.undersample_checkbox.value,
