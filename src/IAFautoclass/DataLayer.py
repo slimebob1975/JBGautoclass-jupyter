@@ -140,37 +140,30 @@ class DataLayer:
     # Produces an SQL command that can be executed to get a hold of the recently classified
     # data elements
     def get_sql_command_for_recently_classified_data(self, num_rows: int) -> str:
-        colstring = self.connection.id_column + "," + ",".join(self.connection.data_numerical_columns) + "," + ",".join(self.connection.data_text_columns)
         
-        #selcols = (
-        #    "A.[" + "], A.[".join(colstring.split(',')) "], "
-        #).replace("A.[]", "").replace(",,",",").replace(", ,",",")
+        dataCols = [
+            self.connection.id_column
+        ] + self.connection.data_numerical_columns + self.connection.data_text_columns
 
-        selcols = ("A.[" + \
-            "], A.[".join(
-                (self.connection.id_column + "," + ",".join(self.connection.data_numerical_columns) + "," + ",".join(self.connection.data_text_columns)).split(',')
-            ) + \
-            "], ").replace("A.[]", "").replace(",,",",").replace(", ,",",")
+        classCols = [
+            "class_result",
+            "class_rate",
+            "class_time",
+            "class_algorithm"
+        ]
 
-        #selcols = ("A.[" + \
-        #    "], A.[".join(
-        #        (self.connection.id_column + "," + \
-        #    self.connection.data_numerical_columns + "," + \
-        #    self.connection.data_text_columns).split(',')
-        #    ) + \
-        #    "], ").replace("A.[]", "").replace(",,",",").replace(", ,",",")
-        
-        query = \
-            "SELECT TOP(" + str(num_rows) + ") " + selcols +  \
-            "B.[class_result], B.[class_rate],  B.[class_time], B.[class_algorithm] " + \
-            "FROM [" + self.connection.data_catalog.replace('.',"].[") + "].[" + \
-            self.connection.data_table.replace('.',"].[") + "] A " + \
-            " INNER JOIN [" + self.connection.class_catalog.replace('.',"].[") + "].[" + \
-            self.connection.class_table.replace('.',"].[") + "] B " + \
-            "ON A." + self.connection.id_column + " = B.[unique_key] " + \
-            "WHERE B.[class_user] = \'" + self.connection.class_username + "\' AND " + \
-            "B.[table_name] = \'" + self.connection.data_table + "\' " + \
-            "ORDER BY B.[class_time] DESC "
+        columns = ",".join([f"TOP({num_rows})"] + [f"A.[{a}]" for a in dataCols] + [f"B.[{b}]" for b in classCols])
+
+        # TODO: Can this be simplified? In particular: what is the format of database/table that requires these tests
+        # My reading: database.one, table.one => [database].[one].[table.one]. Also think a lot of this should be in Config instead of here:
+        # This (and similar) functions should not need to keep track of whether the values are valid or not
+        classTable = "[" + self.connection.class_catalog.replace('.',"].[") + "].[" + self.connection.class_table.replace('.',"].[") + "] B "
+        dataTable =  "[" + self.connection.data_catalog.replace('.',"].[") + "].[" + self.connection.data_table.replace('.',"].[") + "] A "
+
+        join = f"A.[{self.connection.id_column}] = B.[unique_key]"
+        where = f"B.[class_user] = {to_quoted_string(self.connection.class_username)} AND B.[table_name] = {to_quoted_string(self.connection.data_table)}\'"
+        query = f"SELECT {columns} FROM {dataTable} INNER JOIN {classTable} ON {join} WHERE {where} ORDER BY B.[class_time] DESC"
+
         return query
 
     # Function to set a new row in classification database which marks that execution has started.
@@ -539,7 +532,9 @@ class DataLayer:
             raise DataLayerException(f"Correction of mispredicted data: {query} failed: {e}")
 
 def drivers():
-        return str(pyodbc.drivers())
+    drivers = pyodbc.drivers()
+    drivers.append("Mock Server")
+    return str(drivers)
 
 def to_quoted_string(x, quotes:str = '\'') -> str:
     value = str(x)

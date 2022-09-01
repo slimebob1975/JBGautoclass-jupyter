@@ -3,6 +3,7 @@ sql_config.py
 __pycache__
 .vscode
 autoclassconfig_*.py
+src/IAFautoclass/config/test_*.py
 !autoclassconfig_template.py
 src/IAFautoclass/output/*.csv
 src/IAFautoclass/model/*.sav
