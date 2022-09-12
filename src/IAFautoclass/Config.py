@@ -14,7 +14,7 @@ from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
 from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
                               ExtraTreesClassifier, GradientBoostingClassifier,
-                              RandomForestClassifier)
+                              RandomForestClassifier, StackingClassifier)
 from sklearn.feature_selection import SelectFromModel
 from sklearn.kernel_approximation import Nystroem
 from sklearn.linear_model import (LogisticRegression,
@@ -32,11 +32,13 @@ from sklearn.random_projection import GaussianRandomProjection
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import make_scorer, matthews_corrcoef
-# Imports from scikit clean
+
 from skclean.models import RobustForest, RobustLR, Centroid
 
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
+from imblearn.ensemble import (EasyEnsembleClassifier, RUSBoostClassifier, 
+     BalancedBaggingClassifier, BalancedRandomForestClassifier)
 
 from IAFExceptions import ConfigException
 import Helpers
@@ -92,17 +94,23 @@ class MetaEnum(enum.Enum):
 
 class Algorithm(MetaEnum):
     ALL = { "full_name": "All", "limit": None, "fit_params": {}}
-    RCART = { "full_name": "Robust Tree Classifier", "limit": None, "fit_params": {}}
+    SRF1 = { "full_name": "Stacking Random Forests Cl. 1", "limit": None, "fit_params": {}}
+    SRF2 = { "full_name": "Stacking Random Forests Cl. 2", "limit": None, "fit_params": {}}
+    BARF = { "full_name": "Balanced Random Forest Classifier", "limit": None, "fit_params": {}}
+    BABC = { "full_name": "Balanced Bagging Classifier", "limit": None, "fit_params": {}}
+    RUBC = { "full_name": "RUS Boost Classifier", "limit": None, "fit_params": {}}
+    EAEC = { "full_name": "Easy Ensamble Classifier", "limit": None, "fit_params": {}}
+    RORT = { "full_name": "Robust Tree Classifier", "limit": None, "fit_params": {}}
     RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "fit_params": {}}
-    RCT = { "full_name": "Robust Centroid", "limit": None, "fit_params": {}}
+    RNCT = { "full_name": "Robust Centroid", "limit": None, "fit_params": {}}
     LRN = { "full_name": "Logistic Regression", "limit": None, "fit_params": {}}
-    KNN = { "full_name": "K-Neighbors Classifier", "limit": None, "fit_params": {}}
-    CART = { "full_name": "Decision Tree Classifier", "limit": None, "fit_params": {}}
+    KNC = { "full_name": "K-Neighbors Classifier", "limit": None, "fit_params": {}}
+    DRT = { "full_name": "Decision Tree Classifier", "limit": None, "fit_params": {}}
     GNB = { "full_name": "Gaussian Naive Bayes", "limit": None, "fit_params": {}}
     MNB = { "full_name": "Multinomial Naive Bayes", "limit": None, "fit_params": {}}
     BNB = { "full_name": "Bernoulli Naive Bayes", "limit": None, "fit_params": {}}
     CNB = { "full_name": "Complement Naive Bayes", "limit": None, "fit_params": {}}
-    REC = { "full_name": "Ridge Classifier", "limit": None, "fit_params": {}}
+    RIC = { "full_name": "Ridge Classifier", "limit": None, "fit_params": {}}
     PCN = { "full_name": "Perceptron", "limit": None, "fit_params": {}}
     PAC = { "full_name": "Passive Aggressive Classifier", "limit": None, "fit_params": {}}
     RFC1 = { "full_name": "Random Forest Classifier 1", "limit": None, "fit_params": {}}
@@ -118,7 +126,7 @@ class Algorithm(MetaEnum):
     SVC = { "full_name": "Support Vector Classification", "limit": 10000, "fit_params": {}}
     LDA = { "full_name": "Linear Discriminant Analysis", "limit": None, "fit_params": {}}
     QDA = { "full_name": "Quadratic Discriminant Analysis", "limit": None, "fit_params": {}}
-    BDT = { "full_name": "Bagging Classifier", "limit": None, "fit_params": {}}
+    BAC = { "full_name": "Bagging Classifier", "limit": None, "fit_params": {}}
     ETC = { "full_name": "Extra Trees Classifier", "limit": None, "fit_params": {}}
     ABC = { "full_name": "Ada Boost Classifier", "limit": None, "fit_params": {}}
     GBC = { "full_name": "Gradient Boosting Classifier", "limit": None, "fit_params": {}}
@@ -147,6 +155,36 @@ class Algorithm(MetaEnum):
         algorithms =  [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_algorithm_function()]
         algorithms.sort(key=lambda algotuple: algotuple[0].name)
         return algorithms
+    
+    def do_SRF1(self, max_iterations: int, size: int)-> StackingClassifier:
+        estimators = [ \
+                ('rfor',RobustForest()),\
+                ('bfor',BalancedRandomForestClassifier())\
+                ]
+        return StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
+
+    def do_SRF2(self, max_iterations: int, size: int)-> StackingClassifier:
+        estimators = [ \
+                ('for', RandomForestClassifier()),\
+                ('rfor',RobustForest()),\
+                ('bfor',BalancedRandomForestClassifier())\
+                ]
+        return StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
+
+    def do_SRF2(self, max_iterations: int, size: int)-> StackingClassifier:
+        return BalancedRandomForestClassifier()
+
+    def do_BARF(self, max_iterations: int, size: int)-> BalancedRandomForestClassifier:
+        return BalancedRandomForestClassifier()
+    
+    def do_BABC(self, max_iterations: int, size: int)-> BalancedBaggingClassifier:
+        return BalancedBaggingClassifier()
+    
+    def do_RUBC(self, max_iterations: int, size: int)-> RUSBoostClassifier:
+        return RUSBoostClassifier()
+
+    def do_EAEC(self, max_iterations: int, size: int)-> EasyEnsembleClassifier:
+        return EasyEnsembleClassifier()
 
     def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
         return RobustLR()
