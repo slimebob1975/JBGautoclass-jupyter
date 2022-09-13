@@ -199,7 +199,8 @@ class IAFautoclass_GUI:
         
          # Continuation message label
         self.class_summary_text = widgets.Label(
-            description = "",
+            description = "", 
+            value = "Class summary: N/A", # Not empty to avoid a black gap in black background
             disabled = False,
         )
         
