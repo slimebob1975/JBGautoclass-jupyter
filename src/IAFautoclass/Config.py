@@ -179,9 +179,9 @@ class Algorithm(MetaEnum):
     BABC = { "full_name": "Balanced Bagging Classifier", "limit": None, "detector": None, "fit_params": {}}
     RUBC = { "full_name": "RUS Boost Classifier", "limit": None, "detector": None, "fit_params": {}}
     EAEC = { "full_name": "Easy Ensamble Classifier", "limit": None, "detector": None, "fit_params": {}}
-    RORT = { "full_name": "Robust Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
+    RCART = { "full_name": "Robust Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
     RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "detector": None, "fit_params": {}}
-    RNCT = { "full_name": "Robust Centroid", "limit": None, "detector": None, "fit_params": {}}
+    RCT = { "full_name": "Robust Centroid", "limit": None, "detector": None, "fit_params": {}}
     LRN = { "full_name": "Logistic Regression", "limit": None, "detector": None, "fit_params": {}}
     KNC = { "full_name": "K-Neighbors Classifier", "limit": None, "detector": None, "fit_params": {}}
     DRT = { "full_name": "Decision Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
@@ -212,6 +212,7 @@ class Algorithm(MetaEnum):
     MLPR = { "full_name": "ML Neural Network Relu", "limit": None, "detector": None, "fit_params": {}}
     MLPL = { "full_name": "ML Neural Network Sigm", "limit": None, "detector": None, "fit_params": {}}
     WBGK = { "full_name": "Weighted Bagging + KDN", "limit": None, "detector": "Detector.KDN", "fit_params": {}}
+    WBGM = { "full_name": "Weighted Bagging + MCS", "limit": None, "detector": "Detector.MCS", "fit_params": {}}
 
     @property
     def limit(self):
@@ -240,7 +241,19 @@ class Algorithm(MetaEnum):
         algorithms =  [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_function()]
         algorithms.sort(key=lambda algotuple: algotuple[0].name)
         return algorithms
-    
+
+    @classmethod
+    def get_robust_algorithms(cls) -> list:
+        """ This list needs to be extended if we add more robust algorithms"""
+        return [Algorithm.RCART, Algorithm.RLRN, Algorithm.RCT]
+
+    def call_algorithm(self, max_iterations: int, size: int) -> Union[Estimator, None]:
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function(max_iterations=max_iterations, size=size)
+
+    def use_imb_pipeline(self) -> bool:
+        return self in self.get_robust_algorithms()
+
     def do_SRF1(self, max_iterations: int, size: int)-> StackingClassifier:
         estimators = [ \
                 ('rfor',RobustForest()),\
@@ -270,14 +283,6 @@ class Algorithm(MetaEnum):
 
     def do_EAEC(self, max_iterations: int, size: int)-> EasyEnsembleClassifier:
         return EasyEnsembleClassifier()
-
-    @classmethod
-    def get_robust_algorithms(cls) -> list:
-        """ This list needs to be extended if we add more robust algorithms"""
-        return [Algorithm.RCART, Algorithm.RLRN, Algorithm.RCT]
-
-    def use_imb_pipeline(self) -> bool:
-        return self in self.get_robust_algorithms()
 
     def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
         return RobustLR()
@@ -426,9 +431,8 @@ class Algorithm(MetaEnum):
     def do_WBGK(self, max_iterations: int, size: int)-> WeightedBagging: 
         return WeightedBagging(detector=eval(self.detector).call_detector())
 
-    def call_algorithm(self, max_iterations: int, size: int) -> Union[Estimator, None]:
-        """ Wrapper to general function for DRY, but name/signature kept for ease. """
-        return self.call_function(max_iterations=max_iterations, size=size)
+    def do_WBGM(self, max_iterations: int, size: int)-> WeightedBagging: 
+        return WeightedBagging(detector=eval(self.detector).call_detector())
  
 class Detector(MetaEnum):
     ALL = "All"
