@@ -62,11 +62,11 @@ class IAFLogger(terminal.Logger):
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
         if message is not None:
-            self.print_unformatted(message)
+            #self.print_unformatted(message)
             self._set_widget_value("progress_label", message)
 
         if percent is not None:
-            self.print_unformatted(f"{percent*100}% completed")
+            #self.print_unformatted(f"{percent*100}% completed")
             self._set_widget_value("progress_bar", percent)
 
     def print_error(self, *args) -> None:
