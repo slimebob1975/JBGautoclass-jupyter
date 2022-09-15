@@ -183,13 +183,13 @@ class Algorithm(MetaEnum):
     RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "detector": None, "fit_params": {}}
     RCT = { "full_name": "Robust Centroid", "limit": None, "detector": None, "fit_params": {}}
     LRN = { "full_name": "Logistic Regression", "limit": None, "detector": None, "fit_params": {}}
-    KNC = { "full_name": "K-Neighbors Classifier", "limit": None, "detector": None, "fit_params": {}}
-    DRT = { "full_name": "Decision Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
+    KNN = { "full_name": "K-Neighbors Classifier", "limit": None, "detector": None, "fit_params": {}}
+    CART = { "full_name": "Decision Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
     GNB = { "full_name": "Gaussian Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
     MNB = { "full_name": "Multinomial Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
     BNB = { "full_name": "Bernoulli Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
     CNB = { "full_name": "Complement Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
-    RIC = { "full_name": "Ridge Classifier", "limit": None, "detector": None, "fit_params": {}}
+    REC = { "full_name": "Ridge Classifier", "limit": None, "detector": None, "fit_params": {}}
     PCN = { "full_name": "Perceptron", "limit": None, "detector": None, "fit_params": {}}
     PAC = { "full_name": "Passive Aggressive Classifier", "limit": None, "detector": None, "fit_params": {}}
     RFC1 = { "full_name": "Random Forest Classifier 1", "limit": None, "detector": None, "fit_params": {}}
@@ -205,7 +205,7 @@ class Algorithm(MetaEnum):
     SVC = { "full_name": "Support Vector Classification", "limit": 10000, "detector": None, "fit_params": {}}
     LDA = { "full_name": "Linear Discriminant Analysis", "limit": None, "detector": None, "fit_params": {}}
     QDA = { "full_name": "Quadratic Discriminant Analysis", "limit": None, "detector": None, "fit_params": {}}
-    BAC = { "full_name": "Bagging Classifier", "limit": None, "detector": None, "fit_params": {}}
+    BDT = { "full_name": "Bagging Classifier", "limit": None, "detector": None, "fit_params": {}}
     ETC = { "full_name": "Extra Trees Classifier", "limit": None, "detector": None, "fit_params": {}}
     ABC = { "full_name": "Ada Boost Classifier", "limit": None, "detector": None, "fit_params": {}}
     GBC = { "full_name": "Gradient Boosting Classifier", "limit": None, "detector": None, "fit_params": {}}
@@ -269,9 +269,6 @@ class Algorithm(MetaEnum):
                 ]
         return StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
 
-    def do_SRF2(self, max_iterations: int, size: int)-> StackingClassifier:
-        return BalancedRandomForestClassifier()
-
     def do_BARF(self, max_iterations: int, size: int)-> BalancedRandomForestClassifier:
         return BalancedRandomForestClassifier()
     
@@ -284,11 +281,11 @@ class Algorithm(MetaEnum):
     def do_EAEC(self, max_iterations: int, size: int)-> EasyEnsembleClassifier:
         return EasyEnsembleClassifier()
 
-    def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
-        return RobustLR()
-    
     def do_RCART(self, max_iterations: int, size: int)-> RobustForest:
         return RobustForest()
+
+    def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
+        return RobustLR()
 
     def do_RCT(self, max_iterations: int, size: int)-> Centroid:
         return Centroid()
@@ -299,42 +296,32 @@ class Algorithm(MetaEnum):
     def do_KNN(self, max_iterations: int, size: int)-> KNeighborsClassifier:
         return KNeighborsClassifier()
 
-
     def do_CART(self, max_iterations: int, size: int)-> DecisionTreeClassifier:
         return DecisionTreeClassifier()
-
 
     def do_GNB(self, max_iterations: int, size: int)-> GaussianNB:
         return GaussianNB()
 
-
     def do_MNB(self, max_iterations: int, size: int)-> MultinomialNB:
         return MultinomialNB(alpha=.01)
-
 
     def do_BNB(self, max_iterations: int, size: int)-> BernoulliNB:
         return BernoulliNB(alpha=.01)
 
-
     def do_CNB(self, max_iterations: int, size: int)-> ComplementNB:
         return ComplementNB(alpha=.01)
-
 
     def do_REC(self, max_iterations: int, size: int)-> RidgeClassifier:
         return RidgeClassifier(tol=1e-2, solver="sag")
 
-
     def do_PCN(self, max_iterations: int, size: int)-> Perceptron:
         return Perceptron(max_iter=max_iterations)
-
 
     def do_PAC(self, max_iterations: int, size: int)-> PassiveAggressiveClassifier:
         return PassiveAggressiveClassifier(max_iter=max_iterations)
 
-
     def do_RFC1(self, max_iterations: int, size: int)-> RandomForestClassifier:
         return self.call_RandomForest("sqrt")
-
 
     def do_RFC2(self, max_iterations: int, size: int)-> RandomForestClassifier:
         return self.call_RandomForest("log2")
@@ -342,46 +329,25 @@ class Algorithm(MetaEnum):
     def call_RandomForest(self, max_features: str) -> RandomForestClassifier:
         return RandomForestClassifier(n_estimators=100, max_features=max_features)
 
-
     def do_LIN1(self, max_iterations: int, size: int)-> LinearSVC:
         return self.call_LinearSVC(max_iterations, "l1", False) 
 
-
     def do_LIN2(self, max_iterations: int, size: int)-> LinearSVC:  
         return self.call_LinearSVC(max_iterations, "l2", False)
-
 
     def do_LINP(self, max_iterations: int, size: int)-> Pipeline:
         return Pipeline([
             ('feature_selection', SelectFromModel(self.call_LinearSVC(max_iterations, "l1", False))),
             ('classification', self.call_LinearSVC(max_iterations, "l2"))])
-    
-    def do_SVC(self, max_iterations: int, size: int):
-        if size < self.limit:
-            return SVC(gamma='auto', probability=True)
-        
-        # TODO: communicate with terminal to warn? 
-        # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
-        return self.call_LinearSVC(max_iterations, "l1", False)
-    
-
-    def call_LinearSVC(self, max_iterations: int, penalty: str, dual: bool = None) -> LinearSVC:
-        if dual is None:
-            return LinearSVC(penalty=penalty, max_iter=max_iterations)
-        
-        return LinearSVC(penalty=penalty, dual=dual, tol=1e-3, max_iter=max_iterations)
 
     def do_SGD(self, max_iterations: int, size: int)-> SGDClassifier:
         return self.call_SGD(max_iterations)    
 
-
     def do_SGD1(self, max_iterations: int, size: int)-> SGDClassifier:
         return self.call_SGD(max_iterations, "l1")  
-        
 
     def do_SGD2(self, max_iterations: int, size: int)-> SGDClassifier:
         return self.call_SGD(max_iterations, "l2")
-
 
     def do_SGDE(self, max_iterations: int, size: int)-> SGDClassifier:
         return self.call_SGD(max_iterations, "elasticnet")
@@ -395,26 +361,34 @@ class Algorithm(MetaEnum):
     def do_NCT(self, max_iterations: int, size: int)-> NearestCentroid:     
         return NearestCentroid()
 
+    def do_SVC(self, max_iterations: int, size: int):
+        if size < self.limit:
+            return SVC(gamma='auto', probability=True)
+        
+        # TODO: communicate with terminal to warn? 
+        # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
+        return self.call_LinearSVC(max_iterations, "l1", False)
+
+    def call_LinearSVC(self, max_iterations: int, penalty: str, dual: bool = None) -> LinearSVC:
+        if dual is None:
+            return LinearSVC(penalty=penalty, max_iter=max_iterations)
+        
+        return LinearSVC(penalty=penalty, dual=dual, tol=1e-3, max_iter=max_iterations)
 
     def do_LDA(self, max_iterations: int, size: int)-> LinearDiscriminantAnalysis:     
         return LinearDiscriminantAnalysis()
 
-
     def do_QDA(self, max_iterations: int, size: int)-> QuadraticDiscriminantAnalysis:     
         return QuadraticDiscriminantAnalysis()
-
 
     def do_BDT(self, max_iterations: int, size: int)-> BaggingClassifier:     
         return BaggingClassifier(base_estimator=DecisionTreeClassifier(), n_estimators = 100, random_state = 7)
 
-
     def do_ETC(self, max_iterations: int, size: int)-> ExtraTreesClassifier:     
         return ExtraTreesClassifier(n_estimators = 100)
 
-
     def do_ABC(self, max_iterations: int, size: int)-> AdaBoostClassifier:     
         return AdaBoostClassifier(n_estimators = 30, random_state = 7)
-
 
     def do_GBC(self, max_iterations: int, size: int)-> GradientBoostingClassifier:     
         return GradientBoostingClassifier(n_estimators = 100, random_state = 7)
