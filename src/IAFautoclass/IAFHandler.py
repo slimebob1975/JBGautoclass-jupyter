@@ -507,11 +507,11 @@ class DatasetHandler:
             if len(text_dataset.columns) > 0:
 
                 text_dataset = text_dataset.applymap(str)
-
+                
                 # Concatenating text data such that the result is another DataFrame  
                 # with a single column
                 text_dataset = text_dataset.agg(' '.join, axis = 1)
-
+                
                 # Convert text data to numbers using word-in-a-bag technique
                 text_dataset, count_vectorizer, tfid_transformer = self.word_in_a_bag_conversion(text_dataset, model)
 
@@ -591,18 +591,19 @@ class DatasetHandler:
         count_vectorizer = self.get_count_vectorizer_from_dataset(model.count_vectorizer, X)
         
         # Mask all material by encryption (optional)
-         # Commented out since this is likely copypasta
-        #if (self.handler.config.should_hex_encode()):
-        #    X = Helpers.do_hex_base64_encode_on_data(X)
-
+        # När vi skapar våra count_vectorizers så använder vi kryptering på X eller inte beroende på användarens val. 
+        # När vi använder våra count_vectorizers på X måste vi vara konsekventa. Är X inte krypterat då också, så kommer 
+        # count_vectorizers att vara tränat på krypterat material, men hittar ingenting i X som den känner igen.
+        if (self.handler.config.should_hex_encode()):
+            X = Helpers.do_hex_base64_encode_on_data(X)
         # Do the word in a bag now
         X = count_vectorizer.transform(X)
-
+        
         tfid_transformer = self.get_tfid_transformer_from_dataset(model.tfid_transformer, X)
         
         # Generate the sequences
         X = (tfid_transformer.transform(X)).toarray()
-
+        
         return pandas.DataFrame(X), count_vectorizer, tfid_transformer
 
     def get_tfid_transformer_from_dataset(self, tfid_transformer: TfidfTransformer, dataset: np.ndarray) -> TfidfTransformer:
@@ -616,7 +617,7 @@ class DatasetHandler:
 
         return tfid_transformer
 
-    def get_count_vectorizer_from_dataset(self, count_vectorizer: CountVectorizer, dataset: np.ndarray) -> CountVectorizer:
+    def  get_count_vectorizer_from_dataset(self, count_vectorizer: CountVectorizer, dataset: np.ndarray) -> CountVectorizer:
         """ Transform things, if there is no count_vectorizer """
         if count_vectorizer is not None:
             return count_vectorizer
