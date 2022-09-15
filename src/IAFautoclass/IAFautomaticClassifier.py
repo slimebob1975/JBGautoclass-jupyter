@@ -161,7 +161,7 @@ class IAFautomaticClassiphyer:
                 return -1 # Kanske inte behövs?
         except Exception as e:
             self.logger.abort_cleanly(f"Load of dataset failed: {e}")
-
+        
         self.update_progress(self.progression["percentPerMajorTask"])
 
         dh.set_training_data()
@@ -206,8 +206,7 @@ class IAFautomaticClassiphyer:
             except Exception as e:
                 self.logger.abort_cleanly(f"Training model failed: {e}")
 
-        ml_algorithm = mh.model.get_name()
-        self.update_progress(percent=self.progression["percentPerMajorTask"], message=f"Best model is: ({ml_algorithm}) with number of features: {self.config.get_num_selected_features()}")
+        self.update_progress(percent=self.progression["percentPerMajorTask"], message=f"Best model is: ({mh.model.get_name()}) with number of features: {self.config.get_num_selected_features()}")
         
         if self.config.should_train():
             # shape[0] = number of rows
@@ -221,7 +220,7 @@ class IAFautomaticClassiphyer:
                 self.logger.print_training_rates(ph)
                 
                 # Evaluate predictions (optional)
-                ph.evaluate_predictions(dh.Y_validation, "ML algorithm: " + ml_algorithm)
+                ph.evaluate_predictions(dh.Y_validation, "ML algorithm: " + mh.model.get_name())
 
                 # Get accumulated classification score report for all predictions
                 self.logger.print_classification_report(*ph.get_classification_report(dh.Y_validation, mh.model))
@@ -235,7 +234,7 @@ class IAFautomaticClassiphyer:
             if (dh.X_train.shape[0] + dh.X_validation.shape[0]) > 0:
                 self.logger.print_progress(message="Retrain model on whole dataset")
 
-                cross_trained_model = mh.load_pipeline_from_file(self.config.get_model_filename())
+                cross_trained_model = mh.load_pipeline_from_file(self.config.get_model_filename()) # Returns a 
                 dh.X_transformed =  concat([pandas.DataFrame(dh.X_train), pandas.DataFrame(dh.X_validation)], axis = 0)
                 # TODO: Maybe create this one up in the split_dataset, so we save Y_known, since neither Y_train nor Y_validation changes after calculation
                 Y_known = concat([dh.Y_train, dh.Y_validation], axis = 0)

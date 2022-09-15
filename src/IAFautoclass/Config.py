@@ -52,7 +52,69 @@ class Logger(Protocol):
 
     def print_components(self, component, components, exception = None) -> None:
         """ Printing Reduction components"""
+
+""" For a Pipeline the steps are n+1 objects which show the sequential changes done to X """
+class Transform(Protocol):
+    """ 0 => n, requires both fit() and transform() """
+    def fit(self, X, y=None, sample_weight=None):
+        """
+         Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            The data used to compute the per-feature minimum and maximum
+            used for later scaling along the features axis.
+
+        y : None
+            Not used, present here for API consistency by convention.
+
+        sample_weight : array-like of shape (n_samples,), default=None
+            Individual weights for each sample (depending on the object's type)
+
+        Returns
+        -------
+        self : object
+            Fitted scaler.
+        """
     
+    def transform(self, X):
+        """Scale features of X according to feature_range.
+
+                Parameters
+                ----------
+                X : array-like of shape (n_samples, n_features)
+                    Input data that will be transformed.
+
+                Returns
+                -------
+                Xt : ndarray of shape (n_samples, n_features)
+                    Transformed data.
+        """
+
+
+class Estimator(Protocol):
+    """ Final n+1, requires only fit() """
+
+    def fit(self, X, y=None, sample_weight=None):
+        """
+         Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            The data used to compute the per-feature minimum and maximum
+            used for later scaling along the features axis.
+
+        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            The target values (class labels in classification, real numbers in
+            regression).
+
+        sample_weight : array-like of shape (n_samples,), default=None
+            Individual weights for each sample (depending on the object's type)
+
+        Returns
+        -------
+        self : object
+            Fitted scaler.
+        """
+
 class RateType(enum.Enum):
     # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
     I = "Individual"
@@ -89,6 +151,20 @@ class MetaEnum(enum.Enum):
         prefix_list = [(item.full_name, item.name) for item in excluded_enums]
         
         return prefix_list + listed_enums
+
+    def get_function_name(self) -> str:
+        return f"do_{self.name}"
+
+    def has_function(self) -> bool:
+        do = self.get_function_name()
+        return hasattr(self, do) and callable(getattr(self, do))
+
+    def call_function(self, **kwargs):
+        do = self.get_function_name()
+        if hasattr(self, do) and callable(func := getattr(self, do)):
+            return func(**kwargs)
+        
+        return None
 
 class Algorithm(MetaEnum):
     ALL = { "full_name": "All", "limit": None, "fit_params": {}}
@@ -144,9 +220,17 @@ class Algorithm(MetaEnum):
         """ Gets a list of algorithms that are callable
             in the form (algorithm, called function)
         """
-        algorithms =  [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_algorithm_function()]
+        algorithms =  [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in cls if algo.has_function()]
         algorithms.sort(key=lambda algotuple: algotuple[0].name)
         return algorithms
+
+    @classmethod
+    def get_robust_algorithms(cls) -> list:
+        """ This list needs to be extended if we add more robust algorithms"""
+        return [Algorithm.RCART, Algorithm.RLRN, Algorithm.RCT]
+
+    def use_imb_pipeline(self) -> bool:
+        return self in self.get_robust_algorithms()
 
     def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
         return RobustLR()
@@ -293,19 +377,9 @@ class Algorithm(MetaEnum):
         return MLPClassifier(activation = activation, solver='adam', alpha=1e-5, hidden_layer_sizes=(100,), max_iter=max_iterations, random_state=1)
 
 
-    def get_function_name(self) -> str:
-        return f"do_{self.name}"
-    
-    def call_algorithm(self, max_iterations: int, size: int):
-        do = self.get_function_name()
-        if hasattr(self, do) and callable(func := getattr(self, do)):
-            return func(max_iterations, size)
-        
-        return None
-
-    def has_algorithm_function(self) -> bool:
-        do = self.get_function_name()
-        return hasattr(self, do) and callable(getattr(self, do))
+    def call_algorithm(self, max_iterations: int, size: int) -> Union[Estimator, None]:
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function(max_iterations=max_iterations, size=size)
  
 
 class Preprocess(MetaEnum):
@@ -322,7 +396,7 @@ class Preprocess(MetaEnum):
         """ Gets a list of preprocessors that are callable (including NON -> None)
             in the form (preprocessor, called function)
         """
-        return [(pp, pp.call_preprocess()) for pp in cls if pp.has_preprocess_function() and (pp.name != "BIN" or is_text_data)]
+        return [(pp, pp.call_preprocess()) for pp in cls if pp.has_function() and (pp.name != "BIN" or is_text_data)]
 
     def do_NON(self) -> None:
         """ While this return is superfluos, it helps with the listings of preprocessors """
@@ -343,21 +417,10 @@ class Preprocess(MetaEnum):
     def do_BIN(self) -> Binarizer:
         return Binarizer()
 
-    def get_function_name(self) -> str:
-        return f"do_{self.name}"
-    
-    def call_preprocess(self):
-        do = self.get_function_name()
-        if hasattr(self, do) and callable(func := getattr(self, do)):
-            return func()
+    def call_preprocess(self) -> Union[Transform, None]:
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function()
         
-        return None
-        
-
-    def has_preprocess_function(self) -> bool:
-        do = self.get_function_name()
-        return hasattr(self, do) and callable(getattr(self, do))
-
 
 class Reduction(MetaEnum):
     NON = "None"
@@ -371,18 +434,30 @@ class Reduction(MetaEnum):
     LLE = "Locally Linearized Embedding"
 
     def call_transformation(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        do = self.get_function_name()
-        if hasattr(self, do) and callable(func := getattr(self, do)):
-            return func(logger, X, num_selected_features)
-        
-        return None
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function(logger=logger, X=X, num_selected_features=num_selected_features)
 
-    def get_function_name(self) -> str:
-        return f"do_{self.name}"
+    def call_transformation_theory(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        """ This is a possible idea to optimise perform_feature_selection(), with code from there below
+        feature_selection = self.handler.config.get_feature_selection()
+        num_selected_features = self.handler.config.get_num_selected_features()
+        if feature_selection.has_function():
+            self.handler.logger.print_info(f"{feature_selection.full_name} transformation of dataset under way...")
+            self.X, feature_selection_transform = feature_selection.call_transformation(
+                logger=self.handler.logger, X=self.X, num_selected_features=num_selected_features
+            )
+        """
+        logger.print_info(f"{self.full_name} transformation of dataset under way...")
+        new_X = X
+        transform = None
+        try:
+            new_X, transform = self.call_function(logger=logger, X=X, num_selected_features=num_selected_features)
+        except TypeError:
+            """ Acceptable error, call_function() returned None """
 
-    def has_transformation_function(self) -> bool:
-        do = self.get_function_name()
-        return hasattr(self, do) and callable(getattr(self, do))
+        return new_X, transform
+
+
 
     def _do_transformation(self, logger: Logger, X: pandas.DataFrame, transformation, components):
         try:
@@ -1082,7 +1157,6 @@ class Config:
         return config
     
     # Methods to hide implementation of Config
-    # TODO: Change these three to lists and the implementation accordingly
     def is_text_data(self) -> bool:
         return len(self.connection.data_text_columns) > 0
     
@@ -1099,6 +1173,14 @@ class Config:
     def column_is_text(self, column: str) -> bool:
         """ Checks if the column is text based """
         return column in self.get_text_column_names()
+
+    def use_imb_pipeline(self) -> bool:
+        """ Returns True if either smote or undersampler should is True """
+        if not self.mode.smote and not self.mode.undersample:
+            return False
+
+        return True
+
 
     def get_feature_selection(self) -> Reduction:
         """ Gets the given feature selection Reduction """

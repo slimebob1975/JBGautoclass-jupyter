@@ -155,7 +155,9 @@ class DataLayer:
         columns = ",".join([f"TOP({num_rows})"] + [f"A.[{a}]" for a in dataCols] + [f"B.[{b}]" for b in classCols])
 
         # TODO: Can this be simplified? In particular: what is the format of database/table that requires these tests
-        # My reading: database.one, table.one => [database].[one].[table.one]. Also think a lot of this should be in Config instead of here:
+        # My reading: database.one, table.one => [database].[one].[table].[one]. Also think a lot of this should be in Config instead of here:
+        # schema.database => [schema].[database]
+        # Problem med iris, så borde vara lätt att kolla
         # This (and similar) functions should not need to keep track of whether the values are valid or not
         classTable = "[" + self.connection.class_catalog.replace('.',"].[") + "].[" + self.connection.class_table.replace('.',"].[") + "] B "
         dataTable =  "[" + self.connection.data_catalog.replace('.',"].[") + "].[" + self.connection.data_table.replace('.',"].[") + "] A "

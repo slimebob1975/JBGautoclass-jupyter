@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pickle
 import time
+from turtle import st
 import psutil
 import typing
 from dataclasses import dataclass, field
@@ -21,14 +22,25 @@ from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split)
-from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 from skclean.detectors import KDN
 
-from Config import Algorithm, Preprocess, Reduction, RateType, get_model_name
+
+from Config import Algorithm, Preprocess, Reduction, RateType, get_model_name, Estimator, Transform
 from IAFExceptions import DatasetException, ModelException, HandlerException
 import Helpers
+
+# Sklearn issue a lot of warnings sometimes, we suppress them here
+import warnings
+from sklearn.exceptions import FitFailedWarning, ConvergenceWarning
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=FitFailedWarning)
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 class Logger(Protocol):
@@ -139,6 +151,9 @@ class Config(Protocol):
 
     def is_categorical(self, column_name) -> bool:
         """ Returns if a specific column is categorical """
+
+    def use_imb_pipeline(self) -> bool:
+        """ Returns true if smote or undersampler is not None """
 
     def should_train(self) -> bool:
         """ Returns if this is a training config """
@@ -334,6 +349,7 @@ class DatasetHandler:
 
         # Pick out the classification column. This is the "right hand side" of the problem.
         self.Y = self.dataset[class_column]
+
         
         if self.handler.config.should_train():
             self.handler.logger.investigate_dataset(self.dataset) # Returns True if the investigation/printing was not suppressed
@@ -360,11 +376,11 @@ class DatasetHandler:
             for index in dataset.index:
                 old_percent_checked = percent_checked
                 percent_checked = round(100.0*float(index)/index_length)
-                self.handler.logger.print_percentage_checked("Data checked of fetched", old_percent_checked, percent_checked)
+                # TODO: fix message
+                #self.handler.logger.print_percentage_checked("Data checked of fetched", old_percent_checked, percent_checked)
                 
                 for key in dataset.columns:
                     item = dataset.at[index,key]
-                    #print(f"{index=}, {key=}, {item=}")
                     column_is_text = self.handler.config.column_is_text(key)
                     column_is_numeric = self.handler.config.column_is_numeric(key)
                     
@@ -375,7 +391,6 @@ class DatasetHandler:
                         if checked_item != item:
                             dataset.at[index,key] = checked_item
         except Exception as e:
-            print(e)
             print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
             raise DatasetException(f"Something went wrong in inconsistency check at {key}: {item} ({e})")
 
@@ -424,8 +439,6 @@ class DatasetHandler:
 
     def sanitize_value(self, value, column_is_text: bool) -> Union[str, int, float]:
         """ Massages a value into a proper value """
-        #print(f"{type(item)=}, {item=}")
-        
         # Set NoneType objects as zero or empty strings
         if value is None:
             return "" if column_is_text else 0
@@ -435,7 +448,6 @@ class DatasetHandler:
             # Helpers.is_str() should maybe check the type of the value?
             # Set text values that cannot be casted as strings to empty strings
             if type(value) != str and not Helpers.is_str(value):
-                #print(f"{item=} casted to empty string")
                 return ""
 
             # Remove line breaks and superfluous blank spaces from text strings
@@ -685,11 +697,18 @@ class DatasetHandler:
         # In the case of training, we compute a new transformation
         else:
             feature_selection = self.handler.config.get_feature_selection()
-            num_selected_features = self.handler.config.get_num_selected_features()
-            if feature_selection.has_transformation_function():
-                self.handler.logger.print_info(f"{feature_selection.full_name} transformation of dataset under way...")
-                self.X, feature_selection_transform = feature_selection.call_transformation(
-                    self.handler.logger, self.X, num_selected_features)
+            self.X, feature_selection_transform = feature_selection.call_transformation_theory(
+                    logger=self.handler.logger, X=self.X, num_selected_features=self.handler.config.get_num_selected_features()
+            )
+            # Below is old version which uses call_transformation rather than call_transformation_theory(). 
+            # Will be deleted once accuracy of latter confirmed
+            #num_selected_features = self.handler.config.get_num_selected_features()
+            #if feature_selection.has_function():
+            #    self.handler.logger.print_info(f"{feature_selection.full_name} transformation of dataset under way...")
+            #    self.X, feature_selection_transform = feature_selection.call_transformation(
+            #        logger=self.handler.logger, X=self.X, num_selected_features=num_selected_features
+            #    )
+            
 
 
         t = time.time() - t0
@@ -816,6 +835,7 @@ class ModelHandler:
 
     # load pipeline
     def load_pipeline_from_file(self, filename: str) -> Pipeline:
+        self.handler.logger.print_info(f"loading pipeline from {filename}")
         model = self.load_model_from_file(filename)
 
         return model.model
@@ -825,15 +845,15 @@ class ModelHandler:
         return Model(label_binarizers={}, count_vectorizer=None, tfid_transformer=None, transform=None)
 
     def train_model(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame) -> None:
-        self.handler.logger.print_progress(message="Check and train algorithms for best model")
+        # TODO: fix message
+        #self.handler.logger.print_progress(message="Check and train algorithms for best model")
         
         try:
             self.model = self.get_model_from(X_train, Y_train)
     
         except Exception as e:
             print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
-            raise ModelException(f"Something went wrong on training picked model: {str(e)}")
-
+            raise ModelException(f"Something went wrong on training model: {str(e)}")
 
         self.save_model_to_file(self.handler.config.get_model_filename())
 
@@ -850,7 +870,6 @@ class ModelHandler:
 
     # Train ml model
     def train_picked_model(self, model: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
-
         # Train model
         try:
             model.fit(X, Y)
@@ -887,7 +906,6 @@ class ModelHandler:
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
     def spot_check_ml_algorithms(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame, k:int=10) -> Model:
-
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot check ml algorithms...")
@@ -899,17 +917,12 @@ class ModelHandler:
 
         preprocessors = Preprocess.list_callable_preprocessors(is_text_data=self.handler.config.is_text_data())
         # Evaluate each model in turn in combination with all preprocessing methods
-        names = []
         best_mean = 0.0
-        best_std = 1.0
-        trained_model = None
-        temp_model = None
-        algorithm = None
-        pprocessor = None
+        best_stdev = 1.0
+        trained_pipeline = None
+        best_algorithm = None
+        best_preprocessor = None
         
-        smote = self.handler.config.get_smote()
-        undersampler = self.handler.config.get_undersampler()
-
         # Make evaluation of model
         try:
             #if k < 2: # What to do?
@@ -920,12 +933,13 @@ class ModelHandler:
         
         best_feature_selection = X_train.shape[1]
         first_round = True
-        self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time"], divisor="=")
+        # TODO: fix message
+        #self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time"], divisor="=")
 
         numMinorTasks = len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
         
-        # Loop over the models
+        # Loop over the algorithms
         for algorithm, algorithm_callable in algorithms:
             # Loop over pre-processing methods
             for preprocessor, preprocessor_callable in preprocessors:
@@ -935,7 +949,9 @@ class ModelHandler:
                 # Update progressbar percent and label
                 self.handler.logger.print_progress(message=f"{standardProgressText} ({algorithm.name}-{preprocessor.name})")
                 if not first_round: 
-                    self.handler.update_progress(percent=percentAddPerMinorTask)
+                    """ Empty for now, while we have the messages disabled """
+                    # TODO: fix message
+                    #self.handler.update_progress(percent=percentAddPerMinorTask)
                 else:
                     first_round = False
 
@@ -946,20 +962,14 @@ class ModelHandler:
                 min_features_selection = 0 if self.handler.config.use_RFE() else max_features_selection
                 
                 # Loop over feature selections span: break this loop when min and max reach the same value
-                score = 0.0                                                 # Save the best values
-                stdev = 1.0                                                 # so far.
+                rfe_score = 0.0                                             # Save the best values so far.
                 num_features = max_features_selection                       # Start with all features.
                 first_feature_selection = True                              # Make special first round: use all features
-                counter = 0
                 while first_feature_selection or min_features_selection < max_features_selection:
-                    counter += 1
-
-                    # Update limits for binary search and break loop if we are done
+                    # Update limits for binary search, and end loop if needed
                     if not first_feature_selection:
                         num_features = ceil((min_features_selection+max_features_selection) / 2)
-                        if num_features == max_features_selection:
-                            if algorithm == Algorithm.WBDT:
-                                print (f"{num_features=} and {max_features_selection=}")
+                        if num_features == max_features_selection:          
                             break
                     else:
                         first_feature_selection = False
@@ -967,100 +977,246 @@ class ModelHandler:
 
                     # Calculate the time for this setting
                     t0 = time.time()
+                    
+                    try:
+                        current_pipeline, cv_results = self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
+                    except ModelException:
+                        # If any exceptions happen, continue to next step in the loop
+                        break
 
-                    # Apply feature selection to current model and number of features.
-                    # If feature selection is not applicable, set a flag to the loop is 
-                    # ending after one iteration
-                    temp_model = algorithm_callable
-                    if self.handler.config.use_RFE():     
-                        try:
-                            rfe = RFE(temp_model, n_features_to_select=num_features)
-                            temp_model = rfe.fit(X_train, Y_train)
-                        except ValueError as e:
-                            if algorithm == Algorithm.WBDT:
-                                print (f"ValueError {e}")
-                            break
+                    # Stop the stopwatch
+                    t = time.time() - t0
 
-                    # Both algorithm and preprocessor should be used. Move on.
-                    # Build pipline of model and preprocessor.
-                    names.append((algorithm,preprocessor))
-                    if smote is None and undersampler is None:
-                        if preprocessor_callable is not None:
-                            pipe = make_pipeline(preprocessor_callable, temp_model)
-                        else:
-                            pipe = temp_model
+                    # For current settings, calculate score
+                    temp_score = cv_results.mean()
+                    temp_stdev = cv_results.std()
 
-                    # For use SMOTE and undersampling, different Pipeline is used
+                    # Print results to screen
+                    if False: # TODO: fix message
+                    #if self.handler.config.is_verbose(): # TODO: print prettier
+                        print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} s.".
+                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t))
+
+                    # Evaluate if feature selection changed accuracy or not. 
+                    #rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(temp_score, rfe_score, num_features, max_features_selection, min_features_selection)
+                    # Notice: Better or same score with less variables are both seen as an improvement,
+                    # since the chance of finding an improvement increases when number of variables decrease
+                    if  temp_score >= rfe_score:
+                        rfe_score = temp_score
+                        max_features_selection = num_features   # We need to reduce more features
                     else:
-                        steps = [('smote', smote ), ('under', undersampler), \
-                                ('preprocessor', preprocessor_callable), ('model', temp_model)]
-                        pipe = ImbPipeline(steps=steps)
-                        
-                    # Now make kfolded cross evaluation
-                    cv_results = self.get_cross_val_score(pipe, X_train, Y_train, kfold, algorithm)
+                        min_features_selection = num_features   # We have reduced too much already  
 
-                    if cv_results is None:
-                        self.handler.logger.print_warning(f"Pipeline ({algorithm.name}-{preprocessor.name}) raised a ValueError in cross_val_score. Skipping to next")
-                    else:
-                        # Stop the stopwatch
-                        t = time.time() - t0
+                    # Save result if it is the overall best (inside RFE-while)
+                    # Notice the difference from above, here we demand a better score.
+                    if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev):
+                    #if temp_score > best_mean or (temp_score == best_mean and temp_stdev < best_std):
+                        trained_pipeline = current_pipeline
+                        best_algorithm = algorithm
+                        best_preprocessor = preprocessor
+                        best_mean = temp_score
+                        best_stdev = temp_stdev
+                        best_feature_selection = num_features
 
-                        # For current settings, calculate score
-                        temp_score = cv_results.mean()
-                        temp_stdev = cv_results.std()
-
-                        # Print results to screen
-                        if self.handler.config.is_verbose(): # TODO: print prettier
-                            print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} s.".
-                                  format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t))
-
-                        # Evaluate if feature selection changed accuracy or not. 
-                        # Notice: Better or same score with less variables are both seen as an improvement,
-                        # since the chance of finding an improvement increases when number of variables decrease
-                        if  temp_score >= score:
-                            score = temp_score
-                            stdev = temp_stdev
-                            max_features_selection = num_features   # We need to reduce more features
-                        else:
-                            min_features_selection = num_features   # We have reduced too much already  
-
-                         # Save result if it is the overall best
-                         # Notice the difference from above, here we demand a better score.
-                        if temp_score > best_mean or \
-                           (temp_score == best_mean and temp_stdev < best_std):
-                            trained_model = pipe
-                            algorithm = algorithm
-                            pprocessor = preprocessor
-                            best_mean = temp_score
-                            best_std = temp_stdev
-                            best_feature_selection = num_features
-
-        updates = {"algorithm": algorithm, "preprocessor" : pprocessor, "num_selected_features": best_feature_selection}
+        updates = {"algorithm": best_algorithm, "preprocessor" : best_preprocessor, "num_selected_features": best_feature_selection}
         self.handler.config.update_attributes(type="mode", updates=updates)
         
-        algorithm_callable = self.model
-        algorithm_callable.algorithm = algorithm
-        algorithm_callable. preprocess = pprocessor
-        algorithm_callable.model = trained_model
-        # Return best model for start making predictions
-        return algorithm_callable
 
-    def get_cross_val_score(self, pipeline: Pipeline, X_train: pandas.DataFrame, Y_train: pandas.DataFrame, kfold, algorithm: Algorithm) -> Union[np.ndarray,None]:
-        """ Allows to change call to cross_val_score based on algorithm. """
+        best_model = self.model
+        best_model.algorithm = best_algorithm
+        best_model.preprocess = best_preprocessor
+        best_model.model = trained_pipeline
+        
+        # Return best model for start making predictions
+        return best_model
+
+    def calculate_current_features(self, current_score: float, best_score: float, num_features: int, max_features: int, min_features: int):
+        # Evaluate if feature selection changed accuracy or not. 
+        # Notice: Better or same score with less variables are both seen as an improvement,
+        # since the chance of finding an improvement increases when number of variables decrease
+        if  current_score >= best_score: # Reduce more features
+            return current_score, num_features, min_features
+        
+        # Too much reduced
+        return best_score, max_features, num_features
+
+    def is_best_run_yet(self, current_mean: float, current_stdev: float, best_mean: float, best_stdev: float) -> bool:
+        """ Calculates if this round is better than any prior """
+
+        if current_mean < best_mean: # Obviously if current is less it's worse
+            return False
+        if current_mean > best_mean: # If it is better, it is better
+            return True
+
+        # This means that the current and best means are equal, so compare the standard deviations, lower standard deviation is better
+        return current_stdev < best_stdev
+
+    def create_pipeline_and_cv(self, algorithm: Algorithm, preprocessor: Preprocess, estimator: Estimator, transform: Transform, kfold: StratifiedKFold, X: pandas.DataFrame, y: pandas.DataFrame, num_features: int):
+        """ The flow for each algorithm-preprocessor pair, broken out to simplify testing
+        
+          Parameters
+        ----------
+        algorithm : Algorithm
+            Which algorithm is the base for the pipeline
+
+        preprocess : Preprocess
+            Which preprocess is used (if None, value is Preprocess.NON)
+
+        estimator : Estimator
+            An object with the fit() method
+
+        transform : Transform
+            An object with the fit() and transform() methods
+
+        kfold : StratifiedKfold
+            Cross-validation generator
+
+        X : DataFrame
+            The data which is processed
+
+        y : DataFrame
+            Classes for the processed data
+
+        num_features : int
+            What number of features is being used for the processing
+
+        Returns
+        -------
+        pipeline : Pipeline or Estimator
+           The pipeline the dataset gets transformed and/or fitted with.
+
+        cv_results : ndarray
+            The results from the cross-validation scoring
+        """
+
+        try:
+            # Apply feature selection to current model and number of features.
+            modified_estimator = self.modify_algorithm(estimator, num_features, X, y)
+        
+            # Build pipeline of model and preprocessor.
+            current_pipeline = self.get_pipeline(algorithm, modified_estimator, transform)
+            
+            # Now make kfolded cross evaluation
+            cv_results = self.get_cross_val_score(current_pipeline, X, y, kfold, algorithm)
+        except ValueError:
+            raise ModelException(f"Creating pipeline or getting cross val score failed in {algorithm.name}-{preprocessor.name}")
+            # This warning kept to not forget it
+            #self.handler.logger.print_warning(f"Pipeline ({algorithm.name}-{preprocessor.name}) raised a ValueError in cross_val_score. Skipping to next")
+       
+
+        return current_pipeline, cv_results
+ 
+    
+    def modify_algorithm(self, estimator: Estimator, n_features_to_select: int, X: pandas.DataFrame, y: pandas.DataFrame) -> Estimator:
+        """ Modifies the algorithm (callable) based on config 
+        
+          Parameters
+        ----------
+        estimator : Estimator
+            An object with the fit() method
+
+        n_features_to_select : int
+
+        X : array-like of shape (n_samples, n_features)
+            The data used to compute the per-feature minimum and maximum
+            used for later scaling along the features axis.
+
+        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            The target values (class labels in classification, real numbers in
+            regression).
+
+        sample_weight : array-like of shape (n_samples,), default=None
+            Individual weights for each sample (depending on the object's type)
+
+        Returns
+        -------
+        estimator : Estimator
+            The modified or non-modified estimator 
+        """
+
+        modified_estimator = estimator
+        
+        # Apply feature selection to current model and number of features.
+        if self.handler.config.use_RFE():
+            rfe = RFE(estimator, n_features_to_select=n_features_to_select)
+            modified_estimator = rfe.fit(X, y)
+            
+        return modified_estimator
+    
+    
+    def get_pipeline(self, algorithm: Algorithm, estimator: Estimator, transform: Transform) -> Union[Pipeline, Estimator]:
+        """ Decides on which pipeline to use based on configuration and current algorithm 
+        
+          Parameters
+        ----------
+        algorithm : Algorithm
+            Which algorithm is the base for the pipeline
+
+        estimator : Estimator
+            An object with the fit() method
+
+        transform : Transform
+            An object with the fit() and transform() methods
+
+        Returns
+        -------
+        pipeline : Pipeline or Estimator
+           The pipeline the dataset gets transformed and/or fitted with.
+        """
+        possible_steps = [
+            (algorithm.name, estimator)
+        ]
+        possible_steps.insert(0, ("smote", self.handler.config.get_smote()))
+        possible_steps.insert(1, ("undersample", self.handler.config.get_undersampler()))
+        possible_steps.insert(2, ("preprocessor", transform))
+        
+        steps = [step  for step in possible_steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] # List of 1 to 4 elements
+        
+        if len(steps) == 1: # No pipeline if the only one is the estimator
+            return estimator
+
+        # Robust algorithms all use ImbPipeline, Smote and/or Undersample (Config options) do too
+        if algorithm.use_imb_pipeline() or self.handler.config.use_imb_pipeline(): 
+            return ImbPipeline(steps=steps)
+
+        return Pipeline(steps=steps)
+
+
+    def get_cross_val_score(self, pipeline: Pipeline, X: pandas.DataFrame, y: pandas.DataFrame, kfold: StratifiedKFold, algorithm: Algorithm) -> np.ndarray:
+        """ Allows to change call to cross_val_score based on algorithm. 
+        
+          Parameters
+        ----------
+        pipeline : Pipeline
+            Which pipeline is being scored
+
+        X : Dataframe
+            The data the pipeline is being scored on
+
+        y : DataFrame
+            The classes for the data
+
+        kfold : StratifiedKFold
+            Cross-validation generator
+
+        algorithm : Algorithm
+            Which algorithm is being evaluated
+
+        Returns
+        -------
+        score : ndarray
+           The result from the scoring
+        """
         # Now make kfolded cross evaluation
         scorer_mechanism = self.handler.config.get_scoring_mechanism()
         fit_params = {}
         
         for key, function_name in algorithm.fit_params.items():
             if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
-                fit_params[key] = func(X_train, Y_train)
+                fit_params[key] = func(X, y)
 
-        try:
-            return cross_val_score(pipeline, X_train, Y_train, n_jobs=psutil.cpu_count(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params) 
-        except ValueError as e:
-            print(str(e))
-            return
-
+        return cross_val_score(pipeline, X, y=y, n_jobs=psutil.cpu_count(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params) 
+        
     def do_kdn(self, X: pandas.DataFrame, y: pandas.DataFrame):
         """ Used in fit_params as a sample_weight option, via Algorithm """
         return KDN().detect(X, y)
@@ -1068,7 +1224,6 @@ class ModelHandler:
 
     # Save ml model and corresponding configuration
     def save_model_to_file(self, filename):
-        
         try:
             save_config = self.handler.config.get_clean_config()
             data = [
@@ -1129,7 +1284,7 @@ class PredictionsHandler:
             iter(item)
             return ",".join([str(elem) for elem in item])
         except TypeError:
-            # This only happens if the model couldn't predict, så uses the mean
+            # This only happens if the model couldn't predict, so uses the mean
             return item
 
     def get_mispredicted_dataframe(self) -> pandas.DataFrame:
@@ -1295,8 +1450,8 @@ class PredictionsHandler:
         try:
             the_classes = the_model.classes_
         except AttributeError as e:
-            print(f"No classes_ attribute in model, using original classes as fallback: {e}")
-            the_classes = set(Y)
+            self.handler.logger.print_info(f"No classes_ attribute in model, using original classes as fallback: {e}")
+            the_classes = [y for y in set(Y) if y is not None]
 
         if not could_predict_proba:
             for i in range(len(the_classes)): # TODO: possibly rewrite this for loop
