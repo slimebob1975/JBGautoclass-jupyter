@@ -120,6 +120,13 @@ class Estimator(Protocol):
             Fitted scaler.
         """
 
+class Detecter(Protocol):
+    """ Given to some Estimators, requires detect()
+        As the class that tracks detecters is called Detector, that name is already taken
+    """
+    def detect(self, X, y):
+        """ Detects noise likelihood for each sample in the dataset """
+
 class RateType(enum.Enum):
     # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
     I = "Individual"
@@ -171,65 +178,114 @@ class MetaEnum(enum.Enum):
         
         return None
 
+class Detector(MetaEnum):
+    ALL = "All"
+    NON = "None"
+    KDN = "KDN"
+    FKDN = "Forest KDN"
+    RKDN = "Recursive KDN"
+    PDEC = "Partitioning Detector"
+    MCS = "Markov Chain Sampling"
+    INH = "Instance Hardness Detector"
+    RFD = "Random Forest Detector"
+
+    @classmethod
+    def list_callable_detectors(cls) -> list[tuple]:
+        """ Gets a list of detectors that are callable (including NON -> None)
+            in the form (detector, called function)
+        """
+        return [(dt, dt.call_detector()) for dt in cls if dt.has_function()]
+
+    def call_detector(self)  -> Union[Detecter, None]: 
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function()
+
+    def do_NON(self) -> None:
+        """ While this return is superfluos, it helps with the listings of detectors """
+        return None
+
+    def do_KDN(self) -> KDN:
+        return KDN()
+
+    def do_FKDN(self) -> ForestKDN:
+        return ForestKDN()
+
+    def do_RKDN(self) -> RkDN:
+        return RkDN()
+
+    def do_PDEC(self) -> PartitioningDetector:
+        return PartitioningDetector()
+
+    def do_MCS(self) -> MCS:
+        return MCS()
+
+    def do_INH(self) -> INH:
+        return InstanceHardness()
+
+    def do_RFD(self) -> RFD:
+        return RandomForestDetector()
+
 class Algorithm(MetaEnum):
-    ALL = { "full_name": "All", "limit": None, "detector": None}
-    SRF1 = { "full_name": "Stacking Random Forests Cl. 1", "limit": None, "detector": None, "fit_params": {}}
-    SRF2 = { "full_name": "Stacking Random Forests Cl. 2", "limit": None, "detector": None, "fit_params": {}}
-    BARF = { "full_name": "Balanced Random Forest Classifier", "limit": None, "detector": None, "fit_params": {}}
-    BABC = { "full_name": "Balanced Bagging Classifier", "limit": None, "detector": None, "fit_params": {}}
-    RUBC = { "full_name": "RUS Boost Classifier", "limit": None, "detector": None, "fit_params": {}}
-    EAEC = { "full_name": "Easy Ensamble Classifier", "limit": None, "detector": None, "fit_params": {}}
-    RTCL = { "full_name": "Robust Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
-    RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "detector": None, "fit_params": {}}
-    RCNT = { "full_name": "Robust Centroid", "limit": None, "detector": None, "fit_params": {}}
-    LRN = { "full_name": "Logistic Regression", "limit": None, "detector": None, "fit_params": {}}
-    KNN = { "full_name": "K-Neighbors Classifier", "limit": None, "detector": None, "fit_params": {}}
-    DTC = { "full_name": "Decision Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
-    GNB = { "full_name": "Gaussian Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
-    MNB = { "full_name": "Multinomial Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
-    BNB = { "full_name": "Bernoulli Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
-    CNB = { "full_name": "Complement Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
-    REC = { "full_name": "Ridge Classifier", "limit": None, "detector": None, "fit_params": {}}
-    PCN = { "full_name": "Perceptron", "limit": None, "detector": None, "fit_params": {}}
-    PAC = { "full_name": "Passive Aggressive Classifier", "limit": None, "detector": None, "fit_params": {}}
-    RFC1 = { "full_name": "Random Forest Classifier 1", "limit": None, "detector": None, "fit_params": {}}
-    RFC2 = { "full_name": "Random Forest Classifier 2", "limit": None, "detector": None, "fit_params": {}}
-    LIN1 = { "full_name":  "Linear Support Vector L1", "limit": None, "detector": None, "fit_params": {}}
-    LIN2 = { "full_name": "Linear Support Vector L2", "limit": None, "detector": None, "fit_params": {}}
-    LINP = { "full_name": "Linear SV L1+L2", "limit": None, "detector": None, "fit_params": {}}
-    SGD = { "full_name": "Stochastic Gradient Descent", "limit": None, "detector": None, "fit_params": {}}
-    SGD1 = { "full_name": "Stochastic GD L1", "limit": None, "detector": None, "fit_params": {}}
-    SGD2 = { "full_name": "Stochastic GD L2", "limit": None, "detector": None, "fit_params": {}}
-    SGDE = { "full_name": "Stochastic GD Elast.", "limit": None, "detector": None, "fit_params": {}}
-    NCT = { "full_name": "Nearest Centroid", "limit": None, "detector": None, "fit_params": {}}
-    SVC = { "full_name": "Support Vector Classification", "limit": 10000, "detector": None, "fit_params": {}}
-    LDA = { "full_name": "Linear Discriminant Analysis", "limit": None, "detector": None, "fit_params": {}}
-    QDA = { "full_name": "Quadratic Discriminant Analysis", "limit": None, "detector": None, "fit_params": {}}
-    BDT = { "full_name": "Bagging Classifier", "limit": None, "detector": None, "fit_params": {}}
-    ETC = { "full_name": "Extra Trees Classifier", "limit": None, "detector": None, "fit_params": {}}
-    ABC = { "full_name": "Ada Boost Classifier", "limit": None, "detector": None, "fit_params": {}}
-    GBC = { "full_name": "Gradient Boosting Classifier", "limit": None, "detector": None, "fit_params": {}}
-    MLPR = { "full_name": "ML Neural Network Relu", "limit": None, "detector": None, "fit_params": {}}
-    MLPL = { "full_name": "ML Neural Network Sigm", "limit": None, "detector": None, "fit_params": {}}
-    WBGK = { "full_name": "Weighted Bagging + KDN", "limit": None, "detector": "Detector.KDN", "fit_params": {}}
-    WBGM = { "full_name": "Weighted Bagging + MCS", "limit": None, "detector": "Detector.MCS", "fit_params": {}}
+    ALL = { "full_name": "All"}
+    SRF1 = { "full_name": "Stacking Random Forests Cl. 1"}
+    SRF2 = { "full_name": "Stacking Random Forests Cl. 2"}
+    BARF = { "full_name": "Balanced Random Forest Classifier"}
+    BABC = { "full_name": "Balanced Bagging Classifier"}
+    RUBC = { "full_name": "RUS Boost Classifier"}
+    EAEC = { "full_name": "Easy Ensamble Classifier"}
+    RTCL = { "full_name": "Robust Tree Classifier"}
+    RLRN = { "full_name": "Robust Logistic Regression"}
+    RCNT = { "full_name": "Robust Centroid"}
+    LRN = { "full_name": "Logistic Regression"}
+    KNN = { "full_name": "K-Neighbors Classifier"}
+    DTC = { "full_name": "Decision Tree Classifier"}
+    GNB = { "full_name": "Gaussian Naive Bayes"}
+    MNB = { "full_name": "Multinomial Naive Bayes"}
+    BNB = { "full_name": "Bernoulli Naive Bayes"}
+    CNB = { "full_name": "Complement Naive Bayes"}
+    REC = { "full_name": "Ridge Classifier"}
+    PCN = { "full_name": "Perceptron"}
+    PAC = { "full_name": "Passive Aggressive Classifier"}
+    RFC1 = { "full_name": "Random Forest Classifier 1"}
+    RFC2 = { "full_name": "Random Forest Classifier 2"}
+    LIN1 = { "full_name":  "Linear Support Vector L1"}
+    LIN2 = { "full_name": "Linear Support Vector L2"}
+    LINP = { "full_name": "Linear SV L1+L2"}
+    SGD = { "full_name": "Stochastic Gradient Descent"}
+    SGD1 = { "full_name": "Stochastic GD L1"}
+    SGD2 = { "full_name": "Stochastic GD L2"}
+    SGDE = { "full_name": "Stochastic GD Elast."}
+    NCT = { "full_name": "Nearest Centroid"}
+    SVC = { "full_name": "Support Vector Classification", "limit": 10000}
+    LDA = { "full_name": "Linear Discriminant Analysis"}
+    QDA = { "full_name": "Quadratic Discriminant Analysis"}
+    BDT = { "full_name": "Bagging Classifier"}
+    ETC = { "full_name": "Extra Trees Classifier"}
+    ABC = { "full_name": "Ada Boost Classifier"}
+    GBC = { "full_name": "Gradient Boosting Classifier"}
+    MLPR = { "full_name": "ML Neural Network Relu"}
+    MLPL = { "full_name": "ML Neural Network Sigm"}
+    WBGK = { "full_name": "Weighted Bagging + KDN", "detector": Detector.KDN}
+    WBGM = { "full_name": "Weighted Bagging + MCS", "detector": Detector.MCS}
 
     @property
     def limit(self):
         if isinstance(self.value, dict):
-            return self.value["limit"]
+            return self.value.get("limit")
         
         return None
 
     @property
     def detector(self):
         if isinstance(self.value, dict):
-            return self.value["detector"]
+            return self.value.get("detector")
+
+        return None
 
     @property
     def fit_params(self):
         if isinstance(self.value, dict):
-            return self.value["fit_params"]
+            return self.value.get("fit_params", {})
         
         return {}
 
@@ -402,68 +458,15 @@ class Algorithm(MetaEnum):
     def call_MLP(self, max_iterations: int, activation: str) -> MLPClassifier:
         return MLPClassifier(activation = activation, solver='adam', alpha=1e-5, hidden_layer_sizes=(100,), max_iter=max_iterations, random_state=1)
 
-    def do_WBGK(self, max_iterations: int, size: int)-> WeightedBagging: 
-        return WeightedBagging(detector=eval(self.detector).call_detector())
+    def do_WBGK(self, max_iterations: int, size: int)-> WeightedBagging:
+        return self.call_WB(self.detector)
 
     def do_WBGM(self, max_iterations: int, size: int)-> WeightedBagging: 
-        return WeightedBagging(detector=eval(self.detector).call_detector())
- 
-class Detector(MetaEnum):
-    ALL = "All"
-    NON = "None"
-    KDN = "KDN"
-    FKDN = "Forest KDN"
-    RKDN = "Recursive KDN"
-    PDEC = "Partitioning Detector"
-    MCS = "Markov Chain Sampling"
-    INH = "Instance Hardness Detector"
-    RFD = "Random Forest Detector"
-
-    @classmethod
-    def list_callable_detectors(cls) -> list[tuple]:
-        """ Gets a list of detectors that are callable (including NON -> None)
-            in the form (detector, called function)
-        """
-        return [(dt, dt.call_detector()) for dt in cls if dt.has_detector_function()]
-
-    def get_detector_name(self) -> str:
-        return f"do_{self.name}"
+        return self.call_WB(self.detector)
     
-    def call_detector(self): 
-        do = self.get_detector_name()
-        if hasattr(self, do) and callable(func := getattr(self, do)):
-            return func()
-        
-        return None
+    def call_WB(self, detector) -> WeightedBagging:
+        return WeightedBagging(detector=detector.call_detector())
 
-    def has_detector_function(self) -> bool:
-        do = self.get_function_name()
-        return hasattr(self, do) and callable(getattr(self, do))
-
-    def do_NON(self) -> None:
-        """ While this return is superfluos, it helps with the listings of detectors """
-        return None
-
-    def do_KDN(self) -> KDN:
-        return KDN()
-
-    def do_FKDN(self) -> ForestKDN:
-        return ForestKDN()
-
-    def do_RKDN(self) -> RkDN:
-        return RkDN()
-
-    def do_PDEC(self) -> PartitioningDetector:
-        return PartitioningDetector()
-
-    def do_MCS(self) -> MCS:
-        return MCS()
-
-    def do_INH(self) -> INH:
-        return InstanceHardness()
-
-    def do_RFD(self) -> RFD:
-        return RandomForestDetector()
 
 class Preprocess(MetaEnum):
     ALL = "All"

@@ -2,7 +2,7 @@ import os
 from typing import Callable
 from path import Path
 import pytest
-from Config import (Algorithm, Config, Preprocess, Reduction, Scoretype,
+from Config import (Algorithm, Config, Detector, Preprocess, Reduction, Scoretype,
                     get_model_name)
 from IAFExceptions import ConfigException
 from imblearn.over_sampling import SMOTE
@@ -468,6 +468,59 @@ class TestConfig:
     def test_model_name(self):
         assert get_model_name(Algorithm.LDA, Preprocess.STA) == "LDA-STA"
 
+class TestDetector:
+    """ Tests the Enum Detector functions """
+
+    def test_list_callable_detectors(self):
+        """ Class Method that gets all callable detectors and their function """
+        detectors = Detector.list_callable_detectors()
+        # 32 callable detectors
+        assert len(detectors) == 8
+
+        # It's a list of tuples
+        assert all(isinstance(x,tuple) for x in detectors)
+
+        # Each tuple have two elements
+        assert all(len(x) == 2 for x in detectors)
+
+        # The first element in each tuple is an Detector enum
+        assert all(isinstance(x[0], Detector) for x in detectors)
+
+        # The second element in each tuple must have the "detect" function
+         # 1e: This uses the sublist of not-None and only 1 element is None
+        callables = [x[1] for x in detectors if x[1] is not None]
+        assert all(hasattr(x, "detect") and callable(getattr(x, "detect")) for x in callables)
+        assert len(callables) == 7
+    
+    def test_get_sorted_list(self):
+        """ This function gives a list of tuples: (value, name) """
+        sorted_list_default = Detector.get_sorted_list(none_all_first=False)
+        sorted_list_all_first = Detector.get_sorted_list()
+
+        assert len(sorted_list_default) == 9
+        assert len(sorted_list_all_first) == 9
+
+        # They are a list of tuples
+        assert all(isinstance(x,tuple) for x in sorted_list_default)
+        assert all(isinstance(x,tuple) for x in sorted_list_all_first)
+
+        # Each tuple have two elements
+        assert all(len(x) == 2 for x in sorted_list_default)
+        assert all(len(x) == 2 for x in sorted_list_all_first)
+
+        # Each tuple have two strings as elements
+        assert all(isinstance(x[0], str) for x in sorted_list_default)
+        assert all(isinstance(x[1], str) for x in sorted_list_default)
+
+        assert all(isinstance(x[0], str) for x in sorted_list_all_first)
+        assert all(isinstance(x[1], str) for x in sorted_list_all_first)
+
+        # When sorted, ALL is first, as none of the others begin with A
+        assert sorted_list_default[0] == ("All", "ALL")
+        
+        # When sorted, ALL is first
+        assert sorted_list_all_first[0] == ("All", "ALL")
+
 class TestAlgorithm:
     """ Tests the Enum Algorithm functions """
 
@@ -475,7 +528,7 @@ class TestAlgorithm:
         """ Class Method that gets all callable algorithms and their function """
         algorithms = Algorithm.list_callable_algorithms(size=5, max_iterations=10)
         # 32 callable algorithms
-        assert len(algorithms) == 32
+        assert len(algorithms) == 40
 
         # It's a list of tuples
         assert all(isinstance(x,tuple) for x in algorithms)
@@ -494,8 +547,8 @@ class TestAlgorithm:
         sorted_list_default = Algorithm.get_sorted_list(none_all_first=False)
         sorted_list_all_first = Algorithm.get_sorted_list()
 
-        assert len(sorted_list_default) == 33
-        assert len(sorted_list_all_first) == 33
+        assert len(sorted_list_default) == 41
+        assert len(sorted_list_all_first) == 41
 
         # They are a list of tuples
         assert all(isinstance(x,tuple) for x in sorted_list_default)

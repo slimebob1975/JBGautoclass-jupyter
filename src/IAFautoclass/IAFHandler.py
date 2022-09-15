@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import pickle
 import time
-from turtle import st
 import psutil
 import typing
 from dataclasses import dataclass, field
@@ -885,6 +884,10 @@ class ModelHandler:
     def should_run_computation(self, current_algorithm: Algorithm, current_preprocessor: Preprocess) -> bool:
         chosen_algorithm = self.handler.config.get_algorithm()
         chosen_preprocessor = self.handler.config.get_preprocessor()
+
+        # RLRN and RFE do not get along
+        if current_algorithm == Algorithm.RLRN and self.handler.config.use_RFE():
+            return False
         
         # If both of these are ALL, it doesn't matter where in the set we are
         if chosen_algorithm == Algorithm.ALL and chosen_preprocessor == Preprocess.ALL:
@@ -1103,6 +1106,8 @@ class ModelHandler:
             raise ModelException(f"Creating pipeline or getting cross val score failed in {algorithm.name}-{preprocessor.name}")
             # This warning kept to not forget it
             #self.handler.logger.print_warning(f"Pipeline ({algorithm.name}-{preprocessor.name}) raised a ValueError in cross_val_score. Skipping to next")
+        except IndexError as ie:
+            raise ModelException(f"Creating pipeline failed in {algorithm.name}-{preprocessor.name} because {ie}")
        
 
         return current_pipeline, cv_results

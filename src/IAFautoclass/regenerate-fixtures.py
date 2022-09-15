@@ -4,7 +4,8 @@ from Config import Config, Algorithm, Preprocess, Reduction, Scoretype
 
 """ This is a script to quick-and-dirty regenerate some fixtures that might be annoying otherwise
 
-    Each generator is a function, and can be commented out/in in main()
+    Each generator is a function, with a dictionary that sets whether it should be ran or not.
+    Changed it from the original ("comment in/out what you need") as I didn't realise it wasn't regenerating.
 
     Current generators:
     - config-save.sav: Creates a model file with just a config file. Enough for test_config, but not for test_handler
@@ -95,7 +96,6 @@ def save_model_to_file(filename, config, model = None):
             ]
         
         pickle.dump(data, open(filename,'wb'))
-
     except Exception as e:
         print(f"Something went wrong on saving model to file: {e}")
 
@@ -120,11 +120,21 @@ def regenerate_config_save():
     save_model_to_file(configSaveName, config)
 
 def main():
-    """ Regenerates config-save.sav """
-    #regenerate_config_save()
+    options = {
+        "config": False,
+        "model": False
+    }
 
-    """ Regenerates model-save.sav """
-    #regenerate_model_save()
+    for type, run in options.items():
+        if run:
+            print(f"Regenerated {type}-save.sav")
+            if type == "config":
+                regenerate_config_save()
+            elif type == "model":
+                regenerate_model_save()
+        else:
+            print(f"Skipped {type}-save.sav")
+    
     
 
 
