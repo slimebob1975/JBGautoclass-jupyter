@@ -1061,11 +1061,6 @@ class ModelHandler:
             print(str(e))
             return
 
-    def do_kdn(self, X: pandas.DataFrame, y: pandas.DataFrame):
-        """ Used in fit_params as a sample_weight option, via Algorithm """
-        return KDN().detect(X, y)
-
-
     # Save ml model and corresponding configuration
     def save_model_to_file(self, filename):
         
