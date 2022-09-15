@@ -935,7 +935,7 @@ class ModelHandler:
         best_feature_selection = X_train.shape[1]
         first_round = True
         # TODO: fix message
-        #self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time"], divisor="=")
+        self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time"], divisor="=")
 
         numMinorTasks = len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
@@ -993,10 +993,10 @@ class ModelHandler:
                     temp_stdev = cv_results.std()
 
                     # Print results to screen
-                    if False: # TODO: fix message
+                    #if False: # TODO: fix message
                     #if self.handler.config.is_verbose(): # TODO: print prettier
-                        print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} s.".
-                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t))
+                    print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} s.".
+                            format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t))
 
                     # Evaluate if feature selection changed accuracy or not. 
                     #rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(temp_score, rfe_score, num_features, max_features_selection, min_features_selection)
