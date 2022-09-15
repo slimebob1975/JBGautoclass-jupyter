@@ -179,12 +179,12 @@ class Algorithm(MetaEnum):
     BABC = { "full_name": "Balanced Bagging Classifier", "limit": None, "detector": None, "fit_params": {}}
     RUBC = { "full_name": "RUS Boost Classifier", "limit": None, "detector": None, "fit_params": {}}
     EAEC = { "full_name": "Easy Ensamble Classifier", "limit": None, "detector": None, "fit_params": {}}
-    RCART = { "full_name": "Robust Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
+    RTCL = { "full_name": "Robust Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
     RLRN = { "full_name": "Robust Logistic Regression", "limit": None, "detector": None, "fit_params": {}}
-    RCT = { "full_name": "Robust Centroid", "limit": None, "detector": None, "fit_params": {}}
+    RCNT = { "full_name": "Robust Centroid", "limit": None, "detector": None, "fit_params": {}}
     LRN = { "full_name": "Logistic Regression", "limit": None, "detector": None, "fit_params": {}}
     KNN = { "full_name": "K-Neighbors Classifier", "limit": None, "detector": None, "fit_params": {}}
-    CART = { "full_name": "Decision Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
+    DTC = { "full_name": "Decision Tree Classifier", "limit": None, "detector": None, "fit_params": {}}
     GNB = { "full_name": "Gaussian Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
     MNB = { "full_name": "Multinomial Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
     BNB = { "full_name": "Bernoulli Naive Bayes", "limit": None, "detector": None, "fit_params": {}}
@@ -245,7 +245,7 @@ class Algorithm(MetaEnum):
     @classmethod
     def get_robust_algorithms(cls) -> list:
         """ This list needs to be extended if we add more robust algorithms"""
-        return [Algorithm.RCART, Algorithm.RLRN, Algorithm.RCT]
+        return [Algorithm.RTCL, Algorithm.RLRN, Algorithm.RCNT]
 
     def call_algorithm(self, max_iterations: int, size: int) -> Union[Estimator, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
@@ -281,13 +281,13 @@ class Algorithm(MetaEnum):
     def do_EAEC(self, max_iterations: int, size: int)-> EasyEnsembleClassifier:
         return EasyEnsembleClassifier()
 
-    def do_RCART(self, max_iterations: int, size: int)-> RobustForest:
+    def do_RTCL(self, max_iterations: int, size: int)-> RobustForest:
         return RobustForest()
 
     def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
         return RobustLR()
 
-    def do_RCT(self, max_iterations: int, size: int)-> Centroid:
+    def do_RCNT(self, max_iterations: int, size: int)-> Centroid:
         return Centroid()
 
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
@@ -296,7 +296,7 @@ class Algorithm(MetaEnum):
     def do_KNN(self, max_iterations: int, size: int)-> KNeighborsClassifier:
         return KNeighborsClassifier()
 
-    def do_CART(self, max_iterations: int, size: int)-> DecisionTreeClassifier:
+    def do_DTC(self, max_iterations: int, size: int)-> DecisionTreeClassifier:
         return DecisionTreeClassifier()
 
     def do_GNB(self, max_iterations: int, size: int)-> GaussianNB:
