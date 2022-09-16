@@ -1,3 +1,4 @@
+from pathlib import Path
 import pytest
 
 import SQLDataLayer
@@ -42,7 +43,7 @@ def valid_iris_config() -> Config:
             trusted_connection=True,
             class_catalog="Schema.DatabaseOne",
             class_table="ResultTable",
-            class_table_script="createtable.sql.txt",
+            class_table_script="./sql/autoClassCreateTable.sql.txt",
             class_username="some_fake_name",
             class_password="",
             data_catalog="DatabaseTwo",
@@ -95,6 +96,11 @@ def default_datalayer(valid_iris_config) -> SQLDataLayer.DataLayer:
 
 class TestDataLayer():
     """ The main class """
+
+    def test_classification_table_query(self, default_datalayer) -> None:
+        query = default_datalayer.create_classification_table_query()
+        print(query)
+        assert False
 
     def test_classified_data_query(self, default_datalayer) -> None:
         """ This is a query in string format """

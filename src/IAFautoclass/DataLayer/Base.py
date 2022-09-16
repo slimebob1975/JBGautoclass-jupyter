@@ -1,5 +1,6 @@
 
 from dataclasses import dataclass, field
+import os
 from typing import Protocol
 
 
@@ -42,6 +43,32 @@ class DataLayerBase:
             self.logger.print_warning(f"Connection to server failed: {con}")
         
         return False
+
+    def get_databases(self) -> list:
+        """ Used in the GUI, to get the databases """
+        raise NotImplementedError
+
+    def get_tables(self) -> list:
+        """ Used in the GUI, to get the tables """
+        raise NotImplementedError
+
+    def get_id_columns(self, database: str, table: str) -> list:
+        """ Gets name and type for columns in specified <database> and <table> """
+        raise NotImplementedError
+
+    def get_trained_models_from_files(self, model_path: str, model_file_extension: str) -> list:
+        """ Get a list of pretrained models (base implementation assumes files)"""
+        # TODO: model_path + model_file_extension is Config-based, using constants. Think on this
+        models = []
+        for file in os.listdir(model_path):
+            if file[-len(model_file_extension):] == model_file_extension:
+                models.append(file)
+
+        return models
+
+    def prepare_for_classification(self) -> bool:
+        """ Setting up tables or similar things in preparation for the classifictions """
+        raise NotImplementedError
 
 # Main method
 def main():

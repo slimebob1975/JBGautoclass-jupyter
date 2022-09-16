@@ -150,7 +150,7 @@ class IAFautomaticClassiphyer:
             self.logger.abort_cleanly("User must choose either to train a new model or use an old one for predictions")
         
         # Create the classification table, if it does not exist already
-        self.datalayer.create_classification_table()
+        self.datalayer.prepare_for_classification()
         self.update_progress(self.progression["percentPerMajorTask"])
 
         self.pre_run()
@@ -330,7 +330,7 @@ def main(argv):
 
     logger = IAFLogger.IAFLogger(not config.io.verbose)
     
-    datalayer = SQLDataLayer.DataLayer(connection=config.connection, logger=logger)
+    datalayer = SQLDataLayer.DataLayer(connection=config.connection, config=config, logger=logger)
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
     myClassiphyer = IAFautomaticClassiphyer(config=config, logger=logger, datalayer=datalayer)

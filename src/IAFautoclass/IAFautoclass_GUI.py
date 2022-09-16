@@ -66,6 +66,12 @@ class IAFautoclass_GUI:
         # TODO: Can we fix this in a neater way?
         # Some data elements might get lost unless we lock a few callback functions
         self.lock_observe_1 = False
+
+        # This datalayer object is the one working with the classifier data
+        self.classifier_datalayer = None
+
+        # This datalayer object only works with the GUI
+        self.gui_datalayer = None
         
         # Keep track of if this is a rerun or not
         self.rerun = False
@@ -74,7 +80,8 @@ class IAFautoclass_GUI:
 
         self.logger = IAFLogger(False, (self.progress_bar, self.progress_label))
         
-        connection = Config.Connection(
+        config = Config(
+            connection=Config.Connection(
             odbc_driver=os.environ.get("DEFAULT_ODBC_DRIVER"),
             host=os.environ.get("DEFAULT_HOST"),
             class_catalog=os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
@@ -82,9 +89,10 @@ class IAFautoclass_GUI:
             data_catalog=os.environ.get("DEFAULT_DATA_CATALOG"),
             data_table=os.environ.get("DEFAULT_DATA_TABLE")
             )
-        self.data_layer = DataLayer(connection=connection, logger=self.logger)
+        )
+        self.gui_datalayer = DataLayer(config=config, logger=self.logger)
         
-        if not self.data_layer.can_connect(verbose=True):
+        if not self.gui_datalayer.can_connect(verbose=True):
             sys.exit("GUI class could not connect to Server")
         
         # Update databases list
@@ -452,7 +460,7 @@ class IAFautoclass_GUI:
     
     # Internal methods used to populate or update widget settings
     def update_databases(self) -> None:
-        data = self.data_layer.get_databases()
+        data = self.gui_datalayer.get_databases()
         database_list = [''] + [database[0] for database in data]
         self.database_dropdown.options = database_list
         self.database_dropdown.value = database_list[0]
@@ -464,12 +472,12 @@ class IAFautoclass_GUI:
         if self.lock_observe_1:
             return
         
-        tables = self.data_layer.get_tables()
+        tables = self.gui_datalayer.get_tables()
         tables_list = [""] + [table[0]+'.'+table[1] for table in tables]
         self.tables_dropdown.options = tables_list
         self.tables_dropdown.value = tables_list[0]
         self.tables_dropdown.disabled = False
-
+        
         self.tables_dropdown.observe(handler=self.update_models)
         
     def update_models(self, event: Bunch) -> None:
@@ -477,11 +485,11 @@ class IAFautoclass_GUI:
         if self.lock_observe_1 or self.tables_dropdown.value == "":
             return
         
-        models_list = [""] + [self.DEFAULT_TRAIN_OPTION] + self.data_layer.get_trained_models(Config.DEFAULT_MODELS_PATH, Config.DEFAULT_MODEL_EXTENSION)
+        models_list = [""] + [self.DEFAULT_TRAIN_OPTION] + self.gui_datalayer.get_trained_models_from_files(Config.DEFAULT_MODELS_PATH, Config.DEFAULT_MODEL_EXTENSION)
         self.models_dropdown.options = models_list
         self.models_dropdown.value = models_list[0]
         self.models_dropdown.disabled = False
-
+        
         self.models_dropdown.observe(handler=self.use_old_model_or_train_new) # TODO: Rework this to a "model_handler method"
     
     def use_old_model_or_train_new(self, event: Bunch) -> None:
@@ -556,7 +564,7 @@ class IAFautoclass_GUI:
         if self.lock_observe_1:
             return
         
-        columns = self.data_layer.get_id_columns(self.database_dropdown.value, self.tables_dropdown.value)
+        columns = self.gui_datalayer.get_id_columns(self.database_dropdown.value, self.tables_dropdown.value)
         columns_list = [column[0] for column in columns]
         self.datatype_dict = {column[0]:column[1] for column in columns}
 
@@ -617,7 +625,12 @@ class IAFautoclass_GUI:
     def update_class_summary(self):
         """ Updates the data_layer's connection values too """
         try:
-            distrib = self.data_layer.count_class_distribution(
+            # TODO: Initiate classifier_datalayer earlier?
+            if self.classifier_datalayer:
+                distrib = self.classifier_datalayer.count_class_distribution()
+
+            else:
+                distrib = self.gui_datalayer.count_class_distribution(
                 class_column=self.class_column.value,
                 data_catalog=self.database_dropdown.value,
                 data_table=self.tables_dropdown.value)
@@ -683,7 +696,7 @@ class IAFautoclass_GUI:
         
     def update_num_rows(self):
         try:
-            self.num_rows.value = self.data_layer.count_data_rows(data_catalog=self.database_dropdown.value, data_table=self.tables_dropdown.value)
+            self.num_rows.value = self.gui_datalayer.count_data_rows(data_catalog=self.database_dropdown.value, data_table=self.tables_dropdown.value)
         except DataLayerException as e:
              self.logger.abort_cleanly(str(e))
         
@@ -731,14 +744,14 @@ class IAFautoclass_GUI:
         data_numerical_columns = \
                 [col for col in self.data_columns.value if not col in self.text_columns.value]
         connection = Config.Connection(
-                odbc_driver = self.DEFAULT_ODBC_DRIVER,
-                host = self.DEFAULT_HOST,
+                odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
+                host = os.environ.get("DEFAULT_HOST"),
+                class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
+                class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
                 trusted_connection = True,
                 data_catalog = self.database_dropdown.value,
                 data_table = self.tables_dropdown.value,
                 class_column = self.class_column.value,
-                class_catalog = self.DEFAULT_CLASSIFICATION_CATALOG,
-                class_table = self.DEFAULT_CLASSIFICATION_TABLE,
                 data_text_columns = list(self.text_columns.value),
                 data_numerical_columns = data_numerical_columns,
                 id_column = self.id_column.value
@@ -775,9 +788,9 @@ class IAFautoclass_GUI:
             name=self.project.value,
             save=(self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION),
         )
+        self.classifier_datalayer = DataLayer(config=config, logger=self.logger)
         
-        self.data_layer.update_connection(connection)
-        self.the_classifier = autoclass.IAFautomaticClassiphyer(config=config, logger=self.logger, datalayer=self.data_layer)
+        self.the_classifier = autoclass.IAFautomaticClassiphyer(config=config, logger=self.logger, datalayer=self.classifier_datalayer)
         
         with self.output:
             worked = self.the_classifier.run()
@@ -829,7 +842,7 @@ class IAFautoclass_GUI:
     def changed_class(self, change):
         if change.new != 0 and change.old != change.new:
             new_class, new_index = change.new
-            self.data_layer.correct_mispredicted_data(new_class, new_index)
+            self.classifier_datalayer.correct_mispredicted_data(new_class, new_index)
 
     def display_gui(self) -> None:
         elements = [

@@ -18,13 +18,15 @@ class DataLayer(DataLayerBase):
     SQL_CHUNKSIZE = 1000 #TODO: Decide how many
     SQL_USE_CHUNKS = True
 
-    connection: Config.Connection
+    config: Config
     logger: IAFLogger
+    connection: Config.Connection = field(init=False)
     scriptpath: str = field(init=False)
     text_data: bool = field(init=False)
     numerical_data: bool = field(init=False)
 
     def __post_init__(self) -> None:
+        self.connection = self.config.connection
         # Extract parameters that are not textual
         self.text_data = len(self.connection.data_text_columns) > 0
         self.numerical_data = len(self.connection.data_numerical_columns) > 0
@@ -32,6 +34,9 @@ class DataLayer(DataLayerBase):
     
         if drivers().find(self.connection.odbc_driver) == -1:
             raise ValueError("Specified ODBC driver cannot be found!")
+    
+    def set_config(self, config: Config) -> None:
+        self.config = config    
     
     def update_connection(self, connection: Config.Connection) -> None:
         """ Allows us to update the connection to match the Config """
@@ -67,56 +72,36 @@ class DataLayer(DataLayerBase):
         
         return sqlHelper.read_all_data()
 
-    # Used in the GUI, to get the databases to choose from
-    def get_databases(self):
+    def get_databases(self) -> list:
+        """ Used in the GUI, to get the databases """
         query = "SELECT name FROM sys.databases"
         
         return self.get_data_from_query(query)
 
-    # Used in the GUI, to get the tables to choose from
-    def get_tables(self):
+    def get_tables(self) -> list:
+        """ Used in the GUI, to get the tables """
         query = "SELECT TABLE_SCHEMA,TABLE_NAME FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA,TABLE_NAME"
         
         return self.get_data_from_query(query)
 
-    def get_id_columns(self, database: str, table: str):
+    def get_id_columns(self, database: str, table: str) -> list:
+        """ Gets name and type for columns in specified <database> and <table> """
         query = "SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_CATALOG = " \
             + "\'" + database + "\' AND CONCAT(CONCAT(TABLE_SCHEMA,'.'),TABLE_NAME) = " \
             + "\'" + table + "\'" + " ORDER BY DATA_TYPE DESC"
         
         return self.get_data_from_query(query)
-        
+    
+    def prepare_for_classification(self) -> bool:
 
-    # Get a list of pretrained models
-    def get_trained_models(self, model_path: str, model_file_extension: str):
-        models = []
-        for file in os.listdir(model_path):
-            if file[-len(model_file_extension):] == model_file_extension:
-                models.append(file)
+        """ Setting up tables or similar things in preparation for the classifictions """
+        query = self.create_classification_table_query()
+        self.create_classification_table(query)
 
-        return models
-
-    # Create the classification table
-    def create_classification_table(self) -> None:
+    def create_classification_table(self, query: str) -> None:
+        """ Create the classification table """
         self.logger.print_progress(message="Create the classification table")
         
-        # Read in the sql-query from file
-        sql_file = open(self.scriptpath + "\\" + str(Path(self.connection.class_table_script)), mode="rt")
-        
-        #sql_file = open(self.scriptpath + self.connection.class_table_script, mode="rt")
-        query = ""
-        nextline = sql_file.readline()
-        while nextline:
-            query += nextline.strip() + "\n"
-            nextline = sql_file.readline()
-        sql_file.close()
-        
-        # Make sure we create a classification table in the right place with the right name
-        #print("query=",query)
-        query = query.replace("<class_catalog>", self.connection.class_catalog)
-        #print("query2=",query)
-        query = query.replace("<class_table>", self.connection.class_table.replace(".", "].["))
-        #print("query3=",query)
         
         # Get a sql handler and connect to data database
         sqlHelper = self.get_connection()
@@ -125,6 +110,25 @@ class DataLayer(DataLayerBase):
         sqlHelper.execute_query(query, get_data=False, commit = True)
 
         sqlHelper.disconnect(commit=False)
+
+    def create_classification_table_query(self, path: str = None) -> str:
+        # Read in the sql-query from file
+        path = path if path else self.scriptpath/Path(self.connection.class_table_script)
+        if not path.is_file():
+            raise DataLayerException(f"File {path} does not exist.")
+        
+        sql_file = open(path, mode="rt")
+        query = []
+        nextline = sql_file.readline()
+        while nextline:
+            line = nextline.strip().replace("<class_catalog>", self.connection.class_catalog)
+            line = line.replace("<class_table>", self.connection.class_table.replace(".", "].["))
+            
+            query.append(line)
+            nextline = sql_file.readline()
+        sql_file.close()
+        
+        return "\n".join(query)
 
     # Produces an SQL command that can be executed to get a hold of the recently classified
     # data elements
@@ -234,14 +238,12 @@ class DataLayer(DataLayerBase):
     # Function for counting the number of rows in data to classify
     def count_data_rows(self, data_catalog=str, data_table=str) -> int:
         try:
-            self.connection.data_catalog = data_catalog
-            self.connection.data_table = data_table
             # Get a sql handler and connect to data database
             sqlHelper = self.get_connection()
             
             #
             query = "SELECT COUNT(*) FROM "
-            query += "[" + self.connection.data_catalog + "].[" + self.connection.data_table.replace(".","].[") + "]"
+            query += "[" + data_catalog + "].[" + data_table.replace(".","].[") + "]"
 
             if sqlHelper.execute_query(query, get_data=True):
                 count = sqlHelper.read_data()[0]
@@ -257,19 +259,21 @@ class DataLayer(DataLayerBase):
         return count
 
      # Function for counting the number of rows in data corresponding to each class
-    def count_class_distribution(self, class_column: str, data_catalog: str, data_table: str) -> dict:
-        try:
-            self.connection.class_column = class_column
-            self.connection.data_catalog = data_catalog
-            self.connection.data_table = data_table
+    def count_class_distribution(self, class_column: str = None, 
+                data_catalog: str = None,
+                data_table: str = None) -> dict:
 
+        c_column = class_column if class_column else self.config.connection.class_column
+        d_catalog = data_catalog if data_catalog else self.config.connection.data_catalog
+        d_table = data_table if data_table else self.config.connection.data_table
+        try:
             # Get a sql handler and connect to data database
             sqlHelper = self.get_connection()
             
             # Construct the query
-            query = "SELECT " + self.connection.class_column + ", COUNT(*) FROM "
-            query += "[" + self.connection.data_catalog + "].[" + self.connection.data_table.replace(".","].[") + "] "
-            query += "GROUP BY " + self.connection.class_column + " ORDER BY " + self.connection.class_column + " DESC"
+            query = "SELECT " + c_column + ", COUNT(*) FROM "
+            query += "[" + d_catalog + "].[" + d_table.replace(".","].[") + "] "
+            query += "GROUP BY " + c_column + " ORDER BY " + c_column + " DESC"
             
             # Now we are ready to execute the sql query
             # By default, all fetched data is placed in one long 1-dim list. The alternative is to read by chunks.
