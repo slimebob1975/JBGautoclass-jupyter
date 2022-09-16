@@ -11,9 +11,10 @@ from IAFHandler import Model
 from IAFLogger import IAFLogger
 import SqlHelper.IAFSqlHelper as sql
 from IAFExceptions import DataLayerException
+from DataLayer.Base import DataLayerBase
 
 @dataclass
-class DataLayer:
+class DataLayer(DataLayerBase):
     SQL_CHUNKSIZE = 1000 #TODO: Decide how many
     SQL_USE_CHUNKS = True
 
@@ -38,7 +39,7 @@ class DataLayer:
         self.__post_init__()
     
     # get the SQL handler
-    def get_sql_connection(self) -> sql.IAFSqlHelper:
+    def get_connection(self) -> sql.IAFSqlHelper:
         # Get a sql handler and connect to data database
         sqlHelper = sql.IAFSqlHelper(driver = self.connection.odbc_driver, \
             host = self.connection.host, catalog = self.connection.class_catalog, \
@@ -48,21 +49,7 @@ class DataLayer:
         
         return sqlHelper
 
-    def can_connect(self, verbose: bool = False) -> bool:
-        """ This wraps the test in a function, to not show the inner functionality """
-        con = self.get_sql_connection()
-        
-        success = con.can_connect()
-
-        if success:
-            return True
-
-        if verbose:
-            self.logger.print_warning(f"Connection to server failed: {con}")
-        
-        return False
-
-# Update the text_data if not set when the DataLayer is created
+    # Update the text_data if not set when the DataLayer is created
     def update_text_data(self, text_data:bool) -> None:
         self.text_data = text_data
 
@@ -72,7 +59,7 @@ class DataLayer:
     
     # generic function to get data from any query
     def get_data_from_query(self, query: str) -> list:
-        sqlHelper = self.get_sql_connection()
+        sqlHelper = self.get_connection()
         try:
             sqlHelper.execute_query(query, get_data = True)
         except Exception as ex:
@@ -132,7 +119,7 @@ class DataLayer:
         #print("query3=",query)
         
         # Get a sql handler and connect to data database
-        sqlHelper = self.get_sql_connection()
+        sqlHelper = self.get_connection()
 
         # Execute query
         sqlHelper.execute_query(query, get_data=False, commit = True)
@@ -179,7 +166,7 @@ class DataLayer:
 
         try:
            # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection()
+            sqlHelper = self.get_connection()
 
             # Mark execution started by setting unique key to -1 and algorithm to "Not set"
 
@@ -217,7 +204,7 @@ class DataLayer:
 
         try:
             # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection()
+            sqlHelper = self.get_connection()
 
             # Mark execution ended by removing first row with unique key as -1 
             # for the current user and currect script and so forth
@@ -250,7 +237,7 @@ class DataLayer:
             self.connection.data_catalog = data_catalog
             self.connection.data_table = data_table
             # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection()
+            sqlHelper = self.get_connection()
             
             #
             query = "SELECT COUNT(*) FROM "
@@ -277,7 +264,7 @@ class DataLayer:
             self.connection.data_table = data_table
 
             # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection()
+            sqlHelper = self.get_connection()
             
             # Construct the query
             query = "SELECT " + self.connection.class_column + ", COUNT(*) FROM "
@@ -315,7 +302,7 @@ class DataLayer:
 
         try:
             # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection()
+            sqlHelper = self.get_connection()
             
             # Loop through the data
             num_lines = 0
@@ -416,7 +403,7 @@ class DataLayer:
     def get_dataset(self, num_rows: int, train: bool, predict: bool):
         try:
             # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection()
+            sqlHelper = self.get_connection()
 
              # Setup and execute a query to get the wanted data. 
             # 
@@ -508,7 +495,7 @@ class DataLayer:
             self.logger.print_info(f"Changing data row {index} to {new_class}: ")
 
             # Get a sql handler and connect to data database
-            sqlHelper = self.get_sql_connection()
+            sqlHelper = self.get_connection()
 
             # Set together SQL code for the insert
             query =  "UPDATE [" + self.connection.data_catalog + "]."

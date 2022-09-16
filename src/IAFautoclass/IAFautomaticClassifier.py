@@ -33,7 +33,7 @@ from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
 
 # Imports of local help class for communication with SQL Server
 import Config
-import DataLayer
+import SQLDataLayer
 import IAFLogger
 from IAFHandler import IAFHandler
 
@@ -54,7 +54,7 @@ class IAFautomaticClassiphyer:
     MAX_HEAD_COLUMNS = 10
     
     # Constructor with arguments
-    def __init__(self, config: Config.Config, logger: IAFLogger.IAFLogger, datalayer: DataLayer.DataLayer):
+    def __init__(self, config: Config.Config, logger: IAFLogger.IAFLogger, datalayer: SQLDataLayer.DataLayer):
         self.config = config
 
         self.logger = logger
@@ -330,7 +330,7 @@ def main(argv):
 
     logger = IAFLogger.IAFLogger(not config.io.verbose)
     
-    datalayer = DataLayer.DataLayer(connection=config.connection, logger=logger)
+    datalayer = SQLDataLayer.DataLayer(connection=config.connection, logger=logger)
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
     myClassiphyer = IAFautomaticClassiphyer(config=config, logger=logger, datalayer=datalayer)

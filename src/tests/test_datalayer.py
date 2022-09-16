@@ -1,6 +1,6 @@
 import pytest
 
-import DataLayer
+import SQLDataLayer
 
 from Config import Config, Algorithm, Preprocess, Reduction, Scoretype
 
@@ -40,7 +40,7 @@ def valid_iris_config() -> Config:
             odbc_driver="Mock Server",
             host="tcp:database.iaf.mock",
             trusted_connection=True,
-            class_catalog="DatabaseOne",
+            class_catalog="Schema.DatabaseOne",
             class_table="ResultTable",
             class_table_script="createtable.sql.txt",
             class_username="some_fake_name",
@@ -89,8 +89,8 @@ def valid_iris_config() -> Config:
     return config
 
 @pytest.fixture
-def default_datalayer(valid_iris_config) -> DataLayer.DataLayer:
-    return DataLayer.DataLayer(valid_iris_config.connection, MockLogger())
+def default_datalayer(valid_iris_config) -> SQLDataLayer.DataLayer:
+    return SQLDataLayer.DataLayer(connection=valid_iris_config.connection, logger=MockLogger())
 
 
 class TestDataLayer():
@@ -99,6 +99,6 @@ class TestDataLayer():
     def test_classified_data_query(self, default_datalayer) -> None:
         """ This is a query in string format """
         query = default_datalayer.get_sql_command_for_recently_classified_data(10)
-        expectedQuery = "SELECT TOP(10),A.[id],A.[sepal-length],A.[sepal-width],A.[petal-length],A.[petal-width],A.[data_text_column],B.[class_result],B.[class_rate],B.[class_time],B.[class_algorithm] FROM [DatabaseTwo].[InputTable] A  INNER JOIN [DatabaseOne].[ResultTable] B  ON A.[id] = B.[unique_key] WHERE B.[class_user] = 'Mht0202' AND B.[table_name] = 'InputTable'' ORDER BY B.[class_time] DESC"
+        expectedQuery = "SELECT TOP(10),A.[id],A.[sepal-length],A.[sepal-width],A.[petal-length],A.[petal-width],A.[data_text_column],B.[class_result],B.[class_rate],B.[class_time],B.[class_algorithm] FROM [DatabaseTwo].[InputTable] A  INNER JOIN [Schema].[DatabaseOne].[ResultTable] B  ON A.[id] = B.[unique_key] WHERE B.[class_user] = 'Mht0202' AND B.[table_name] = 'InputTable'' ORDER BY B.[class_time] DESC"
         
         assert query == expectedQuery

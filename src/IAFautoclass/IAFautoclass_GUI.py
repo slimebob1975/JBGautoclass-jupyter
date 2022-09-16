@@ -22,7 +22,7 @@ from IAFExceptions import DataLayerException
 from IAFLogger import IAFLogger
 import IAFautomaticClassifier as autoclass
 from Config import Algorithm, Config, Preprocess, Reduction, Scoretype
-from DataLayer import DataLayer
+from SQLDataLayer import DataLayer
 
 if os.path.isfile(env_path):
     load_dotenv(env_path)  # take environment variables from .env
@@ -82,7 +82,7 @@ class IAFautoclass_GUI:
             data_catalog=os.environ.get("DEFAULT_DATA_CATALOG"),
             data_table=os.environ.get("DEFAULT_DATA_TABLE")
             )
-        self.data_layer = DataLayer(connection, self.logger)
+        self.data_layer = DataLayer(connection=connection, logger=self.logger)
         
         if not self.data_layer.can_connect(verbose=True):
             sys.exit("GUI class could not connect to Server")
