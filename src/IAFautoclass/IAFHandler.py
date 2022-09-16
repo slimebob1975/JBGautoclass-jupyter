@@ -59,7 +59,7 @@ class Logger(Protocol):
     def print_percentage_checked(self, text: str, old_percent, percent_checked) -> None:
         """ Uses print() to update the line rather than new line"""
 
-    def investigate_dataset(self, dataset: pandas.DataFrame, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
+    def investigate_dataset(self, dataset: pandas.DataFrame, class_name: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
         """ Print information about dataset """
     
     def print_warning(self, *args) -> None:
@@ -351,7 +351,7 @@ class DatasetHandler:
 
         
         if self.handler.config.should_train():
-            self.handler.logger.investigate_dataset(self.dataset) # Returns True if the investigation/printing was not suppressed
+            self.handler.logger.investigate_dataset(self.dataset, class_column) # Returns True if the investigation/printing was not suppressed
         
         return True
 
@@ -543,7 +543,7 @@ class DatasetHandler:
 
         if text_data:
             self.handler.logger.print_formatted_info("After conversion of text data to numerical data")
-            self.handler.logger.investigate_dataset( self.X, False, False )
+            self.handler.logger.investigate_dataset( self.X, None, False, False )
 
         return label_binarizers, count_vectorizer, tfid_transformer
     

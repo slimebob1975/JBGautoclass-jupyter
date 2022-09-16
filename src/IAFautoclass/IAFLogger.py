@@ -83,12 +83,12 @@ class IAFLogger(terminal.Logger):
         if widget in self.widgets:
             self.widgets[widget] = value
 
-    def investigate_dataset(self, dataset: pandas.DataFrame, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
+    def investigate_dataset(self, dataset: pandas.DataFrame, class_column: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
         if self._enable_quiet:
             # This function should only run if info can be shown
             return False
         self._set_widget_value("progress_label", "Investigate dataset (see console)")
-        self.print_dataset_investigation(dataset, show_class_distribution)
+        self.print_dataset_investigation(dataset, class_column, show_class_distribution)
 
         if show_statistics:
             #Give some statistical overview of the training material
@@ -97,7 +97,7 @@ class IAFLogger(terminal.Logger):
         return True
 
     # Investigating dataset -- make some printouts to standard output
-    def print_dataset_investigation(self, dataset, show_class_distribution = True):
+    def print_dataset_investigation(self, dataset, class_column: str, show_class_distribution: bool = True):
 
         try: 
             self.start("Looking at dataset:")
@@ -113,9 +113,9 @@ class IAFLogger(terminal.Logger):
             if show_class_distribution:
                 # 4. Class distribution
                 self.print_unformatted("Class distribution: ")
-                self.print_unformatted(dataset.groupby(dataset.columns[0]).size()) 
+                self.print_unformatted(dataset.groupby(dataset[class_column]).size()) 
         except Exception as e:
-            self.warning(f"An error occured in investigate_dataset: {str(e)}")
+            self.print_warning(f"An error occured in investigate_dataset: {str(e)}")
 
         self.end()
 
