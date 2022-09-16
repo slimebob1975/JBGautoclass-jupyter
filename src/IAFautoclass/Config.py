@@ -36,7 +36,7 @@ from sklearn.metrics import make_scorer, matthews_corrcoef
 from skclean.models import RobustForest, RobustLR, Centroid
 from skclean.detectors import (KDN, ForestKDN, RkDN, PartitioningDetector, 
                                MCS, InstanceHardness, RandomForestDetector)
-from skclean.handlers import WeightedBagging
+from skclean.handlers import WeightedBagging, Costing
 
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -267,6 +267,8 @@ class Algorithm(MetaEnum):
     MLPL = { "full_name": "ML Neural Network Sigm"}
     WBGK = { "full_name": "Weighted Bagging + KDN", "detector": Detector.KDN}
     WBGM = { "full_name": "Weighted Bagging + MCS", "detector": Detector.MCS}
+    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN}
+    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS}
 
     @property
     def limit(self):
@@ -466,7 +468,15 @@ class Algorithm(MetaEnum):
     
     def call_WB(self, detector) -> WeightedBagging:
         return WeightedBagging(detector=detector.call_detector())
+    
+    def do_CSTK(self, max_iterations: int, size: int)-> Costing:
+        return self.call_CST(self.detector)
 
+    def do_CSTM(self, max_iterations: int, size: int)-> Costing: 
+        return self.call_CST(self.detector)
+    
+    def call_CST(self, detector) -> Costing:
+        return WeightedBagging(detector=detector.call_detector())
 
 class Preprocess(MetaEnum):
     ALL = "All"
