@@ -174,8 +174,8 @@ class IAFLogger(terminal.Logger):
         if not ph.could_predict_proba:
             return
         
-        mean, std = ph.get_rates(as_string = True)
-        self.print_info("Training Classification Rates: Mean, Std.dev: ", mean, std)
+        mean, std = ph.get_rates(as_string = False)
+        self.print_info("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
     
 
     # Makes sure the GUI isn't left hanging if exceptions crash the program
