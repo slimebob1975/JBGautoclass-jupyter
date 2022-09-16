@@ -93,12 +93,6 @@ def default_datalayer(valid_iris_config) -> DataLayer.DataLayer:
     return DataLayer.DataLayer(valid_iris_config.connection, MockLogger())
 
 
-# From GUI--perhaps instead test_connection()
-#try:
-#    self.data_layer.get_sql_connection() # This checks so that the SQL connection works
-#except Exception as ex:
-#    sys.exit("GUI class could not connect to SQL Server: {0}".format(str(ex)))
-
 class TestDataLayer():
     """ The main class """
 

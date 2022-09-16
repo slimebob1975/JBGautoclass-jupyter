@@ -55,7 +55,7 @@ class IAFautoclass_GUI:
 
 
     # Constructor
-    def __init__(self):    
+    def __init__(self):
         self.config = None
         # The classifier object is a data element in our GUI
         self.the_classifier = None
@@ -69,10 +69,11 @@ class IAFautoclass_GUI:
         
         # Keep track of if this is a rerun or not
         self.rerun = False
-        
         # All the widgets moved into this function to be able to be hidden easier
         self.setup_GUI()
+
         self.logger = IAFLogger(False, (self.progress_bar, self.progress_label))
+        
         connection = Config.Connection(
             odbc_driver=os.environ.get("DEFAULT_ODBC_DRIVER"),
             host=os.environ.get("DEFAULT_HOST"),
@@ -83,10 +84,8 @@ class IAFautoclass_GUI:
             )
         self.data_layer = DataLayer(connection, self.logger)
         
-        try:
-            self.data_layer.get_sql_connection() # This checks so that the SQL connection works
-        except Exception as ex:
-            sys.exit("GUI class could not connect to SQL Server: {0}".format(str(ex)))
+        if not self.data_layer.can_connect(verbose=True):
+            sys.exit("GUI class could not connect to Server")
         
         # Update databases list
         self.update_databases()

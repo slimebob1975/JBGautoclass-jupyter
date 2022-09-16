@@ -1,8 +1,5 @@
-from msilib.schema import ODBCAttribute
 import sys
-import os
 import platform
-import importlib
 from typing import List
 
 if platform.system() == 'Windows':
@@ -23,11 +20,11 @@ class IAFSqlHelper():
         self.Host = host
         self.Catalog = catalog
         if trusted_connection:
-            self.Trusted_connection = True;
+            self.Trusted_connection = True
             self.Username = None
             self.Password = None
         else:
-            self.Trusted_connection = False;
+            self.Trusted_connection = False
             self.Username = username
             self.Password = password
         self.Connection = None
@@ -45,12 +42,27 @@ class IAFSqlHelper():
     
     # Print the class 
     def __str__(self):
-        return self.Driver + ", " + self.Host + ", " + \
-               self.Catalog + ", " + self.Trusted_connection + ", " + \
-               self.Username + ", " + self.Password
+        return self.build_connection()
 
-    # Make a connection to database
-    def connect(self) -> pyodbc.Connection:
+    def build_connection(self) -> str:
+        fields = {
+            "driver": self.Driver,
+            "server": self.Host,
+            "database": self.Catalog
+        }
+
+        if self.Trusted_connection:
+            fields["trusted_connection"] = "yes"
+
+        else:
+            fields["uid"] = self.Username
+            fields["pwd"] = self.Password
+        
+        connection = [ f"{key.upper()}={value}" for (key,value) in fields.items()]
+        
+        return ";".join(connection)
+
+    def build_connection_string(self) -> str:
         if not self.Trusted_connection:
             connect_string = \
                 "DRIVER=" + self.Driver + ";" + \
@@ -64,11 +76,30 @@ class IAFSqlHelper():
                 "SERVER=" + self.Host + ";" + \
                 "DATABASE=" + self.Catalog + ";" + \
                 "TRUSTED_CONNECTION=yes;" 
+        
+        return connect_string
+
+    def can_connect(self) -> bool:
+        connect_string = self.build_connection()
+        connection = self.connect(connect_string, False)
+
+        if (type(connection) == pyodbc.Connection):
+            return True
+
+        return False
+
+    # Make a connection to database
+    def connect(self, connect: str = None, print_fail: bool = True) -> pyodbc.Connection:
+        connect_string = connect
+        if not connect_string:
+            connect_string = self.build_connection()
+        
         try:
             return pyodbc.connect(connect_string)
         except Exception as ex:
             func = str(sys._getframe().f_code.co_name)
-            print("Connection to database failed: " + connect_string)
+            if (print_fail):
+                print("Connection to database failed: " + connect_string)
             if not self.ignore_errors:
                 self.end_program( func, str(ex) )
     

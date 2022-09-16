@@ -50,15 +50,17 @@ class DataLayer:
 
     def can_connect(self, verbose: bool = False) -> bool:
         """ This wraps the test in a function, to not show the inner functionality """
-        try:
-            self.get_sql_connection() # This checks so that the SQL connection works
-        except Exception as e:
-            if verbose:
-                self.logger.print_warning(f"Exception when connecting to SQL server: {e}")
-            
-            return False
+        con = self.get_sql_connection()
         
-        return True
+        success = con.can_connect()
+
+        if success:
+            return True
+
+        if verbose:
+            self.logger.print_warning(f"Connection to server failed: {con}")
+        
+        return False
 
 # Update the text_data if not set when the DataLayer is created
     def update_text_data(self, text_data:bool) -> None:
@@ -542,3 +544,4 @@ def to_quoted_string(x, quotes:str = '\'') -> str:
     value = str(x)
 
     return quotes + value + quotes
+    
