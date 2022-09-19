@@ -14,7 +14,6 @@
 #
 # Standard imports
 import os
-from pathlib import Path
 import sys
 
 from IAFExceptions import HandlerException

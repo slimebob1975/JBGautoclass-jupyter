@@ -1,7 +1,10 @@
 
 from dataclasses import dataclass, field
 import os
-from typing import Protocol
+from typing import Protocol, Union
+
+from IAFExceptions import DataLayerException
+from Config import Config
 
 
 class Logger(Protocol):
@@ -12,19 +15,36 @@ class Logger(Protocol):
     def print_warning(self, *args) -> None:
         """ print warning """
 
-class Config(Protocol):
-    # Methods to hide implementation of Config
-    def is_text_data(self) -> bool:
-        """True or False"""
-    
-    def is_numerical_data(self) -> bool:
-        """True or False"""
-
 @dataclass
 class DataLayerBase:
     config: Config = field(init=False)
     logger: Logger
     """ This is the base class that all DataLayers inherit from """
+
+    def get_config(self) -> Config:
+        """ Getter/setter to not directly touch the config """
+
+        if not self.config:
+            raise DataLayerException(f"Config is not yet defined")
+        
+        return self.config
+
+    def update_config(self, updates: Union[dict, Config]) -> bool:
+        """ Updates the config
+            If updates is a Config, it replaces the current config
+            If updates is a dict, it runs config.update_configuration
+        """
+
+        if isinstance(updates, Config):
+            self.config = updates
+            return True
+
+        if isinstance(updates, dict):
+            self.config.update_configuration(updates)
+            return True
+
+        return False
+
 
     def get_connnection(self):
         """ Gets the connection based on the type"""

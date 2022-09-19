@@ -77,7 +77,7 @@ class IAFautoclass_GUI:
         self.rerun = False
         # All the widgets moved into this function to be able to be hidden easier
         self.setup_GUI()
-
+        
         self.logger = IAFLogger(False, (self.progress_bar, self.progress_label))
         
         config = Config(
@@ -625,15 +625,7 @@ class IAFautoclass_GUI:
     def update_class_summary(self):
         """ Updates the data_layer's connection values too """
         try:
-            # TODO: Initiate classifier_datalayer earlier?
-            if self.classifier_datalayer:
-                distrib = self.classifier_datalayer.count_class_distribution()
-
-            else:
-                distrib = self.gui_datalayer.count_class_distribution(
-                class_column=self.class_column.value,
-                data_catalog=self.database_dropdown.value,
-                data_table=self.tables_dropdown.value)
+             distrib = self.classifier_datalayer.count_class_distribution()
         except DataLayerException as e:
             self.logger.abort_cleanly(str(e))
         
@@ -643,6 +635,24 @@ class IAFautoclass_GUI:
         
     def continuation_button_was_clicked(self, event:Bunch) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
+        # This is a good place to also create the classifier_datalayer
+        data_numerical_columns = [col for col in self.data_columns.value if not col in self.text_columns.value]
+        connection = Config.Connection(
+                odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
+                host = os.environ.get("DEFAULT_HOST"),
+                class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
+                class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
+                trusted_connection = True,
+                data_catalog = self.database_dropdown.value,
+                data_table = self.tables_dropdown.value,
+                class_column = self.class_column.value,
+                data_text_columns = list(self.text_columns.value),
+                data_numerical_columns = data_numerical_columns,
+                id_column = self.id_column.value
+            )
+
+        self.classifier_datalayer = DataLayer(Config(connection), self.logger)
+
         self.lock_observe_1 = True
         if self.models_dropdown.value != self.DEFAULT_TRAIN_OPTION:
             self.train_checkbox.value = False
@@ -686,6 +696,7 @@ class IAFautoclass_GUI:
         self.continuation_button.disabled = True
         self.start_button.disabled = False
         self.start_button.on_click(callback = self.start_button_was_clicked)
+
         
     def update_algorithm_form(self):
         self.reduction_dropdown.options = Reduction.get_sorted_list()
@@ -741,7 +752,7 @@ class IAFautoclass_GUI:
             model_name = self.models_dropdown.value.replace(Config.DEFAULT_MODEL_EXTENSION, "")
         
         
-        data_numerical_columns = \
+        """data_numerical_columns = \
                 [col for col in self.data_columns.value if not col in self.text_columns.value]
         connection = Config.Connection(
                 odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
@@ -787,10 +798,41 @@ class IAFautoclass_GUI:
             ),
             name=self.project.value,
             save=(self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION),
-        )
-        self.classifier_datalayer = DataLayer(config=config, logger=self.logger)
+        )"""
+        updates = {
+            "mode": Config.Mode(
+                train = self.train_checkbox.value,
+                predict = self.predict_checkbox.value,
+                mispredicted = self.mispredicted_checkbox.value,
+                use_stop_words = self.filter_checkbox.value,
+                specific_stop_words_threshold = float(self.filter_slider.value) / 100.0,
+                hex_encode = self.encryption_checkbox.value,
+                use_categorization = self.categorize_checkbox.value,
+                category_text_columns = list(self.categorize_columns.value),
+                test_size = float(self.testdata_slider.value) / 100.0,
+                smote = self.smote_checkbox.value,
+                undersample = self.undersample_checkbox.value,
+                algorithm = Algorithm[self.algorithm_dropdown.value],
+                preprocessor = Preprocess[self.preprocessor_dropdown.value],
+                feature_selection = Reduction[self.reduction_dropdown.value],
+                num_selected_features = None,
+                scoring = Scoretype[self.metric_dropdown.value],
+                max_iterations = self.iterations_slider.value
+            ),
+            "io": Config.IO(
+                verbose=self.verbose_checkbox.value,
+                model_name=model_name
+            ),
+            "debug": Config.Debug(
+                on=True,
+                num_rows=self.num_rows.value
+            ),
+            "name": self.project.value,
+            "save": (self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION)
+        }
+        self.classifier_datalayer.update_config(updates)
         
-        self.the_classifier = autoclass.IAFautomaticClassiphyer(config=config, logger=self.logger, datalayer=self.classifier_datalayer)
+        self.the_classifier = autoclass.IAFautomaticClassiphyer(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
         
         with self.output:
             worked = self.the_classifier.run()

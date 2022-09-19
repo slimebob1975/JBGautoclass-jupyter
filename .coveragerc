@@ -1,0 +1,2 @@
+[run]
+omit = src/tests/*,*/__init__.py,*/regenerate-fixtures.py, */__test.py,*config/*,*output/*,*model/*

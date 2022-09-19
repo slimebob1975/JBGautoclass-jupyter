@@ -90,21 +90,21 @@ def valid_iris_config() -> Config:
     return config
 
 @pytest.fixture
-def default_datalayer(valid_iris_config) -> SQLDataLayer.DataLayer:
-    return SQLDataLayer.DataLayer(connection=valid_iris_config.connection, logger=MockLogger())
+def default_sqldatalayer(valid_iris_config) -> SQLDataLayer.DataLayer:
+    return SQLDataLayer.DataLayer(config=valid_iris_config, logger=MockLogger())
 
 
 class TestDataLayer():
     """ The main class """
 
-    def test_classification_table_query(self, default_datalayer) -> None:
-        query = default_datalayer.create_classification_table_query()
-        print(query)
-        assert False
+    def test_classification_table_query(self, default_sqldatalayer) -> None:
+        query = default_sqldatalayer.create_classification_table_query()
+        #print(query)
+        #assert False
 
-    def test_classified_data_query(self, default_datalayer) -> None:
+    def test_classified_data_query(self, default_sqldatalayer) -> None:
         """ This is a query in string format """
-        query = default_datalayer.get_sql_command_for_recently_classified_data(10)
+        query = default_sqldatalayer.get_sql_command_for_recently_classified_data(10)
         expectedQuery = "SELECT TOP(10),A.[id],A.[sepal-length],A.[sepal-width],A.[petal-length],A.[petal-width],A.[data_text_column],B.[class_result],B.[class_rate],B.[class_time],B.[class_algorithm] FROM [DatabaseTwo].[InputTable] A  INNER JOIN [Schema].[DatabaseOne].[ResultTable] B  ON A.[id] = B.[unique_key] WHERE B.[class_user] = 'Mht0202' AND B.[table_name] = 'InputTable'' ORDER BY B.[class_time] DESC"
         
         assert query == expectedQuery

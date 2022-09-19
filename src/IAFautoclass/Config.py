@@ -1003,9 +1003,6 @@ class Config:
         if self.save:
             self.save_to_file()
 
-   
-
-
     def __str__(self) -> str:
         str_list = [
             " -- Configuration settings --",
@@ -1243,6 +1240,16 @@ class Config:
         return config
     
     # Methods to hide implementation of Config
+    def update_configuration(self, updates: dict) -> bool: #TEST
+        """ Updates the config with new, wholesale, bits """
+        # TODO: Break out validation to be able to call that here as well
+        for key, item in updates.items():
+            if not hasattr(self, key):
+                raise ConfigException(f"Key {key} does not exist in Config")
+
+            setattr(self, key, item)
+
+
     def is_text_data(self) -> bool:
         return len(self.connection.data_text_columns) > 0
     
@@ -1532,11 +1539,19 @@ def main():
     else:
        config = Config()
 
+    updates = {
+        "debug": Config.Debug(
+                on=True,
+                num_rows=125
+            ),
+    }
+    print(config.debug)
+    config.update_configuration(updates)
     #print(isinstance(config.mode.scoring, enum.Enum))
     #print(config.mode.scoring.name)
     #config.export_configuration_to_file()
     # print(Algorithm.ALL.value)
-    print(config)
+    print(config.debug)
 
 
 if __name__ == "__main__":

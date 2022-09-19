@@ -1092,7 +1092,7 @@ class ModelHandler:
         cv_results : ndarray
             The results from the cross-validation scoring
         """
-
+        # TODO: Varför envisas vissa modeller med att returnera NaN-värden från cross_val_score? Kan vi åtgärda?
         try:
             # Apply feature selection to current model and number of features.
             modified_estimator = self.modify_algorithm(estimator, num_features, X, y)
