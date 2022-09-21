@@ -938,7 +938,7 @@ class ModelHandler:
         best_feature_selection = X_train.shape[1]
         first_round = True
         # TODO: fix message
-        self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time"], divisor="=")
+        self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time","Failure"], divisor="=")
 
         numMinorTasks = len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
@@ -983,7 +983,8 @@ class ModelHandler:
                     t0 = time.time()
                     
                     try:
-                        current_pipeline, cv_results = self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
+                        current_pipeline, cv_results, failure = \
+                            self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
                     except ModelException:
                         # If any exceptions happen, continue to next step in the loop
                         break
@@ -998,8 +999,8 @@ class ModelHandler:
                     # Print results to screen
                     #if False: # TODO: fix message
                     #if self.handler.config.is_verbose(): # TODO: print prettier
-                    print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} s.".
-                            format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t))
+                    print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} {6:<30s}".
+                            format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t,failure))
 
                     # Evaluate if feature selection changed accuracy or not. 
                     #rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(temp_score, rfe_score, num_features, max_features_selection, min_features_selection)
@@ -1092,7 +1093,8 @@ class ModelHandler:
         cv_results : ndarray
             The results from the cross-validation scoring
         """
-
+        exception = None
+        message = ""
         try:
             # Apply feature selection to current model and number of features.
             modified_estimator = self.modify_algorithm(estimator, num_features, X, y)
@@ -1102,15 +1104,17 @@ class ModelHandler:
             
             # Now make kfolded cross evaluation
             cv_results = self.get_cross_val_score(current_pipeline, X, y, kfold, algorithm)
-        except ValueError:
-            raise ModelException(f"Creating pipeline or getting cross val score failed in {algorithm.name}-{preprocessor.name}")
+        #except ValueError as exception:
+        #    raise ModelException(f"Creating pipeline or getting cross val score failed in {algorithm.name}-{preprocessor.name}")
             # This warning kept to not forget it
             #self.handler.logger.print_warning(f"Pipeline ({algorithm.name}-{preprocessor.name}) raised a ValueError in cross_val_score. Skipping to next")
-        except IndexError as ie:
-            raise ModelException(f"Creating pipeline failed in {algorithm.name}-{preprocessor.name} because {ie}")
-       
+        #except IndexError as exception:
+        #    raise ModelException(f"Creating pipeline failed in {algorithm.name}-{preprocessor.name} because {exception}")
+        except Exception as ex:
+            cv_results = np.array([np.nan])
+            exception = "{0}: {1!r}".format(type(ex).__name__, ex.args)
 
-        return current_pipeline, cv_results
+        return current_pipeline, cv_results, str(exception)
  
     
     def modify_algorithm(self, estimator: Estimator, n_features_to_select: int, X: pandas.DataFrame, y: pandas.DataFrame) -> Estimator:
@@ -1221,7 +1225,7 @@ class ModelHandler:
             if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
                 fit_params[key] = func(X, y)
 
-        return cross_val_score(pipeline, X, y=y, n_jobs=psutil.cpu_count(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params) 
+        return cross_val_score(pipeline, X, y=y, n_jobs=psutil.cpu_count(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
         
     def do_kdn(self, X: pandas.DataFrame, y: pandas.DataFrame):
         """ Used in fit_params as a sample_weight option, via Algorithm """
