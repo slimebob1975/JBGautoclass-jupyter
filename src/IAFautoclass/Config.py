@@ -188,18 +188,28 @@ class Encoder(MetaEnum):
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
         return self.call_function(y=y)
 
-    def _do_encoding(self, y: pandas.DataFrame, what_encoder = None):
-        if what_encoder != None:
-            try:
-                encoder = what_encoder.fit(y=y)
-                return encoder.transform(y=y)
-            except Exception as e:
-                pass        
+    def _do_encoding(self, y: pandas.DataFrame, what_encoder):
+        try:
+            encoder = what_encoder.fit(y=y)
+            return encoder.transform(y=y)
+        except Exception as e:
+            pass        
+        return y
+
+    def _undo_encoding(self, y: pandas.DataFrame, the_encoder):
+        try:
+            return the_encoder.inverse_transform(y=y)
+        except Exception as e:
+            pass        
         return y
 
     def do_STA(self, y: pandas.DataFrame):
         label_encoder = LabelEncoder()
         return self._do_encoding(y=y, what_encoder=label_encoder)
+
+    def undo_STA(self, y: pandas.DataFrame, the_encoder: LabelEncoder):
+        return self._undo_encoding(y=y, the_encoder=the_encoder)
+        
 
 class Detector(MetaEnum):
     ALL = { "full_name": "All" }
