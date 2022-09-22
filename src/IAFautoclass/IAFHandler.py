@@ -1113,6 +1113,7 @@ class ModelHandler:
         except Exception as ex:
             cv_results = np.array([np.nan])
             exception = "{0}: {1!r}".format(type(ex).__name__, ex.args)
+            #raise(ex)
 
         return current_pipeline, cv_results, str(exception)
  
@@ -1226,11 +1227,6 @@ class ModelHandler:
                 fit_params[key] = func(X, y)
 
         return cross_val_score(pipeline, X, y=y, n_jobs=psutil.cpu_count(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
-        
-    def do_kdn(self, X: pandas.DataFrame, y: pandas.DataFrame):
-        """ Used in fit_params as a sample_weight option, via Algorithm """
-        return KDN().detect(X, y)
-
 
     # Save ml model and corresponding configuration
     def save_model_to_file(self, filename):

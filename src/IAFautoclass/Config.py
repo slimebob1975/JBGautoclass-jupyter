@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Protocol, Type, TypeVar, Union
 
 import pandas
+from sklearn.preprocessing import LabelEncoder
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
@@ -127,6 +128,7 @@ class Detecter(Protocol):
     def detect(self, X, y):
         """ Detects noise likelihood for each sample in the dataset """
 
+
 class RateType(enum.Enum):
     # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
     I = "Individual"
@@ -178,16 +180,37 @@ class MetaEnum(enum.Enum):
         
         return None
 
-class Detector(MetaEnum):
-    ALL = "All"
+class Encoder(MetaEnum):
     NON = "None"
-    KDN = "KDN"
-    FKDN = "Forest KDN"
-    RKDN = "Recursive KDN"
-    PDEC = "Partitioning Detector"
-    MCS = "Markov Chain Sampling"
-    INH = "Instance Hardness Detector"
-    RFD = "Random Forest Detector"
+    STA = "Standard Encoder" # Encode target labels with value between 0 and n_classes-1
+
+    def call_encoder(self, y: pandas.DataFrame):
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function(y=y)
+
+    def _do_encoding(self, y: pandas.DataFrame, what_encoder = None):
+        if what_encoder != None:
+            try:
+                encoder = what_encoder.fit(y=y)
+                return encoder.transform(y=y)
+            except Exception as e:
+                pass        
+        return y
+
+    def do_STA(self, y: pandas.DataFrame):
+        label_encoder = LabelEncoder()
+        return self._do_encoding(y=y, what_encoder=label_encoder)
+
+class Detector(MetaEnum):
+    ALL = { "full_name": "All" }
+    NON = { "full_name": "None" }
+    KDN = { "full_name":"KDN" }
+    FKDN = { "full_name": "Forest KDN" }
+    RKDN = { "full_name": "Recursive KDN" }
+    PDEC = { "full_name": "Partitioning Detector", "encoder": Encoder.STA } # TODO: Use LabelEncoder on y for this detector
+    MCS = { "full_name": "Markov Chain Sampling", "encoder": Encoder.STA } # TODO: Use LabelEncoder on y for this detector
+    INH = { "full_name": "Instance Hardness Detector" }
+    RFD = { "full_name": "Random Forest Detector" }
 
     @classmethod
     def list_callable_detectors(cls) -> list[tuple]:
@@ -219,11 +242,16 @@ class Detector(MetaEnum):
     def do_MCS(self) -> MCS:
         return MCS()
 
-    def do_INH(self) -> INH:
+    def do_INH(self) -> InstanceHardness:
         return InstanceHardness()
 
-    def do_RFD(self) -> RFD:
-        return RandomForestDetector()
+    def do_RFD(self) -> RandomForestDetector:
+        
+        # Depending on version of scikit-clean installed
+        try:
+            return RandomForestDetector(method="cv")
+        except:
+            return RandomForestDetector()
 
 class Algorithm(MetaEnum):
     ALL = { "full_name": "All"}
@@ -570,7 +598,6 @@ class Preprocess(MetaEnum):
     def call_preprocess(self) -> Union[Transform, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
         return self.call_function()
-        
 
 class Reduction(MetaEnum):
     NON = "None"
