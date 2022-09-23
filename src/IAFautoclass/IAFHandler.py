@@ -3,6 +3,7 @@ from __future__ import annotations
 import pickle
 import time
 import psutil
+import traceback
 import typing
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -41,6 +42,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
+GIVE_EXCEPTION_TRACEBACK = True
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -1112,8 +1114,10 @@ class ModelHandler:
         #    raise ModelException(f"Creating pipeline failed in {algorithm.name}-{preprocessor.name} because {exception}")
         except Exception as ex:
             cv_results = np.array([np.nan])
-            exception = "{0}: {1!r}".format(type(ex).__name__, ex.args)
-            #raise(ex)
+            if not GIVE_EXCEPTION_TRACEBACK:
+                exception = "{0}: {1!r}".format(type(ex).__name__, ex.args)
+            else:
+                exception = traceback.format_exc()
 
         return current_pipeline, cv_results, str(exception)
  
