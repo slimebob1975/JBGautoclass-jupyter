@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Protocol, Type, TypeVar, Union
 
 import pandas
+from sklearn.preprocessing import LabelEncoder
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
@@ -36,7 +37,7 @@ from sklearn.metrics import make_scorer, matthews_corrcoef
 from skclean.models import RobustForest, RobustLR, Centroid
 from skclean.detectors import (KDN, ForestKDN, RkDN, PartitioningDetector, 
                                MCS, InstanceHardness, RandomForestDetector)
-from skclean.handlers import WeightedBagging
+from skclean.handlers import WeightedBagging, Costing, CLNI, Filter
 
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -127,6 +128,7 @@ class Detecter(Protocol):
     def detect(self, X, y):
         """ Detects noise likelihood for each sample in the dataset """
 
+
 class RateType(enum.Enum):
     # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
     I = "Individual"
@@ -178,16 +180,47 @@ class MetaEnum(enum.Enum):
         
         return None
 
-class Detector(MetaEnum):
-    ALL = "All"
+class Encoder(MetaEnum):
     NON = "None"
-    KDN = "KDN"
-    FKDN = "Forest KDN"
-    RKDN = "Recursive KDN"
-    PDEC = "Partitioning Detector"
-    MCS = "Markov Chain Sampling"
-    INH = "Instance Hardness Detector"
-    RFD = "Random Forest Detector"
+    STA = "Standard Encoder" # Encode target labels with value between 0 and n_classes-1
+
+    def call_encoder(self, y: pandas.DataFrame):
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function(y=y)
+
+    def _do_encoding(self, y: pandas.DataFrame, what_encoder):
+        try:
+            encoder = what_encoder.fit(y=y)
+            return encoder.transform(y=y)
+        except Exception as e:
+            pass        
+        return y
+
+    def _undo_encoding(self, y: pandas.DataFrame, the_encoder):
+        try:
+            return the_encoder.inverse_transform(y=y)
+        except Exception as e:
+            pass        
+        return y
+
+    def do_STA(self, y: pandas.DataFrame):
+        label_encoder = LabelEncoder()
+        return self._do_encoding(y=y, what_encoder=label_encoder)
+
+    def undo_STA(self, y: pandas.DataFrame, the_encoder: LabelEncoder):
+        return self._undo_encoding(y=y, the_encoder=the_encoder)
+        
+
+class Detector(MetaEnum):
+    ALL = { "full_name": "All" }
+    NON = { "full_name": "None" }
+    KDN = { "full_name":"KDN" }
+    FKDN = { "full_name": "Forest KDN" }
+    RKDN = { "full_name": "Recursive KDN" }
+    PDEC = { "full_name": "Partitioning Detector", "encoder": Encoder.STA } # TODO: Use LabelEncoder on y for this detector
+    MCS = { "full_name": "Markov Chain Sampling", "encoder": Encoder.STA } # TODO: Use LabelEncoder on y for this detector
+    INH = { "full_name": "Instance Hardness Detector" }
+    RFD = { "full_name": "Random Forest Detector" }
 
     @classmethod
     def list_callable_detectors(cls) -> list[tuple]:
@@ -219,11 +252,16 @@ class Detector(MetaEnum):
     def do_MCS(self) -> MCS:
         return MCS()
 
-    def do_INH(self) -> INH:
+    def do_INH(self) -> InstanceHardness:
         return InstanceHardness()
 
-    def do_RFD(self) -> RFD:
-        return RandomForestDetector()
+    def do_RFD(self) -> RandomForestDetector:
+        
+        # Depending on version of scikit-clean installed
+        try:
+            return RandomForestDetector(method="cv")
+        except:
+            return RandomForestDetector()
 
 class Algorithm(MetaEnum):
     ALL = { "full_name": "All"}
@@ -267,6 +305,20 @@ class Algorithm(MetaEnum):
     MLPL = { "full_name": "ML Neural Network Sigm"}
     WBGK = { "full_name": "Weighted Bagging + KDN", "detector": Detector.KDN}
     WBGM = { "full_name": "Weighted Bagging + MCS", "detector": Detector.MCS}
+    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN}
+    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS}
+    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD}
+    FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC}
+    FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN}
+    CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD}
+    CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC}
+    CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN}
+    WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD}
+    WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC}
+    WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN}
+    CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD}
+    CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC}
+    CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN}
 
     @property
     def limit(self):
@@ -463,10 +515,60 @@ class Algorithm(MetaEnum):
 
     def do_WBGM(self, max_iterations: int, size: int)-> WeightedBagging: 
         return self.call_WB(self.detector)
+
+    def do_WRFD(self, max_iterations: int, size: int)-> WeightedBagging:
+        return self.call_WB(self.detector)
+
+    def do_WPCD(self, max_iterations: int, size: int)-> WeightedBagging: 
+        return self.call_WB(self.detector)
+
+    def do_WFKD(self, max_iterations: int, size: int)-> WeightedBagging: 
+        return self.call_WB(self.detector)
     
     def call_WB(self, detector) -> WeightedBagging:
         return WeightedBagging(detector=detector.call_detector())
+    
+    def do_CSTK(self, max_iterations: int, size: int)-> Costing:
+        return self.call_CST(self.detector)
 
+    def do_CSTM(self, max_iterations: int, size: int)-> Costing: 
+        return self.call_CST(self.detector)
+
+    def do_CRFD(self, max_iterations: int, size: int)-> Costing:
+        return self.call_CST(self.detector)
+
+    def do_CPCD(self, max_iterations: int, size: int)-> Costing: 
+        return self.call_CST(self.detector)
+
+    def do_CFKD(self, max_iterations: int, size: int)-> Costing:
+        return self.call_CST(self.detector)
+    
+    def call_CST(self, detector) -> Costing:
+        return Costing(detector=detector.call_detector())
+
+    def do_CLRF(self, max_iterations: int, size: int)-> CLNI:
+        return self.call_CLNI(self.detector)
+    
+    def do_CLCP(self, max_iterations: int, size: int)-> CLNI:
+        return self.call_CLNI(self.detector)
+    
+    def do_CLFK(self, max_iterations: int, size: int)-> CLNI:
+        return self.call_CLNI(self.detector)
+    
+    def call_CLNI(self, detector) -> Costing:
+        return CLNI(classifier=SVC(), detector=detector.call_detector())
+
+    def do_FRFD(self, max_iterations: int, size: int)-> Filter:
+        return self.call_FLT(self.detector)
+    
+    def do_FPCD(self, max_iterations: int, size: int)-> Filter:
+        return self.call_FLT(self.detector)
+    
+    def do_FFKD(self, max_iterations: int, size: int)-> Filter:
+        return self.call_FLT(self.detector)
+    
+    def call_FLT(self, detector) -> Filter:
+        return Filter(classifier=SVC(), detector=detector.call_detector())
 
 class Preprocess(MetaEnum):
     ALL = "All"
@@ -506,7 +608,6 @@ class Preprocess(MetaEnum):
     def call_preprocess(self) -> Union[Transform, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
         return self.call_function()
-        
 
 class Reduction(MetaEnum):
     NON = "None"
