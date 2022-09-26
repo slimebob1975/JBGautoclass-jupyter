@@ -1,3 +1,4 @@
+import chunk
 import sys
 import platform
 from typing import List
@@ -134,9 +135,16 @@ class IAFSqlHelper():
         except Exception as ex:
             func = str(sys._getframe().f_code.co_name)
             print("Execution of query failed: " + query)
+            print(str(ex))
             if not self.ignore_errors:
                 self.end_program( func, str(ex) )    
     
+    def read_next(self, chunksize: int = None):
+        if chunksize:
+            return self.read_many_data(chunksize)
+        
+        return self.read_data()
+
     # Read next line of data, if possible
     def read_data(self):
 
@@ -170,9 +178,43 @@ class IAFSqlHelper():
         except Exception as ex:
             func = str(sys._getframe().f_code.co_name)
             print("Execution failed!")
+            
             if not self.ignore_errors:
                 self.end_program( func, str(ex) )
+    
+    def get_count(self, endQuery: str) -> int:
+        """ Creates a COUNT query and returns the count
+            endQuery is on the form of "[database].[table] WHERE x = y"
+        """
+
+        query = f"SELECT COUNT(*) FROM {endQuery}"
+        count = -1
+
+        if self.execute_query(query, get_data=True):
+                count = self.read_data()[0]
+
+        # Disconnect from database
+        self.disconnect()
+
+        return count
+
+
+    def get_data_from_query(self, query: str) -> list:
+        """ Gets the full set of data from a query """
+        try:
+            self.execute_query(query, get_data = True)
+        except Exception as e:
+            func = str(sys._getframe().f_code.co_name)
+            print("Execution failed!")
             
+            if not self.ignore_errors:
+                self.end_program(func, str(e))
+        
+        data = self.read_all_data()
+        self.disconnect()
+
+        return data
+    
     # Print available drivers
     @staticmethod
     def drivers():

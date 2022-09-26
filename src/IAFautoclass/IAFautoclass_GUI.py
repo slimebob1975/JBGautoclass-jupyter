@@ -6,6 +6,7 @@ import errno
 import os
 import sys
 from pathlib import Path
+from typing import Callable
 
 # Imports
 import ipywidgets as widgets
@@ -459,41 +460,46 @@ class IAFautoclass_GUI:
         )
     
     # Internal methods used to populate or update widget settings
-    def update_databases(self) -> None:
-        data = self.gui_datalayer.get_databases()
-        database_list = [''] + [database[0] for database in data]
-        self.database_dropdown.options = database_list
-        self.database_dropdown.value = database_list[0]
+    def update_dropdown(self, name: str, options: list, default: str, disabled: bool, observer: Callable = None) -> None:
+        if not hasattr(self, name):
+            raise ValueError(f"Dropdown by name {name} does not exist")
+
+        dropdown = getattr(self, name)
+        dropdown.options = options
+        dropdown.value = default
+        dropdown.disabled = disabled
+
+        if observer:
+            dropdown.observe(handler=observer)
+
         
-        self.database_dropdown.observe(handler=self.update_tables)
+
+    def update_databases(self) -> None:
+        database_list = self.gui_datalayer.get_databases()
+        self.update_dropdown("database_dropdown", database_list, database_list[0], False, self.update_tables)
+
                 
     def update_tables(self, event: Bunch) -> None:
         """ Handler: This updates the tables dropdown when the database dropdown changes. """
         if self.lock_observe_1:
             return
         
-        tables = self.gui_datalayer.get_tables()
-        tables_list = [""] + [table[0]+'.'+table[1] for table in tables]
-        self.tables_dropdown.options = tables_list
-        self.tables_dropdown.value = tables_list[0]
-        self.tables_dropdown.disabled = False
-        
-        self.tables_dropdown.observe(handler=self.update_models)
+        tables_list = self.gui_datalayer.get_tables()
+        self.update_dropdown("tables_dropdown", tables_list, tables_list[0], False, self.update_models)
+
         
     def update_models(self, event: Bunch) -> None:
         """ Handler: This updates the models dropdown when the tables dropdown changes. """
         if self.lock_observe_1 or self.tables_dropdown.value == "":
             return
+        preface = ["", self.DEFAULT_TRAIN_OPTION]
         
-        models_list = [""] + [self.DEFAULT_TRAIN_OPTION] + self.gui_datalayer.get_trained_models_from_files(Config.DEFAULT_MODELS_PATH, Config.DEFAULT_MODEL_EXTENSION)
-        self.models_dropdown.options = models_list
-        self.models_dropdown.value = models_list[0]
-        self.models_dropdown.disabled = False
-        
-        self.models_dropdown.observe(handler=self.use_old_model_or_train_new) # TODO: Rework this to a "model_handler method"
+        models_list = self.gui_datalayer.get_trained_models_from_files(Config.DEFAULT_MODELS_PATH, Config.DEFAULT_MODEL_EXTENSION, preface)
+        self.update_dropdown("models_dropdown", models_list, models_list[0], False, self.use_old_model_or_train_new)
     
     def use_old_model_or_train_new(self, event: Bunch) -> None:
         """ Handler: Sets the GUI to a new or existing model, as necessary. """
+        # TODO: Rework this to a "model_handler method"
         self.update_class_id_data_columns()
         if self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION:
             self.continuation_button.disabled = True
@@ -563,28 +569,30 @@ class IAFautoclass_GUI:
         """ Updates the options for class, id and data_columns"""
         if self.lock_observe_1:
             return
+        try:
+            columns = self.gui_datalayer.get_id_columns(self.database_dropdown.value, self.tables_dropdown.value)
+        except ValueError as ve:
+            # Length of data is established in datalayer
+            sys.exit(str(ve))
         
-        columns = self.gui_datalayer.get_id_columns(self.database_dropdown.value, self.tables_dropdown.value)
-        columns_list = [column[0] for column in columns]
-        self.datatype_dict = {column[0]:column[1] for column in columns}
+        self.datatype_dict = columns
+        columns_list = list(columns.keys())
 
-        if len(columns_list) >= 3:
-            self.class_column.options = columns_list
-            self.class_column.value = columns_list[0]
-            self.class_column.disabled = False
-            self.class_column.observe(handler=self.update_id_and_data_columns)
+        self.class_column.options = columns_list
+        self.class_column.value = columns_list[0]
+        self.class_column.disabled = False
+        self.class_column.observe(handler=self.update_id_and_data_columns)
 
-            self.id_column.options = columns_list[1:]
-            self.id_column.value = columns_list[1]
-            self.id_column.disabled = False
-            self.id_column.observe(handler=self.update_data_columns)
+        self.id_column.options = columns_list[1:]
+        self.id_column.value = columns_list[1]
+        self.id_column.disabled = False
+        self.id_column.observe(handler=self.update_data_columns)
 
-            self.data_columns.options = columns_list[2:]
-            self.data_columns.value = []
-            self.data_columns.disabled = False
-            self.data_columns.observe(handler=self.update_text_columns_and_enable_button)
-        else:
-            sys.exit("Selected data table has to few columns. Minimum is three (3).")
+        self.data_columns.options = columns_list[2:]
+        self.data_columns.value = []
+        self.data_columns.disabled = False
+        self.data_columns.observe(handler=self.update_text_columns_and_enable_button)
+        
             
     def update_id_and_data_columns(self, event:Bunch) -> None:
         """ Handler: Changes the id and data columns when the class option is changed. """

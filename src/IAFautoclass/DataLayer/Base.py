@@ -1,7 +1,7 @@
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import os
-from typing import Protocol, Union
+from typing import Protocol
 
 from IAFExceptions import DataLayerException
 from Config import Config
@@ -17,9 +17,16 @@ class Logger(Protocol):
 
 @dataclass
 class DataLayerBase:
-    config: Config = field(init=False)
+    config: Config
     logger: Logger
+    validate: bool = True
     """ This is the base class that all DataLayers inherit from """
+
+    def validate_parameters(self) -> None:
+        """ Allow child classes to validate parameters they are given
+            Raise ValueError if improperly-configurated parameters are found
+        """
+        return
 
     def get_config(self) -> Config:
         """ Getter/setter to not directly touch the config """
@@ -29,15 +36,8 @@ class DataLayerBase:
         
         return self.config
 
-    def update_config(self, updates: Union[dict, Config]) -> bool:
-        """ Updates the config
-            If updates is a Config, it replaces the current config
-            If updates is a dict, it runs config.update_configuration
-        """
-
-        if isinstance(updates, Config):
-            self.config = updates
-            return True
+    def update_config(self, updates: dict) -> bool:
+        """ Updates the config by running config.update_configuration """
 
         if isinstance(updates, dict):
             self.config.update_configuration(updates)
@@ -64,28 +64,23 @@ class DataLayerBase:
         
         return False
 
-    def get_databases(self) -> list:
-        """ Used in the GUI, to get the databases """
-        raise NotImplementedError
-
-    def get_tables(self) -> list:
-        """ Used in the GUI, to get the tables """
-        raise NotImplementedError
-
-    def get_id_columns(self, database: str, table: str) -> list:
-        """ Gets name and type for columns in specified <database> and <table> """
-        raise NotImplementedError
-
-    def get_trained_models_from_files(self, model_path: str, model_file_extension: str) -> list:
+    def get_trained_models_from_files(self, model_path: str, model_file_extension: str, preface: list = None) -> list:
         """ Get a list of pretrained models (base implementation assumes files)"""
         # TODO: model_path + model_file_extension is Config-based, using constants. Think on this
         models = []
+
+        if preface:
+            models = preface
         for file in os.listdir(model_path):
             if file[-len(model_file_extension):] == model_file_extension:
                 models.append(file)
 
         return models
 
+    def get_data_from_query(self, query:str) -> list:
+        """ Parses data returned from data source """
+        raise NotImplementedError
+    
     def prepare_for_classification(self) -> bool:
         """ Setting up tables or similar things in preparation for the classifictions """
         raise NotImplementedError
