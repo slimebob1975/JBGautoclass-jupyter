@@ -255,19 +255,33 @@ class TestConfig:
 
         # 3. There are no text columns
         assert not valid_iris_config.column_is_text("none-such-exists") 
+
+        # Check for RFE-usage
+        # 1. No, this is Reduction.PCA
+        assert not valid_iris_config.use_RFE()
+
+        # 2. Change the feature, and now it'll be true
+        valid_iris_config.mode.feature_selection = Reduction.RFE
+        assert valid_iris_config
+
+        
         
 
     def test_smote_and_undersampler(self, valid_iris_config):
         # Using the default both smote and undersampler are False and should return None
         assert valid_iris_config.get_smote() is None
         assert valid_iris_config.get_undersampler() is None
-
+        assert not valid_iris_config.use_imb_pipeline(), "Neither smote nor undersampler means no imb_pipeline"
+        
         # Update the config to confirm that it's the right type of class
         valid_iris_config.mode.smote = True
+        
+        assert valid_iris_config.use_imb_pipeline(), "Smote or undersampler means imb_pipeline"
         valid_iris_config.mode.undersample = True
 
         assert isinstance(valid_iris_config.get_smote(), SMOTE)
         assert isinstance(valid_iris_config.get_undersampler(), RandomUnderSampler)
+        assert valid_iris_config.use_imb_pipeline(), "Smote and undersampler means imb_pipeline"
         
     def test_none_or_positive_int(self, valid_iris_config):
         """ Some values return either an int or None """
@@ -464,7 +478,21 @@ class TestConfig:
         config.mode.scoring = Scoretype.mcc
         assert isinstance(config.get_scoring_mechanism(), Callable)
 
-    
+    def test_update_configuration(self, valid_iris_config):
+        new_debug = Config.Debug(
+            on=True,
+            num_rows=125
+        )
+        
+        default_debug = valid_iris_config.debug
+        
+        assert new_debug != default_debug, "Just making sure these are different"
+        valid_iris_config.update_configuration({
+            "debug": new_debug
+        })
+
+        assert valid_iris_config.debug == new_debug
+
     def test_model_name(self):
         assert get_model_name(Algorithm.LDA, Preprocess.STA) == "LDA-STA"
 
@@ -527,8 +555,8 @@ class TestAlgorithm:
     def test_list_callable_algorithms(self):
         """ Class Method that gets all callable algorithms and their function """
         algorithms = Algorithm.list_callable_algorithms(size=5, max_iterations=10)
-        # 32 callable algorithms
-        assert len(algorithms) == 40
+        # 53 callable algorithms
+        assert len(algorithms) == 53
 
         # It's a list of tuples
         assert all(isinstance(x,tuple) for x in algorithms)
@@ -547,8 +575,8 @@ class TestAlgorithm:
         sorted_list_default = Algorithm.get_sorted_list(none_all_first=False)
         sorted_list_all_first = Algorithm.get_sorted_list()
 
-        assert len(sorted_list_default) == 41
-        assert len(sorted_list_all_first) == 41
+        assert len(sorted_list_default) == 55
+        assert len(sorted_list_all_first) == 55
 
         # They are a list of tuples
         assert all(isinstance(x,tuple) for x in sorted_list_default)

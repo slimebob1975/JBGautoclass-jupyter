@@ -1,5 +1,5 @@
-IF OBJECT_ID('[<class_catalog>].[<class_table>]','U') IS NULL 
-	CREATE TABLE [<class_catalog>].[<class_table>](
+IF OBJECT_ID('<class_catalog>.<class_table>','U') IS NULL 
+	CREATE TABLE <class_catalog>.<class_table>(
     class_id INTEGER IDENTITY(1,1) PRIMARY KEY,     /* The primary key */
 	catalog_name VARCHAR(255) NOT NULL,             /* Database namne */
 	table_name VARCHAR(255) NOT NULL,               /* Table name */

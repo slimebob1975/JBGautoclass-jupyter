@@ -163,12 +163,18 @@ class IAFLogger(terminal.Logger):
         
         return self.writeln('unformatted', *args)
 
-    def print_percentage_checked(self, text: str, old_percent, percent_checked) -> None:
-        if self._enable_quiet or old_percent <= percent_checked:
+    def print_percentage(self, text: str, percent: float, old_percent: float = 0) -> None:
+        if self._enable_quiet or (old_percent > 0 and old_percent <= percent):
             return
 
-        print(f"{text}: " + str(percent_checked) + " %", end='\r')
+        print(f"{text}: {percent} %", end='\r')
 
+    def print_linebreak(self) -> None:
+        """ Important after using \r for updates """
+        if self._enable_quiet:
+            return self
+
+        print("\n")
     #
     def print_training_rates(self, ph: PredictionsHandler) -> None:
         if not ph.could_predict_proba:

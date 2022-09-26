@@ -819,6 +819,89 @@ class Config:
         data_username: str = ""
         data_password: str = ""
 
+        def driver_is_implemented(self) -> bool:
+            """ Returns whether the driver of the config is implemented """
+            # TODO: Probably want to make this sturdier, but that would require
+            # rewriting the dependancy on odbc_driver and the str
+            if self.odbc_driver in ["SQL Server", "Mock Server"]:
+                return True
+            
+            return False
+
+        def _get_formatted_catalog(self, type) -> str:
+            """ Gets a class table formatted for the type, which is based on odbc_driver
+            """
+            if not self.driver_is_implemented():
+                return ""
+
+            catalog_attr = type + "_catalog"
+            catalog = getattr(self, catalog_attr)
+            return f"[{ period_to_brackets(catalog) }]"
+
+        def get_formatted_class_catalog(self) -> str:
+            """ Gets a class table formatted for the type, which is based on odbc_driver
+            """
+            return self._get_formatted_catalog("class")
+
+        def get_formatted_data_catalog(self) -> str:
+            """ Gets a data table formatted for the type, which is based on odbc_driver
+            """
+            return self._get_formatted_catalog("data")
+
+        def _get_formatted_table(self, type: str, include_database: bool = True) -> str:
+            """ Gets a class table formatted for the type, which is based on odbc_driver
+            """
+            if not self.driver_is_implemented():
+                return ""
+
+            table_attr = type + "_table"
+            table = getattr(self, table_attr)
+            formatted_table = f"[{ period_to_brackets(table) }]"
+
+            if not include_database:
+                return formatted_table
+
+            formatted_catalog = self._get_formatted_catalog(type)
+
+            return f"{formatted_catalog}.{formatted_table}"
+
+        def get_formatted_class_table(self, include_database: bool = True) -> str:
+            """ Gets the class table as a formatted string for the correct driver
+                In the type of [schema].[catalog].[table]
+            """
+            return self._get_formatted_table("class", include_database)
+
+        def get_formatted_data_table(self, include_database: bool = True) -> str:
+            """ Gets the data table as a formatted string for the correct driver
+                In the type of [schema].[catalog].[table]
+            """
+            return self._get_formatted_table("data", include_database)
+
+            
+        def get_catalog_params(self, type) -> dict:
+            """ Gets params to connect to a database """
+            params = {
+                "driver": self.odbc_driver,
+                "host": self.host,
+                "catalog": "",
+                "trusted_connection": self.trusted_connection,
+                "username": "",
+                "password": ""
+            }
+
+            if type == "class":
+                params["catalog"] = self.class_catalog
+                params["username"] = self.class_username
+                params["password"] = self.class_password
+            elif type == "data":
+                params["catalog"] = self.data_catalog
+                params["username"] = self.data_username
+                params["password"] = self.data_password
+            else:
+                raise ConfigException(f"Type {type} not acceptable as a connection type")
+            
+            return params
+
         def __str__(self) -> str:
             str_list = [
                 " 1. Database settings ",
@@ -922,14 +1005,19 @@ class Config:
     debug: Debug = field(default_factory=Debug)
     name: str = "iris"
     config_path: str = None
+    script_path: str = None
     filename: str = None
     save: bool = False
     
 
     def __post_init__(self) -> None:
+        pwd = os.path.dirname(os.path.realpath(__file__))
+        
         if self.config_path is None:
-            pwd = os.path.dirname(os.path.realpath(__file__))
             self.config_path = Path(pwd) / "./config/"
+
+        if self.script_path is None:
+            self.script_path = Path(pwd)
 
         if self.filename is None:
             self.filename = f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
@@ -1075,9 +1163,6 @@ class Config:
         if self.save:
             self.save_to_file()
 
-   
-
-
     def __str__(self) -> str:
         str_list = [
             " -- Configuration settings --",
@@ -1088,14 +1173,14 @@ class Config:
         ]
         return  "\n".join(str_list)
 
-    def get_model_filename(self, pwd: str = None) -> str:
+    def get_model_filename(self, pwd: Path = None) -> str:
         """ Set the name and path of the model file
             The second parameter allows for injecting the path for reliable testing
         """
         if pwd is None:
-            pwd = os.path.dirname(os.path.realpath(__file__))
+            pwd = self.script_path
         
-        model_path = Path(pwd) / self.io.model_path
+        model_path = pwd / self.io.model_path
         
         return model_path / (self.io.model_name + Config.DEFAULT_MODEL_EXTENSION)
 
@@ -1315,6 +1400,16 @@ class Config:
         return config
     
     # Methods to hide implementation of Config
+    def update_configuration(self, updates: dict) -> bool: #TEST
+        """ Updates the config with new, wholesale, bits """
+        # TODO: Break out validation to be able to call that here as well
+        for key, item in updates.items():
+            if not hasattr(self, key):
+                raise ConfigException(f"Key {key} does not exist in Config")
+
+            setattr(self, key, item)
+
+
     def is_text_data(self) -> bool:
         return len(self.connection.data_text_columns) > 0
     
@@ -1339,7 +1434,11 @@ class Config:
 
         return True
 
-
+    def get_classification_script_path(self) -> Path:
+        """ Gives a calculated path based on config"""
+        
+        return self.script_path / self.connection.class_table_script
+    
     def get_feature_selection(self) -> Reduction:
         """ Gets the given feature selection Reduction """
         return self.mode.feature_selection
@@ -1353,6 +1452,7 @@ class Config:
         return value
 
     def get_attribute(self, attribute: str):
+        """ Gets an attribute from a attribute.subattribute string """
         location = attribute.split(".")
         length = len(location)
         if length > 2:
@@ -1374,6 +1474,16 @@ class Config:
 
         return value    
     
+    def get_connection(self) -> Connection:
+        return self.connection
+
+    def get_quoted_attribute(self, attribute: str, quotes: str = "\'") -> str:
+        """ Gets an attribute as per get_attribute, returns it in quotation marks """
+
+        return to_quoted_string(self.get_attribute(attribute), quotes)
+    
+    
+
     def get_num_selected_features(self) -> int:
         return self.get_none_or_positive_value("mode.num_selected_features")
         
@@ -1588,14 +1698,31 @@ class Config:
         """ Gets the data user name """
         return self.connection.data_username
 
+    def get_class_catalog_params(self) -> dict:
+        """ Gets params to connect to class database """
+        return self.connection.get_catalog_params("class")
+
+    def get_data_catalog_params(self) -> dict:
+        """ Gets params to connect to data database """
+        return self.connection.get_catalog_params("data")
+
 
 # TODO: Move to algorithm?
 def get_model_name(algo: Algorithm, prepros: Preprocess)->str:
     return f"{algo.name}-{prepros.name}"
 
 
+def to_quoted_string(x, quotes:str = '\'') -> str:
+        value = str(x)
 
+        return quotes + value + quotes
 
+def period_to_brackets(string: str) -> str:
+    """ Takes a string and replaces . with ].[
+        Used with tables, schemas and databases    
+    """
+
+    return string.replace(".", "].[")
 
 
 def main():
@@ -1604,11 +1731,19 @@ def main():
     else:
        config = Config()
 
+    updates = {
+        "debug": Config.Debug(
+                on=True,
+                num_rows=125
+            ),
+    }
+    print(config.debug)
+    config.update_configuration(updates)
     #print(isinstance(config.mode.scoring, enum.Enum))
     #print(config.mode.scoring.name)
     #config.export_configuration_to_file()
     # print(Algorithm.ALL.value)
-    print(config)
+    print(config.debug)
 
 
 if __name__ == "__main__":

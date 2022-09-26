@@ -58,7 +58,7 @@ class Logger(Protocol):
     def print_formatted_info(self, message: str) -> None:
         """ Printing info with """
 
-    def print_percentage_checked(self, text: str, old_percent, percent_checked) -> None:
+    def print_percentage(self, text: str, percent: float, old_percent: float = 0) -> None:
         """ Uses print() to update the line rather than new line"""
 
     def investigate_dataset(self, dataset: pandas.DataFrame, class_name: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
@@ -79,7 +79,7 @@ class DataLayer(Protocol):
     def get_dataset(self, num_rows: int, train: bool, predict: bool):
         """ Get the dataset, query and number of rows"""
 
-    def save_data(self, results: list, class_rate_type: RateType, model: Model, config: Config)-> int:
+    def save_data(self, results: list, class_rate_type: RateType, model: Model)-> int:
         """ Saves classification for X_unknown in classification database """
 
     def get_sql_command_for_recently_classified_data(self, num_rows: int) -> str:
@@ -203,12 +203,10 @@ class IAFHandler:
     datalayer: DataLayer
     config: Config
     logger: Logger
-    progression: dict
+    progression: dict = field(default_factory=dict)
 
     handlers: dict = field(default_factory=dict, init=False)
-    queries: dict = field(default_factory=dict)
     
-
     # This is defined this way so that VS code can find the different methods
     def add_handler(self, name: str) -> Union[DatasetHandler, ModelHandler, PredictionsHandler]:
         """ Returns the newly created handler"""
@@ -239,13 +237,17 @@ class IAFHandler:
 
         raise HandlerException(f"{name.capitalize()}Handler does not exist")
 
+    @property
+    def read_data_query(self) -> str:
+        """ Property to get the query for reading data """
+        
+        return self.datalayer.get_data_query(self.config.get_max_limit())
 
+    
     def get_dataset(self):
         """ By putting this here, Datalayer does not need to be supplied to Dataset Handler"""
-        data, query =  self.datalayer.get_dataset(self.config.get_max_limit(), self.config.should_train(), self.config.should_predict())
+        data =  self.datalayer.get_dataset()
         
-        self.queries["read_data"] = query
-
         return data
    
     def save_classification_data(self) -> None:
@@ -268,8 +270,7 @@ class IAFHandler:
             results_saved = self.datalayer.save_data(
                 results,
                 class_rate_type=ph.get_rate_type(),
-                model=mh.model,
-                config=self.config
+                model=mh.model
             )
             
         except Exception as e:
@@ -375,10 +376,10 @@ class DatasetHandler:
         index_length = float(len(dataset.index))
         try:
             for index in dataset.index:
+                # TODO: fix message
                 old_percent_checked = percent_checked
                 percent_checked = round(100.0*float(index)/index_length)
-                # TODO: fix message
-                #self.handler.logger.print_percentage_checked("Data checked of fetched", old_percent_checked, percent_checked)
+                #self.handler.logger.print_percentage("Data checked of fetched", percent_checked, old_percent_checked)
                 
                 for key in dataset.columns:
                     item = dataset.at[index,key]
@@ -1310,7 +1311,8 @@ class PredictionsHandler:
         self.handler.logger.print_info(f"Classification matrix for evaluation data: \n\n{classification_report(Y, self.predictions, zero_division='warn')}")
 
     # Evaluates mispredictions
-    def evaluate_mispredictions(self, read_data_query: str, misplaced_filepath: str) -> None:
+    def evaluate_mispredictions(self, misplaced_filepath: str) -> None:
+        read_data_query = self.handler.read_data_query
         if self.X_most_mispredicted.empty or not self.handler.config.should_display_mispredicted():
             return
         
@@ -1487,10 +1489,30 @@ class PredictionsHandler:
 
 
 def main():
-    handler = IAFHandler(DataLayer, Config, Logger)
+    import IAFLogger, SQLDataLayer, Config, sys
 
+    if len(sys.argv) > 1:
+        config = Config.Config.load_config_from_module(sys.argv)
+    else:
+        config = Config.Config()
+        #pwd = os.path.dirname(os.path.realpath(__file__))
+        #
+        #model_path = Path(pwd) / "./model/"
+        #
+        #filename =  model_path / "hpl_förutsättningar_2020.sav"
+        #config = Config.Config.load_config_from_model_file(filename)
+        #config.io.model_name = "hpl_förutsättningar_2020"
+
+    logger = IAFLogger.IAFLogger(not config.io.verbose)
+    
+    datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
+    #handler = IAFHandler(DataLayer, Config, Logger)
+    handler = IAFHandler(datalayer, config, logger)
+    #handler.get_dataset()
+
+    #print(handler.read_data_query)
     # Should hopefully not give errors
-    handler.add_handler(name="dataset")
+    #handler.add_handler(name="dataset")
 
     # Gives exception
     #handler.add_handler(name="model")

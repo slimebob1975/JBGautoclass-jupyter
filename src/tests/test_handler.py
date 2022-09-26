@@ -165,7 +165,7 @@ class MockConfig():
 class MockDataLayer():
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
 
-    def get_dataset(self, num_rows: int, train: bool, predict: bool):
+    def get_dataset(self, num_rows: int = None):
         """ Get the dataset and query """
 
         data = [
@@ -175,11 +175,11 @@ class MockDataLayer():
             ["Aryan",24, "even", 4]
         ]
 
-        return data, "sql-string"
+        return data
 
 
 
-    def save_data(self, results: list, class_rate_type: str, model: Model, config: MockConfig)-> int:
+    def save_data(self, results: list, class_rate_type: str, model: Model)-> int:
         """ Saves classification for X_unknown in classification database """
 
         return 1
@@ -256,7 +256,7 @@ class TestHandler():
         assert isinstance(default_handler.get_handler("dAtasEt"), DatasetHandler)
 
     def test_save_classification_data(self, default_handler):
-        """ Tests that the classification data gets saved properly"""
+        """ Tests that the classification data gets saved properly """
 
         # 1. One (or more) of the handlers are not set, HandlerException
         with pytest.raises(HandlerException):
@@ -274,6 +274,8 @@ class TestHandler():
         keys = pandas.Series(dtype="float64") # This is to silence a warning about deprecation--the actual type is irrelevant
         dh.set_unpredicted_keys(keys)
         default_handler.save_classification_data()
+        
+        
 
     def test_update_progress(self, default_handler):
         """ Two cases, percentage or percentage + message """
@@ -293,9 +295,10 @@ class TestDatasetHandler():
         assert not hasattr(default_dataset_handler, "keys")
         assert not hasattr(default_dataset_handler, "classes")
         assert not hasattr(default_dataset_handler, "Y")
-
+        
         default_dataset_handler.read_in_data()
 
+        
         # After it runs, dataset, keys and classes should be set
         assert hasattr(default_dataset_handler, "dataset")
         assert hasattr(default_dataset_handler, "keys")
@@ -318,6 +321,7 @@ class TestDatasetHandler():
 
         # Check that Y (the series of classes) are all strings
         assert all(isinstance(x, str) for x in default_dataset_handler.Y)
+        
 
     def test_set_unpredicted_keys(self, default_dataset_handler):
         keys = pandas.Series(dtype="object")

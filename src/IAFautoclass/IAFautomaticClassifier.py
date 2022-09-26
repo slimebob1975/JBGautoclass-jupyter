@@ -14,7 +14,6 @@
 #
 # Standard imports
 import os
-from pathlib import Path
 import sys
 
 from IAFExceptions import HandlerException
@@ -33,7 +32,7 @@ from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
 
 # Imports of local help class for communication with SQL Server
 import Config
-import DataLayer
+import SQLDataLayer
 import IAFLogger
 from IAFHandler import IAFHandler
 
@@ -54,7 +53,7 @@ class IAFautomaticClassiphyer:
     MAX_HEAD_COLUMNS = 10
     
     # Constructor with arguments
-    def __init__(self, config: Config.Config, logger: IAFLogger.IAFLogger, datalayer: DataLayer.DataLayer):
+    def __init__(self, config: Config.Config, logger: IAFLogger.IAFLogger, datalayer: SQLDataLayer.DataLayer):
         self.config = config
 
         self.logger = logger
@@ -150,7 +149,7 @@ class IAFautomaticClassiphyer:
             self.logger.abort_cleanly("User must choose either to train a new model or use an old one for predictions")
         
         # Create the classification table, if it does not exist already
-        self.datalayer.create_classification_table()
+        self.datalayer.prepare_for_classification()
         self.update_progress(self.progression["percentPerMajorTask"])
 
         self.pre_run()
@@ -245,7 +244,7 @@ class IAFautomaticClassiphyer:
                 
                 ph.most_mispredicted(dh.X_original, trained_model, cross_trained_model, dh.X_transformed, Y_known)
 
-                ph.evaluate_mispredictions(self.handler.queries["read_data"], self.get_output_filename("misplaced"))
+                ph.evaluate_mispredictions(self.get_output_filename("misplaced"))
             
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
@@ -275,25 +274,15 @@ class IAFautomaticClassiphyer:
         
 
     def pre_run(self) -> None:
-        try:
-            # Set a flag in the classification database that execution has started
-            self.datalayer.mark_execution_started()
-        except Exception as e:
-            self.logger.abort_cleanly(f"Mark of executionstart failed: {e}")
+        """ Empty for now """
+        # This used to have a function to set a flag in the database, which is no longer used.
+        # However, pre_run is a good place to put things that needs to be run in the first stages
+        # of the classifier
 
     def post_run(self) -> int:
         elapsed_time = time.time() - self.clock1
         date_again = str(datetime.now())
         self.logger.print_formatted_info(f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again}")
-
-        try:
-            # Remove flag in database, signaling all was alright
-            self.datalayer.mark_execution_ended()
-        except Exception as e:
-            self.logger.abort_cleanly(f"Mark of execution-end failed: {e}")
-
-        # Make sure progressbar is completed if not before
-        self.logger.print_progress(message="Process finished", percent=1.0)
 
         # Return positive signal
         return 0
@@ -330,7 +319,7 @@ def main(argv):
 
     logger = IAFLogger.IAFLogger(not config.io.verbose)
     
-    datalayer = DataLayer.DataLayer(connection=config.connection, logger=logger)
+    datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
     myClassiphyer = IAFautomaticClassiphyer(config=config, logger=logger, datalayer=datalayer)
