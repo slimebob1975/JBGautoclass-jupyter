@@ -34,7 +34,7 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import make_scorer, matthews_corrcoef
 
-from skclean.models import RobustForest, RobustLR, Centroid
+from skclean.models import RobustForest
 from skclean.detectors import (KDN, ForestKDN, RkDN, PartitioningDetector, 
                                MCS, InstanceHardness, RandomForestDetector)
 from skclean.handlers import WeightedBagging, Costing, CLNI, Filter
@@ -45,7 +45,8 @@ from imblearn.ensemble import (EasyEnsembleClassifier, RUSBoostClassifier,
      BalancedBaggingClassifier, BalancedRandomForestClassifier)
 
 from IAFExceptions import ConfigException
-from IAFExperimental import IAFRobustCentroid, IAFPartitioningDetector, IAFMCS
+from IAFExperimental import (IAFRobustLogisticRegression, IAFRobustCentroid, 
+                            IAFPartitioningDetector, IAFMCS)
 import Helpers
 
 
@@ -187,10 +188,8 @@ class Detector(MetaEnum):
     KDN = { "full_name":"KDN" }
     FKDN = { "full_name": "Forest KDN" }
     RKDN = { "full_name": "Recursive KDN" }
-    PDEC = { "full_name": "Partitioning Detector" }
-    PDE2 = { "full_name": "Partitioning Detector + Label Encoder" }
-    MCS = { "full_name": "Markov Chain Sampling" } 
-    MC2 = { "full_name": "Markov Chain Sampling + Label Encoder" } 
+    PDEC = { "full_name": "Partitioning Detector + Label Encoder" }
+    MCS = { "full_name": "Markov Chain Sampling + Label Encoder" } 
     INH = { "full_name": "Instance Hardness Detector" }
     RFD = { "full_name": "Random Forest Detector" }
 
@@ -218,16 +217,10 @@ class Detector(MetaEnum):
     def do_RKDN(self) -> RkDN:
         return RkDN()
 
-    def do_PDEC(self) -> PartitioningDetector:
-        return PartitioningDetector()
-
-    def do_MCS(self) -> MCS:
-        return MCS()
-
-    def do_PDE2(self) -> IAFPartitioningDetector:
+    def do_PDEC(self) -> IAFPartitioningDetector:
         return IAFPartitioningDetector()
 
-    def do_MC2(self) -> IAFMCS:
+    def do_MCS(self) -> IAFMCS:
         return IAFMCS()
 
     def do_INH(self) -> InstanceHardness:
@@ -250,9 +243,8 @@ class Algorithm(MetaEnum):
     RUBC = { "full_name": "RUS Boost Classifier"}
     EAEC = { "full_name": "Easy Ensamble Classifier"}
     RTCL = { "full_name": "Robust Tree Classifier"}
-    RLRN = { "full_name": "Robust Logistic Regression"}
-    RCNT = { "full_name": "Robust Centroid"}
-    RCN2 = { "full_name": "Robust Centroid + Label Encoder"}
+    RLRN = { "full_name": "Robust Logistic Regression + Label Encoder"}
+    RCNT = { "full_name": "Robust Centroid + Label Encoder"}
     LRN = { "full_name": "Logistic Regression"}
     KNN = { "full_name": "K-Neighbors Classifier"}
     DTC = { "full_name": "Decision Tree Classifier"}
@@ -284,12 +276,10 @@ class Algorithm(MetaEnum):
     MLPL = { "full_name": "ML Neural Network Sigm"}
     WBGK = { "full_name": "Weighted Bagging + KDN", "detector": Detector.KDN}
     WBGM = { "full_name": "Weighted Bagging + MCS", "detector": Detector.MCS}
-    WBM2 = { "full_name": "Weighted Bagging + MCS + Label Encoder", "detector": Detector.MC2}
     CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN}
     CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS}
     FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD}
     FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC}
-    FPD2 = { "full_name": "Filter + PartitioningDetector + Label Encoder", "detector": Detector.PDE2}
     FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN}
     CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD}
     CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC}
@@ -373,13 +363,10 @@ class Algorithm(MetaEnum):
     def do_RTCL(self, max_iterations: int, size: int)-> RobustForest:
         return RobustForest()
 
-    def do_RLRN(self, max_iterations: int, size: int)-> RobustLR:
-        return RobustLR()
+    def do_RLRN(self, max_iterations: int, size: int)-> IAFRobustLogisticRegression:
+        return IAFRobustLogisticRegression()
 
-    def do_RCNT(self, max_iterations: int, size: int)-> Centroid:
-        return Centroid()
-
-    def do_RCN2(self, max_iterations: int, size: int)-> IAFRobustCentroid:
+    def do_RCNT(self, max_iterations: int, size: int)-> IAFRobustCentroid:
         return IAFRobustCentroid()
 
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
@@ -499,9 +486,6 @@ class Algorithm(MetaEnum):
 
     def do_WBGM(self, max_iterations: int, size: int)-> WeightedBagging: 
         return self.call_WB(self.detector)
-    
-    def do_WBM2(self, max_iterations: int, size: int)-> WeightedBagging: 
-        return self.call_WB(self.detector)
 
     def do_WRFD(self, max_iterations: int, size: int)-> WeightedBagging:
         return self.call_WB(self.detector)
@@ -549,9 +533,6 @@ class Algorithm(MetaEnum):
         return self.call_FLT(self.detector)
     
     def do_FPCD(self, max_iterations: int, size: int)-> Filter:
-        return self.call_FLT(self.detector)
-
-    def do_FPD2(self, max_iterations: int, size: int)-> Filter:
         return self.call_FLT(self.detector)
     
     def do_FFKD(self, max_iterations: int, size: int)-> Filter:

@@ -1,6 +1,20 @@
-from skclean.models import Centroid
+import numpy as np
+from skclean.models import RobustLR, Centroid
 from skclean.detectors import PartitioningDetector, MCS
 from sklearn.preprocessing import LabelEncoder
+
+class IAFRobustLogisticRegression(RobustLR):
+    def __init__(self, PN=.2, NP=.2, C=np.inf, max_iter=4000, random_state=None):
+        super().__init__(PN=.2, NP=.2, C=np.inf, max_iter=4000, random_state=None)
+        self.label_encoder = LabelEncoder()
+
+    def fit(self, X, y, sample_weight=None):
+        self.label_encoder = self.label_encoder.fit(y)
+        super().fit(X, self.label_encoder.transform(y), sample_weight=sample_weight)
+        return self
+
+    def predict(self, X):
+        return self.label_encoder.inverse_transform(super().predict(X))
 
 class IAFRobustCentroid(Centroid):
     
