@@ -2,8 +2,7 @@ import os
 from typing import Callable
 from path import Path
 import pytest
-from Config import (Algorithm, Config, Detector, Preprocess, Reduction, Scoretype,
-                    get_model_name)
+from Config import (Algorithm, Config, Detector, Preprocess, Reduction, Scoretype)
 from IAFExceptions import ConfigException
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -494,8 +493,6 @@ class TestConfig:
 
         assert valid_iris_config.debug == new_debug
 
-    def test_model_name(self):
-        assert get_model_name(Algorithm.LDA, Preprocess.STA) == "LDA-STA"
 
 class TestDetector:
     """ Tests the Enum Detector functions """
@@ -552,6 +549,8 @@ class TestDetector:
 
 class TestAlgorithm:
     """ Tests the Enum Algorithm functions """
+    def test_compound_name(self):
+        assert Algorithm.LDA.get_compound_name(Preprocess.STA) == "LDA-STA"
 
     def test_list_callable_algorithms(self):
         """ Class Method that gets all callable algorithms and their function """

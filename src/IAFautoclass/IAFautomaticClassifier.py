@@ -120,16 +120,22 @@ class IAFautomaticClassiphyer:
 
         return self.progression["progress"]
 
+    def create_handlers(self):
+        """ Creates the handler and returns a tuple with handlers """
+
+        self.handler = IAFHandler(self.datalayer, self.config, self.logger, self.progression)
+        dh = self.handler.add_handler("dataset")
+        mh = self.handler.add_handler("model")
+        ph = self.handler.add_handler("predictions")
+
+        return dh, mh, ph
+
     # The main classification function for the class
     def run(self):
         if not self.config.should_train():
             self.config = Config.Config.load_config_from_model_file(self.config.get_model_filename(), config=self.config)
         
-        # TODO: This should be broken out into it's own function, creating IAFHandler and the necessary handlers
-        self.handler = IAFHandler(self.datalayer, self.config, self.logger, self.progression)
-        dh = self.handler.add_handler("dataset")
-        mh = self.handler.add_handler("model")
-        ph = self.handler.add_handler("predictions")
+        dh, mh, ph = self.create_handlers()
         
         # Print a welcoming message for the audience
         self.logger.print_welcoming_message(config=self.config, date_now=self.date_now)
@@ -176,19 +182,10 @@ class IAFautomaticClassiphyer:
         mh.model.update_field("transform", dh.perform_feature_selection(mh.model))
         self.update_progress(self.progression["percentPerMajorTask"])
 
-        # TODO: This was originally in perform_feature_selection, but I didn't want it as a sideeffect
-        # Still need to decide where this belongs, however
-        if mh.model.transform is None:
-            num_selected_features = dh.X.shape[1]
-        else:
-            if hasattr(mh.model.transform, "n_components_"):
-                num_selected_features = mh.model.transform.n_components_
-            elif hasattr(mh.model.transform, "n_components"):
-                num_selected_features = mh.model.transform.n_components
-            else:
-                self.logger.abort_cleanly(f"Transform {type(mh.model.transform)} have neither 'n_components_' 'or n_components'. Please check")
-
-        self.config.set_num_selected_features(num_selected_features)
+        try:
+            self.config.set_num_selected_features(mh.model.get_num_selected_features(dh.X))
+        except Exception as e:
+            self.logger.abort_cleanly(f"Transform error: {e}")
         
         # Split dataset for machine learning
         # TODO: Byt namn?
@@ -201,6 +198,7 @@ class IAFautomaticClassiphyer:
         # Or just use the model previously trained.
         if self.config.should_train():
             try:
+                self.logger.print_progress(message="Check and train algorithms for best model")
                 mh.train_model(dh.X_train, dh.Y_train)
             except Exception as e:
                 self.logger.abort_cleanly(f"Training model failed: {e}")
@@ -257,10 +255,6 @@ class IAFautomaticClassiphyer:
             
             self.logger.print_training_rates(ph)
             
-            # TODO: move this into make_predictions, since this is backup if predictions
-            # couldn't be made (IE predict_proba == False)
-            ph.calculate_probability()
-           
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
             try:

@@ -25,10 +25,9 @@ from sklearn.model_selection import (StratifiedKFold, cross_val_score,
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
-from skclean.detectors import KDN
 
 
-from Config import Algorithm, Preprocess, Reduction, RateType, get_model_name, Estimator, Transform
+from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
 from IAFExceptions import DatasetException, ModelException, HandlerException
 import Helpers
 
@@ -376,10 +375,9 @@ class DatasetHandler:
         index_length = float(len(dataset.index))
         try:
             for index in dataset.index:
-                # TODO: fix message
                 old_percent_checked = percent_checked
                 percent_checked = round(100.0*float(index)/index_length)
-                #self.handler.logger.print_percentage("Data checked of fetched", percent_checked, old_percent_checked)
+                self.handler.logger.print_percentage("Data checked of fetched", percent_checked, old_percent_checked)
                 
                 for key in dataset.columns:
                     item = dataset.at[index,key]
@@ -792,8 +790,19 @@ class Model:
         if self.algorithm is None or self.preprocess is None:
             return ""
 
-        return get_model_name(self.algorithm, self.preprocess)
-                
+        return self.algorithm.get_compound_name(self.preprocess)
+
+    def get_num_selected_features(self, X) -> int:
+        if self.transform is None:
+            return X.shape[1]
+
+        if hasattr(self.transform, "n_components_"):
+            return self.transform.n_components_
+        
+        if hasattr(self.transform, "n_components"):
+            return self.transform.n_components
+        
+        raise ModelException(f"Transform {type(self.transform)} have neither 'n_components_' 'or n_components'. Please check")
 
 @dataclass
 class ModelHandler:
@@ -848,9 +857,6 @@ class ModelHandler:
         return Model(label_binarizers={}, count_vectorizer=None, tfid_transformer=None, transform=None)
 
     def train_model(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame) -> None:
-        # TODO: fix message
-        #self.handler.logger.print_progress(message="Check and train algorithms for best model")
-        
         try:
             self.model = self.get_model_from(X_train, Y_train)
     
@@ -940,7 +946,7 @@ class ModelHandler:
         
         best_feature_selection = X_train.shape[1]
         first_round = True
-        # TODO: fix message
+        
         self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time","Failure"], divisor="=")
 
         numMinorTasks = len(algorithms) * len(preprocessors)
@@ -956,9 +962,7 @@ class ModelHandler:
                 # Update progressbar percent and label
                 self.handler.logger.print_progress(message=f"{standardProgressText} ({algorithm.name}-{preprocessor.name})")
                 if not first_round: 
-                    """ Empty for now, while we have the messages disabled """
-                    # TODO: fix message
-                    #self.handler.update_progress(percent=percentAddPerMinorTask)
+                    self.handler.update_progress(percent=percentAddPerMinorTask)
                 else:
                     first_round = False
 
@@ -1000,10 +1004,9 @@ class ModelHandler:
                     temp_stdev = cv_results.std()
 
                     # Print results to screen
-                    #if False: # TODO: fix message
-                    #if self.handler.config.is_verbose(): # TODO: print prettier
-                    print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} {6:<30s}".
-                            format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t,failure))
+                    if self.handler.config.is_verbose(): # TODO: print prettier
+                        print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} {6:<30s}".
+                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t,failure))
 
                     # Evaluate if feature selection changed accuracy or not. 
                     #rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(temp_score, rfe_score, num_features, max_features_selection, min_features_selection)
@@ -1354,6 +1357,9 @@ class PredictionsHandler:
         self.predictions = predictions
         self.rates = rates
 
+        # This is backup if predictions couldn't be made (IE predict_proba == False)
+        self.calculate_probability()
+        
         return could_predict_proba
 
     # Gets the rate type
@@ -1375,13 +1381,13 @@ class PredictionsHandler:
             return 
         
         prob = []
-        # TODO: range(len) is generally not ideal
-        for i in range(len(self.predictions)):
+        
+        for prediction in self.predictions:
             try:
                 # This should probably be a list of a float, not a float
-                prob = prob + [self.class_report[self.predictions[i]]['precision']]
+                prob = prob + [self.class_report[prediction]['precision']]
             except KeyError as e:
-                self.handler.logger.print_warning(f"probability collection failed for key {self.predictions[i]} with error {e}")
+                self.handler.logger.print_warning(f"probability collection failed for key {prediction} with error {e}")
     
         self.handler.logger.print_info("Probabilities:", str(prob))
         self.probabilites = prob
@@ -1466,8 +1472,8 @@ class PredictionsHandler:
             the_classes = [y for y in set(Y) if y is not None]
 
         if not could_predict_proba:
-            for i in range(len(the_classes)): # TODO: possibly rewrite this for loop
-                X_mispredicted.insert(0, "P(" + the_classes[i] + ")", "N/A")
+            for item in the_classes:
+                X_mispredicted.insert(0, f"P({item})", "N/A")
             n_limit = min(self.LIMIT_MISPREDICTED, X_mispredicted.shape[0])
 
             self.X_most_mispredicted = X_mispredicted.sample(n=n_limit)

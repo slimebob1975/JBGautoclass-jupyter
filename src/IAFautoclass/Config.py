@@ -1,4 +1,4 @@
-
+from __future__ import annotations
 import copy
 import enum
 import os
@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Callable, Protocol, Type, TypeVar, Union
 
 import pandas
-from sklearn.preprocessing import LabelEncoder
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
@@ -312,6 +311,7 @@ class Algorithm(MetaEnum):
         
         return {}
 
+
     @classmethod
     def list_callable_algorithms(cls, size: int, max_iterations: int) -> list[tuple]:
         """ Gets a list of algorithms that are callable
@@ -325,6 +325,9 @@ class Algorithm(MetaEnum):
     def get_robust_algorithms(cls) -> list:
         """ This list needs to be extended if we add more robust algorithms"""
         return [Algorithm.RTCL, Algorithm.RLRN, Algorithm.RCNT]
+
+    def get_compound_name(self, prepros: Preprocess)->str:
+        return f"{self.name}-{prepros.name}"
 
     def call_algorithm(self, max_iterations: int, size: int) -> Union[Estimator, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
@@ -1717,11 +1720,6 @@ class Config:
     def get_data_catalog_params(self) -> dict:
         """ Gets params to connect to data database """
         return self.connection.get_catalog_params("data")
-
-
-# TODO: Move to algorithm?
-def get_model_name(algo: Algorithm, prepros: Preprocess)->str:
-    return f"{algo.name}-{prepros.name}"
 
 
 def to_quoted_string(x, quotes:str = '\'') -> str:
