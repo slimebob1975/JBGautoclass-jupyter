@@ -1016,8 +1016,8 @@ class Config:
     io: IO = field(default_factory=IO)
     debug: Debug = field(default_factory=Debug)
     name: str = "iris"
-    config_path: str = None
-    script_path: str = None
+    config_path: Path = None
+    script_path: Path = None
     filename: str = None
     save: bool = False
     
@@ -1192,7 +1192,7 @@ class Config:
         if pwd is None:
             pwd = self.script_path
         
-        model_path = pwd / self.io.model_path
+        model_path = pwd / Path(self.io.model_path)
         
         return model_path / (self.io.model_name + Config.DEFAULT_MODEL_EXTENSION)
 

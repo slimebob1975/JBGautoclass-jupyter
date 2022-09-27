@@ -281,9 +281,8 @@ class IAFautomaticClassiphyer:
 
     def post_run(self) -> int:
         elapsed_time = time.time() - self.clock1
-        date_again = str(datetime.now())
-        message = f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again}"
-        self.logger.print_formatted_info(message)
+        date_again = datetime.now()
+        message = f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again:%Y-%m-%d %H:%M}"
         self.logger.print_progress(message, 1.0)
         # Return positive signal
         return 0
@@ -302,7 +301,8 @@ class IAFautomaticClassiphyer:
         dh = self.handler.get_handler("dataset")
 
         return dh.classes
-    
+
+
 # Main program
 def main(argv):
 
@@ -318,7 +318,7 @@ def main(argv):
         #config = Config.Config.load_config_from_model_file(filename)
         #config.io.model_name = "hpl_förutsättningar_2020"
 
-    logger = IAFLogger.IAFLogger(not config.io.verbose)
+    logger = IAFLogger.IAFLogger(quiet=not config.io.verbose, in_terminal=True)
     
     datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
     # Use the loaded configuration module argument
@@ -330,4 +330,4 @@ def main(argv):
 
 # Start main
 if __name__ == "__main__":
-    main(sys.argv)
+    sys.exit(main(sys.argv))

@@ -421,9 +421,10 @@ class TestConfig:
 
     def test_get_model_filename(self, valid_iris_config):
         """ Tests the model filename functionality with injected dependency"""
-        expected = "fake_path\\model\\test.sav"
-        real = valid_iris_config.get_model_filename(pwd="fake_path")
-        assert str(real) == expected
+        expected = Path("fake_path\\model\\test.sav")
+        real = valid_iris_config.get_model_filename(pwd=Path("fake_path"))
+        
+        assert real == expected
 
     def test_clean_config(self, valid_iris_config, bare_iris_config):
         """ gets a stripped down version for saving with the .sav file """
@@ -556,7 +557,7 @@ class TestAlgorithm:
         """ Class Method that gets all callable algorithms and their function """
         algorithms = Algorithm.list_callable_algorithms(size=5, max_iterations=10)
         # 53 callable algorithms
-        assert len(algorithms) == 53
+        assert len(algorithms) == 57
 
         # It's a list of tuples
         assert all(isinstance(x,tuple) for x in algorithms)
@@ -575,8 +576,8 @@ class TestAlgorithm:
         sorted_list_default = Algorithm.get_sorted_list(none_all_first=False)
         sorted_list_all_first = Algorithm.get_sorted_list()
 
-        assert len(sorted_list_default) == 55
-        assert len(sorted_list_all_first) == 55
+        assert len(sorted_list_default) == 59
+        assert len(sorted_list_all_first) == 59
 
         # They are a list of tuples
         assert all(isinstance(x,tuple) for x in sorted_list_default)

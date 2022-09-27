@@ -402,9 +402,9 @@ class IAFautoclass_GUI:
             description_tooltip = 'During debugging or testing, limiting the number of data rows can be beneficial'
         )
         
-        self.verbose_checkbox = widgets.Checkbox(
+        self.show_info_checkbox = widgets.Checkbox(
             value = False,
-            description = 'Verbose',
+            description = 'Show info',
             disabled = True,
             indent = True,
         )
@@ -418,7 +418,7 @@ class IAFautoclass_GUI:
         )
         
         # Put together horisontally as before
-        self.debug_form = widgets.HBox([self.num_rows, self.verbose_checkbox, self.num_variables])
+        self.debug_form = widgets.HBox([self.num_rows, self.show_info_checkbox, self.num_variables])
         
         # Start Button to continue after all settings was set
         self.start_button = widgets.Button(
@@ -692,7 +692,7 @@ class IAFautoclass_GUI:
             self.filter_slider.disabled = False
         self.num_rows.disabled = False
         self.update_num_rows()
-        self.verbose_checkbox.disabled = False
+        self.show_info_checkbox.disabled = False
         self.project.disabled = True
         self.database_dropdown.disabled = True
         self.tables_dropdown.disabled = True
@@ -739,7 +739,7 @@ class IAFautoclass_GUI:
         self.filter_checkbox.disabled = True
         self.filter_slider.disabled = True
         self.num_rows.disabled = True
-        self.verbose_checkbox.disabled = True
+        self.show_info_checkbox.disabled = True
         self.start_button.disabled = True
         
         if self.rerun:
@@ -828,7 +828,7 @@ class IAFautoclass_GUI:
                 max_iterations = self.iterations_slider.value
             ),
             "io": Config.IO(
-                verbose=self.verbose_checkbox.value,
+                verbose=self.show_info_checkbox.value,
                 model_name=model_name
             ),
             "debug": Config.Debug(
@@ -853,7 +853,7 @@ class IAFautoclass_GUI:
         self.start_button.description = "Rerun"
         self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
         self.start_button.disabled = False
-        self.verbose_checkbox.disabled = False
+        self.show_info_checkbox.disabled = False
     
     def update_mispredicted_gridbox(self): 
         if not self.the_classifier or self.the_classifier.no_mispredicted_elements():
