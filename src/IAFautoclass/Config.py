@@ -762,7 +762,7 @@ class Config:
     
     MAX_ITERATIONS = 20000
     CONFIG_FILENAME_START = "autoclassconfig_"
-    CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py"
+    CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py.txt"
     PCA_VARIANCE_EXPLAINED = 0.999
     LOWER_LIMIT_REDUCTION = 100
     NON_LINEAR_REDUCTION_COMPONENTS = 2
@@ -1755,7 +1755,7 @@ def main():
     #print(config.mode.scoring.name)
     #config.export_configuration_to_file()
     # print(Algorithm.ALL.value)
-    print(config.debug)
+    #config.save_to_file(filename="testing")
 
 
 if __name__ == "__main__":
