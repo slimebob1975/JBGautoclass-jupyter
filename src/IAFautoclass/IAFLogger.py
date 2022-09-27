@@ -25,6 +25,7 @@ class IAFLogger(terminal.Logger):
             self.widgets["progress_bar"] = progress[0]
             self.widgets["progress_label"] = progress[1]
 
+        
         terminal.Logger.__init__(self, quiet=quiet)
         
 
@@ -81,7 +82,7 @@ class IAFLogger(terminal.Logger):
 
     def _set_widget_value(self, widget: str, value) -> None:
         if widget in self.widgets:
-            self.widgets[widget] = value
+            self.widgets[widget].value = value
 
     def investigate_dataset(self, dataset: pandas.DataFrame, class_column: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
         if self._enable_quiet:

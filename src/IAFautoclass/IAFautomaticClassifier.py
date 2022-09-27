@@ -282,8 +282,9 @@ class IAFautomaticClassiphyer:
     def post_run(self) -> int:
         elapsed_time = time.time() - self.clock1
         date_again = str(datetime.now())
-        self.logger.print_formatted_info(f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again}")
-
+        message = f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again}"
+        self.logger.print_formatted_info(message)
+        self.logger.print_progress(message, 1.0)
         # Return positive signal
         return 0
 

@@ -71,6 +71,7 @@ class IAFInstanceHardness(InstanceHardness):
     
 
 class IAFRandomForestDetector(RandomForestDetector):
+    # TODO: method får inte ges till init av RFD
     def __init__(self, method='bootstrap', n_estimators=101, sampling_ratio=None, cv=None, n_jobs=1, random_state=None):
         super().__init__(method=method, n_estimators=n_estimators, sampling_ratio=sampling_ratio, 
                         cv=cv, n_jobs=n_jobs, random_state=random_state)
