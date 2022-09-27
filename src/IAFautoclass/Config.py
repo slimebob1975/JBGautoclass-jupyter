@@ -35,8 +35,7 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import make_scorer, matthews_corrcoef
 
 from skclean.models import RobustForest
-from skclean.detectors import (KDN, ForestKDN, RkDN, PartitioningDetector, 
-                               MCS, InstanceHardness, RandomForestDetector)
+from skclean.detectors import (KDN, ForestKDN, RkDN)
 from skclean.handlers import WeightedBagging, Costing, CLNI, Filter
 
 from imblearn.over_sampling import SMOTE
@@ -46,7 +45,8 @@ from imblearn.ensemble import (EasyEnsembleClassifier, RUSBoostClassifier,
 
 from IAFExceptions import ConfigException
 from IAFExperimental import (IAFRobustLogisticRegression, IAFRobustCentroid, 
-                            IAFPartitioningDetector, IAFMCS)
+                            IAFPartitioningDetector, IAFMCS, IAFInstanceHardness,
+                            IAFRandomForestDetector)
 import Helpers
 
 
@@ -223,16 +223,11 @@ class Detector(MetaEnum):
     def do_MCS(self) -> IAFMCS:
         return IAFMCS()
 
-    def do_INH(self) -> InstanceHardness:
-        return InstanceHardness()
+    def do_INH(self) -> IAFInstanceHardness:
+        return IAFInstanceHardness()
 
-    def do_RFD(self) -> RandomForestDetector:
-        
-        # Depending on version of scikit-clean installed
-        try:
-            return RandomForestDetector(method="cv")
-        except:
-            return RandomForestDetector()
+    def do_RFD(self) -> IAFRandomForestDetector:
+        return IAFRandomForestDetector()
 
 class Algorithm(MetaEnum):
     ALL = { "full_name": "All"}
@@ -274,22 +269,27 @@ class Algorithm(MetaEnum):
     GBC = { "full_name": "Gradient Boosting Classifier"}
     MLPR = { "full_name": "ML Neural Network Relu"}
     MLPL = { "full_name": "ML Neural Network Sigm"}
-    WBGK = { "full_name": "Weighted Bagging + KDN", "detector": Detector.KDN}
-    WBGM = { "full_name": "Weighted Bagging + MCS", "detector": Detector.MCS}
-    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN}
-    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS}
     FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD}
     FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC}
     FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN}
+    FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH}
+    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN}
+    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS}
     CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD}
     CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC}
     CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN}
+    CINH = { "full_name": "Costing + InstanceHardness", "detector": Detector.INH}
+    WBGK = { "full_name": "WeightedBagging + KDN", "detector": Detector.KDN}
+    WBGM = { "full_name": "WeightedBagging + MCS", "detector": Detector.MCS}   
     WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD}
     WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC}
     WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN}
+    WINH = { "full_name": "WeightedBagging + InstanceHardness", "detector": Detector.INH}
     CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD}
     CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC}
     CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN}
+    CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH}
+
 
     @property
     def limit(self):
@@ -495,6 +495,9 @@ class Algorithm(MetaEnum):
 
     def do_WFKD(self, max_iterations: int, size: int)-> WeightedBagging: 
         return self.call_WB(self.detector)
+
+    def do_WINH(self, max_iterations: int, size: int)-> WeightedBagging: 
+        return self.call_WB(self.detector)
     
     def call_WB(self, detector) -> WeightedBagging:
         return WeightedBagging(detector=detector.call_detector())
@@ -513,6 +516,9 @@ class Algorithm(MetaEnum):
 
     def do_CFKD(self, max_iterations: int, size: int)-> Costing:
         return self.call_CST(self.detector)
+
+    def do_CINH(self, max_iterations: int, size: int)-> Costing:
+        return self.call_CST(self.detector)
     
     def call_CST(self, detector) -> Costing:
         return Costing(detector=detector.call_detector())
@@ -525,6 +531,9 @@ class Algorithm(MetaEnum):
     
     def do_CLFK(self, max_iterations: int, size: int)-> CLNI:
         return self.call_CLNI(self.detector)
+
+    def do_CLIH(self, max_iterations: int, size: int)-> CLNI:
+        return self.call_CLNI(self.detector)
     
     def call_CLNI(self, detector) -> Costing:
         return CLNI(classifier=SVC(), detector=detector.call_detector())
@@ -536,6 +545,9 @@ class Algorithm(MetaEnum):
         return self.call_FLT(self.detector)
     
     def do_FFKD(self, max_iterations: int, size: int)-> Filter:
+        return self.call_FLT(self.detector)
+
+    def do_FINH(self, max_iterations: int, size: int)-> Filter:
         return self.call_FLT(self.detector)
     
     def call_FLT(self, detector) -> Filter:
