@@ -1463,7 +1463,7 @@ class PredictionsHandler:
             the_classes = the_model.classes_
         except AttributeError as e:
             self.handler.logger.print_info(f"No classes_ attribute in model, using original classes as fallback: {e}")
-            the_classes = [y for y in set(Y) if y is not None]
+            the_classes = [str(y) for y in set(Y) if y is not None]
 
         if not could_predict_proba:
             for i in range(len(the_classes)): # TODO: possibly rewrite this for loop
