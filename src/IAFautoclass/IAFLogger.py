@@ -18,14 +18,14 @@ class IAFLogger(terminal.Logger):
     # * verbose = show verbose errors, warnings and info
     # * quiet = don't show info
 
-    def __init__(self, quiet: bool = True, progress: tuple = None):
+    def __init__(self, quiet: bool = True, progress: tuple = None, in_terminal: bool = False):
         # Setup any widgets to report to
         self.widgets = {}
         if progress is not None:
             self.widgets["progress_bar"] = progress[0]
             self.widgets["progress_label"] = progress[1]
 
-        
+        self.in_terminal = in_terminal
         terminal.Logger.__init__(self, quiet=quiet)
         
 
@@ -63,11 +63,13 @@ class IAFLogger(terminal.Logger):
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
         if message is not None:
-            #self.print_unformatted(message)
+            if self.in_terminal:
+                self.print_unformatted(message)
             self._set_widget_value("progress_label", message)
 
         if percent is not None:
-            #self.print_unformatted(f"{percent*100}% completed")
+            if self.in_terminal:
+                self.print_unformatted(f"{percent*100:.0f}% completed")
             self._set_widget_value("progress_bar", percent)
 
     def print_error(self, *args) -> None:

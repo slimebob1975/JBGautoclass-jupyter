@@ -40,7 +40,7 @@ class MockLogger():
     def abort_cleanly(self, message: str) -> None:
         """ Exits the process """
 
-    def print_percentage_checked(self, text: str, old_percent, percent_checked) -> None:
+    def print_percentage(self, text: str, old_percent: float, percent_checked: float) -> None:
         """ Prints using the normal print() """
 
 class MockConfig():

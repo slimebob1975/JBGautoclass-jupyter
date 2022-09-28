@@ -1,4 +1,4 @@
-
+from __future__ import annotations
 import copy
 import enum
 import os
@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Callable, Protocol, Type, TypeVar, Union
 
 import pandas
-from sklearn.preprocessing import LabelEncoder
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
@@ -312,6 +311,7 @@ class Algorithm(MetaEnum):
         
         return {}
 
+
     @classmethod
     def list_callable_algorithms(cls, size: int, max_iterations: int) -> list[tuple]:
         """ Gets a list of algorithms that are callable
@@ -325,6 +325,9 @@ class Algorithm(MetaEnum):
     def get_robust_algorithms(cls) -> list:
         """ This list needs to be extended if we add more robust algorithms"""
         return [Algorithm.RTCL, Algorithm.RLRN, Algorithm.RCNT]
+
+    def get_compound_name(self, prepros: Preprocess)->str:
+        return f"{self.name}-{prepros.name}"
 
     def call_algorithm(self, max_iterations: int, size: int) -> Union[Estimator, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
@@ -762,7 +765,7 @@ class Config:
     
     MAX_ITERATIONS = 20000
     CONFIG_FILENAME_START = "autoclassconfig_"
-    CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py"
+    CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py.txt"
     PCA_VARIANCE_EXPLAINED = 0.999
     LOWER_LIMIT_REDUCTION = 100
     NON_LINEAR_REDUCTION_COMPONENTS = 2
@@ -1016,8 +1019,8 @@ class Config:
     io: IO = field(default_factory=IO)
     debug: Debug = field(default_factory=Debug)
     name: str = "iris"
-    config_path: str = None
-    script_path: str = None
+    config_path: Path = None
+    script_path: Path = None
     filename: str = None
     save: bool = False
     
@@ -1192,7 +1195,7 @@ class Config:
         if pwd is None:
             pwd = self.script_path
         
-        model_path = pwd / self.io.model_path
+        model_path = pwd / Path(self.io.model_path)
         
         return model_path / (self.io.model_name + Config.DEFAULT_MODEL_EXTENSION)
 
@@ -1719,11 +1722,6 @@ class Config:
         return self.connection.get_catalog_params("data")
 
 
-# TODO: Move to algorithm?
-def get_model_name(algo: Algorithm, prepros: Preprocess)->str:
-    return f"{algo.name}-{prepros.name}"
-
-
 def to_quoted_string(x, quotes:str = '\'') -> str:
         value = str(x)
 
@@ -1755,7 +1753,7 @@ def main():
     #print(config.mode.scoring.name)
     #config.export_configuration_to_file()
     # print(Algorithm.ALL.value)
-    print(config.debug)
+    #config.save_to_file(filename="testing")
 
 
 if __name__ == "__main__":
