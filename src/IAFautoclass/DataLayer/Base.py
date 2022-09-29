@@ -85,6 +85,10 @@ class DataLayerBase:
         """ Setting up tables or similar things in preparation for the classifictions """
         raise NotImplementedError
 
+    def count_data_rows(self, data_catalog: str, data_table: str) -> int:
+        """ Function for counting the number of rows in data to classify """
+        raise NotImplementedError
+
 # Main method
 def main():
     dl = DataLayerBase(Config, Logger)

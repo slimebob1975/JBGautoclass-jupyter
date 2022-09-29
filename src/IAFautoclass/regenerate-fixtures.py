@@ -62,7 +62,7 @@ def bare_iris_config() -> Config:
             num_rows=150
         ),
         name="iris",
-        filename="autoclassconfig_iris_.py"
+        _filename="autoclassconfig_iris_.py"
     )
 
     config.connection.data_catalog = ""

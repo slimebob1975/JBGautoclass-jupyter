@@ -56,8 +56,7 @@ def valid_iris_config() -> Config:
             on=True,
             num_rows=150
         ),
-        name="test",
-        filename="autoclassconfig_test_some_fake_name.py"
+        name="test"
     )
 
     return config
@@ -111,8 +110,7 @@ def bare_iris_config() -> Config:
             on=True,
             num_rows=150
         ),
-        name="iris",
-        filename="autoclassconfig_iris_.py"
+        name="iris"
     )
 
     config.connection.data_catalog = ""
@@ -175,8 +173,7 @@ def saved_with_valid_iris_config() -> Config:
             on=True,
             num_rows=150
         ),
-        name="iris",
-        filename="autoclassconfig_iris_.py"
+        name="iris"
     )
 
     return config
@@ -428,7 +425,7 @@ class TestConfig:
     def test_clean_config(self, valid_iris_config, bare_iris_config):
         """ gets a stripped down version for saving with the .sav file """
         cleaned_config = valid_iris_config.get_clean_config()
-
+        
         assert cleaned_config == bare_iris_config
 
     def test_saving_config(self, tmp_path, valid_iris_config):
@@ -450,10 +447,12 @@ class TestConfig:
         filename = get_fixture_path() / "config-save.sav"
         # 2. Without a config
         new_config = Config.load_config_from_model_file(filename)
+        
         assert new_config == bare_iris_config
 
         # 3. With a config
         new_config = Config.load_config_from_model_file(filename, valid_iris_config)
+        
         assert new_config == saved_with_valid_iris_config
 
     def test_load_config_from_module(self, valid_iris_config):
@@ -465,7 +464,7 @@ class TestConfig:
         ]
 
         loaded_config = Config.load_config_from_module(argv)
-
+        
         assert loaded_config == valid_iris_config
 
     def test_scoring_mechanism(self):

@@ -834,6 +834,56 @@ class Config:
         data_username: str = ""
         data_password: str = ""
 
+        def validate(self) -> None:
+            """ Throws TypeError if invalid """
+            # database connection information
+            database_connection_information = [
+                isinstance(self.host, str),
+                isinstance(self.class_catalog, str),
+                isinstance(self.class_table, str),
+                isinstance(self.class_table_script, str),
+                isinstance(self.class_username, str),
+                isinstance(self.class_password, str),
+                isinstance(self.data_catalog, str),
+                isinstance(self.data_table, str),
+                isinstance(self.class_column, str),
+                isinstance(self.data_text_columns, list),
+                isinstance(self.data_numerical_columns, list),
+                isinstance(self.id_column, str),
+                isinstance(self.trusted_connection, bool)
+            ]
+            
+            if not all(database_connection_information):
+                raise TypeError(
+                    "Specified database connection information is invalid")
+
+            if not all(isinstance(x,str) for x in self.data_text_columns):
+                raise TypeError("Data text columns needs to be a list of strings")
+            if not all(isinstance(x,str) for x in self.data_numerical_columns):
+                raise TypeError("Data numerical columns needs to be a list of strings")
+
+            
+            # Login credentials
+            login_credentials = [
+                isinstance(self.data_username, str),
+                isinstance(self.data_password, str)
+            ]
+
+            if not all(login_credentials):
+                raise TypeError("Specified login credentials are invalid!")
+
+            # Overriding values
+            if self.trusted_connection:
+                self.data_password = ""
+                self.class_password = ""
+
+                username = Config.get_username()
+                self.class_username = username
+                self.data_username = username
+
+            
+
+
         def driver_is_implemented(self) -> bool:
             """ Returns whether the driver of the config is implemented """
             # TODO: Probably want to make this sturdier, but that would require
@@ -946,6 +996,16 @@ class Config:
         model_path: str = "./model/"
         model_name: str = "iris"
 
+        def validate(self) -> None:
+            """ Throws TypeError if invalid """
+        
+            for item in [
+                "verbose",
+            ]:
+                if not isinstance(getattr(self, item), bool):
+                    raise TypeError(f"Argument {item} must be True or False")
+
+        
         def __str__(self) -> str:
             str_list = [
                 " 3. I/O specifications ",
@@ -976,6 +1036,77 @@ class Config:
         scoring: Scoretype = Scoretype.accuracy
         max_iterations: int = None
 
+        def validate(self) -> None:
+            """ Throws TypeError if invalid """
+
+            if not isinstance(self.category_text_columns, list):
+                raise TypeError(f"Argument category_text_columns must be a list of strings")
+
+            if not all(isinstance(x,str) for x in self.category_text_columns):
+                raise TypeError(f"Argument category_text_columns must be a list of strings")
+            
+            if not Helpers.positive_int_or_none(self.num_selected_features):
+                raise ValueError(
+                    "Argument num_selected_features must be a positive integer")
+
+            if self.max_iterations is None:
+                self.max_iterations = Config.MAX_ITERATIONS
+            elif not Helpers.positive_int_or_none(self.max_iterations):
+                raise ValueError(
+                    "Argument max_iterations must be a positive integer")
+
+            # Type checking + at least one is True
+            mode_types = [
+                isinstance(self.train, bool),
+                isinstance(self.predict, bool),
+                isinstance(self.mispredicted, bool),
+                (self.train or self.predict)
+            ]
+            
+            if not all(mode_types):
+                raise ValueError(
+                    "Class must be set for either training, predictions and/or mispredictions!")
+
+            if self.mispredicted and not self.train:
+                raise ValueError(
+                    "Class must be set for training if it is set for misprediction")
+
+            # Stop words threshold and test size
+            if isinstance(self.specific_stop_words_threshold, float):
+                if self.specific_stop_words_threshold > 1.0 or self.specific_stop_words_threshold < 0.0:
+                    raise ValueError(
+                        "Argument specific_stop_words_threshold must be between 0 and 1!")
+            else:
+                raise TypeError(
+                    "Argument specific_stop_words_threshold must be a float between 0 and 1!")
+
+            
+            if isinstance(self.test_size, float):
+                if self.test_size > 1.0 or self.test_size < 0.0:
+                    raise ValueError(
+                        "Argument test_size must be between 0 and 1!")
+            else:
+                raise TypeError(
+                    "Argument test_size must be a float between 0 and 1!")
+
+            if not (isinstance(self.algorithm, Algorithm)):
+                raise TypeError("Argument algorithm is invalid")
+
+            if not (isinstance(self.preprocessor, Preprocess)):
+                raise TypeError("Argument preprocessor is invalid")
+
+            if not (isinstance(self.feature_selection, Reduction)):
+                raise TypeError("Argument feature_selection is invalid")
+
+            for item in [
+                "use_stop_words",
+                "hex_encode",
+                "smote",
+                "undersample"
+            ]:
+                if not isinstance(getattr(self, item), bool):
+                    raise TypeError(f"Argument {item} must be True or False")
+
         def __str__(self) -> str:
             str_list = [
                 " 2. Classification mode settings ",
@@ -1005,6 +1136,15 @@ class Config:
         on: bool = True
         num_rows: int = None
 
+        def validate(self) -> None:
+            """ Throws TypeError if invalid """
+
+            # TODO: Set the value based on count_data_rows(), but first decide where that method should be
+            # The method is (and should probably stay) in DataLayer--question is where we set this
+            if not Helpers.positive_int_or_none(self.num_rows):
+                raise ValueError(
+                    "Argument num_rows must be a positive integer")
+
         def __str__(self) -> str:
             str_list = [
                 " 4. Debug settings  ",
@@ -1021,9 +1161,19 @@ class Config:
     name: str = "iris"
     config_path: Path = None
     script_path: Path = None
-    filename: str = None
+    _filename: str = None
     save: bool = False
     
+    @property
+    def filename(self) -> str:
+        if self._filename is None:
+            return f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
+
+        return self._filename
+    
+    @property
+    def filepath(self) -> Path:
+        return self.config_path / self.filename
 
     def __post_init__(self) -> None:
         pwd = os.path.dirname(os.path.realpath(__file__))
@@ -1034,9 +1184,6 @@ class Config:
         if self.script_path is None:
             self.script_path = Path(pwd)
 
-        if self.filename is None:
-            self.filename = f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
-        
         
         """Post init is called after init, which is the best place to check the types & values"""
 
@@ -1045,134 +1192,16 @@ class Config:
             raise TypeError(f"Argument name must be a string")
 
         # 2: Connection params
-        # 2.1: database connection information
-        database_connection_information = [
-            isinstance(self.connection.host, str),
-            isinstance(self.connection.class_catalog, str),
-            isinstance(self.connection.class_table, str),
-            isinstance(self.connection.class_table_script, str),
-            isinstance(self.connection.class_username, str),
-            isinstance(self.connection.class_password, str),
-            isinstance(self.connection.data_catalog, str),
-            isinstance(self.connection.data_table, str),
-            isinstance(self.connection.class_column, str),
-            isinstance(self.connection.data_text_columns, list),
-            isinstance(self.connection.data_numerical_columns, list),
-            isinstance(self.connection.id_column, str),
-            isinstance(self.connection.trusted_connection, bool)
-        ]
-        
-        if not all(database_connection_information):
-            raise TypeError(
-                "Specified database connection information is invalid")
+        self.connection.validate()
 
-        if not all(isinstance(x,str) for x in self.connection.data_text_columns):
-            raise TypeError("Data text columns needs to be a list of strings")
-        if not all(isinstance(x,str) for x in self.connection.data_numerical_columns):
-            raise TypeError("Data numerical columns needs to be a list of strings")
-
-        
-        # 2.2: Login credentials
-        login_credentials = [
-            isinstance(self.connection.data_username, str),
-            isinstance(self.connection.data_password, str)
-        ]
-
-        if not all(login_credentials):
-            raise TypeError("Specified login credentials are invalid!")
-        
         # 3: Mode/training
-        if not isinstance(self.mode.category_text_columns, list):
-            raise TypeError(f"Argument category_text_columns must be a list of strings")
-
-        if not all(isinstance(x,str) for x in self.mode.category_text_columns):
-            raise TypeError(f"Argument category_text_columns must be a list of strings")
-        
-        if not Helpers.positive_int_or_none(self.mode.num_selected_features):
-            raise ValueError(
-                "Argument num_selected_features must be a positive integer")
-
-        if self.mode.max_iterations is None:
-            self.mode.max_iterations = self.MAX_ITERATIONS
-        elif not Helpers.positive_int_or_none(self.mode.max_iterations):
-            raise ValueError(
-                "Argument max_iterations must be a positive integer")
-
-        # Type checking + at least one is True
-        mode_types = [
-            isinstance(self.mode.train, bool),
-            isinstance(self.mode.predict, bool),
-            isinstance(self.mode.mispredicted, bool),
-            (self.mode.train or self.mode.predict)
-        ]
-        
-        if not all(mode_types):
-            raise ValueError(
-                "Class must be set for either training, predictions and/or mispredictions!")
-
-        if self.mode.mispredicted and not self.mode.train:
-            raise ValueError(
-                "Class must be set for training if it is set for misprediction")
-
-        # Stop words threshold and test size
-        if isinstance(self.mode.specific_stop_words_threshold, float):
-            if self.mode.specific_stop_words_threshold > 1.0 or self.mode.specific_stop_words_threshold < 0.0:
-                 raise ValueError(
-                    "Argument specific_stop_words_threshold must be between 0 and 1!")
-        else:
-            raise TypeError(
-                "Argument specific_stop_words_threshold must be a float between 0 and 1!")
-
-        
-        if isinstance(self.mode.test_size, float):
-            if self.mode.test_size > 1.0 or self.mode.test_size < 0.0:
-                raise ValueError(
-                    "Argument test_size must be between 0 and 1!")
-        else:
-            raise TypeError(
-                "Argument test_size must be a float between 0 and 1!")
-
-        if not (isinstance(self.mode.algorithm, Algorithm)):
-            raise TypeError("Argument algorithm is invalid")
-
-        if not (isinstance(self.mode.preprocessor, Preprocess)):
-            raise TypeError("Argument preprocessor is invalid")
-
-        if not (isinstance(self.mode.feature_selection, Reduction)):
-            raise TypeError("Argument feature_selection is invalid")
-
-        for item in [
-            "use_stop_words",
-            "hex_encode",
-            "smote",
-            "undersample"
-        ]:
-            if not isinstance(getattr(self.mode, item), bool):
-                raise TypeError(f"Argument {item} must be True or False")
-        
+        self.mode.validate()
         
         # 4: IO
-        for item in [
-            "verbose",
-        ]:
-            if not isinstance(getattr(self.io, item), bool):
-                raise TypeError(f"Argument {item} must be True or False")
+        self.io.validate()
 
         # 5: Debug
-        # TODO: Set the value based on count_data_rows(), but first decide where that method should be
-        if not Helpers.positive_int_or_none(self.debug.num_rows):
-            raise ValueError(
-                "Argument num_rows must be a positive integer")
-
-        # Overriding values
-        if self.connection.trusted_connection:
-            self.connection.data_password = ""
-            self.connection.class_password = ""
-
-            # TODO: Change to not use os.getlogin()
-            username = os.getlogin()
-            self.connection.class_username = username
-            self.connection.data_username = username
+        self.debug.validate()
 
         # This is True if training in GUI, always False if not
         if self.save:
@@ -1188,6 +1217,13 @@ class Config:
         ]
         return  "\n".join(str_list)
 
+    @classmethod
+    def get_username(self) -> str:
+        """ calculates username """
+
+        # TODO: Change to not use os.getlogin()
+        return os.getlogin()
+    
     def get_model_filename(self, pwd: Path = None) -> str:
         """ Set the name and path of the model file
             The second parameter allows for injecting the path for reliable testing
@@ -1218,7 +1254,7 @@ class Config:
         return configuration
 
     # Saves config to be read from the command line
-    def save_to_file(self, filename: str = None, username: str = None) -> None:
+    def save_to_file(self, filepath: Path = None, username: str = None) -> None:
         template_path = self.config_path / self.CONFIG_SAMPLE_FILE
         
         with open(template_path, "r", encoding="utf-8") as fin:
@@ -1249,9 +1285,9 @@ class Config:
             for i in range(len(lines)):
                 lines[i] = lines[i].replace(template, str(replace))
        
-        if filename is None:
-            filename = self.config_path / self.filename
-        with open(filename, "w", encoding="utf-8") as fout:
+        filepath = filepath if filepath else self.filepath
+        
+        with open(filepath, "w", encoding="utf-8") as fout:
            fout.writelines(lines)
 
     @classmethod
@@ -1415,7 +1451,7 @@ class Config:
         return config
     
     # Methods to hide implementation of Config
-    def update_configuration(self, updates: dict) -> bool: #TEST
+    def update_configuration(self, updates: dict) -> bool:
         """ Updates the config with new, wholesale, bits """
         # TODO: Break out validation to be able to call that here as well
         for key, item in updates.items():
@@ -1423,6 +1459,10 @@ class Config:
                 raise ConfigException(f"Key {key} does not exist in Config")
 
             setattr(self, key, item)
+
+        self.__post_init__()
+        #if self.save:
+        #    self.save_to_file()
 
 
     def is_text_data(self) -> bool:

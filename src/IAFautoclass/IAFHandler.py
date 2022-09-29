@@ -1337,7 +1337,8 @@ class PredictionsHandler:
                                 errors='strict')
     
     # Make predictions on dataset
-    def make_predictions(self, model: Pipeline, X: pandas.DataFrame, classes: pandas.Series) -> bool:
+    def make_predictions(self, model: Pipeline, X: pandas.DataFrame, classes: pandas.Series, Y: pandas.DataFrame) -> bool:
+        print(Y)
         could_predict_proba = False
         try:
             predictions = model.predict(X)
@@ -1357,6 +1358,7 @@ class PredictionsHandler:
         self.predictions = predictions
         self.rates = rates
 
+        self.set_classification_report(Y)
         # This is backup if predictions couldn't be made (IE predict_proba == False)
         self.calculate_probability()
         
@@ -1384,7 +1386,7 @@ class PredictionsHandler:
         
         for prediction in self.predictions:
             try:
-                # This should probably be a list of a float, not a float
+                # This should probably be a list of floats, not a float
                 prob = prob + [self.class_report[prediction]['precision']]
             except KeyError as e:
                 self.handler.logger.print_warning(f"probability collection failed for key {prediction} with error {e}")
@@ -1403,9 +1405,13 @@ class PredictionsHandler:
 
         return [mean, std]
 
+    def set_classification_report(self, Y: pandas.DataFrame) -> dict:
+        report = classification_report(Y, self.predictions, output_dict = True)
+        self.class_report = report
+
     # Create classification report
     def get_classification_report(self, Y_validation: pandas.DataFrame, model: Model) -> list:
-        self.class_report = classification_report(Y_validation, self.predictions, output_dict = True)
+        self.set_classification_report(Y_validation)
 
         return [self.class_report, model, self.handler.config.get_num_selected_features()]
     
@@ -1452,7 +1458,7 @@ class PredictionsHandler:
             Y_prob = the_model.predict_proba(X_mispredicted)
             could_predict_proba = True
         except Exception as e:
-            self.handler.logger.print_warning(f"Could not predict probabilities: {e}")
+            self.handler.logger.print_info(f"Could not predict probabilities: {e}")
             could_predict_proba = False
 
         #  Re-insert original data columns but drop the class column
@@ -1469,7 +1475,7 @@ class PredictionsHandler:
             the_classes = the_model.classes_
         except AttributeError as e:
             self.handler.logger.print_info(f"No classes_ attribute in model, using original classes as fallback: {e}")
-            the_classes = [str(y) for y in set(Y) if y is not None]
+            the_classes = [y for y in set(Y) if y is not None]
 
         if not could_predict_proba:
             for item in the_classes:
@@ -1481,7 +1487,7 @@ class PredictionsHandler:
         
         Y_prob_max = np.amax(Y_prob, axis = 1)
         for i in reversed(range(Y_prob.shape[1])):
-            X_mispredicted.insert(0, "P(" + the_classes[i] + ")", Y_prob[:,i])
+            X_mispredicted.insert(0, f"P({the_classes[i]})", Y_prob[:,i])
         X_mispredicted.insert(0, "__Sort__", Y_prob_max)
 
         # Sort the dataframe on the first column and remove it

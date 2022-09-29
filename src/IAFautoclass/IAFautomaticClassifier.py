@@ -212,8 +212,8 @@ class IAFautomaticClassiphyer:
                 # Make predictions on known testdata
                 self.logger.print_progress(message="Make predictions on known testdata")
                 
-                ph.make_predictions(mh.model.model, dh.X_validation, dh.classes)
-
+                ph.make_predictions(mh.model.model, dh.X_validation, dh.classes, dh.Y_validation)
+                
                 self.logger.print_training_rates(ph)
                 
                 # Evaluate predictions (optional)

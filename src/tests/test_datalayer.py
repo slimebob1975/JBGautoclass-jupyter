@@ -88,7 +88,7 @@ def valid_iris_config() -> Config:
             num_rows=150
         ),
         name="test",
-        filename="autoclassconfig_test_some_fake_name.py"
+        _filename="autoclassconfig_test_some_fake_name.py"
     )
 
     return config

@@ -631,7 +631,7 @@ class IAFautoclass_GUI:
             self.continuation_button.disabled = True
                 
     def update_class_summary(self):
-        """ Updates the data_layer's connection values too """
+        """ Sets the class summary """
         try:
              distrib = self.classifier_datalayer.count_class_distribution()
         except DataLayerException as e:
@@ -807,6 +807,8 @@ class IAFautoclass_GUI:
             name=self.project.value,
             save=(self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION),
         )"""
+        save = (self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION)
+        
         updates = {
             "mode": Config.Mode(
                 train = self.train_checkbox.value,
@@ -836,8 +838,9 @@ class IAFautoclass_GUI:
                 num_rows=self.num_rows.value
             ),
             "name": self.project.value,
-            "save": (self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION)
+            "save": save
         }
+        
         self.classifier_datalayer.update_config(updates)
         
         self.the_classifier = autoclass.IAFautomaticClassiphyer(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
