@@ -596,11 +596,7 @@ class IAFautoclass_GUI:
             
     def update_id_and_data_columns(self, event:Bunch) -> None:
         """ Handler: Changes the id and data columns when the class option is changed. """
-        try:
-            self.update_class_summary()
-        except Exception as ex:
-            print("Notice. Could not update summary for class: {0}, for reason: {1}". \
-                format(self.class_column.value, str(ex)))
+        self.update_class_summary()
         self.id_column.options = \
             [option for option in self.class_column.options if option != self.class_column.value]
         self.update_data_columns(event)
@@ -629,38 +625,59 @@ class IAFautoclass_GUI:
             self.continuation_button.on_click(callback=self.continuation_button_was_clicked)
         else:
             self.continuation_button.disabled = True
-                
+
+    def get_classifier_datalayer(self, early = False) -> DataLayer:
+        """ This will create or update the layer, and should probably also include the start_classifier() stuff
+        """
+        if not self.classifier_datalayer:
+            connection = Config.Connection(
+                    odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
+                    host = os.environ.get("DEFAULT_HOST"),
+                    class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
+                    class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
+                    trusted_connection = True,
+                    data_catalog = self.database_dropdown.value,
+                    data_table = self.tables_dropdown.value,
+                    class_column = self.class_column.value, 
+                    data_text_columns = list(self.text_columns.value), 
+                    data_numerical_columns = self.get_data_numerical_columns(), 
+                    id_column = self.id_column.value 
+                )
+
+            self.classifier_datalayer = DataLayer(Config(connection), self.logger)
+        else:
+            if early: # before the classifier_datalayer is completed
+                updated_columns = {
+                    "class_column": self.class_column.value,
+                    "data_text_columns": list(self.text_columns.value),
+                    "data_numerical_columns": self.get_data_numerical_columns(),
+                    "id_column": self.id_column.value
+                }
+                self.classifier_datalayer.config.update_connection_columns(updated_columns)
+
+        return self.classifier_datalayer
+
+    def get_data_numerical_columns(self) -> list:
+        """ List comprehension to get which columns are numerical data """
+        return [col for col in self.data_columns.value if not col in self.text_columns.value]
+
     def update_class_summary(self):
         """ Sets the class summary """
+        current_class = self.class_column.value
+        datalayer = self.get_classifier_datalayer(early=True)
         try:
-             distrib = self.classifier_datalayer.count_class_distribution()
+             distrib = datalayer.count_class_distribution()
         except DataLayerException as e:
             self.logger.abort_cleanly(str(e))
+        except Exception as e:
+            message = f"Could not update summary for class: {current_class} because {e}"
+            self.logger.print_info(message)
         
-        self.class_summary_text.value = \
-            "Class column: \'{0}\', with distribution: {2}, in total: {1} rows". \
-            format(self.class_column.value, sum(distrib.values()), str(distrib)[1:-1])
+        new_text = f"Class column: '{current_class}', with distribution: {str(distrib)[1:-1]}, in total: {sum(distrib.values())} rows"
+        self.class_summary_text.value = new_text
         
-    def continuation_button_was_clicked(self, event:Bunch) -> None:
+    def continuation_button_was_clicked(self, event: Bunch) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
-        # This is a good place to also create the classifier_datalayer
-        data_numerical_columns = [col for col in self.data_columns.value if not col in self.text_columns.value]
-        connection = Config.Connection(
-                odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
-                host = os.environ.get("DEFAULT_HOST"),
-                class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
-                class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
-                trusted_connection = True,
-                data_catalog = self.database_dropdown.value,
-                data_table = self.tables_dropdown.value,
-                class_column = self.class_column.value,
-                data_text_columns = list(self.text_columns.value),
-                data_numerical_columns = data_numerical_columns,
-                id_column = self.id_column.value
-            )
-
-        self.classifier_datalayer = DataLayer(Config(connection), self.logger)
-
         self.lock_observe_1 = True
         if self.models_dropdown.value != self.DEFAULT_TRAIN_OPTION:
             self.train_checkbox.value = False
@@ -759,54 +776,6 @@ class IAFautoclass_GUI:
         else:
             model_name = self.models_dropdown.value.replace(Config.DEFAULT_MODEL_EXTENSION, "")
         
-        
-        """data_numerical_columns = \
-                [col for col in self.data_columns.value if not col in self.text_columns.value]
-        connection = Config.Connection(
-                odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
-                host = os.environ.get("DEFAULT_HOST"),
-                class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
-                class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
-                trusted_connection = True,
-                data_catalog = self.database_dropdown.value,
-                data_table = self.tables_dropdown.value,
-                class_column = self.class_column.value,
-                data_text_columns = list(self.text_columns.value),
-                data_numerical_columns = data_numerical_columns,
-                id_column = self.id_column.value
-            )
-        config = Config(
-            connection,
-            Config.Mode(
-                train = self.train_checkbox.value,
-                predict = self.predict_checkbox.value,
-                mispredicted = self.mispredicted_checkbox.value,
-                use_stop_words = self.filter_checkbox.value,
-                specific_stop_words_threshold = float(self.filter_slider.value) / 100.0,
-                hex_encode = self.encryption_checkbox.value,
-                use_categorization = self.categorize_checkbox.value,
-                category_text_columns = list(self.categorize_columns.value),
-                test_size = float(self.testdata_slider.value) / 100.0,
-                smote = self.smote_checkbox.value,
-                undersample = self.undersample_checkbox.value,
-                algorithm = Algorithm[self.algorithm_dropdown.value],
-                preprocessor = Preprocess[self.preprocessor_dropdown.value],
-                feature_selection = Reduction[self.reduction_dropdown.value],
-                num_selected_features = None,
-                scoring = Scoretype[self.metric_dropdown.value],
-                max_iterations = self.iterations_slider.value
-            ),
-            Config.IO(
-                verbose=self.verbose_checkbox.value,
-                model_name=model_name
-            ),
-            Config.Debug(
-                on=True,
-                num_rows=self.num_rows.value
-            ),
-            name=self.project.value,
-            save=(self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION),
-        )"""
         save = (self.models_dropdown.value == self.DEFAULT_TRAIN_OPTION)
         
         updates = {
@@ -848,7 +817,7 @@ class IAFautoclass_GUI:
         with self.output:
             worked = self.the_classifier.run()
             if worked == -1:
-                print("Notice: no data was fetched from database!")
+                self.logger.print_info("No data was fetched from database!")
             else:
                 if self.mispredicted_checkbox.value:
                     self.update_mispredicted_gridbox()

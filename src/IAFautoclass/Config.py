@@ -881,8 +881,25 @@ class Config:
                 self.class_username = username
                 self.data_username = username
 
+        def update_columns(self, updated_columns: dict) -> dict:
+            """ Given the dictionary updated_columns set attributes to values """
+            errors = []
+            for attribute, value in updated_columns.items():
+                if hasattr(self, attribute):
+                    setattr(self, attribute, value)
+                else:
+                    errors.append(attribute)
             
+            if errors:
+                return {
+                    "response": f"Following columns do not exist: {', '.join(errors)}",
+                    "success": False
+                }
 
+            return {
+                "response": "Columns updated",
+                "success": True
+            }
 
         def driver_is_implemented(self) -> bool:
             """ Returns whether the driver of the config is implemented """
@@ -1224,6 +1241,10 @@ class Config:
         # TODO: Change to not use os.getlogin()
         return os.getlogin()
     
+    def update_connection_columns(self, updated_columns = dict) -> dict:
+        """ Wrapper function to not show inner workings """
+        return self.connection.update_columns(updated_columns)
+
     def get_model_filename(self, pwd: Path = None) -> str:
         """ Set the name and path of the model file
             The second parameter allows for injecting the path for reliable testing
