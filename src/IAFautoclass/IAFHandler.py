@@ -886,8 +886,19 @@ class ModelHandler:
             print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
             raise ModelException(f"Something went wrong on training picked model: {str(e)}")
             
-
         return model
+
+    # Train and evaluate picked model
+    def train_and_evaluate_picked_model(self, model: Pipeline, X_train: pandas.DataFrame, \
+        Y_train: pandas.DataFrame, X_test: pandas.DataFrame, Y_test: pandas.DataFrame):
+
+        # First train model on whole of test data (no k-folded cross validation here)
+        model = self.train_picked_model(model, X_train, Y_train)
+
+        # Evaluate on test_data
+        score = model.score(X_test, Y_test)
+
+        return model, score
 
     # While more code, this should (hopefully) be easier to read
     def should_run_computation(self, current_algorithm: Algorithm, current_preprocessor: Preprocess) -> bool:
