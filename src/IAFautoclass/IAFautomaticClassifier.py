@@ -199,7 +199,7 @@ class IAFautomaticClassiphyer:
         if self.config.should_train():
             try:
                 self.logger.print_progress(message="Check and train algorithms for best model")
-                mh.train_model(dh.X_train, dh.Y_train)
+                mh.train_model(dh.X_train, dh.Y_train, dh.X_validation, dh.Y_validation)
             except Exception as e:
                 self.logger.abort_cleanly(f"Training model failed: {e}")
 

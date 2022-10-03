@@ -39,14 +39,14 @@ class IAFLogger(terminal.Logger):
         self.print_unformatted(config)
 
     def get_table_format(self) -> str:
-        return "{0:>4s}-{1:<6s}{2:>6s}{3:>8s}{4:>8s}{5:>11s} {6:<30s}"
+        return "{0:>4s}-{1:<6s}{2:>6s}{3:>8s}{4:>8s}{5:>8s}{6:>11s} {7:<30s}"
 
     def print_table_row(self, items: list[str], divisor: str = None) -> None:
         """ Prints a row with optional divisor"""
         self.print_unformatted(self.get_table_format().format(*items))
 
         if divisor is not None:
-            self.print_unformatted(divisor*45)
+            self.print_unformatted(divisor*60)
 
     def print_components(self, component, components, exception = None) -> None:
         if exception is None:

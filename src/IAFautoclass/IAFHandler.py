@@ -856,9 +856,10 @@ class ModelHandler:
     def load_empty_model(self) -> Model:
         return Model(label_binarizers={}, count_vectorizer=None, tfid_transformer=None, transform=None)
 
-    def train_model(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame) -> None:
+    def train_model(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame, \
+        X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None) -> None:
         try:
-            self.model = self.get_model_from(X_train, Y_train)
+            self.model = self.get_model_from(X_train, Y_train, X_test, Y_test)
     
         except Exception as e:
             print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
@@ -866,12 +867,13 @@ class ModelHandler:
 
         self.save_model_to_file(self.handler.config.get_model_filename())
 
-    def get_model_from(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame) -> Model:
+    def get_model_from(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame, \
+        X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None) -> Model:
         k = min(10, Helpers.find_smallest_class_number(Y_train))
         if k < 10:
             self.handler.logger.print_info(f"Using non-standard k-value for spotcheck of algorithms: {k}")
         
-        model = self.spot_check_ml_algorithms(X_train, Y_train, k)
+        model = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
         
         model.model.fit(X_train, Y_train)
 
@@ -888,15 +890,17 @@ class ModelHandler:
             
         return model
 
-    # Train and evaluate picked model
+    # Train and evaluate picked model (warning for overfitting)
     def train_and_evaluate_picked_model(self, model: Pipeline, X_train: pandas.DataFrame, \
-        Y_train: pandas.DataFrame, X_test: pandas.DataFrame, Y_test: pandas.DataFrame):
+        Y_train: pandas.DataFrame, X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None):
 
         # First train model on whole of test data (no k-folded cross validation here)
         model = self.train_picked_model(model, X_train, Y_train)
 
         # Evaluate on test_data
-        score = model.score(X_test, Y_test)
+        score = -1.0
+        if X_test is not None and Y_test is not None:
+            score = model.score(X_test, Y_test)
 
         return model, score
 
@@ -929,7 +933,8 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_ml_algorithms(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame, k:int=10) -> Model:
+    def spot_check_ml_algorithms(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame, k:int=10, \
+        X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None) -> Model:
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot check ml algorithms...")
@@ -958,7 +963,7 @@ class ModelHandler:
         best_feature_selection = X_train.shape[1]
         first_round = True
         
-        self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Time","Failure"], divisor="=")
+        self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Scre","Time","Failure"], divisor="=")
 
         numMinorTasks = len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
@@ -1003,6 +1008,10 @@ class ModelHandler:
                     try:
                         current_pipeline, cv_results, failure = \
                             self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
+                        if X_test is not None and Y_test is not None:
+                            _, erocs = self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
+                        else:
+                            erocs = 0.0
                     except ModelException:
                         # If any exceptions happen, continue to next step in the loop
                         break
@@ -1016,8 +1025,8 @@ class ModelHandler:
 
                     # Print results to screen
                     if self.handler.config.is_verbose(): # TODO: print prettier
-                        print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:11.3f} {6:<30s}".
-                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,t,failure))
+                        print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:8.3f}{6:11.3f} {7:<30s}".
+                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,erocs,t,failure))
 
                     # Evaluate if feature selection changed accuracy or not. 
                     #rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(temp_score, rfe_score, num_features, max_features_selection, min_features_selection)
@@ -1031,7 +1040,7 @@ class ModelHandler:
 
                     # Save result if it is the overall best (inside RFE-while)
                     # Notice the difference from above, here we demand a better score.
-                    if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev):
+                    if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev, erocs):
                     #if temp_score > best_mean or (temp_score == best_mean and temp_stdev < best_std):
                         trained_pipeline = current_pipeline
                         best_algorithm = algorithm
@@ -1062,16 +1071,19 @@ class ModelHandler:
         # Too much reduced
         return best_score, max_features, num_features
 
-    def is_best_run_yet(self, current_mean: float, current_stdev: float, best_mean: float, best_stdev: float) -> bool:
+    def is_best_run_yet(self, current_mean: float, current_stdev: float, best_mean: float, best_stdev: float, eval_score: float = 0.0) -> bool:
         """ Calculates if this round is better than any prior """
 
         if current_mean < best_mean: # Obviously if current is less it's worse
             return False
-        if current_mean > best_mean: # If it is better, it is better
+        elif current_mean > best_mean: # If it is better, it is better
             return True
-
-        # This means that the current and best means are equal, so compare the standard deviations, lower standard deviation is better
-        return current_stdev < best_stdev
+        elif current_stdev < best_stdev:    # From here it is comparable.
+            return True                     # With lower standard deviation it is better
+        elif eval_score > best_mean:        # With higher score on evaluation data, is is also better
+            return True
+        else:
+            return False                    # Comparable, but it fails in the end since no better stdev or better of eval data
 
     def create_pipeline_and_cv(self, algorithm: Algorithm, preprocessor: Preprocess, estimator: Estimator, transform: Transform, kfold: StratifiedKFold, X: pandas.DataFrame, y: pandas.DataFrame, num_features: int):
         """ The flow for each algorithm-preprocessor pair, broken out to simplify testing
