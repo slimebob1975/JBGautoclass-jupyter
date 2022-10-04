@@ -894,13 +894,13 @@ class ModelHandler:
     def train_and_evaluate_picked_model(self, model: Pipeline, X_train: pandas.DataFrame, \
         Y_train: pandas.DataFrame, X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None):
 
-        # First train model on whole of test data (no k-folded cross validation here)
         exception = None
+        score = -1.0
         try:
-            model = self.train_picked_model(model, X_train, Y_train)
+            # First train model on whole of test data (no k-folded cross validation here)
+            model.fit(X_train, Y_train)
 
             # Evaluate on test_data
-            score = -1.0
             if X_test is not None and Y_test is not None:
                 score = model.score(X_test, Y_test)
         except Exception as ex:
@@ -971,7 +971,7 @@ class ModelHandler:
         best_feature_selection = X_train.shape[1]
         first_round = True
         
-        self.handler.logger.print_table_row(items=["Name","Prep.","#Feat.","Mean","Std","Scre","Time","Failure"], divisor="=")
+        self.handler.logger.print_table_row(items=["Algo","Pre","Comp","Train","Stdev","Score","Time","Except"], divisor="=")
 
         numMinorTasks = len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
@@ -1017,7 +1017,8 @@ class ModelHandler:
                         current_pipeline, cv_results, failure = \
                             self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
                         if X_test is not None and Y_test is not None:
-                            _, erocs, failure = self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
+                            current_pipeline, erocs, failure = \
+                                self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
                         else:
                             erocs = 0.0
                     except ModelException:
