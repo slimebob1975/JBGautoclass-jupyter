@@ -895,14 +895,22 @@ class ModelHandler:
         Y_train: pandas.DataFrame, X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None):
 
         # First train model on whole of test data (no k-folded cross validation here)
-        model = self.train_picked_model(model, X_train, Y_train)
+        exception = None
+        try:
+            model = self.train_picked_model(model, X_train, Y_train)
 
-        # Evaluate on test_data
-        score = -1.0
-        if X_test is not None and Y_test is not None:
-            score = model.score(X_test, Y_test)
+            # Evaluate on test_data
+            score = -1.0
+            if X_test is not None and Y_test is not None:
+                score = model.score(X_test, Y_test)
+        except Exception as ex:
+            score = np.nan
+            if not GIVE_EXCEPTION_TRACEBACK:
+                exception = "{0}: {1!r}".format(type(ex).__name__, ex.args)
+            else:
+                exception = traceback.format_exc()
 
-        return model, score
+        return model, score, str(exception)
 
     # While more code, this should (hopefully) be easier to read
     def should_run_computation(self, current_algorithm: Algorithm, current_preprocessor: Preprocess) -> bool:
@@ -1009,7 +1017,7 @@ class ModelHandler:
                         current_pipeline, cv_results, failure = \
                             self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
                         if X_test is not None and Y_test is not None:
-                            _, erocs = self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
+                            _, erocs, failure = self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
                         else:
                             erocs = 0.0
                     except ModelException:
@@ -1123,7 +1131,6 @@ class ModelHandler:
             The results from the cross-validation scoring
         """
         exception = None
-        message = ""
         try:
             # Apply feature selection to current model and number of features.
             modified_estimator = self.modify_algorithm(estimator, num_features, X, y)
