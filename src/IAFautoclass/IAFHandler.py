@@ -1090,7 +1090,7 @@ class ModelHandler:
         
         if self.handler.config.get_scoring_mechanism() == Scoretype.accuracy.name and \
             abs(current_mean - eval_score) > 2.0 * current_stdev:
-            raise UnstableModelException(f"Diff in performance for training and testing exceeds 2 stdev")
+            raise UnstableModelException(f"Accuracy difference for cross evaluation and final test exceeds 2*stdev")
         
         if current_mean < best_mean: # Obviously if current is less it's worse
             return False
