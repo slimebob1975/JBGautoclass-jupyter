@@ -27,8 +27,8 @@ from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
 
-from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
-from IAFExceptions import DatasetException, ModelException, HandlerException
+from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform, Scoretype
+from IAFExceptions import DatasetException, ModelException, HandlerException, UnstableModelException
 import Helpers
 
 # Sklearn issue a lot of warnings sometimes, we suppress them here
@@ -894,7 +894,7 @@ class ModelHandler:
     def train_and_evaluate_picked_model(self, model: Pipeline, X_train: pandas.DataFrame, \
         Y_train: pandas.DataFrame, X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None):
 
-        exception = None
+        exception = ""
         score = -1.0
         try:
             # First train model on whole of test data (no k-folded cross validation here)
@@ -906,11 +906,11 @@ class ModelHandler:
         except Exception as ex:
             score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
-                exception = "{0}: {1!r}".format(type(ex).__name__, ex.args)
+                exception = str("{0}: {1!r}".format(type(ex).__name__, ex.args))
             else:
-                exception = traceback.format_exc()
+                exception = str(traceback.format_exc())
 
-        return model, score, str(exception)
+        return model, score, exception
 
     # While more code, this should (hopefully) be easier to read
     def should_run_computation(self, current_algorithm: Algorithm, current_preprocessor: Preprocess) -> bool:
@@ -1032,11 +1032,6 @@ class ModelHandler:
                     temp_score = cv_results.mean()
                     temp_stdev = cv_results.std()
 
-                    # Print results to screen
-                    if self.handler.config.is_verbose(): # TODO: print prettier
-                        print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:8.3f}{6:11.3f} {7:<30s}".
-                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,erocs,t,failure))
-
                     # Evaluate if feature selection changed accuracy or not. 
                     #rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(temp_score, rfe_score, num_features, max_features_selection, min_features_selection)
                     # Notice: Better or same score with less variables are both seen as an improvement,
@@ -1049,14 +1044,23 @@ class ModelHandler:
 
                     # Save result if it is the overall best (inside RFE-while)
                     # Notice the difference from above, here we demand a better score.
-                    if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev, erocs):
-                    #if temp_score > best_mean or (temp_score == best_mean and temp_stdev < best_std):
-                        trained_pipeline = current_pipeline
-                        best_algorithm = algorithm
-                        best_preprocessor = preprocessor
-                        best_mean = temp_score
-                        best_stdev = temp_stdev
-                        best_feature_selection = num_features
+                    try:
+                        if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev, erocs):
+                        #if temp_score > best_mean or (temp_score == best_mean and temp_stdev < best_std):
+                            trained_pipeline = current_pipeline
+                            best_algorithm = algorithm
+                            best_preprocessor = preprocessor
+                            best_mean = temp_score
+                            best_stdev = temp_stdev
+                            best_feature_selection = num_features
+                    except UnstableModelException as ex:
+                        if not failure:
+                            failure = "{0}: {1!r}".format(type(ex).__name__, ex.args)
+
+                    # Print results to screen
+                    if self.handler.config.is_verbose(): # TODO: print prettier
+                        print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:8.3f}{6:11.3f} {7:<30s}".
+                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,erocs,t,failure))
 
         updates = {"algorithm": best_algorithm, "preprocessor" : best_preprocessor, "num_selected_features": best_feature_selection}
         self.handler.config.update_attributes(type="mode", updates=updates)
@@ -1081,8 +1085,13 @@ class ModelHandler:
         return best_score, max_features, num_features
 
     def is_best_run_yet(self, current_mean: float, current_stdev: float, best_mean: float, best_stdev: float, eval_score: float = 0.0) -> bool:
-        """ Calculates if this round is better than any prior """
-
+        """ Calculates if this round is better than any prior 
+        But first check if performance is suspicios (only works for accuracy score) """
+        
+        if self.handler.config.get_scoring_mechanism() == Scoretype.accuracy.name and \
+            abs(current_mean - eval_score) > 2.0 * current_stdev:
+            raise UnstableModelException(f"Diff in performance for training and testing exceeds 2 stdev")
+        
         if current_mean < best_mean: # Obviously if current is less it's worse
             return False
         elif current_mean > best_mean: # If it is better, it is better
@@ -1131,7 +1140,7 @@ class ModelHandler:
         cv_results : ndarray
             The results from the cross-validation scoring
         """
-        exception = None
+        exception = ""
         try:
             # Apply feature selection to current model and number of features.
             modified_estimator = self.modify_algorithm(estimator, num_features, X, y)
@@ -1150,11 +1159,11 @@ class ModelHandler:
         except Exception as ex:
             cv_results = np.array([np.nan])
             if not GIVE_EXCEPTION_TRACEBACK:
-                exception = "{0}: {1!r}".format(type(ex).__name__, ex.args)
+                exception = str("{0}: {1!r}".format(type(ex).__name__, ex.args))
             else:
-                exception = traceback.format_exc()
+                exception = str(traceback.format_exc())
 
-        return current_pipeline, cv_results, str(exception)
+        return current_pipeline, cv_results, exception
  
     
     def modify_algorithm(self, estimator: Estimator, n_features_to_select: int, X: pandas.DataFrame, y: pandas.DataFrame) -> Estimator:
