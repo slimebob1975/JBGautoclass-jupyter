@@ -895,22 +895,24 @@ class ModelHandler:
         Y_train: pandas.DataFrame, X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None):
 
         exception = ""
-        score = -1.0
+        the_score = -1.0
         try:
             # First train model on whole of test data (no k-folded cross validation here)
             model.fit(X_train, Y_train)
 
-            # Evaluate on test_data
+            # Evaluate on test_data with correct scorer
             if X_test is not None and Y_test is not None:
-                score = model.score(X_test, Y_test)
+                scorer = self.handler.config.get_scoring_mechanism()
+                the_score = scorer(model, X_test, Y_test)
+                #the_score = model.score(X_test, Y_test)
         except Exception as ex:
-            score = np.nan
+            the_score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
                 exception = str("{0}: {1!r}".format(type(ex).__name__, ex.args))
             else:
                 exception = str(traceback.format_exc())
 
-        return model, score, exception
+        return model, the_score, exception
 
     # While more code, this should (hopefully) be easier to read
     def should_run_computation(self, current_algorithm: Algorithm, current_preprocessor: Preprocess) -> bool:
@@ -971,7 +973,7 @@ class ModelHandler:
         best_feature_selection = X_train.shape[1]
         first_round = True
         
-        self.handler.logger.print_table_row(items=["Algo","Pre","Comp","Train","Stdev","Score","Time","Except"], divisor="=")
+        self.handler.logger.print_table_row(items=["Algo","Pre","Comp","Train","Stdev","Test","Time","Except"], divisor="=")
 
         numMinorTasks = len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
@@ -1017,10 +1019,10 @@ class ModelHandler:
                         current_pipeline, cv_results, failure = \
                             self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
                         if X_test is not None and Y_test is not None:
-                            current_pipeline, erocs, failure = \
+                            current_pipeline, test_score, failure = \
                                 self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
                         else:
-                            erocs = 0.0
+                            test_score = 0.0
                     except ModelException:
                         # If any exceptions happen, continue to next step in the loop
                         break
@@ -1045,7 +1047,7 @@ class ModelHandler:
                     # Save result if it is the overall best (inside RFE-while)
                     # Notice the difference from above, here we demand a better score.
                     try:
-                        if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev, erocs):
+                        if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev, test_score):
                         #if temp_score > best_mean or (temp_score == best_mean and temp_stdev < best_std):
                             trained_pipeline = current_pipeline
                             best_algorithm = algorithm
@@ -1060,7 +1062,7 @@ class ModelHandler:
                     # Print results to screen
                     if self.handler.config.is_verbose(): # TODO: print prettier
                         print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:8.3f}{6:11.3f} {7:<30s}".
-                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,erocs,t,failure))
+                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,test_score,t,failure))
 
         updates = {"algorithm": best_algorithm, "preprocessor" : best_preprocessor, "num_selected_features": best_feature_selection}
         self.handler.config.update_attributes(type="mode", updates=updates)
@@ -1084,12 +1086,12 @@ class ModelHandler:
         # Too much reduced
         return best_score, max_features, num_features
 
-    def is_best_run_yet(self, current_mean: float, current_stdev: float, best_mean: float, best_stdev: float, eval_score: float = 0.0) -> bool:
+    def is_best_run_yet(self, current_mean: float, current_stdev: float, best_mean: float, best_stdev: float, eval_score: float) -> bool:
         """ Calculates if this round is better than any prior 
         But first check if performance is suspicios (only works for accuracy score) """
         
-        if self.handler.config.get_scoring_mechanism() == Scoretype.accuracy.name and \
-            abs(current_mean - eval_score) > 2.0 * current_stdev:
+        #if self.handler.config.get_scoring_mechanism() == Scoretype.accuracy.name and \
+        if abs(current_mean - eval_score) > 2.0 * current_stdev:
             raise UnstableModelException(f"Accuracy difference for cross evaluation and final test exceeds 2*stdev")
         
         if current_mean < best_mean: # Obviously if current is less it's worse

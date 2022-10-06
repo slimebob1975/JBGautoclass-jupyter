@@ -31,7 +31,9 @@ from sklearn.preprocessing import (Binarizer, MaxAbsScaler, MinMaxScaler,
 from sklearn.random_projection import GaussianRandomProjection
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import make_scorer, matthews_corrcoef
+from sklearn.metrics import (make_scorer, accuracy_score, balanced_accuracy_score,
+                             f1_score, recall_score, precision_score,
+                             matthews_corrcoef)
 
 from skclean.models import RobustForest
 from skclean.detectors import (KDN, ForestKDN, RkDN)
@@ -739,24 +741,48 @@ class Reduction(MetaEnum):
 
 
 class Scoretype(MetaEnum):
-    accuracy = "Accuracy"
-    balanced_accuracy = "Balanced Accuracy"
-    f1_micro = "Balanced F1 Micro"
-    f1_weighted = "Balanced F1 Weighted"
-    recall_micro = "Recall Micro"
-    recall_macro = "Recall Macro"
-    recall_weighted = "Recall Weighted"
-    precision_micro = "Precision Micro"
-    precision_macro = "Precision Macro"
-    precision_weighted = "Precision Weighted"
-    mcc = "Matthews Corr. Coefficient"
+    accuracy = {"full_name": "Accuracy", "callable": accuracy_score, "kwargs": None}
+    balanced_accuracy = {"full_name": "Balanced Accuracy", "callable": balanced_accuracy_score, "kwargs": None}
+    f1_micro = {"full_name": "Balanced F1 Micro", "callable": f1_score, "kwargs": {"average": 'micro'}}
+    f1_weighted = {"full_name": "Balanced F1 Weighted", "callable": f1_score, "kwargs": {"average": 'weighted'}}
+    recall_micro = {"full_name": "Recall Micro", "callable": recall_score, "kwargs": {"average": 'micro'}}
+    recall_macro = {"full_name": "Recall Macro", "callable": recall_score, "kwargs": {"average": 'macro'}}
+    recall_weighted = {"full_name": "Recall Weighted", "callable": recall_score, "kwargs": {"average": 'weighted'}}
+    precision_micro = {"full_name": "Precision Micro", "callable": precision_score, "kwargs": {"average": 'micro'}}
+    precision_macro = {"full_name": "Precision Macro", "callable": precision_score, "kwargs": {"average": 'macro'}}
+    precision_weighted = {"full_name": "Precision Weighted", "callable": precision_score, "kwargs": {"average": 'weighted'}}
+    mcc = {"full_name":"Matthews Corr. Coefficient", "callable": matthews_corrcoef, "kwargs": None}
 
+    @property
+    def callable(self):
+        if isinstance(self.value, dict):
+            return self.value.get("callable")
+
+        return None
+
+    @property
+    def kwargs(self):
+        if isinstance(self.value, dict):
+            return self.value.get("kwargs")
+
+        return None
+    
     def get_mechanism(self) -> Union[str, Callable]:
         """ Returns the scoring mechanism based on the Scoretype"""
-        if self == Scoretype.mcc:
-            return make_scorer(matthews_corrcoef)
+        return self.get_parametrized_scorer()
+        
+        #if self == Scoretype.mcc:
+        #    return make_scorer(matthews_corrcoef)
+        #
+        #return self.name
 
-        return self.name
+    def get_parametrized_scorer(self) -> Callable:
+        """ Returns a scorer callable based on the Scoretype """
+        
+        if self.kwargs:
+            return make_scorer(self.callable, **(self.kwargs))
+        else:
+            return make_scorer(self.callable)
 
 T = TypeVar('T', bound='Config')
 
