@@ -1086,24 +1086,24 @@ class ModelHandler:
         # Too much reduced
         return best_score, max_features, num_features
 
-    def is_best_run_yet(self, train_mean_score: float, train_stdev: float, best_mean: float, best_stdev: float, test_score: float) -> bool:
+    def is_best_run_yet(self, train_score: float, train_stdev: float, best_score: float, best_stdev: float, test_score: float) -> bool:
         """ Calculates if this round is better than any prior 
         But first check if performance is suspicios (only works for accuracy score) """
         
         #if self.handler.config.get_scoring_mechanism() == Scoretype.accuracy.name and \
-        if abs(train_mean_score - test_score) > 2.0 * train_stdev:
+        if abs(train_score - test_score) > 2.0 * train_stdev:
             raise UnstableModelException(f"Accuracy difference for cross evaluation and final test exceeds 2*stdev")
         
-        if train_mean_score < best_mean:   # Obviously if current is less it's worse
+        if train_score < best_score:   # Obviously if current is less it's worse
             return False
-        elif train_mean_score > best_mean: # If it is better, it is better
+        elif train_score > best_score: # If it is better, it is better
             return True
-        elif train_stdev < best_stdev:     # From here it is comparable and with lower standard deviation it is also better
+        elif train_stdev < best_stdev: # From here it is comparable and with lower standard deviation it is also better
             return True                   
-        elif test_score > best_mean:       # With higher score on test data, is is also better (even though we ignore stdev)
+        elif test_score > best_score:  # With higher score on test data, is is also better (even though we ignore stdev)
             return True
         else:
-            return False                   # Comparable, but it fails in the end since no better stdev or better of eval data
+            return False               # Comparable, but it fails in the end since no better stdev or better on evaluation data
 
     def create_pipeline_and_cv(self, algorithm: Algorithm, preprocessor: Preprocess, estimator: Estimator, transform: Transform, kfold: StratifiedKFold, X: pandas.DataFrame, y: pandas.DataFrame, num_features: int):
         """ The flow for each algorithm-preprocessor pair, broken out to simplify testing
