@@ -71,11 +71,25 @@ class DataLayerBase:
 
         if preface:
             models = preface
-        for file in os.listdir(model_path):
-            if file[-len(model_file_extension):] == model_file_extension:
-                models.append(file)
+        
+        if os.path.exists(model_path):
+            for file in os.listdir(model_path):
+                if file[-len(model_file_extension):] == model_file_extension:
+                    models.append(file)
 
         return models
+
+    def get_catalogs_as_options(self) -> list:
+        """ Used in the GUI, to get the databases """
+        raise NotImplementedError
+
+    def get_tables_as_options(self) -> list:
+        """ Used in the GUI, to get the tables """
+        raise NotImplementedError
+
+    def get_id_columns(self, **kwargs) -> list:
+        """ Used in the GUI, gets name and type for columns """
+        raise NotImplementedError
 
     def get_data_from_query(self, query:str) -> list:
         """ Parses data returned from data source """

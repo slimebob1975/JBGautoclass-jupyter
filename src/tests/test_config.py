@@ -2,7 +2,7 @@ import os
 from typing import Callable
 from path import Path
 import pytest
-from Config import (Algorithm, Config, Detector, Preprocess, Reduction, Scoretype)
+from Config import (Algorithm, Config, Detector, Preprocess, Reduction, ScoreMetric)
 from IAFExceptions import ConfigException
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -44,7 +44,7 @@ def valid_iris_config() -> Config:
             preprocessor=Preprocess.STA,
             feature_selection=Reduction.PCA,
             num_selected_features=None,
-            scoring=Scoretype.accuracy,
+            scoring=ScoreMetric.accuracy,
             max_iterations=20000
         ),
         Config.IO(
@@ -98,7 +98,7 @@ def bare_iris_config() -> Config:
             preprocessor=Preprocess.STA,
             feature_selection=Reduction.PCA,
             num_selected_features=None,
-            scoring=Scoretype.accuracy,
+            scoring=ScoreMetric.accuracy,
             max_iterations=20000
         ),
         Config.IO(
@@ -161,7 +161,7 @@ def saved_with_valid_iris_config() -> Config:
             preprocessor=Preprocess.STA,
             feature_selection=Reduction.PCA,
             num_selected_features=None,
-            scoring=Scoretype.accuracy,
+            scoring=ScoreMetric.accuracy,
             max_iterations=20000
         ),
         Config.IO(
@@ -468,13 +468,9 @@ class TestConfig:
         assert loaded_config == valid_iris_config
 
     def test_scoring_mechanism(self):
-        """ This has two results: string or Callable """
+        """ This returns a Callable """
 
         config = Config() # By default as Scorertype.accuracy
-        assert config.get_scoring_mechanism() == "accuracy"
-
-        # Will return a Callable
-        config.mode.scoring = Scoretype.mcc
         assert isinstance(config.get_scoring_mechanism(), Callable)
 
     def test_update_configuration(self, valid_iris_config):
@@ -706,13 +702,13 @@ class TestReduction:
         # When sorted, NONE is first
         assert sorted_list_all_first[0] == ("None", "NON")
 
-class TestScoretype:
-    """ Tests the Enum Scoretype functions """
+class TestScoreMetric:
+    """ Tests the Enum ScoreMetric functions """
     def test_get_sorted_list(self):
         """ This function gives a list of tuples: (value, name) """
-        # For Scoretype there is no difference between these two, as there is no NON or ALL
-        sorted_list_default = Scoretype.get_sorted_list(none_all_first=False)
-        sorted_list_all_first = Scoretype.get_sorted_list()
+        # For ScoreMetric there is no difference between these two, as there is no NON or ALL
+        sorted_list_default = ScoreMetric.get_sorted_list(none_all_first=False)
+        sorted_list_all_first = ScoreMetric.get_sorted_list()
 
         assert sorted_list_default == sorted_list_all_first
         assert len(sorted_list_default) == 11

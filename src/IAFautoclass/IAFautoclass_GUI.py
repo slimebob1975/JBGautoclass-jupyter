@@ -12,9 +12,10 @@ from typing import Callable
 import ipywidgets as widgets
 from sklearn.utils import Bunch
 
-base_dir = os.path.dirname(os.path.realpath(__file__))
+src_dir = os.path.dirname(os.path.realpath(__file__))
 env_path = os.path.join(os.getcwd(), '.env')
-sys.path.append(base_dir)
+
+sys.path.append(src_dir)
 
 from dotenv import load_dotenv
 
@@ -22,17 +23,9 @@ import Helpers
 from IAFExceptions import DataLayerException
 from IAFLogger import IAFLogger
 import IAFautomaticClassifier as autoclass
-from Config import Algorithm, Config, Preprocess, Reduction, Scoretype
+from Config import Algorithm, Config, Preprocess, Reduction, ScoreMetric
 from SQLDataLayer import DataLayer
-
-if os.path.isfile(env_path):
-    load_dotenv(env_path)  # take environment variables from .env
-else:
-    raise FileNotFoundError(
-        errno.ENOENT, 
-        os.strerror(errno.ENOENT), 
-        env_path
-    )
+from GUI.Widgets import Widgets
 
 # Class definition for the GUI
 class IAFautoclass_GUI:
@@ -51,12 +44,13 @@ class IAFautoclass_GUI:
     TEXT_WIDGET_LIMIT = 30
     TEXT_AREA_LIMIT = 60
     NULL = "NULL"
-    IMAGE_FILE = base_dir + "/images/iaf-logo.png"
+    IMAGE_FILE = src_dir + "/images/iaf-logo.png"
     TEXT_DATATYPES = ["nvarchar", "varchar", "char", "text", "enum", "set"]
 
 
     # Constructor
     def __init__(self):
+        self.widgets = Widgets(src_path=Path(src_dir), GUIhandler=self)
         self.config = None
         # The classifier object is a data element in our GUI
         self.the_classifier = None
@@ -72,14 +66,14 @@ class IAFautoclass_GUI:
         self.classifier_datalayer = None
 
         # This datalayer object only works with the GUI
-        self.gui_datalayer = None
+        self.gui_datalayer = None 
         
         # Keep track of if this is a rerun or not
         self.rerun = False
         # All the widgets moved into this function to be able to be hidden easier
-        self.setup_GUI()
+        #self.setup_GUI()
         
-        self.logger = IAFLogger(False, (self.progress_bar, self.progress_label))
+        self.logger = IAFLogger(False, self.widgets.progress)
         
         config = Config(
             connection=Config.Connection(
@@ -96,11 +90,12 @@ class IAFautoclass_GUI:
         if not self.gui_datalayer.can_connect(verbose=True):
             sys.exit("GUI class could not connect to Server")
         
+        self.widgets.load_contents(self.gui_datalayer)
         # Update databases list
-        self.update_databases()
+        #self.update_databases()
         
-        self.update_algorithm_form()
-                
+        
+           
     # Destructor
     def __del__(self):
         pass
@@ -122,6 +117,14 @@ class IAFautoclass_GUI:
             value = "*** Welcome to IAF automatic classification! ***"
         )
         
+        self.display_data_settings()
+        
+        self.display_classifier_settings()
+        
+        self.display_classifier()
+
+    def display_data_settings(self) -> None:
+        """ Widgets to select the data to classify """
         # Project element data element
         self.project = widgets.Text(
             value = 'default',
@@ -220,7 +223,9 @@ class IAFautoclass_GUI:
             tooltip='Continue with the process using these settings',
             icon='check' 
         )
-        
+
+    def display_classifier_settings(self) -> None:
+        """ Displays the various settings for the classifier """
         # Checkboxes for different model modes
         self.train_checkbox = widgets.Checkbox(
             value = False,
@@ -429,6 +434,8 @@ class IAFautoclass_GUI:
             icon='check' 
         )
         
+    def display_classifier(self) -> None:
+        """ Final part, shows progress bar and built-in terminal """
         # A progress bar that displays the computational process
         self.progress_bar = widgets.FloatProgress(
             value=0.0,
@@ -458,7 +465,7 @@ class IAFautoclass_GUI:
             value = "No mispredicted training data was detected yet",
             description_tooltip = 'Use to manually inspect and correct mispredicted training data'
         )
-    
+
     # Internal methods used to populate or update widget settings
     def update_dropdown(self, name: str, options: list, default: str, disabled: bool, observer: Callable = None) -> None:
         if not hasattr(self, name):
@@ -475,7 +482,7 @@ class IAFautoclass_GUI:
         
 
     def update_databases(self) -> None:
-        database_list = self.gui_datalayer.get_databases()
+        database_list = self.gui_datalayer.get_catalogs_as_options()
         self.update_dropdown("database_dropdown", database_list, database_list[0], False, self.update_tables)
 
                 
@@ -624,7 +631,50 @@ class IAFautoclass_GUI:
             self.continuation_button.disabled = False
             self.continuation_button.on_click(callback=self.continuation_button_was_clicked)
         else:
-            self.continuation_button.disabled = True
+            self.continuation_button.disabled = True    
+
+    # TODO: This is called from Widgets.update_class_summary
+    def get_class_distribution(self, data_settings: dict) -> dict:
+        """ Widgets does not need to know about Classifier Datalayer """
+        datalayer = self.get_new_classifier_datalayer(data_settings=data_settings, early=True)
+        try:
+            distribution = datalayer.count_class_distribution()
+        except DataLayerException as e:
+            self.logger.abort_cleanly(str(e))
+
+        return distribution
+
+    def get_new_classifier_datalayer(self, data_settings: dict, early: bool = False) -> DataLayer:
+        """ This will create or update the layer, and should probably also include the start_classifier() stuff
+        """
+        if not self.classifier_datalayer:
+            connection = Config.Connection(
+                    odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
+                    host = os.environ.get("DEFAULT_HOST"),
+                    class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
+                    class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
+                    trusted_connection = True,
+                    data_catalog = data_settings["data"]["catalog"],
+                    data_table = data_settings["data"]["table"],
+                    class_column = data_settings["columns"]["class"], 
+                    data_text_columns =  data_settings["columns"]["data_text"], 
+                    data_numerical_columns = data_settings["columns"]["data_numerical"], 
+                    id_column = data_settings["columns"]["id"]
+                )
+
+            self.classifier_datalayer = DataLayer(Config(connection), self.logger)
+        else:
+            if early: # before the classifier_datalayer is completed
+                updated_columns = {
+                    "class_column": data_settings["columns"]["class"], 
+                    "data_text_columns":  data_settings["columns"]["data_text"], 
+                    "data_numerical_columns": data_settings["columns"]["data_numerical"], 
+                    "id_column": data_settings["columns"]["id"]
+                }
+                self.classifier_datalayer.config.update_connection_columns(updated_columns)
+
+        return self.classifier_datalayer
+
 
     def get_classifier_datalayer(self, early = False) -> DataLayer:
         """ This will create or update the layer, and should probably also include the start_classifier() stuff
@@ -666,7 +716,7 @@ class IAFautoclass_GUI:
         current_class = self.class_column.value
         datalayer = self.get_classifier_datalayer(early=True)
         try:
-             distrib = datalayer.count_class_distribution()
+            distrib = datalayer.count_class_distribution()
         except DataLayerException as e:
             self.logger.abort_cleanly(str(e))
         except Exception as e:
@@ -675,7 +725,8 @@ class IAFautoclass_GUI:
         
         new_text = f"Class column: '{current_class}', with distribution: {str(distrib)[1:-1]}, in total: {sum(distrib.values())} rows"
         self.class_summary_text.value = new_text
-        
+
+
     def continuation_button_was_clicked(self, event: Bunch) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
         self.lock_observe_1 = True
@@ -727,7 +778,7 @@ class IAFautoclass_GUI:
         self.reduction_dropdown.options = Reduction.get_sorted_list()
         self.algorithm_dropdown.options = Algorithm.get_sorted_list()
         self.preprocessor_dropdown.options = Preprocess.get_sorted_list()
-        self.metric_dropdown.options = Scoretype.get_sorted_list()
+        self.metric_dropdown.options = ScoreMetric.get_sorted_list()
         
         
     def update_num_rows(self):
@@ -795,7 +846,7 @@ class IAFautoclass_GUI:
                 preprocessor = Preprocess[self.preprocessor_dropdown.value],
                 feature_selection = Reduction[self.reduction_dropdown.value],
                 num_selected_features = None,
-                scoring = Scoretype[self.metric_dropdown.value],
+                scoring = ScoreMetric[self.metric_dropdown.value],
                 max_iterations = self.iterations_slider.value
             ),
             "io": Config.IO(
@@ -867,6 +918,8 @@ class IAFautoclass_GUI:
             self.classifier_datalayer.correct_mispredicted_data(new_class, new_index)
 
     def display_gui(self) -> None:
+        self.widgets.display_gui()
+        return
         elements = [
             "logo",
             "welcome",
@@ -892,8 +945,20 @@ class IAFautoclass_GUI:
         
 
 def main():
+    load_dotenv()
     gui = IAFautoclass_GUI()
+    gui.display_gui()
 
 
 if __name__ == "__main__":
     main()
+else:
+    if os.path.isfile(env_path):
+        load_dotenv(env_path)  # take environment variables from .env
+    else:
+        raise FileNotFoundError(
+            errno.ENOENT, 
+            os.strerror(errno.ENOENT), 
+            env_path
+        )
+

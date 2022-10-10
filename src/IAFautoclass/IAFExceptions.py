@@ -25,3 +25,7 @@ class DataLayerException(Exception):
 class ConfigException(Exception):
     def __init__(self, message):
         super().__init__(f"ConfigException: {message}")
+
+class GuiWidgetsException(Exception):
+    def __init__(self, message):
+        super().__init__(f"GuiWidgetsException: {message}")

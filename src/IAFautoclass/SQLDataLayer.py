@@ -93,12 +93,12 @@ class DataLayer(DataLayerBase):
 
         raise DataLayerException(f"Defined query type {type} does not exist")
 
-    def get_databases(self) -> list:
+    def get_catalogs_as_options(self) -> list:
         """ Used in the GUI, to get the databases """
 
         return self.get_gui_list("databases", "{}")
 
-    def get_tables(self) -> list:
+    def get_tables_as_options(self) -> list:
         """ Used in the GUI, to get the tables """
         return self.get_gui_list("tables", "{}.{}")
 
@@ -205,9 +205,9 @@ class DataLayer(DataLayerBase):
         """ Builds the query for class=>rows """
         c_column = self.config.get_class_column_name()
         
-        select = f"SELECT {c_column}, COUNT(*) FROM {self.config.connection.get_formatted_data_table()}"
+        select = f"SELECT [{c_column}], COUNT(*) FROM {self.config.connection.get_formatted_data_table()}"
 
-        query = f"{select} GROUP BY {c_column} ORDER BY {c_column} DESC"
+        query = f"{select} GROUP BY [{c_column}] ORDER BY [{c_column}] DESC"
 
         return query
 

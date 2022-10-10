@@ -740,7 +740,7 @@ class Reduction(MetaEnum):
         return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
 
 
-class Scoretype(MetaEnum):
+class ScoreMetric(MetaEnum):
     accuracy = {"full_name": "Accuracy", "callable": accuracy_score, "kwargs": None}
     balanced_accuracy = {"full_name": "Balanced Accuracy", "callable": balanced_accuracy_score, "kwargs": None}
     f1_micro = {"full_name": "Balanced F1 Micro", "callable": f1_score, "kwargs": {"average": 'micro'}}
@@ -768,16 +768,11 @@ class Scoretype(MetaEnum):
         return None
     
     def get_mechanism(self) -> Union[str, Callable]:
-        """ Returns the scoring mechanism based on the Scoretype"""
+        """ Returns the scoring mechanism based on the ScoreMetric"""
         return self.get_parametrized_scorer()
-        
-        #if self == Scoretype.mcc:
-        #    return make_scorer(matthews_corrcoef)
-        #
-        #return self.name
 
     def get_parametrized_scorer(self) -> Callable:
-        """ Returns a scorer callable based on the Scoretype """
+        """ Returns a scorer callable based on the ScoreMetric """
         
         if self.kwargs:
             return make_scorer(self.callable, **(self.kwargs))
@@ -796,8 +791,11 @@ class Config:
     LOWER_LIMIT_REDUCTION = 100
     NON_LINEAR_REDUCTION_COMPONENTS = 2
 
-    DEFAULT_MODELS_PATH =  ".\\src\\IAFautoclass\\model\\"
+    DEFAULT_MODELS_PATH =  ".\\model\\"
     DEFAULT_MODEL_EXTENSION = ".sav"
+    DEFAULT_TRAIN_OPTION = "Train a new model"
+
+    TEXT_DATATYPES = ["nvarchar", "varchar", "char", "text", "enum", "set"]
 
     TEMPLATE_TAGS = {
         "name": "<name>",
@@ -1076,7 +1074,7 @@ class Config:
         preprocessor: Preprocess = Preprocess.NON
         feature_selection: Reduction = Reduction.NON
         num_selected_features: int = None
-        scoring: Scoretype = Scoretype.accuracy
+        scoring: ScoreMetric = ScoreMetric.accuracy
         max_iterations: int = None
 
         def validate(self) -> None:
@@ -1417,7 +1415,7 @@ class Config:
                 preprocessor=Preprocess[module.mode["preprocessor"]],
                 feature_selection=Reduction[module.mode["feature_selection"]],
                 num_selected_features=num_selected_features,
-                scoring=Scoretype[module.mode["scoring"]],
+                scoring=ScoreMetric[module.mode["scoring"]],
                 max_iterations=max_iterations
             ),
             Config.IO(
@@ -1480,7 +1478,7 @@ class Config:
                 preprocessor=Preprocess[module.mode["preprocessor"]],
                 feature_selection=Reduction[module.mode["feature_selection"]],
                 num_selected_features=num_selected_features,
-                scoring=Scoretype[module.mode["scoring"]],
+                scoring=ScoreMetric[module.mode["scoring"]],
                 max_iterations=max_iterations
             ),
             Config.IO(
@@ -1708,7 +1706,11 @@ class Config:
             return SMOTE(sampling_strategy='auto')
 
         return None
-        
+    
+    def use_smote(self) -> bool:
+        """ Simple check if it's used or note """
+        return self.mode.smote
+    
     def get_undersampler(self) -> Union[RandomUnderSampler, None]:
         """ Gets the UnderSampler, or None if there should be none"""
         if self.mode.undersample:
@@ -1716,6 +1718,11 @@ class Config:
 
         return None
 
+    def use_undersample(self) -> bool:
+        """ Simple check if it's used or note """
+        return self.mode.undersample
+    
+    
     def set_num_selected_features(self, num_features: int) -> None:
         """ Updates the config with the number """
         self.mode.num_selected_features = num_features

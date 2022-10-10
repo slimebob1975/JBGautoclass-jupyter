@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import SQLDataLayer
 
-from Config import Config, Algorithm, Preprocess, Reduction, Scoretype
+from Config import Config, Algorithm, Preprocess, Reduction, ScoreMetric
 
 
 class MockLogger():
@@ -75,7 +75,7 @@ def valid_iris_config() -> Config:
             preprocessor=Preprocess.STA,
             feature_selection=Reduction.PCA,
             num_selected_features=None,
-            scoring=Scoretype.accuracy,
+            scoring=ScoreMetric.accuracy,
             max_iterations=20000
         ),
         Config.IO(

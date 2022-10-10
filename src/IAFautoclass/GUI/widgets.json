@@ -1,0 +1,11 @@
+{
+    "project": {
+        "type": "Text",
+        "params": {
+            "value": "default",
+            "placeholder": "Project name",
+            "description": "Project name:",
+            "description_tooltip": "Enter a distinct project name for the model"
+        }
+    }
+}

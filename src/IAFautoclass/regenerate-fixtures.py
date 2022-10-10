@@ -1,6 +1,6 @@
 import os
 import pickle
-from Config import Config, Algorithm, Preprocess, Reduction, Scoretype
+from Config import Config, Algorithm, Preprocess, Reduction, ScoreMetric
 
 """ This is a script to quick-and-dirty regenerate some fixtures that might be annoying otherwise
 
@@ -49,7 +49,7 @@ def bare_iris_config() -> Config:
             preprocessor=Preprocess.STA,
             feature_selection=Reduction.PCA,
             num_selected_features=None,
-            scoring=Scoretype.accuracy,
+            scoring=ScoreMetric.accuracy,
             max_iterations=20000
         ),
         Config.IO(

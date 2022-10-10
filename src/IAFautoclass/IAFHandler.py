@@ -27,7 +27,7 @@ from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
 
-from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform, Scoretype
+from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
 from IAFExceptions import DatasetException, ModelException, HandlerException, UnstableModelException
 import Helpers
 
@@ -1090,7 +1090,7 @@ class ModelHandler:
         """ Calculates if this round is better than any prior 
         But first check if performance is suspicios (only works for accuracy score) """
         
-        #if self.handler.config.get_scoring_mechanism() == Scoretype.accuracy.name and \
+        #if self.handler.config.get_scoring_mechanism() == ScoreMetric.accuracy.name and \
         if abs(train_score - test_score) > 2.0 * train_stdev:
             raise UnstableModelException(f"Accuracy difference for cross evaluation and final test exceeds 2*stdev")
         
