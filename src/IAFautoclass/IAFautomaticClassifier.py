@@ -22,28 +22,16 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
     
 # General imports
 import time
-import warnings
 from datetime import datetime, timedelta
-#import ipywidgets as widgets
 
 import pandas
 from pandas import DataFrame, concat
-from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
 
 # Imports of local help class for communication with SQL Server
 import Config
 import SQLDataLayer
 import IAFLogger
 from IAFHandler import IAFHandler
-
-# Sklearn issue a lot of warnings sometimes, we suppress them here
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=FitFailedWarning)
-warnings.filterwarnings("ignore", category=ConvergenceWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-#warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
 
 class IAFautomaticClassiphyer:
 
@@ -214,13 +202,7 @@ class IAFautomaticClassiphyer:
                 
                 ph.make_predictions(mh.model.model, dh.X_validation, dh.classes, dh.Y_validation)
                 
-                self.logger.print_training_rates(ph)
-                
-                # Evaluate predictions (optional)
-                ph.evaluate_predictions(dh.Y_validation, "ML algorithm: " + mh.model.get_name())
-
-                # Get accumulated classification score report for all predictions
-                self.logger.print_classification_report(*ph.get_classification_report(dh.Y_validation, mh.model))
+                ph.report_results(dh.Y_validation, mh.model)
                 
 
             self.update_progress(percent=self.progression["percentPerMajorTask"])
