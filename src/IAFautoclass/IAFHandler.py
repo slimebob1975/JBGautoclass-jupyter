@@ -31,22 +31,18 @@ from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transf
 from IAFExceptions import DatasetException, ModelException, HandlerException, UnstableModelException
 import Helpers
 
-# Sklearn issue a lot of warnings sometimes, we suppress them here
-import warnings
-from sklearn.exceptions import FitFailedWarning, ConvergenceWarning
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=FitFailedWarning)
-warnings.filterwarnings("ignore", category=ConvergenceWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-
 GIVE_EXCEPTION_TRACEBACK = False
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
     def print_info(self, *args) -> None:
         """printing info"""
+
+    def print_always(self, *args) -> None:
+        """ This ignores the quiet flag and should always be printed out """
+
+    def print_prediction_report(self) -> None:
+        """ Printing out info about the prediction"""
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
         """Printing progress"""
@@ -69,8 +65,20 @@ class Logger(Protocol):
     def print_table_row(self, items: list[str], divisor: str = None) -> None:
         """ Prints row of items, with optional divisor"""
 
+    def print_result_line(self, algorithm_name: str, preprocessor_name: str, num_features: float, temp_score, temp_stdev, test_score, t, failure:str) -> None:
+        """ Prints information about a specific result line """
+
     def abort_cleanly(self, message: str) -> None:
         """ Exits the process """
+
+    def print_dragon(self, exception: Exception) -> None:
+        """ Type of Unhandled Exceptions, to handle them for the future """
+
+    def print_training_rates(self, ph) -> None:
+        """ Prints a report on the training rates """
+
+    def print_classification_report(self, report: dict, model: Model, num_features: int):
+        """ Should only be printed if verbose """
 
 class DataLayer(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -273,7 +281,7 @@ class IAFHandler:
             )
             
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.logger.print_dragon(exception=e)
             raise HandlerException(e)
         
         saved_query = self.datalayer.get_sql_command_for_recently_classified_data(results_saved)
@@ -327,7 +335,7 @@ class DatasetHandler:
         try:
             data = self.handler.get_dataset()
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.handler.logger.print_dragon(exception=e)
             raise DatasetException(e)
 
         if data is None:
@@ -364,7 +372,7 @@ class DatasetHandler:
         try:
             dataset.astype({class_column: 'str'}, copy=False)
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
             
         # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
@@ -391,7 +399,7 @@ class DatasetHandler:
                         if checked_item != item:
                             dataset.at[index,key] = checked_item
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Something went wrong in inconsistency check at {key}: {item} ({e})")
 
         return dataset
@@ -423,14 +431,14 @@ class DatasetHandler:
         try:
             keys = dataset[id_column].copy(deep = True).apply(Helpers.get_rid_of_decimals)
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not convert to integer: {e}")
             
         
         try:
             dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True, verify_integrity=False)
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not set index for dataset: {e}")
         
         dataset = dataset.drop([id_column], axis = 1)
@@ -862,7 +870,7 @@ class ModelHandler:
             self.model = self.get_model_from(X_train, Y_train, X_test, Y_test)
     
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training model: {str(e)}")
 
         self.save_model_to_file(self.handler.config.get_model_filename())
@@ -885,7 +893,7 @@ class ModelHandler:
         try:
             model.fit(X, Y)
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model: {str(e)}")
             
         return model
@@ -967,7 +975,7 @@ class ModelHandler:
             #if k < 2: # What to do?
             kfold = StratifiedKFold(n_splits=k, random_state=1, shuffle=True)
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"StratifiedKfold raised an exception with message: {e}")
         
         best_feature_selection = X_train.shape[1]
@@ -1018,6 +1026,7 @@ class ModelHandler:
                     try:
                         current_pipeline, cv_results, failure = \
                             self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
+                        
                         if X_test is not None and Y_test is not None:
                             current_pipeline, test_score, failure = \
                                 self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
@@ -1060,9 +1069,17 @@ class ModelHandler:
                             failure = "{0}: {1!r}".format(type(ex).__name__, ex.args)
 
                     # Print results to screen
-                    if self.handler.config.is_verbose(): # TODO: print prettier
-                        print("{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:8.3f}{6:11.3f} {7:<30s}".
-                                format(algorithm.name,preprocessor.name,num_features,temp_score,temp_stdev,test_score,t,failure))
+                    self.handler.logger.print_result_line(
+                        algorithm.name,
+                        preprocessor.name,
+                        num_features,
+                        temp_score,
+                        temp_stdev,
+                        test_score,
+                        t,
+                        failure
+                    )
+                    
 
         updates = {"algorithm": best_algorithm, "preprocessor" : best_preprocessor, "num_selected_features": best_feature_selection}
         self.handler.config.update_attributes(type="mode", updates=updates)
@@ -1090,7 +1107,6 @@ class ModelHandler:
         """ Calculates if this round is better than any prior 
         But first check if performance is suspicios (only works for accuracy score) """
         
-        #if self.handler.config.get_scoring_mechanism() == ScoreMetric.accuracy.name and \
         if abs(train_score - test_score) > 2.0 * train_stdev:
             raise UnstableModelException(f"Accuracy difference for cross evaluation and final test exceeds 2*stdev")
         
@@ -1346,14 +1362,24 @@ class PredictionsHandler:
     def get_mispredicted_dataframe(self) -> pandas.DataFrame:
         return self.X_most_mispredicted
 
-    # Evaluate predictions
-    def evaluate_predictions(self, Y, message="Unknown") -> None:
-        self.handler.logger.print_progress(message="Evaluate predictions")
-                
-        self.handler.logger.print_info(f"Evaluation performed with evaluation data: " + message)
-        self.handler.logger.print_info(f"Accuracy score for evaluation data: {accuracy_score(Y, self.predictions)}")
-        self.handler.logger.print_info(f"Confusion matrix for evaluation data: \n\n{confusion_matrix(Y, self.predictions)}")
-        self.handler.logger.print_info(f"Classification matrix for evaluation data: \n\n{classification_report(Y, self.predictions, zero_division='warn')}")
+    def report_results(self, Y, model) -> None:
+        """ Prints the various informations """
+        self.handler.logger.print_training_rates(self)
+        
+        # Evaluate predictions (optional)
+        evaluation_data = "ML algorithm: " + model.get_name()
+        accuracy = accuracy_score(Y, self.predictions)
+        con_matrix = confusion_matrix(Y, self.predictions)
+        class_matrix = classification_report(Y, self.predictions, zero_division='warn')
+        self.handler.logger.print_prediction_report(
+            evaluation_data=evaluation_data,
+            accuracy_score=accuracy,
+            confusion_matrix=con_matrix,
+            classification_matrix=class_matrix
+        )
+
+        # Get accumulated classification score report for all predictions
+        self.handler.logger.print_classification_report(*self.get_classification_report(Y, model))
 
     # Evaluates mispredictions
     def evaluate_mispredictions(self, misplaced_filepath: str) -> None:
@@ -1361,7 +1387,8 @@ class PredictionsHandler:
         if self.X_most_mispredicted.empty or not self.handler.config.should_display_mispredicted():
             return
         
-        self.handler.logger.print_info(f"Total number of mispredicted elements: {self.num_mispredicted}")
+        self.handler.logger.print_always(f"Total number of mispredicted elements: {self.num_mispredicted}")
+        
         joiner = self.handler.config.get_id_column_name() + " = \'"
         most_mispredicted_query = read_data_query + "WHERE " +  joiner \
             + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
@@ -1380,7 +1407,6 @@ class PredictionsHandler:
     
     # Make predictions on dataset
     def make_predictions(self, model: Pipeline, X: pandas.DataFrame, classes: pandas.Series, Y: pandas.DataFrame) -> bool:
-        print(Y)
         could_predict_proba = False
         try:
             predictions = model.predict(X)
@@ -1489,8 +1515,7 @@ class PredictionsHandler:
             
             return
         
-        #
-        self.handler.logger.print_info(f"Accuracy score for {what_model}: {accuracy_score(Y, Y_pred)}")
+        self.handler.logger.print_always(f"Accuracy score for {what_model}: {accuracy_score(Y, Y_pred)}")
 
         # Select the found mispredicted data
         X_mispredicted = X_transformed.loc[X_not]

@@ -1,5 +1,6 @@
 from datetime import datetime
 import sys
+from numpy import ndarray
 import pandas
 import terminal
 from typing import Protocol
@@ -60,6 +61,20 @@ class IAFLogger(terminal.Logger):
 
     def print_info(self, *args) -> None:
         self.print_unformatted(' '.join(args))
+
+    def print_always(self, *args) -> None:
+        """ This ignores the quiet flag and should always be printed out """
+        
+        return self.writeln("always", *args)
+
+    def print_prediction_report(self, evaluation_data: str, accuracy_score: float, confusion_matrix: ndarray, classification_matrix: str) -> None:
+        """ Printing out info about the prediction"""
+        self.print_progress(message="Evaluate predictions")
+
+        self.print_always(f"Evaluation performed with evaluation data: " + evaluation_data)
+        self.print_always(f"Accuracy score for evaluation data: {accuracy_score}")
+        self.print_always(f"Confusion matrix for evaluation data: \n\n{confusion_matrix}")
+        self.print_always(f"Classification matrix for evaluation data: \n\n{classification_matrix}")
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
         if message is not None:
@@ -146,6 +161,10 @@ class IAFLogger(terminal.Logger):
         self.print_unformatted(skew, "\n")
 
     def print_classification_report(self, report: dict, model: Model, num_features: int):
+        """ Should only be printed if verbose """
+        if self._enable_quiet:
+            return self
+
         self.start(f"Classification report for {model.algorithm.name}/{model.preprocess.name} with #features: {num_features}")
         for key, value in report.items():
             self.print_unformatted(f"{key}: {value}")
@@ -158,6 +177,21 @@ class IAFLogger(terminal.Logger):
     def print_query(self, type: str, query: str) -> None:
         message = f"Query for {type}: {query}"
         self.debug(message)
+
+    def print_dragon(self, exception: Exception) -> None:
+        """ Type of Unhandled Exceptions, to handle them for the future """
+        message = f"Here be dragons: {type(exception)}"
+        self.print_warning(message)
+    
+    def print_result_line(self, algorithm_name: str, preprocessor_name: str, num_features: float, temp_score, temp_stdev, test_score, t, failure:str) -> None:
+        """ Prints information about a specific result line """
+        if self._enable_quiet:
+            return self
+
+        print(
+            "{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:8.3f}{6:11.3f} {7:<30s}".
+                                format(algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure)
+        )
 
     # This is to avoid the annoying "info:" in front of all lines. Debug/warning/Error should still use the normal
     def print_unformatted(self, *args) -> None:

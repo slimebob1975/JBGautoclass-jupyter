@@ -23,6 +23,9 @@ class Logger(Protocol):
     def print_query(self, type: str, query: str) -> None:
         """ Prints a query """
 
+    def print_dragon(self, exception: Exception) -> None:
+        """ Type of Unhandled Exceptions, to handle them for the future """
+
 class Config(Protocol):
     # Methods to hide implementation of Config
     def get_attribute(self, attribute: str):
@@ -195,7 +198,7 @@ class DataLayer(DataLayerBase):
             count = self.get_connection().get_count(endQuery=endQuery)
 
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.logger.print_dragon(e)
             raise DataLayerException(f"Count of dataset failed: {str(e)}")
 
         # Return 
@@ -219,7 +222,7 @@ class DataLayer(DataLayerBase):
         try:
             data = self.get_data_list_from_query(query)
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.logger.print_dragon(e)
             raise DataLayerException(f"Count of dataset distribution failed: {str(e)}")
 
         dict = {}
@@ -298,7 +301,7 @@ class DataLayer(DataLayerBase):
             print(ke)
             raise DataLayerException(f"Something went wrong when saving data ({ke})")
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.logger.print_dragon(e)
             raise DataLayerException(f"Something went wrong when saving data ({e})")
 
     def get_data_query(self, num_rows: int) -> str:
@@ -418,7 +421,7 @@ class DataLayer(DataLayerBase):
             return data
 
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.logger.print_dragon(e)
             raise DataLayerException(f"Something went wrong when fetching dataset ({e})")
 
     def get_mispredicted_query(self, new_class: str, index: int) -> str:
@@ -455,7 +458,7 @@ class DataLayer(DataLayerBase):
             return num_lines
 
         except Exception as e:
-            print(f"Here be dragons: {type(e)}") # Remove this once we've narrowed the exception types down
+            self.logger.print_dragon(e)
             raise DataLayerException(f"Correction of mispredicted data: {query} failed: {e}")
     
 # Main method
