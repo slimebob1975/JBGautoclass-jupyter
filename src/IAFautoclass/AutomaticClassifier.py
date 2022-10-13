@@ -33,7 +33,7 @@ import SQLDataLayer
 import IAFLogger
 from IAFHandler import IAFHandler
 
-class IAFautomaticClassiphyer:
+class AutomaticClassifier:
 
     # Internal constants
     LOWER_LIMIT_REDUCTION = 100
@@ -299,7 +299,7 @@ def main(argv):
     datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
-    myClassiphyer = IAFautomaticClassiphyer(config=config, logger=logger, datalayer=datalayer)
+    myClassiphyer = AutomaticClassifier(config=config, logger=logger, datalayer=datalayer)
 
     # Run the classifier
     myClassiphyer.run()

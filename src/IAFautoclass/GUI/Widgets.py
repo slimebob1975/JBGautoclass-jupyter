@@ -7,12 +7,11 @@ import json
 
 from typing import Callable, Protocol
 import ipywidgets as widgets
-from pandas import DataFrame
 from sklearn.utils import Bunch
 
 from Config import Config, Reduction, Algorithm, Preprocess, ScoreMetric
 from IAFExceptions import GuiWidgetsException
-from IAFautomaticClassifier import IAFautomaticClassiphyer
+from AutomaticClassifier import AutomaticClassifier
 import Helpers
 
 class WidgetConstant(Enum):
@@ -158,6 +157,11 @@ class EventHandler:
         self.widgets.deactivate_section("classifier")
         self.widgets.start_button_actions()
     
+    def reset_button_was_clicked(self, button: widgets.Button) -> None:
+        """ Callback: Resets all widgets back to the way they were """
+
+        self.widgets._load_default_widgets(clear=True)
+    
     def unimplemented_handler(self, change) -> None:
         """ Just a basic handler before I've done the correct one """
         self.print_event_info("Unimplemented", change)
@@ -197,21 +201,28 @@ class Widgets:
     TEXT_MIN_LIMIT = 30
     TEXT_AREA_MIN_LIMIT = 60
     
-    def __init__(self, src_path: Path, GUIhandler: GUIhandler, model_path: Path = None, datalayer: DataLayer = None) -> None:
-        self.logo_image = src_path / "images/iaf-logo.png"
-        self.src_dir = src_path # TODO: Remove if not needed, but keep for now
+    def __init__(self, src_path: Path, GUIhandler: GUIhandler, model_path: Path = None, datalayer: DataLayer = None, settings: dict = None) -> None:
+
+        if settings:
+            self.settings = settings
+        else:
+            with open(Path(__file__).parent / "settings.json") as f: # The settings.json is sibling
+                self.settings = json.load(f)
+        
         self.datalayer = datalayer
         self.eventhandler = EventHandler(self)
         self.guihandler = GUIhandler
         self.model_path = model_path if model_path else src_path / Config.DEFAULT_MODELS_PATH
         
-        with open(Path(__file__).parent / "widgets.json") as f: # The widgets.json is sibling
-            self.default_widgets = json.load(f)
+        self.default_widgets = self.settings.get("widgets")
+        self.sections = self.settings.get("sections")
+        self.logo_image = src_path / self.settings.get("logo")
 
         self.states = {
             "rerun": False
         }
         self.widgets = {}
+        self._load_default_widgets()
         self.forms = {
             "catalog": [self.data_catalogs_dropdown, self.data_tables_dropdown],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
@@ -223,42 +234,6 @@ class Widgets:
             "progress": [self.progress_bar, self.progress_label]
         }
 
-        self.sections = {
-            "data": [
-                "project",
-                "data_catalogs_dropdown",
-                "data_tables_dropdown",
-                "models_dropdown",
-                "class_column",
-                "id_column",
-                "data_columns",
-                "text_columns",
-                "class_summary",
-                "continuation_button"
-            ],
-            "classifier": [
-                "train_checkbox",
-                "predict_checkbox",
-                "mispredicted_checkbox",
-                "algorithm_dropdown",
-                "preprocess_dropdown",
-                "scoremetric_dropdown",
-                "reduction_dropdown",
-                "smote_checkbox",
-                "undersample_checkbox",
-                "testdata_slider",
-                "iterations_slider",
-                "encryption_checkbox",
-                "categorize_checkbox",
-                "categorize_columns",
-                "filter_checkbox",
-                "filter_slider",
-                "data_limit",
-                "show_info_checkbox",
-                "num_variables",
-                "start_button",
-            ]
-        }
         # We need a dictionary to keep track of datatypes
         self.datatype_dict = None
     
@@ -280,26 +255,28 @@ class Widgets:
         model_path = self.model_path / value
         
         config = Config.load_config_from_model_file(model_path)
-
-        # Values from config
-        self.class_column.value = config.get_class_column_name()
-        self.id_column.value = config.get_id_column_name()
-        self.data_columns.value = config.get_data_column_names()
-        self.text_columns.value = config.get_text_column_names()
-        self.algorithm_dropdown.value = config.get_algorithm().name
-        self.preprocess_dropdown.value = config.get_preprocessor().name
-        self.reduction_dropdown.value = config.get_feature_selection().name
-        self.num_variables.value = config.get_num_selected_features()
-        self.filter_checkbox.value = config.use_stop_words()
-        self.filter_slider.value = config.get_stop_words_threshold_percentage()
-        self.encryption_checkbox.value = config.should_hex_encode()
-        self.categorize_checkbox.value = config.use_categorization()
         self.categorize_columns.options = config.get_text_column_names()
-        self.categorize_columns.value =  config.get_categorical_text_column_names()
-        self.testdata_slider.value = config.get_test_size_percentage()
-        self.smote_checkbox.value = config.use_smote()
-        self.undersample_checkbox.value = config.use_undersample()
-
+        
+        # Values from config
+        self.update_values({
+            "class_column": config.get_class_column_name(),
+            "id_column": config.get_id_column_name(),
+            "data_columns": config.get_data_column_names(),
+            "text_columns": config.get_text_column_names(),
+            "algorithm_dropdown": config.get_algorithm().name,
+            "preprocess_dropdown": config.get_preprocessor().name,
+            "reduction_dropdown": config.get_feature_selection().name,
+            "num_variables": config.get_num_selected_features(),
+            "filter_checkbox": config.use_stop_words(),
+            "filter_slider": config.get_stop_words_threshold_percentage(),
+            "encryption_checkbox": config.should_hex_encode(),
+            "categorize_checkbox": config.use_categorization(),
+            "categorize_columns":  config.get_categorical_text_column_names(),
+            "testdata_slider": config.get_test_size_percentage(),
+            "smote_checkbox": config.use_smote(),
+            "undersample_checkbox": config.use_undersample(),
+        })
+        
         # Disabled items:
         self.disable_items(["class_column", "id_column", "data_columns", "text_columns", "categorize_columns"])
         
@@ -404,7 +381,7 @@ class Widgets:
         self.start_button.description = "Rerun"
         self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
         
-    def handle_mispredicted(self, classifier: IAFautomaticClassiphyer) -> None:
+    def handle_mispredicted(self, classifier: AutomaticClassifier) -> None:
         mispredicted = classifier.get_mispredicted_dataframe()
         items = [widgets.Label(mispredicted.index.name)] + \
             [widgets.Label(item) for item in mispredicted.columns] + \
@@ -695,11 +672,6 @@ class Widgets:
         for attribute, value in updates.items():
             if hasattr(item, attribute):
                 setattr(item, attribute, value)
-        
-        #if hasattr(item, "foo"):
-        #    print(f"Weirdly, {name} has a foo")
-        #else:
-        #     print(f"Correct, {name} doesn't have a foo")
 
     def update_values(self, updates: dict) -> None:
         """ Given a dict with item: value, update the values """
@@ -749,6 +721,15 @@ class Widgets:
             align_items="stretch",
             width="auto",
         )
+    
+    def _load_default_widgets(self, clear: bool = False) -> None:
+        if clear:
+            self.widgets = {}
+
+        for item in self.default_widgets.keys():
+            if hasattr(self, item):
+                getattr(self, item)
+
     
     def _load_widget(self, name: str, calculated_params: dict = None, callback: Callable = None, handler: Callable = None) -> widgets.Widget:
         if name not in self.widgets:
@@ -807,45 +788,24 @@ class Widgets:
     def data_catalogs_dropdown(self) -> widgets.Dropdown:
         name = sys._getframe(  ).f_code.co_name # Current function name
         if name not in self.widgets:
-            self.widgets[name] =  widgets.Dropdown(
-                options = ["N/A"],
-                value = "N/A",
-                description = "Catalogs:",
-                disabled = True,
-                description_tooltip = "These are the catalogs of choice"
-            )
-            self.widgets[name].observe(handler=self.eventhandler.data_catalogs_dropdown)
-        
+            self._load_widget(name, handler=self.eventhandler.data_catalogs_dropdown)
+            
         return self.widgets[name]
     
     @property
     def data_tables_dropdown(self) -> widgets.Dropdown:
         name = sys._getframe(  ).f_code.co_name # Current function name
         if name not in self.widgets:
-            self.widgets[name] =  widgets.Dropdown(
-                options = ["N/A"],
-                value = "N/A",
-                description = "Tables:",
-                disabled = True,
-                description_tooltip = "These are the tables of choice"
-            )
-            self.widgets[name].observe(handler=self.eventhandler.data_tables_dropdown)
-        
+            self._load_widget(name, handler=self.eventhandler.data_tables_dropdown)
+            
         return self.widgets[name]
     
     @property
     def models_dropdown(self) -> widgets.Dropdown:
         name = sys._getframe(  ).f_code.co_name # Current function name
         if name not in self.widgets:
-            self.widgets[name] =  widgets.Dropdown(
-                options = ["N/A"],
-                value = "N/A",
-                description = "Models:",
-                disabled = True,
-                description_tooltip = "You can train a new model or use a previously trained one"
-            )
-            self.widgets[name].observe(handler=self.eventhandler.models_dropdown)
-        
+            self._load_widget(name, handler=self.eventhandler.models_dropdown)
+            
         return self.widgets[name]
 
 
@@ -853,62 +813,30 @@ class Widgets:
     def class_column(self) -> widgets.RadioButtons:
         name = sys._getframe(  ).f_code.co_name # Current function name
         if name not in self.widgets:
-            self.widgets[name] = widgets.RadioButtons(
-                options = ["N/A"],
-                value = "N/A",
-                description = "Class:",
-                disabled = True,
-                description_tooltip = "Pick the column to use as class label"
-            )
-            self.widgets[name].observe(handler=self.eventhandler.class_column)
-            
+            self._load_widget(name, handler=self.eventhandler.class_column)
         
         return self.widgets[name]
     
     @property
     def id_column(self) -> widgets.RadioButtons:
-        name = sys._getframe(  ).f_code.co_name # Current function name
+        name = sys._getframe().f_code.co_name # Current function name
         if name not in self.widgets:
-            self.widgets[name] =  widgets.RadioButtons(
-                options = ["N/A"],
-                value = "N/A",
-                description = "Unique id:",
-                disabled = True,
-                description_tooltip = "Pick the column to use as unique identifier"
-            )
-            self.widgets[name].observe(handler=self.eventhandler.id_column)
-            
+            self._load_widget(name, handler=self.eventhandler.id_column)
         
         return self.widgets[name]
 
     @property
     def data_columns(self) -> widgets.SelectMultiple:
-        name = sys._getframe(  ).f_code.co_name # Current function name
+        name = sys._getframe().f_code.co_name # Current function name
         if name not in self.widgets:
-            self.widgets[name] =  widgets.SelectMultiple(
-                options = ["N/A"],
-                value = [],
-                description = "Pick data columns:",
-                disabled = True,
-                description_tooltip = "Pick the columns with the data to be used in the classification"
-            )
-            self.widgets[name].observe(handler=self.eventhandler.data_columns)
-
+            self._load_widget(name, handler=self.eventhandler.data_columns)
+            
         return self.widgets[name]
 
     @property
     def text_columns(self) -> widgets.SelectMultiple:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.SelectMultiple(
-            options = ["N/A"],
-            value = [],
-            description="Is text:",
-            disabled = True,
-            description_tooltip = "Mark the data columns to be interpreted as text (some are marked by default from their SQL datatype)"
-        )
-        
-        return self.widgets[name]
+        return self._load_widget(name)
 
     @property
     def data_numerical_columns(self) -> list:
@@ -921,12 +849,8 @@ class Widgets:
     @property
     def class_summary(self) -> widgets.HTML:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.HTML(
-                value="<em>Class summary</em>: N/A"
-            )
-        
-        return self.widgets[name]
+        return self._load_widget(name)
+       
     
     @property
     def continuation_button(self) -> widgets.Button:
@@ -939,281 +863,123 @@ class Widgets:
     @property
     def train_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = False,
-                description = "Mode: Train",
-                disabled = True,
-                indent = True,
-                description_tooltip = "A new model will be trained"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def predict_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = False,
-                description = "Mode: Predict",
-                disabled = True,
-                indent = True,
-                description_tooltip = "The model of choice will be used to make predictions"
-            )
-            
-        return self.widgets[name]
+        return self._load_widget(name)
+        
     
     @property
     def mispredicted_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = False,
-                description = "Mode: Display mispredictions",
-                disabled = True,
-                indent = True,
-                description_tooltip = "The classifier will display mispredicted training data for manual inspection and correction"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def algorithm_dropdown(self) -> widgets.Dropdown:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Dropdown(
-                options = Algorithm.get_sorted_list(),
-                description = "Algorithm:",
-                disabled = True,
-                description_tooltip = "Pick which algorithms to use"
-            )
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name, calculated_params={
+            "options": Algorithm.get_sorted_list()
+        })
         
-        return self.widgets[name]
-    
     @property
     def preprocess_dropdown(self) -> widgets.Dropdown:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Dropdown(
-                options = Preprocess.get_sorted_list(),
-                description = "Preprocess:",
-                disabled = True,
-                description_tooltip = "Pick which data preprocessors to use"
-            )
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name, calculated_params={
+            "options": Preprocess.get_sorted_list()
+        })
         
-        return self.widgets[name]
     
     @property
     def scoremetric_dropdown(self) -> widgets.Dropdown:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Dropdown(
-                options = ScoreMetric.get_sorted_list(),
-                description = "Score metric:",
-                disabled = True,
-                description_tooltip = "Pick by which method algorithm performances are measured and compared"
-            )
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name, calculated_params={
+            "options": ScoreMetric.get_sorted_list()
+        })
         
-        return self.widgets[name]
 
     @property
     def reduction_dropdown(self) -> widgets.Dropdown:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Dropdown(
-                options = Reduction.get_sorted_list(),
-                description = "Reduction:",
-                disabled = True,
-                description_tooltip = "Pick by which method the number of features (variables) are reduced"
-            )
-        
-        return self.widgets[name]
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name, calculated_params={
+            "options": Reduction.get_sorted_list()
+        })
+    
     
     @property
     def smote_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = False,
-                description = "SMOTE",
-                disabled = True,
-                indent = True,
-                description_tooltip = "Use SMOTE (synthetic minority oversampling technique) for training data"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def undersample_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = False,
-                description = "Undersampling",
-                disabled = True,
-                indent = True,
-                description_tooltip = "Use undersampling of majority training data"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def testdata_slider(self) -> widgets.IntSlider:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.IntSlider(
-                value = 20,
-                min = 0,
-                max = 100,
-                step = 1,
-                description = "Testdata (%):",
-                disabled = True,
-                continuous_update = False,
-                orientation = "horizontal",
-                readout = True,
-                readout_format = "d",
-                description_tooltip = "Set how large evaluation size of training data will be"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def iterations_slider(self) -> widgets.IntSlider:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.IntSlider(
-                value = 20000,
-                min = 1000,
-                max = 100000,
-                step = 100,
-                description = "Max.iter:",
-                disabled = True,
-                continuous_update = False,
-                orientation = "horizontal",
-                readout = True,
-                readout_format = "d",
-                description_tooltip = "Set how many iterations to use at most"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def encryption_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = True,
-                description = "Text: Encryption",
-                description_tooltip = "Use encryption on text",
-                disabled = True,
-                indent = True
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def categorize_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = True,
-                description = "Text: Categorize",
-                description_tooltip = "Use categorization on text",
-                disabled = True,
-                indent = True
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
-    
     @property
     def categorize_columns(self) -> widgets.SelectMultiple:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.SelectMultiple(
-                options = ["N/A"],
-                value = [],
-                description="Categorize:",
-                disabled = True,
-                description_tooltip = "Mark text columns to force them to be categorized (text columns with up to 30 distinct values will be if checkbox is checked)"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def filter_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = False,
-                description = "Text: Filter",
-                description_tooltip = "Use Better Tooltip",
-                disabled = True,
-                indent = True
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def filter_slider(self) -> widgets.IntSlider:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.IntSlider(
-                value = 100,
-                min = 0,
-                max = 100,
-                step = 1,
-                description = "Doc.freq. (%):",
-                disabled = True,
-                continuous_update = False,
-                orientation = "horizontal",
-                readout = True,
-                readout_format = "d",
-                description_tooltip = "Set document frequency limit for filtering of stop words"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def data_limit(self) -> widgets.IntText:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.IntText(
-                value = 0,
-                description = "Data limit:",
-                disabled = True,
-                description_tooltip = "During debugging or testing, limiting the number of data rows can be beneficial"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def show_info_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Checkbox(
-                value = False,
-                description = "Show info",
-                description_tooltip = "Show detailed printout in output",
-                disabled = True,
-                indent = True
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
 
 
     @property
     def num_variables(self) -> widgets.IntText:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.IntText(
-                value = 0,
-                description = "Variables:",
-                disabled = True,
-                description_tooltip = "The number of variables used is shown in this box"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def start_button(self) -> widgets.Button:
@@ -1246,27 +1012,7 @@ class Widgets:
     def display_gui(self) -> None:
         """ Displays the elements in the given order """
         
-        items = [
-            "logo",
-            "welcome",
-            "project",
-            "data_catalogs_dropdown",
-            "data_tables_dropdown",
-            "models_dropdown",
-            "data_form",
-            "class_summary",
-            "continuation_button",
-            "checkboxes_form",
-            "algorithm_form",
-            "data_handling_form",
-            "text_handling_form",
-            "debug_form",
-            "start_button",
-            "progress_form",
-            "output"
-        ]
-
-        for item in items:
+        for item in self.settings.get("display"):
             if hasattr(self, item):
                 widget = getattr(self, item)
                 if item.endswith("_form"):
