@@ -155,7 +155,7 @@ def widget_parameters() -> dict:
         },
         "continuation_button": {
             "description": "Continue",
-            "button_style": "success", 
+            "button_style": "primary", 
             "disabled": True,
             "tooltip": "Continue with the process using these settings",
             "icon": "check" 
@@ -318,7 +318,7 @@ def widget_parameters() -> dict:
                 "description_tooltip": "Set document frequency limit for filtering of stop words"
             }
         },
-        "num_rows": {
+        "data_limit": {
             "pre__load": {
                 "value": 0,
                 "disabled": True,
@@ -346,7 +346,7 @@ def widget_parameters() -> dict:
         "start_button": {
             "pre__load": {
                 "description": "Start",
-                "button_style": "success", 
+                "button_style": "primary", 
                 "disabled": True,
                 "tooltip": "Run the classifier using the current settings",
                 "icon": "check" 
@@ -372,8 +372,7 @@ def widget_parameters() -> dict:
         },
         "mispredicted_gridbox": {
             "pre__load": {
-                "value": "No mispredicted training data was detected yet",
-                "description_tooltip": "Use to manually inspect and correct mispredicted training data"
+                "value": "<p>No mispredicted training data was detected yet</p>"
             }
         },
     }
@@ -659,12 +658,12 @@ class TestWidgets:
         assert filter_slider.description_tooltip == widget_parameters["filter_slider"]["pre__load"]["description_tooltip"]
        
         # Num Rows IntText
-        num_rows = widgets.num_rows
-        assert isinstance(num_rows, ipywidgets.IntText)
-        assert num_rows.value == widget_parameters["num_rows"]["pre__load"]["value"]
-        assert num_rows.disabled == widget_parameters["num_rows"]["pre__load"]["disabled"]
-        assert num_rows.description == widget_parameters["num_rows"]["pre__load"]["description"]
-        assert num_rows.description_tooltip == widget_parameters["num_rows"]["pre__load"]["description_tooltip"]
+        data_limit = widgets.data_limit
+        assert isinstance(data_limit, ipywidgets.IntText)
+        assert data_limit.value == widget_parameters["data_limit"]["pre__load"]["value"]
+        assert data_limit.disabled == widget_parameters["data_limit"]["pre__load"]["disabled"]
+        assert data_limit.description == widget_parameters["data_limit"]["pre__load"]["description"]
+        assert data_limit.description_tooltip == widget_parameters["data_limit"]["pre__load"]["description_tooltip"]
 
         # Show Info Checkbox
         show_info_checkbox = widgets.show_info_checkbox
@@ -712,11 +711,10 @@ class TestWidgets:
         output = widgets.output
         assert isinstance(output, ipywidgets.Output)
 
-        # Mispredicted Gridbox, Label
+        # Mispredicted Gridbox, HTML
         mispredicted_gridbox = widgets.mispredicted_gridbox
-        assert isinstance(mispredicted_gridbox, ipywidgets.Label)
+        assert isinstance(mispredicted_gridbox, ipywidgets.HTML)
         assert mispredicted_gridbox.value == widget_parameters["mispredicted_gridbox"]["pre__load"]["value"]
-        assert mispredicted_gridbox.description_tooltip == widget_parameters["mispredicted_gridbox"]["pre__load"]["description_tooltip"]
 
     def test_properties(self, widgets, widget_parameters) -> None:
         """ Tests properties that are not widgets """

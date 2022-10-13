@@ -230,7 +230,7 @@ class IAFautomaticClassiphyer:
 
         # Now make predictions on non-classified dataset: X_unknown -> Y_unknown
         if self.config.should_predict() and dh.X_unknown.shape[0] > 0:
-            ph.make_predictions(mh.model.model, dh.X_unknown)
+            ph.make_predictions(mh.model.model, dh.X_unknown, dh.classes)
             
             self.logger.print_formatted_info("Predictions for the unknown data")
             self.logger.print_info("Predictions:", str(ph.predictions))

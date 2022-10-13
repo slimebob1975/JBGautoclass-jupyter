@@ -1406,7 +1406,7 @@ class PredictionsHandler:
                                 errors='strict')
     
     # Make predictions on dataset
-    def make_predictions(self, model: Pipeline, X: pandas.DataFrame, classes: pandas.Series, Y: pandas.DataFrame) -> bool:
+    def make_predictions(self, model: Pipeline, X: pandas.DataFrame, classes: pandas.Series, Y: pandas.DataFrame = None) -> bool:
         could_predict_proba = False
         try:
             predictions = model.predict(X)
@@ -1426,7 +1426,8 @@ class PredictionsHandler:
         self.predictions = predictions
         self.rates = rates
 
-        self.set_classification_report(Y)
+        if Y is not None:
+            self.set_classification_report(Y)
         # This is backup if predictions couldn't be made (IE predict_proba == False)
         self.calculate_probability()
         

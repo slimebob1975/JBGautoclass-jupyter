@@ -85,7 +85,7 @@ def valid_iris_config() -> Config:
         ),
         Config.Debug(
             on=True,
-            num_rows=150
+            data_limit=150
         ),
         name="test",
         _filename="autoclassconfig_test_some_fake_name.py"

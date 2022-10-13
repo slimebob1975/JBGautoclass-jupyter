@@ -28,7 +28,7 @@ from SQLDataLayer import DataLayer
 from GUI.Widgets import Widgets
 
 # Class definition for the GUI
-class IAFautoclass_GUI:
+class GUIHandler:
     
     # Constants
     DEFAULT_HOST = os.environ.get("DEFAULT_HOST")
@@ -51,7 +51,6 @@ class IAFautoclass_GUI:
     # Constructor
     def __init__(self):
         self.widgets = Widgets(src_path=Path(src_dir), GUIhandler=self)
-        self.config = None
         # The classifier object is a data element in our GUI
         self.the_classifier = None
         
@@ -73,7 +72,7 @@ class IAFautoclass_GUI:
         # All the widgets moved into this function to be able to be hidden easier
         #self.setup_GUI()
         
-        self.logger = IAFLogger(False, self.widgets.progress)
+        self.logger = IAFLogger(False, self.widgets.progress) # Quiet is set to false here
         
         config = Config(
             connection=Config.Connection(
@@ -636,7 +635,7 @@ class IAFautoclass_GUI:
     # TODO: This is called from Widgets.update_class_summary
     def get_class_distribution(self, data_settings: dict) -> dict:
         """ Widgets does not need to know about Classifier Datalayer """
-        datalayer = self.get_new_classifier_datalayer(data_settings=data_settings, early=True)
+        datalayer = self.get_new_classifier_datalayer(data_settings=data_settings)
         try:
             distribution = datalayer.count_class_distribution()
         except DataLayerException as e:
@@ -644,27 +643,33 @@ class IAFautoclass_GUI:
 
         return distribution
 
-    def get_new_classifier_datalayer(self, data_settings: dict, early: bool = False) -> DataLayer:
+    def get_new_classifier_datalayer(self, data_settings: dict = None, config_params: dict = None) -> DataLayer:
         """ This will create or update the layer, and should probably also include the start_classifier() stuff
         """
-        if not self.classifier_datalayer:
-            connection = Config.Connection(
-                    odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
-                    host = os.environ.get("DEFAULT_HOST"),
-                    class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
-                    class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
-                    trusted_connection = True,
-                    data_catalog = data_settings["data"]["catalog"],
-                    data_table = data_settings["data"]["table"],
-                    class_column = data_settings["columns"]["class"], 
-                    data_text_columns =  data_settings["columns"]["data_text"], 
-                    data_numerical_columns = data_settings["columns"]["data_numerical"], 
-                    id_column = data_settings["columns"]["id"]
-                )
+        if config_params:
+            # This creates a new classifier_datalayer whether one exists or not, because it has all the info
+            self.classifier_datalayer = DataLayer(Config(**config_params), self.logger)
 
-            self.classifier_datalayer = DataLayer(Config(connection), self.logger)
-        else:
-            if early: # before the classifier_datalayer is completed
+            return self.classifier_datalayer
+
+        if data_settings:
+            if not self.classifier_datalayer:
+                connection = Config.Connection(
+                        odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
+                        host = os.environ.get("DEFAULT_HOST"),
+                        class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
+                        class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
+                        trusted_connection = True,
+                        data_catalog = data_settings["data"]["catalog"],
+                        data_table = data_settings["data"]["table"],
+                        class_column = data_settings["columns"]["class"], 
+                        data_text_columns =  data_settings["columns"]["data_text"], 
+                        data_numerical_columns = data_settings["columns"]["data_numerical"], 
+                        id_column = data_settings["columns"]["id"]
+                    )
+
+                self.classifier_datalayer = DataLayer(Config(connection), self.logger)
+            else:
                 updated_columns = {
                     "class_column": data_settings["columns"]["class"], 
                     "data_text_columns":  data_settings["columns"]["data_text"], 
@@ -818,6 +823,25 @@ class IAFautoclass_GUI:
         self.output.clear_output(wait=True)
         self.start_classifier()
     
+    def run_classifier(self, config_params: dict, output: widgets.Output) -> None:
+        """ Sets up the classifier and then runs it"""
+        # This isn't pretty and probably needs to be tweaked, but it works for now
+        # Sometimes you want to load the config from a different place than the name of the project
+        
+        self.get_new_classifier_datalayer(config_params = config_params)
+
+        self.logger.set_enable_quiet(not config_params["io"].verbose)
+        self.the_classifier = autoclass.IAFautomaticClassiphyer(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
+        with output:
+            worked = self.the_classifier.run()
+            if worked == -1:
+                self.logger.print_info("No data was fetched from database!")
+            else:
+                self.widgets.handle_mispredicted(self.the_classifier)
+        
+        self.widgets.set_rerun()
+
+
     def start_classifier(self):
         
         # This isn't pretty and probably needs to be tweaked, but it works for now
@@ -855,7 +879,7 @@ class IAFautoclass_GUI:
             ),
             "debug": Config.Debug(
                 on=True,
-                num_rows=self.num_rows.value
+                data_limit=self.num_rows.value
             ),
             "name": self.project.value,
             "save": save
@@ -917,36 +941,18 @@ class IAFautoclass_GUI:
             new_class, new_index = change.new
             self.classifier_datalayer.correct_mispredicted_data(new_class, new_index)
 
+    def correct_mispredicted_data(self, new_class: str, index: int) -> None:
+        """ Changes the original dataset """
+        self.classifier_datalayer.correct_mispredicted_data(new_class, index)
+
     def display_gui(self) -> None:
         self.widgets.display_gui()
-        return
-        elements = [
-            "logo",
-            "welcome",
-            "project",
-            "database_dropdown",
-            "tables_dropdown",
-            "models_dropdown",
-            "data_form",
-            "class_summary_text",
-            "continuation_button",
-            "checkboxes_form",
-            "algorithm_form",
-            "data_handling_form",
-            "text_handling_form",
-            "debug_form",
-            "start_button",
-            "progress_form",
-            "output"
-        ]
-
-        for element in elements:
-            display(getattr(self, element))
+        
         
 
 def main():
     load_dotenv()
-    gui = IAFautoclass_GUI()
+    gui = GUIHandler()
     gui.display_gui()
 
 

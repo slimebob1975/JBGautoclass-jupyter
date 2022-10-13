@@ -836,7 +836,7 @@ class Config:
         "io.model_path": "<model_path>",
         "io.model_name": "<model_name>",
         "debug.on": "<on>",
-        "debug.num_rows": "<num_rows>"
+        "debug.data_limit": "<data_limit>"
     }
 
     @dataclass
@@ -1175,22 +1175,22 @@ class Config:
     @dataclass
     class Debug:
         on: bool = True
-        num_rows: int = None
+        data_limit: int = None
 
         def validate(self) -> None:
             """ Throws TypeError if invalid """
 
             # TODO: Set the value based on count_data_rows(), but first decide where that method should be
             # The method is (and should probably stay) in DataLayer--question is where we set this
-            if not Helpers.positive_int_or_none(self.num_rows):
+            if not Helpers.positive_int_or_none(self.data_limit):
                 raise ValueError(
-                    "Argument num_rows must be a positive integer")
+                    "Argument data_limit must be a positive integer")
 
         def __str__(self) -> str:
             str_list = [
                 " 4. Debug settings  ",
                 f" * Debugging on:                            {self.on}",
-                f" * How many data rows to consider:          {self.num_rows}"
+                f" * How many data rows to consider:          {self.data_limit}"
             ]
 
             return "\n".join(str_list)   
@@ -1293,7 +1293,7 @@ class Config:
         configuration.io = copy.deepcopy(self.io)
         configuration.io.model_name = ""
         configuration.debug = copy.deepcopy(self.debug)
-        configuration.debug.num_rows = 0
+        configuration.debug.data_limit = 0
         configuration.save = False
         
         return configuration
@@ -1350,7 +1350,7 @@ class Config:
             saved_config.connection.data_catalog = config.connection.data_catalog
             saved_config.connection.data_table = config.connection.data_table
             saved_config.io.model_name = config.io.model_name
-            saved_config.debug.num_rows = config.debug.num_rows
+            saved_config.debug.data_limit = config.debug.data_limit
         
         return saved_config
 
@@ -1372,7 +1372,10 @@ class Config:
 
     @classmethod
     def load_config_2(cls: Type[T], module) -> T:
-        num_rows = Helpers.set_none_or_int(module.debug["num_rows"])
+        if "num_rows" in module.debug:
+            data_limit = Helpers.set_none_or_int(module.debug["num_rows"])
+        else:
+            data_limit = Helpers.set_none_or_int(module.debug["data_limit"])
         num_selected_features = Helpers.set_none_or_int(module.mode["num_selected_features"])
         max_iterations = Helpers.set_none_or_int(module.mode["max_iterations"])
         data_text_columns = Helpers.get_from_string_or_list(module.connection["data_text_columns"])
@@ -1425,7 +1428,7 @@ class Config:
             ),
             Config.Debug(
                 on=module.debug["on"],
-                num_rows=num_rows
+                data_limit=data_limit
             ),
             name=module.name
         )
@@ -1488,7 +1491,7 @@ class Config:
             ),
             Config.Debug(
                 on=module.debug["debug_on"],
-                num_rows=num_rows
+                data_limit=num_rows
             ),
             name=module.project["name"]
         )
@@ -1582,7 +1585,12 @@ class Config:
 
         return to_quoted_string(self.get_attribute(attribute), quotes)
     
-    
+    @staticmethod
+    def get_model_name(model: str, project_name: str) -> str:
+        if model == Config.DEFAULT_TRAIN_OPTION:
+            return project_name
+        
+        return model.replace(Config.DEFAULT_MODEL_EXTENSION, "")
 
     def get_num_selected_features(self) -> int:
         return self.get_none_or_positive_value("mode.num_selected_features")
@@ -1613,7 +1621,7 @@ class Config:
 
     def get_max_limit(self) -> int:
         """ Get the max limit. Name might change depending on GUI names"""
-        return self.get_none_or_positive_value("debug.num_rows")
+        return self.get_none_or_positive_value("debug.data_limit")
 
     def get_max_iterations(self) -> int:
         """ Get max iterations """
@@ -1838,7 +1846,7 @@ def main():
     updates = {
         "debug": Config.Debug(
                 on=True,
-                num_rows=125
+                data_limit=125
             ),
     }
     print(config.debug)

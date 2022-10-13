@@ -54,7 +54,7 @@ def valid_iris_config() -> Config:
         ),
         Config.Debug(
             on=True,
-            num_rows=150
+            data_limit=150
         ),
         name="test"
     )
@@ -108,7 +108,7 @@ def bare_iris_config() -> Config:
         ),
         Config.Debug(
             on=True,
-            num_rows=150
+            data_limit=150
         ),
         name="iris"
     )
@@ -119,7 +119,7 @@ def bare_iris_config() -> Config:
     config.mode.predict = None
     config.mode.mispredicted = None
     config.io.model_name = ""
-    config.debug.num_rows = 0
+    config.debug.data_limit = 0
     
 
     return config
@@ -171,7 +171,7 @@ def saved_with_valid_iris_config() -> Config:
         ),
         Config.Debug(
             on=True,
-            num_rows=150
+            data_limit=150
         ),
         name="iris"
     )
@@ -476,7 +476,7 @@ class TestConfig:
     def test_update_configuration(self, valid_iris_config):
         new_debug = Config.Debug(
             on=True,
-            num_rows=125
+            data_limit=125
         )
         
         default_debug = valid_iris_config.debug

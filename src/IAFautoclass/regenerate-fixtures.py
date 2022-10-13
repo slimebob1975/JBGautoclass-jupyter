@@ -59,7 +59,7 @@ def bare_iris_config() -> Config:
         ),
         Config.Debug(
             on=True,
-            num_rows=150
+            data_limit=150
         ),
         name="iris",
         _filename="autoclassconfig_iris_.py"
@@ -71,7 +71,7 @@ def bare_iris_config() -> Config:
     config.mode.predict = None
     config.mode.mispredicted = None
     config.io.model_name = ""
-    config.debug.num_rows = 0
+    config.debug.data_limit = 0
     
 
     return config

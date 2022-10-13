@@ -1,14 +1,19 @@
 from __future__ import annotations
 from enum import Enum
+import os
 from pathlib import Path
 import sys
+import json
 
 from typing import Callable, Protocol
 import ipywidgets as widgets
+from pandas import DataFrame
 from sklearn.utils import Bunch
 
 from Config import Config, Reduction, Algorithm, Preprocess, ScoreMetric
 from IAFExceptions import GuiWidgetsException
+from IAFautomaticClassifier import IAFautomaticClassiphyer
+import Helpers
 
 class WidgetConstant(Enum):
     DATA_NUMERICAL = 1
@@ -26,75 +31,75 @@ class EventHandler:
         # Some data elements might get lost unless we lock a few callback functions
         self.lock_observe_1 = False
 
-    def should_run_event(self, event: Bunch) -> bool:
+    def should_run_event(self, change: Bunch) -> bool:
         """ This only returns True if event.name is 'index' and event.new > 0 or lock_observe_1 == False """
         if self.lock_observe_1:
             return False
 
-        if event.name != "index":
+        if change.name != "index":
             return False
         
-        if event.new == 0:
+        if change.new == 0:
             return False
 
         return True
     
-    def print_event_info(self, caller: str, event: Bunch) -> None:
+    def print_event_info(self, caller: str, change: Bunch) -> None:
         """ Just prints some info about the event to the output, for debug """
-        print(f"{caller}: {event.name=}, {event.old=}, {event.new=}")
+        print(f"{caller}: {change.name=}, {change.old=}, {change.new=}")
 
-    def data_catalogs_dropdown(self, event: Bunch) -> None:
+    def data_catalogs_dropdown(self, change: Bunch) -> None:
         """ Handler for data_catalogs_dropdown
             Events:
                 value_change: Updates the data tables dropdown when catalog is picked
         """
         # Change to default values below if it's changing in ways
-        if not self.should_run_event(event):
+        if not self.should_run_event(change):
             return
         
         self.widgets.update_data_tables_dropdown()
     
-    def data_tables_dropdown(self, event: Bunch) -> None:
+    def data_tables_dropdown(self, change: Bunch) -> None:
         """ Handler for data_tables_dropdown
             Events:
                 value_change: Sets the models dropdown to enabled when table is picked
         """
         # Change to default values below if it's changing in ways
-        if not self.should_run_event(event):
+        if not self.should_run_event(change):
             return
         
         self.widgets.update_item("models_dropdown", {"disabled": False})
 
-    def models_dropdown(self, event: Bunch) -> None:
+    def models_dropdown(self, change: Bunch) -> None:
         """ Handler for models_dropdown
             Events:
                 value_change: Triggers several changes when model is set
         """
         # Change to default values below if it's changing in ways
-        if event.name != "index":
+        if change.name != "index":
             return
         
-        if event.new == 0: # Moves to the empty value
+        if change.new == 0: # Moves to the empty value
             return
         
         if not self.lock_observe_1:
             self.widgets.update_class_id_data_columns()
         
-        if event.new == 1: # This is the default train option
-            self.widgets.update_item("continuation_button", {"disabled": True})
+        if change.new == 1: # This is the default train option
+            self.widgets.disable_button("continuation_button")
             return
         
         self.widgets.update_from_model_config()
 
-    def class_column(self, event: Bunch) -> None:
+    def class_column(self, change: Bunch) -> None:
         """ Handler for class_column
             Events:
                 value_change: Changes the id and data columns, updates summary
         """
-        if event.name not in ["index", "disabled"]:
+        if change.name not in ["index", "disabled"]:
             return
         
-        if event.name == "disabled" and event.name:
+        if change.name == "disabled" and change.name:
             # This is still disabled
             return
         
@@ -103,46 +108,63 @@ class EventHandler:
         self.widgets.update_class_summary()
         self.widgets.update_id_column() # Event.name "options"
 
-    def id_column(self, event: Bunch) -> None:
+    def id_column(self, change: Bunch) -> None:
         """ Handler for id_column
             Events:
                 value_change: Updates the data column option when id is set
-            update_data_columns
         """
         if self.lock_observe_1: 
             return
         
-        if event.name not in ["index", "options"]:
+        if change.name not in ["index", "options"]:
             return
         
         self.widgets.update_data_columns()
 
-    def data_columns(self, event: Bunch) -> None:
+    def data_columns(self, change: Bunch) -> None:
         """ Handler for data_columns
             Events:
                 value_change: Updates the text columns and continuation_button states when data options changes
-            update_text_columns_and_enable_button
         """
         if self.lock_observe_1: 
             return
         
-        if event.name not in ["index", "options"]:
+        if change.name not in ["index", "options"]:
             return
 
         self.widgets.update_text_columns()
         self.widgets.update_ready() # At the moment enables/disables the continuation_button
     
-    def continuation_button_was_clicked(self, event: Bunch) -> None:
+
+    def reclassify_dropdown__value(self, change: Bunch) -> None:
+        """ Handler for mispredicted/reclassify value-event
+            Triggers a correction into the database
+        """
+        if change.new != 0 and change.old != change.new:
+            new_class, new_index = change.new
+            self.widgets.correct_mispredicted_data(new_class, new_index)
+
+    def continuation_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
         self.lock_observe_1 = True
-
-    def start_button_was_clicked(self, event: Bunch) -> None:
-        """ Callback: Changes the state to be read-only, starts the classifier (or the class summary) """
-    
         
-    def unimplemented_handler(self, event) -> None:
+        self.widgets.deactivate_section("data")
+        self.widgets.continuation_button_actions()
+        
+
+    def start_button_was_clicked(self, button: widgets.Button) -> None:
+        """ Callback: Changes the state to be read-only, starts the classifier (or the class summary) """
+
+        self.widgets.deactivate_section("classifier")
+        self.widgets.start_button_actions()
+    
+    def unimplemented_handler(self, change) -> None:
         """ Just a basic handler before I've done the correct one """
-        self.print_event_info("Unimplemented", event)
+        self.print_event_info("Unimplemented", change)
+
+    def print_to_output(self, thing) -> None:
+        with self.widgets.output:
+            print(thing)
 
 
 class DataLayer(Protocol):
@@ -161,13 +183,20 @@ class DataLayer(Protocol):
         """ Used in the GUI, gets name and type for columns """
         
 class GUIhandler(Protocol):
-    """ Empty for now"""
     def get_class_distribution(self, data_settings: dict) -> dict:
         """ Help function to avoid Widgets knowing about classifier DataLayer """
 
+    def run_classifier(self) -> None:
+        """ Sets up the classifier and then runs it"""
+
+    def correct_mispredicted_data(self, new_class: str, index: int) -> None:
+        """ Changes the original dataset """
+
 class Widgets:
     """ Creates and populates the widgets of the GUI """
-
+    TEXT_MIN_LIMIT = 30
+    TEXT_AREA_MIN_LIMIT = 60
+    
     def __init__(self, src_path: Path, GUIhandler: GUIhandler, model_path: Path = None, datalayer: DataLayer = None) -> None:
         self.logo_image = src_path / "images/iaf-logo.png"
         self.src_dir = src_path # TODO: Remove if not needed, but keep for now
@@ -176,6 +205,12 @@ class Widgets:
         self.guihandler = GUIhandler
         self.model_path = model_path if model_path else src_path / Config.DEFAULT_MODELS_PATH
         
+        with open(Path(__file__).parent / "widgets.json") as f: # The widgets.json is sibling
+            self.default_widgets = json.load(f)
+
+        self.states = {
+            "rerun": False
+        }
         self.widgets = {}
         self.forms = {
             "catalog": [self.data_catalogs_dropdown, self.data_tables_dropdown],
@@ -184,12 +219,49 @@ class Widgets:
             "algorithm": [self.reduction_dropdown, self.algorithm_dropdown, self.preprocess_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.smote_checkbox, self.undersample_checkbox, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.filter_slider],
-            "debug": [self.num_rows, self.show_info_checkbox, self.num_variables],
+            "debug": [self.data_limit, self.show_info_checkbox, self.num_variables],
             "progress": [self.progress_bar, self.progress_label]
         }
 
+        self.sections = {
+            "data": [
+                "project",
+                "data_catalogs_dropdown",
+                "data_tables_dropdown",
+                "models_dropdown",
+                "class_column",
+                "id_column",
+                "data_columns",
+                "text_columns",
+                "class_summary",
+                "continuation_button"
+            ],
+            "classifier": [
+                "train_checkbox",
+                "predict_checkbox",
+                "mispredicted_checkbox",
+                "algorithm_dropdown",
+                "preprocess_dropdown",
+                "scoremetric_dropdown",
+                "reduction_dropdown",
+                "smote_checkbox",
+                "undersample_checkbox",
+                "testdata_slider",
+                "iterations_slider",
+                "encryption_checkbox",
+                "categorize_checkbox",
+                "categorize_columns",
+                "filter_checkbox",
+                "filter_slider",
+                "data_limit",
+                "show_info_checkbox",
+                "num_variables",
+                "start_button",
+            ]
+        }
         # We need a dictionary to keep track of datatypes
         self.datatype_dict = None
+    
     
     def load_contents(self, datalayer: DataLayer = None) -> None:
         """ This is when we set content loaded from datasource """
@@ -213,7 +285,7 @@ class Widgets:
         self.class_column.value = config.get_class_column_name()
         self.id_column.value = config.get_id_column_name()
         self.data_columns.value = config.get_data_column_names()
-        self.text_columns.value = config.get_text_column_names
+        self.text_columns.value = config.get_text_column_names()
         self.algorithm_dropdown.value = config.get_algorithm().name
         self.preprocess_dropdown.value = config.get_preprocessor().name
         self.reduction_dropdown.value = config.get_feature_selection().name
@@ -222,7 +294,7 @@ class Widgets:
         self.filter_slider.value = config.get_stop_words_threshold_percentage()
         self.encryption_checkbox.value = config.should_hex_encode()
         self.categorize_checkbox.value = config.use_categorization()
-        self.categorize_columns.options = config.get_text_column_names
+        self.categorize_columns.options = config.get_text_column_names()
         self.categorize_columns.value =  config.get_categorical_text_column_names()
         self.testdata_slider.value = config.get_test_size_percentage()
         self.smote_checkbox.value = config.use_smote()
@@ -232,21 +304,248 @@ class Widgets:
         self.disable_items(["class_column", "id_column", "data_columns", "text_columns", "categorize_columns"])
         
         # Enabled items:
-        self.enable_items(["continuation_button"])
+        self.enable_button("continuation_button")
+    
+    def activate_section(self, name: str) -> None:
+        """ This should probably be a toggle, but for the moment we'll do it this way"""
+
+        if section := self.sections.get(name):
+            for item in section:
+                if item.endswith("_button"):
+                    self.enable_button(item)
+                else:
+                    widget = self.get_item_or_error(item)
+                    if hasattr(widget, "disabled"):
+                        setattr(widget, "disabled", False)
+
+    def deactivate_section(self, name: str) -> None:
+        """ This should probably be a toggle, but for the moment we'll do it this way"""
+        if section := self.sections.get(name):
+            for item in section:
+                if item.endswith("_button"):
+                    self.disable_button(item)
+                else:
+                    widget = self.get_item_or_error(item)
+                    if hasattr(widget, "disabled"):
+                        setattr(widget, "disabled", True)
+
+    def set_checkboxes(self, new_model: bool) -> None:
+        """ Sets the values and enabled-state based on new vs trained model"""
+        if new_model:
+            self.enable_items([
+                "train_checkbox",
+                "predict_checkbox",
+                "mispredicted_checkbox"
+            ])
+            self.update_values({
+                "train_checkbox": True,
+                "predict_checkbox": False,
+                "mispredicted_checkbox": True
+            })
+        else:
+            self.disable_items([
+                "train_checkbox",
+                "predict_checkbox",
+                "mispredicted_checkbox",
+            ])
+            self.update_values({
+                "train_checkbox": False,
+                "predict_checkbox": True,
+                "mispredicted_checkbox": False
+            })
+            
+    def continuation_button_actions(self) -> None:
+        """ Complex actions when button is clicked """
+        new_model = self.new_model
+        self.set_checkboxes(new_model)
+        default_enable_list = [
+            "data_limit",
+            "show_info_checkbox",
+            "start_button"
+        ]
+        new_model_list = []
+        if new_model:
+            new_model_list = [
+                "algorithm_dropdown",
+                "preprocess_dropdown",
+                "reduction_dropdown",
+                "scoremetric_dropdown", 
+                "smote_checkbox",
+                "undersample_checkbox",
+                "testdata_slider",
+                "iterations_slider",
+                "encryption_checkbox",
+                "categorize_checkbox",
+                "categorize_columns",
+                "filter_checkbox",
+                "filter_slider"
+            ]
         
+            self.categorize_columns.options = self.text_columns.value
+        
+        self.update_data_limit()
+        self.enable_items(default_enable_list + new_model_list)
+
+    def start_button_actions(self) -> None:
+        """ Complex actions when button is clicked """
+        if self.states["rerun"]:
+            self.update_class_summary()
+        else:
+            self.states["rerun"] = True
+        
+        self.output.clear_output(wait=True)
+        
+        self.guihandler.run_classifier(config_params=self.get_config_params(), output=self.output)
+
+    def set_rerun(self) -> None:
+        """ Updates buttons and checkboxes for doing a rerun with the settings """
+        self.enable_items(["start_button", "show_info_checkbox"])
+
+        self.start_button.description = "Rerun"
+        self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
+        
+    def handle_mispredicted(self, classifier: IAFautomaticClassiphyer) -> None:
+        mispredicted = classifier.get_mispredicted_dataframe()
+        items = [widgets.Label(mispredicted.index.name)] + \
+            [widgets.Label(item) for item in mispredicted.columns] + \
+            [widgets.Label("Reclassify as")]
+        cols = len(items)
+        for i in mispredicted.index:
+            row = mispredicted.loc[i]
+            row_items = [widgets.Label(str(row.name))]
+            for item in row.index: 
+                row_items.append(self.get_text_widget(row[item]))
+            dropdown_options = [('Keep', 0)]
+            for label in classifier.get_unique_classes():
+                dropdown_options.append((label, (label, row.name)))
+            reclassify_dropdown = widgets.Dropdown(options = dropdown_options, value = 0, description = '', disabled = False)
+            reclassify_dropdown.observe(self.eventhandler.reclassify_dropdown__value,'value')
+            row_items += [reclassify_dropdown]
+            items += row_items 
+        
+        gridbox_layout = widgets.Layout(grid_template_columns="repeat("+ str(cols) +", auto)", border="4px solid grey")
+        self.widgets["mispredicted_gridbox"] = widgets.GridBox(items, layout=gridbox_layout)
+        display(self.mispredicted_gridbox)
+
+    def correct_mispredicted_data(self, new_class: str, index: int) -> None:
+        """ From the reclassify dropdown change"""
+        self.guihandler.correct_mispredicted_data(new_class, index)
+
+
+    def get_text_widget(self, element):
+        """ Gets the right type of text widget based on the value """
+        if Helpers.is_str(element):
+            element_string = str(element)
+            string_length = len(element_string)
+        
+            kwargs = {
+                "value": element_string,
+                "placeholder": "NULL"
+            }
+            if string_length > self.TEXT_AREA_MIN_LIMIT:
+                return widgets.Textarea(**kwargs)
+            
+            if string_length > self.TEXT_MIN_LIMIT:
+                return widgets.Text(**kwargs)
+        
+        if Helpers.is_float(element):
+            element = round(float(element), 2)
+        
+        return widgets.Label(str(element))
+
+    
+    def get_config_params(self) -> dict:
+        """ Creates a Config params object"""
+        data_settings = self.data_settings
+        params = {
+            "connection": Config.Connection(
+                odbc_driver = os.environ.get("DEFAULT_ODBC_DRIVER"),
+                host = os.environ.get("DEFAULT_HOST"),
+                class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
+                class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
+                trusted_connection = True,
+                data_catalog = data_settings["data"]["catalog"],
+                data_table = data_settings["data"]["table"],
+                class_column = data_settings["columns"]["class"], 
+                data_text_columns =  data_settings["columns"]["data_text"], 
+                data_numerical_columns = data_settings["columns"]["data_numerical"], 
+                id_column = data_settings["columns"]["id"]
+            ),
+            "mode": Config.Mode(
+                train = self.train_checkbox.value,
+                predict = self.predict_checkbox.value,
+                mispredicted = self.mispredicted_checkbox.value,
+                use_stop_words = self.filter_checkbox.value,
+                specific_stop_words_threshold = float(self.filter_slider.value) / 100.0,
+                hex_encode = self.encryption_checkbox.value,
+                use_categorization = self.categorize_checkbox.value,
+                category_text_columns = list(self.categorize_columns.value),
+                test_size = float(self.testdata_slider.value) / 100.0,
+                smote = self.smote_checkbox.value,
+                undersample = self.undersample_checkbox.value,
+                algorithm = Algorithm[self.algorithm_dropdown.value],
+                preprocessor = Preprocess[self.preprocess_dropdown.value],
+                feature_selection = Reduction[self.reduction_dropdown.value],
+                num_selected_features = None,
+                scoring = ScoreMetric[self.scoremetric_dropdown.value],
+                max_iterations = self.iterations_slider.value
+            ),
+            "io": Config.IO(
+                verbose=self.show_info_checkbox.value,
+                model_name=self.model_name
+            ),
+            "debug": Config.Debug(
+                on=True,
+                data_limit=self.data_limit.value
+            ),
+            "name": self.project.value,
+            "save": self.new_model
+        }
+
+        return params
+
+    @property
+    def new_model(self) -> bool:
+        return self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION
+
+    def update_data_limit(self) -> None:
+        """ Gets the number of rows from the database """
+        num_rows = self.datalayer.count_data_rows(data_catalog=self.data_catalogs_dropdown.value, data_table=self.data_tables_dropdown.value)
+        
+        self.data_limit.value = num_rows
+
+
+    def disable_button(self, name: str) -> None:
+        """ Disables and sets to warning style """
+        item = self.get_item_or_error(name)
+        setattr(item, "disabled", True)
+        setattr(item, "button_style", "primary")
+
+    def enable_button(self, name: str) -> None:
+        """ Enables and sets to success style """
+        item = self.get_item_or_error(name)
+        setattr(item, "disabled", False)
+        setattr(item, "button_style", "success")
+
     def disable_items(self, items: list) -> None:
         """ Disable all items in the list """
         for name in items:
-            item = self.get_item_or_error(name)
-            if hasattr(item, "disabled"):
-                setattr(item, "disabled", True)
+            if name.endswith("_button"):
+                self.disable_button(name)
+            else:
+                item = self.get_item_or_error(name)
+                if hasattr(item, "disabled"):
+                    setattr(item, "disabled", True)
 
     def enable_items(self, items: list) -> None:
         """ Enable all items in the list """
         for name in items:
-            item = self.get_item_or_error(name)
-            if hasattr(item, "disabled"):
-                setattr(item, "disabled", False)
+            if name.endswith("_button"):
+                self.enable_button(name)
+            else:
+                item = self.get_item_or_error(name)
+                if hasattr(item, "disabled"):
+                    setattr(item, "disabled", False)
 
     def update_data_catalogs_dropdown(self) -> None:
         catalog_list = self.datalayer.get_catalogs_as_options()
@@ -317,6 +616,11 @@ class Widgets:
             }
         }
 
+    @property
+    def model_name(self) -> str:
+        """ Gets the model name based on values """
+        return Config.get_model_name(self.models_dropdown.value, self.project.value)
+
     def _get_data_columns(self, type: WidgetConstant) -> list:
         """ Gets a list of columns connected to data """
         text_columns = list(self.text_columns.value)
@@ -372,7 +676,12 @@ class Widgets:
         self.num_variables.value = num_vars
 
         ready_for_classifier = num_vars > 0
-        self.update_item("continuation_button", {"disabled": ready_for_classifier})
+        if ready_for_classifier:
+            self.enable_button("continuation_button")
+        else:
+            self.disable_button("continuation_button")
+        
+
 
     def get_item_or_error(self, name: str) -> widgets.Widget:
         if not hasattr(self, name):
@@ -441,6 +750,25 @@ class Widgets:
             width="auto",
         )
     
+    def _load_widget(self, name: str, calculated_params: dict = None, callback: Callable = None, handler: Callable = None) -> widgets.Widget:
+        if name not in self.widgets:
+            config = self.default_widgets.get(name)
+
+            calculated_params = calculated_params if calculated_params else {}
+
+            if config:
+                widget_class = getattr(widgets, config["type"])
+                widget_params = config["params"] | calculated_params
+                self.widgets[name] = widget_class(**widget_params)
+
+                if callback:
+                    self.widgets[name].on_click(callback=callback)
+
+                if handler:
+                    self.widgets[name].observe(handler=handler)
+        
+        return self.widgets[name]
+        
     @property
     def progress(self) -> tuple:
         return (self.progress_bar, self.progress_label)
@@ -448,43 +776,31 @@ class Widgets:
     
     @property
     def logo(self) -> widgets.Image:
+        """ This checks the if here, since the initial state requires loading an image """
         name = sys._getframe(  ).f_code.co_name # Current function name
+
         if name not in self.widgets:
             logo = open(self.logo_image, "rb")
-            self.widgets[name] = widgets.Image(
-                value = logo.read(),
-                format = "png",
-            )
-        
+
+            return self._load_widget(name, {
+                "value": logo.read()
+            })
+
         return self.widgets[name]
 
     @property
     def welcome(self) -> widgets.HTML:
+        """ The initial data is entirely from the json """
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.HTML(
-                value="<h1>Welcome to IAF automatic classification!</h1>"
-            )
         
-        return self.widgets[name]
+        return self._load_widget(name)
     
     @property
     def project(self) -> widgets.Text:
+        """ The initial data is entirely from the json """
         name = sys._getframe(  ).f_code.co_name # Current function name
-        # This is defined outside of the rest to test proof-of-concept of defining the
-        # intial values in a json file
-        kwargs = {
-            "value": "default",
-            "placeholder": "Project name",
-            "description": "Project name:",
-            "description_tooltip": "Enter a distinct project name for the model"
-        }
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Text(
-                **kwargs
-            )
         
-        return self.widgets[name]
+        return self._load_widget(name)
 
     
     @property
@@ -616,14 +932,8 @@ class Widgets:
     def continuation_button(self) -> widgets.Button:
         name = sys._getframe(  ).f_code.co_name # Current function name
         if name not in self.widgets:
-            self.widgets[name] =   widgets.Button(
-                description="Continue",
-                disabled=True,
-                button_style="success", 
-                tooltip="Continue with the process using these settings",
-                icon="check" 
-            )
-            self.widgets[name].on_click(callback=self.eventhandler.continuation_button_was_clicked)
+            self._load_widget(name, callback=self.eventhandler.continuation_button_was_clicked)
+        
         return self.widgets[name]
     
     @property
@@ -865,7 +1175,7 @@ class Widgets:
         return self.widgets[name]
     
     @property
-    def num_rows(self) -> widgets.IntText:
+    def data_limit(self) -> widgets.IntText:
         name = sys._getframe(  ).f_code.co_name # Current function name
         if name not in self.widgets:
             self.widgets[name] =  widgets.IntText(
@@ -909,66 +1219,30 @@ class Widgets:
     def start_button(self) -> widgets.Button:
         name = sys._getframe(  ).f_code.co_name # Current function name
         if name not in self.widgets:
-            self.widgets[name] =   widgets.Button(
-                description="Start",
-                disabled=True,
-                button_style="success", 
-                tooltip="Run the classifier using the current settings",
-                icon="check" 
-            )
-            self.widgets[name].on_click(callback = self.eventhandler.start_button_was_clicked)
+            self._load_widget(name, callback=self.eventhandler.start_button_was_clicked)
         return self.widgets[name]
 
     @property
     def progress_bar(self) -> widgets.FloatProgress:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.FloatProgress(
-                value=0.0,
-                min=0.0,
-                max=1.0,
-                description="Progress:",
-                bar_style="info",
-                style={"bar_color": "#004B99"},
-                orientation="horizontal",
-                description_tooltip = "The computational process is shown here"
-            )
+        return self._load_widget(name)
         
-        return self.widgets[name]
     
     @property
     def progress_label(self) -> widgets.HTML:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.HTML(
-                value=""
-            )
-        
-        return self.widgets[name]
+        return self._load_widget(name)
     
     @property
     def output(self) -> widgets.Output:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =  widgets.Output(
-                layout={"border": "2px solid grey"}
-            )  
-        
-        return self.widgets[name]
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name)
     
     @property
     def mispredicted_gridbox(self) -> widgets.Label:
-        # TODO: Why is this a label?
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self.widgets[name] =   widgets.Label(
-                value = "No mispredicted training data was detected yet",
-                description_tooltip = "Use to manually inspect and correct mispredicted training data"
-            )
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name)
         
-        return self.widgets[name]
-
-
     def display_gui(self) -> None:
         """ Displays the elements in the given order """
         

@@ -30,6 +30,10 @@ class IAFLogger(terminal.Logger):
         terminal.Logger.__init__(self, quiet=quiet)
         
 
+    def set_enable_quiet(self, enable_quiet: bool) -> None:
+        """ Sets quiet after init """
+        self._enable_quiet = enable_quiet
+    
     def print_welcoming_message(self, config: Config, date_now: datetime) -> None:
         
         # Print welcoming message
