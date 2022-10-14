@@ -16,6 +16,8 @@
 import os
 import sys
 
+from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
+
 from IAFExceptions import HandlerException
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
@@ -32,6 +34,15 @@ import Config
 import SQLDataLayer
 import IAFLogger
 from IAFHandler import IAFHandler
+
+import warnings
+# Sklearn issue a lot of warnings sometimes, we suppress them here
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=FitFailedWarning)
+warnings.filterwarnings("ignore", category=ConvergenceWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 class AutomaticClassifier:
 
