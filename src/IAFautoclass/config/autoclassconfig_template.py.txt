@@ -139,6 +139,6 @@ debug = {
     "on": <on>,
     
     # Number of records to consider in data table
-    "num_rows": "<num_rows>",    
+    "data_limit": "<data_limit>",    
     
 }

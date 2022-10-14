@@ -154,7 +154,7 @@ class TestDataLayer():
         """ This is a query in string format """
         query = default_sqldatalayer.get_class_distribution_query()
 
-        expectedQuery = "SELECT class, COUNT(*) FROM [DatabaseTwo].[InputTable] GROUP BY class ORDER BY class DESC"
+        expectedQuery = "SELECT [class], COUNT(*) FROM [DatabaseTwo].[InputTable] GROUP BY [class] ORDER BY [class] DESC"
 
         assert query == expectedQuery
 

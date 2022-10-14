@@ -43,6 +43,10 @@ class MockLogger():
     def print_percentage(self, text: str, old_percent: float, percent_checked: float) -> None:
         """ Prints using the normal print() """
 
+    def print_dragon(self, exception: Exception) -> None:
+        """ Type of Unhandled Exceptions, to handle them for the future """
+        
+
 class MockConfig():
     # Methods to hide implementation of Config
     def set_num_selected_features(self, num_features: int) -> None:

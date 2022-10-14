@@ -36,7 +36,7 @@ def get_model_path() -> Path:
     return this_file.parent / "fixtures/"
 
 def get_logo_path() -> Path:
-    return get_src_path() / "images/iaf-logo.png"
+    return get_src_path() / "images/logo.png"
 
 @pytest.fixture
 def widgets() -> Widgets:
@@ -158,7 +158,7 @@ def widget_parameters() -> dict:
             "button_style": "primary", 
             "disabled": True,
             "tooltip": "Continue with the process using these settings",
-            "icon": "check" 
+            "icon": "forward" 
         },
         "train_checkbox": {
             "pre__load": {

@@ -1306,6 +1306,7 @@ class Config:
             lines = fin.readlines()
         
         for tag in self.TEMPLATE_TAGS:
+            print(tag)
             template = self.TEMPLATE_TAGS[tag]
             location = tag.split(".")
             
@@ -1329,6 +1330,10 @@ class Config:
 
             for i in range(len(lines)):
                 lines[i] = lines[i].replace(template, str(replace))
+
+        # This fixes the issue with debug/num_rows
+        if hasattr(self.debug, "num_rows"):
+            print("woo?")
        
         filepath = filepath if filepath else self.filepath
         
@@ -1509,8 +1514,6 @@ class Config:
             setattr(self, key, item)
 
         self.__post_init__()
-        #if self.save:
-        #    self.save_to_file()
 
 
     def is_text_data(self) -> bool:

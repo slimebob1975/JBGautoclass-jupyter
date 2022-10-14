@@ -1,4 +1,4 @@
-{   "logo": "images/iaf-logo.png",
+{   "logo": "images/logo.png",
     "widgets": {
         "logo": {
             "type": "Image",
