@@ -1,4 +1,5 @@
 from __future__ import annotations
+import dis
 from enum import Enum
 import os
 from pathlib import Path
@@ -101,7 +102,10 @@ class EventHandler:
         if change.name == "disabled" and change.name:
             # This is still disabled
             return
-        
+
+        if change.name == "index" and change.old != change.new: # This is not done automatically
+            self.widgets.summarise_state = True
+ 
         """ update_id_and_data_columns
         """
         self.widgets.update_class_summary()
@@ -206,7 +210,7 @@ class Widgets:
         if settings:
             self.settings = settings
         else:
-            with open(Path(__file__).parent / "settings.json") as f: # The settings.json is sibling
+            with open(Path(__file__).parent / "default_settings.json") as f: # The default_settings.json is sibling
                 self.settings = json.load(f)
         
         self.datalayer = datalayer
@@ -219,7 +223,8 @@ class Widgets:
         self.logo_image = src_path / self.settings.get("logo")
 
         self.states = {
-            "rerun": False
+            "rerun": False,
+            "summarise": False,
         }
         self.widgets = {}
         self._load_default_widgets()
@@ -237,6 +242,22 @@ class Widgets:
         # We need a dictionary to keep track of datatypes
         self.datatype_dict = None
     
+    @property
+    def rerun_state(self) -> bool:
+        return self.states["rerun"]
+
+    @rerun_state.setter
+    def rerun_state(self, state: bool) -> None:
+        self.states["rerun"] = state
+    
+    @property
+    def summarise_state(self) -> bool:
+        return self.states["summarise"]
+
+    @summarise_state.setter
+    def summarise_state(self, state: bool) -> None:
+        self.states["summarise"] = state
+
     
     def load_contents(self, datalayer: DataLayer = None) -> None:
         """ This is when we set content loaded from datasource """
@@ -365,10 +386,10 @@ class Widgets:
 
     def start_button_actions(self) -> None:
         """ Complex actions when button is clicked """
-        if self.states["rerun"]:
+        if self.rerun_state:
             self.update_class_summary()
         else:
-            self.states["rerun"] = True
+            self.rerun_state = True
         
         self.output.clear_output(wait=True)
         
@@ -611,6 +632,9 @@ class Widgets:
 
     def update_class_summary(self):
         """ Sets the class summary """
+        if not self.summarise_state:
+            return
+        
         current_class = self.class_column.value
         
         try:
@@ -619,7 +643,10 @@ class Widgets:
             message = f"Could not update summary for class: {current_class} because {e}"
             self.guihandler.logger.print_info(message)
         else: # No exception
-            new_text = f"Class column: '{current_class}', with distribution: {str(distribution)[1:-1]}, in total: {sum(distribution.values())} rows"
+            dist_items = '; '.join(f'{key} ({value})' for key, value in distribution.items())
+            new_text = f"<em>Class column</em>: {current_class}<br>"
+            new_text += f"<em>Distribution</em>: {dist_items}<br>"
+            new_text += f"<em>Total rows</em>: {sum(distribution.values())}" 
             
             self.class_summary.value = new_text
         

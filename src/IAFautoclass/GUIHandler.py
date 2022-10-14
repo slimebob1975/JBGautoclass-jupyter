@@ -3,6 +3,7 @@
 # Broken into module by: Marie Hogebrandt June-oct 2022
 
 import errno
+import json
 import os
 import sys
 from pathlib import Path
@@ -10,7 +11,7 @@ from pathlib import Path
 from ipywidgets import Output
 
 src_dir = os.path.dirname(os.path.realpath(__file__))
-env_path = os.path.join(os.getcwd(), '.env')
+env_path = os.path.join(os.getcwd(), ".env")
 
 sys.path.append(src_dir)
 
@@ -27,7 +28,14 @@ from GUI.Widgets import Widgets
 class GUIHandler:
     # Constructor
     def __init__(self):
-        self.widgets = Widgets(src_path=Path(src_dir), GUIhandler=self)
+        settings = None
+        settings_file = os.path.join(os.getcwd(), "settings.json")
+        if os.path.isfile(settings_file):
+            with open(settings_file) as f:
+                settings = json.load(f)
+
+        self.widgets = Widgets(src_path=Path(src_dir), GUIhandler=self, settings=settings)
+        
         # The classifier object is a data element in our GUI
         self.the_classifier = None
         

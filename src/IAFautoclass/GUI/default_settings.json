@@ -9,7 +9,7 @@
         "welcome": {
             "type": "HTML",
             "params": {
-                "value": "<h1>Welcome to IAF automatic classification!</h1>"
+                "value": "<h1>Welcome to JBG automatic classification!</h1>"
             }
         },
         "project": {
@@ -77,7 +77,7 @@
                 "options": ["N/A"],
                 "value": [],
                 "disabled": true,
-                "description": "Pick data columns:",
+                "description": "Data columns:",
                 "description_tooltip": "Pick the columns with the data to be used in the classification"
             }
         },

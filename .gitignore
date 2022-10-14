@@ -11,3 +11,4 @@ src/IAFautoclass/model/*.sav
 .ideas
 .pytest_cache
 __test.py
+settings.json
