@@ -642,7 +642,7 @@ class Widgets:
         """ Sets any text-columns as pickable """
         updates = {
             "options": self.data_columns.value,
-            "values": [col for col in self.data_columns.value if self.datatype_dict[col] in Config.TEXT_DATATYPES],
+            "value": [col for col in self.data_columns.value if self.datatype_dict[col] in Config.TEXT_DATATYPES],
             "disabled": False
         }
         self.update_item("text_columns", updates)
