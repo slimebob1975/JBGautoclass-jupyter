@@ -298,7 +298,6 @@ class DataLayer(DataLayerBase):
             # Return the number of inserted rows
             return num_lines
         except KeyError as ke:
-            print(ke)
             raise DataLayerException(f"Something went wrong when saving data ({ke})")
         except Exception as e:
             self.logger.print_dragon(e)
