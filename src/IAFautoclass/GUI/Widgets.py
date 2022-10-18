@@ -56,7 +56,7 @@ class EventHandler:
         # Change to default values below if it's changing in ways
         if not self.should_run_event(change):
             return
-        
+        self.widgets.update_data_catalog()
         self.widgets.update_data_tables_dropdown()
     
     def data_tables_dropdown(self, change: Bunch) -> None:
@@ -200,12 +200,23 @@ class GUIhandler(Protocol):
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
         """ Changes the original dataset """
 
+    @property
+    def logger(self):
+        """ Signifies the logger property """
+
+    @property
+    def datalayer(self) -> DataLayer:
+        """ Returns the datalayer """
+
+    def set_data_catalog(self, data_catalog: str) -> None:
+        """ Updates the GUI datalayer with the data catalog """
+
 class Widgets:
     """ Creates and populates the widgets of the GUI """
     TEXT_MIN_LIMIT = 30
     TEXT_AREA_MIN_LIMIT = 60
     
-    def __init__(self, src_path: Path, GUIhandler: GUIhandler, model_path: Path = None, datalayer: DataLayer = None, settings: dict = None) -> None:
+    def __init__(self, src_path: Path, GUIhandler: GUIhandler, model_path: Path = None, settings: dict = None) -> None:
 
         if settings:
             self.settings = settings
@@ -213,7 +224,6 @@ class Widgets:
             with open(Path(__file__).parent / "default_settings.json") as f: # The default_settings.json is sibling
                 self.settings = json.load(f)
         
-        self.datalayer = datalayer
         self.eventhandler = EventHandler(self)
         self.guihandler = GUIhandler
         self.model_path = model_path if model_path else src_path / Config.DEFAULT_MODELS_PATH
@@ -243,6 +253,11 @@ class Widgets:
         self.datatype_dict = None
     
     @property
+    def datalayer(self) -> DataLayer:
+        """ This returns the datalayer from the gui handler """
+        return self.guihandler.datalayer
+
+    @property
     def rerun_state(self) -> bool:
         return self.states["rerun"]
 
@@ -259,11 +274,8 @@ class Widgets:
         self.states["summarise"] = state
 
     
-    def load_contents(self, datalayer: DataLayer = None) -> None:
+    def load_contents(self) -> None:
         """ This is when we set content loaded from datasource """
-        if datalayer:
-            self.datalayer = datalayer
-
         if not self.datalayer:
             raise GuiWidgetsException("Data Layer not initialized")
 
@@ -544,6 +556,11 @@ class Widgets:
                 item = self.get_item_or_error(name)
                 if hasattr(item, "disabled"):
                     setattr(item, "disabled", False)
+
+    def update_data_catalog(self) -> None:
+        """ Update datalayer with data_catalog """
+        # TODO: This doesn't work as expected (changing the catalog) currently because the datalayer *only* looks at class_catalog
+        self.guihandler.set_data_catalog(self.data_catalogs_dropdown.value)
 
     def update_data_catalogs_dropdown(self) -> None:
         catalog_list = self.datalayer.get_catalogs_as_options()
