@@ -62,9 +62,20 @@ class GUIHandler:
         if not self.gui_datalayer.can_connect(verbose=True):
             sys.exit("GUI Handler could not connect to Server")
         
-        self.widgets.load_contents(self.gui_datalayer)
+        self.widgets.load_contents()
         
-           
+    @property
+    def datalayer(self) -> DataLayer:
+        """ This returns the GUI datalayer """
+        return self.gui_datalayer
+
+    def set_data_catalog(self, data_catalog: str) -> None:
+        """ Updates the GUI datalayer with the data catalog """
+        self.gui_datalayer.config.update_connection_columns({
+            "data_catalog": data_catalog
+            
+        })
+
     def get_class_distribution(self, data_settings: dict) -> dict:
         """ Widgets does not need to know about Classifier Datalayer """
         datalayer = self.get_classifier_datalayer(data_settings=data_settings)

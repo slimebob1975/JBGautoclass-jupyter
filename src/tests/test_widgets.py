@@ -26,6 +26,10 @@ class MockDataLayer:
 
 class MockGUIhandler:
     """ Empty for now"""
+    @property
+    def datalayer(self):
+        dl = MockDataLayer()
+        return dl
 
 def get_src_path() -> Path:
     this_file = Path(__file__)
@@ -40,10 +44,9 @@ def get_logo_path() -> Path:
 
 @pytest.fixture
 def widgets() -> Widgets:
-    dl = MockDataLayer()
     gh = MockGUIhandler()
     
-    return Widgets(src_path=get_src_path(), GUIhandler=gh, model_path=get_model_path(), datalayer=dl)
+    return Widgets(src_path=get_src_path(), GUIhandler=gh, model_path=get_model_path())
 
 @pytest.fixture
 def loaded_widgets(widgets) -> Widgets:
@@ -61,7 +64,7 @@ def widget_parameters() -> dict:
             "format": "png"
         },
         "welcome": {
-            "value": "<h1>Welcome to IAF automatic classification!</h1>"
+            "value": "<h1>Welcome to JBG automatic classification!</h1>"
         },
         "project": {
             "pre__load": {
@@ -135,7 +138,7 @@ def widget_parameters() -> dict:
                 "options": ["N/A"],
                 "value": (),
                 "disabled": True,
-                "description": "Pick data columns:",
+                "description": "Data columns:",
                 "description_tooltip": "Pick the columns with the data to be used in the classification"
             }
         },
