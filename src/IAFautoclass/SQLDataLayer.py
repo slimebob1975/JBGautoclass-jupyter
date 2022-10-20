@@ -82,9 +82,13 @@ class DataLayer(DataLayerBase):
     def get_gui_list(self, type: str, list_format: str, first_empty: bool = True) -> list:
         """ For queries used in the GUI """
 
+        data_catalog = self.config.get_data_catalog_params()["catalog"]
+        class_catalog = self.config.get_class_catalog_params()["catalog"]
+
         available_queries = {
             "databases": "SELECT name FROM sys.databases ORDER BY name",
-            "tables": "SELECT TABLE_SCHEMA,TABLE_NAME FROM INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA,TABLE_NAME"
+            "tables": "SELECT TABLE_SCHEMA,TABLE_NAME FROM "+ data_catalog + \
+                ".INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA,TABLE_NAME"
         }
 
         if type in available_queries:
