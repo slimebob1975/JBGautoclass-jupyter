@@ -137,18 +137,19 @@
             }
         },
         "algorithm_dropdown": {
-            "type": "Dropdown",
+            "type": "SelectMultiple",
             "params": {
-                "value": "ALL",
+                "value": ["ABC"],
                 "description": "Algorithm:",
                 "disabled": true,
                 "description_tooltip": "Pick which algorithms to use"
             }
         },
         "preprocess_dropdown": {
-            "type": "Dropdown",
+            "_type": "Dropdown",
+            "type": "SelectMultiple",
             "params": {
-                "value": "ALL",
+                "value": ["NON"],
                 "description": "Preprocess:",
                 "disabled": true,
                 "description_tooltip": "Pick which data preprocessors to use"

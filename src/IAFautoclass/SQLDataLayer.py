@@ -82,12 +82,10 @@ class DataLayer(DataLayerBase):
     def get_gui_list(self, type: str, list_format: str, first_empty: bool = True) -> list:
         """ For queries used in the GUI """
 
-        data_catalog = self.config.get_data_catalog_params()["catalog"]
-        class_catalog = self.config.get_class_catalog_params()["catalog"]
-
         available_queries = {
             "databases": "SELECT name FROM sys.databases ORDER BY name",
-            "tables": "SELECT TABLE_SCHEMA,TABLE_NAME FROM "+ data_catalog + \
+            "tables": "SELECT TABLE_SCHEMA,TABLE_NAME FROM " + \
+                self.config.get_data_catalog_params()["catalog"] + \
                 ".INFORMATION_SCHEMA.TABLES ORDER BY TABLE_SCHEMA,TABLE_NAME"
         }
 
@@ -181,7 +179,7 @@ class DataLayer(DataLayerBase):
             "class_algorithm"
         ]
 
-        columns = ",".join([f"TOP({num_rows})"] + [f"A.[{a}]" for a in dataCols] + [f"B.[{b}]" for b in classCols])
+        columns = f"TOP({num_rows}) " + ", ".join([f"A.[{a}]" for a in dataCols] + [f"B.[{b}]" for b in classCols])
 
         classTable = connection.get_formatted_class_table() + " B"
         dataTable = connection.get_formatted_data_table() + " A"

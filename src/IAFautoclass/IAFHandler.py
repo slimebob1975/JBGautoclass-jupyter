@@ -924,29 +924,29 @@ class ModelHandler:
 
     # While more code, this should (hopefully) be easier to read
     def should_run_computation(self, current_algorithm: Algorithm, current_preprocessor: Preprocess) -> bool:
-        chosen_algorithm = self.handler.config.get_algorithm()
-        chosen_preprocessor = self.handler.config.get_preprocessor()
+        #chosen_algorithm = self.handler.config.get_algorithm()
+        #chosen_preprocessor = self.handler.config.get_preprocessor()
 
         # RLRN and RFE do not get along
         if current_algorithm == Algorithm.RLRN and self.handler.config.use_RFE():
             return False
         
         # If both of these are ALL, it doesn't matter where in the set we are
-        if chosen_algorithm == Algorithm.ALL and chosen_preprocessor == Preprocess.ALL:
-            return True
+        #if chosen_algorithm == Algorithm.ALL and chosen_preprocessor == Preprocess.ALL:
+        #    return True
 
         # If both the current one are equal to the chosen ones, carry on
-        if current_algorithm == chosen_algorithm and current_preprocessor == chosen_preprocessor:
-            return True
+        #if current_algorithm == chosen_algorithm and current_preprocessor == chosen_preprocessor:
+        #    return True
 
         # Two edge cases: A is All and P is Current, or A is Current and P is All
-        if chosen_algorithm == Algorithm.ALL and current_preprocessor == chosen_preprocessor:
-            return True
+        #if chosen_algorithm == Algorithm.ALL and current_preprocessor == chosen_preprocessor:
+        #    return True
 
-        if current_algorithm == chosen_algorithm and chosen_preprocessor == Preprocess.ALL:
-            return True
+        #if current_algorithm == chosen_algorithm and chosen_preprocessor == Preprocess.ALL:
+        #    return True
 
-        return False
+        return True
 
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
@@ -957,7 +957,12 @@ class ModelHandler:
         standardProgressText = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot check ml algorithms...")
         
-        algorithms = Algorithm.list_callable_algorithms(
+        #algorithms = Algorithm.list_callable_algorithms(
+        #    size=X_train.shape[0], 
+        #    max_iterations=self.handler.config.get_max_iterations()
+        #)
+
+        algorithms = self.handler.config.mode.algorithm.list_callable_algorithms(
             size=X_train.shape[0], 
             max_iterations=self.handler.config.get_max_iterations()
         )
@@ -999,7 +1004,6 @@ class ModelHandler:
                     self.handler.update_progress(percent=percentAddPerMinorTask)
                 else:
                     first_round = False
-
 
                 # Add feature selection if selected, i.e., the option of reducing the number of variables used.
                 # Make a binary search for the optimal dimensions.
@@ -1360,7 +1364,10 @@ class PredictionsHandler:
             return item
 
     def get_mispredicted_dataframe(self) -> pandas.DataFrame:
-        return self.X_most_mispredicted
+        try:
+            return self.X_most_mispredicted
+        except AttributeError:
+            return None
 
     def report_results(self, Y, model) -> None:
         """ Prints the various informations """
@@ -1384,7 +1391,10 @@ class PredictionsHandler:
     # Evaluates mispredictions
     def evaluate_mispredictions(self, misplaced_filepath: str) -> None:
         read_data_query = self.handler.read_data_query
-        if self.X_most_mispredicted.empty or not self.handler.config.should_display_mispredicted():
+        try:
+            if self.X_most_mispredicted.empty or not self.handler.config.should_display_mispredicted():
+                return 
+        except AttributeError: # In some cases X_most_mispredicted is not even defined
             return
         
         self.handler.logger.print_always(f"Total number of mispredicted elements: {self.num_mispredicted}")

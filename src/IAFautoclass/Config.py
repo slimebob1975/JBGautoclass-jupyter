@@ -6,7 +6,7 @@ import pickle
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Protocol, Type, TypeVar, Union
+from typing import Callable, Iterable, Protocol, Type, TypeVar, Union
 
 import pandas
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
@@ -231,7 +231,6 @@ class Detector(MetaEnum):
         return IAFRandomForestDetector()
 
 class Algorithm(MetaEnum):
-    ALL = { "full_name": "All"}
     SRF1 = { "full_name": "Stacking Random Forests Cl. 1"}
     SRF2 = { "full_name": "Stacking Random Forests Cl. 2"}
     BARF = { "full_name": "Balanced Random Forest Classifier"}
@@ -291,6 +290,8 @@ class Algorithm(MetaEnum):
     CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN}
     CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH}
 
+    def get_full_name(self) -> str:
+        return self.full_name
 
     @property
     def limit(self):
@@ -312,7 +313,6 @@ class Algorithm(MetaEnum):
             return self.value.get("fit_params", {})
         
         return {}
-
 
     @classmethod
     def list_callable_algorithms(cls, size: int, max_iterations: int) -> list[tuple]:
@@ -558,14 +558,55 @@ class Algorithm(MetaEnum):
     def call_FLT(self, detector) -> Filter:
         return Filter(classifier=SVC(), detector=detector.call_detector())
 
+class AlgorithmTuple:
+
+    def __init__(self, list) -> None:
+        if isinstance(list, Iterable):
+            algorithms = []
+            for algorithm in list:
+                if isinstance(algorithm, Algorithm):
+                    algorithms.append(algorithm)
+                elif isinstance(algorithm, str):
+                    algorithms.append(Algorithm[algorithm])
+                else:
+                    raise ValueError("Each element in input list must be an Algorithm instance")
+            self.algorithms = tuple(algorithms)
+        else:
+            raise ValueError("Input to AlgorithmTuple must be an iterable")
+
+    def __str__(self) -> str:
+        output = ""
+        for algorithm in self.algorithms:
+            output += ',' + str(algorithm.name)
+        return output[1:]
+
+    def get_full_name(self) -> str:
+        return self.get_full_names()
+    
+    def get_full_names(self) -> str:
+        output = ""
+        for algorithm in self.algorithms:
+            output += ', ' + str(algorithm.get_full_name())
+        return output[2:]
+
+    def list_callable_algorithms(self, size: int, max_iterations: int) -> list[tuple]:
+        """ Gets a list of algorithms that are callable
+            in the form (algorithm, called function)
+        """
+        algorithms =  [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in self.algorithms if algo.has_function()]
+        algorithms.sort(key=lambda algotuple: algotuple[0].name)
+        return algorithms
+
 class Preprocess(MetaEnum):
-    ALL = "All"
     NON = "None"
     STA = "Standard Scaler"
     MIX = "Min-Max Scaler"
     MMX = "Max-Absolute Scaler"
     NRM = "Normalizer"
     BIN = "Binarizer"
+
+    def get_full_name(self) -> str:
+        return self.full_name
 
     @classmethod
     def list_callable_preprocessors(cls, is_text_data: bool) -> list[tuple]:
@@ -597,6 +638,43 @@ class Preprocess(MetaEnum):
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
         return self.call_function()
 
+class PreprocessTuple:
+
+    def __init__(self, list) -> None:
+        if isinstance(list, Iterable):
+            preprocessors = []
+            for preprocessor in list:
+                if isinstance(preprocessor, Preprocess):
+                    preprocessors.append(preprocessor)
+                elif isinstance(preprocessor, str):
+                    preprocessors.append(Preprocess[preprocessor])
+                else:
+                    raise ValueError("Each element in input list must be an Preprocess instance")
+            self.preprocessors = tuple(preprocessors)
+        else:
+            raise ValueError("Input to PreprocessTuple must be an iterable")
+
+    def __str__(self) -> str:
+        output = ""
+        for preprocessor in self.preprocessors:
+            output += ',' + str(preprocessor.name)
+        return output[1:]
+
+    def get_full_names(self) -> str:
+        output = ""
+        for preprocessor in self.preprocessors:
+            output += ', ' + str(preprocessor.get_full_name())
+        return output[2:]
+
+    def get_full_name(self) -> str:
+        return self.get_full_names()
+
+    def list_callable_preprocessors(self, is_text_data: bool) -> list[tuple]:
+        """ Gets a list of preprocessors that are callable (including NON -> None)
+            in the form (preprocessor, called function)
+        """
+        return [(pp, pp.call_preprocess()) for pp in self.preprocessors if pp.has_function() and (pp.name != "BIN" or is_text_data)]
+
 class Reduction(MetaEnum):
     NON = "None"
     RFE = "Recursive Feature Elimination"
@@ -607,6 +685,9 @@ class Reduction(MetaEnum):
     GRP = "Gaussion Random Projection"
     ISO = "Isometric Mapping"
     LLE = "Locally Linearized Embedding"
+
+    def get_full_name(self) -> str:
+        return self.full_name
 
     def call_transformation(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
@@ -753,6 +834,9 @@ class ScoreMetric(MetaEnum):
     precision_weighted = {"full_name": "Precision Weighted", "callable": precision_score, "kwargs": {"average": 'weighted'}}
     mcc = {"full_name":"Matthews Corr. Coefficient", "callable": matthews_corrcoef, "kwargs": None}
 
+    def get_full_name(self) -> str:
+        return self.full_name
+    
     @property
     def callable(self):
         if isinstance(self.value, dict):
@@ -1070,8 +1154,8 @@ class Config:
         test_size: float = 0.2
         smote: bool = False
         undersample: bool = False
-        algorithm: Algorithm = Algorithm.ALL
-        preprocessor: Preprocess = Preprocess.NON
+        algorithm: Algorithm = AlgorithmTuple([Algorithm.LDA])
+        preprocessor: Preprocess = PreprocessTuple([Preprocess.NON])
         feature_selection: Reduction = Reduction.NON
         num_selected_features: int = None
         scoring: ScoreMetric = ScoreMetric.accuracy
@@ -1130,10 +1214,10 @@ class Config:
                 raise TypeError(
                     "Argument test_size must be a float between 0 and 1!")
 
-            if not (isinstance(self.algorithm, Algorithm)):
+            if not (isinstance(self.algorithm, AlgorithmTuple)):
                 raise TypeError("Argument algorithm is invalid")
 
-            if not (isinstance(self.preprocessor, Preprocess)):
+            if not (isinstance(self.preprocessor, PreprocessTuple)):
                 raise TypeError("Argument preprocessor is invalid")
 
             if not (isinstance(self.feature_selection, Reduction)):
@@ -1162,10 +1246,10 @@ class Config:
                 f" * Test size for trainings:                 {self.test_size}",
                 f" * Use SMOTE:                               {self.smote}",
                 f" * Use undersampling of majority class:     {self.undersample}",
-                f" * Algorithm of choice:                     {self.algorithm.full_name}",
-                f" * Preprocessing method of choice:          {self.preprocessor.full_name}",
-                f" * Scoring method:                          {self.scoring.full_name}",
-                f" * Feature selection:                       {self.feature_selection.full_name}",
+                f" * Algorithms of choice:                    {self.algorithm.get_full_name()}",
+                f" * Preprocessing method of choice:          {self.preprocessor.get_full_name()}",
+                f" * Scoring method:                          {self.scoring.get_full_name()}",
+                f" * Feature selection:                       {self.feature_selection.get_full_name()}",
                 f" * Number of selected features:             {self.num_selected_features}",
                 f" * Maximum iterations (where applicable):   {self.max_iterations}"
             ]
@@ -1306,7 +1390,7 @@ class Config:
             lines = fin.readlines()
         
         for tag in self.TEMPLATE_TAGS:
-            print(tag)
+            #print(tag)
             template = self.TEMPLATE_TAGS[tag]
             location = tag.split(".")
             
@@ -1796,11 +1880,11 @@ class Config:
 
     def get_algorithm(self) -> Algorithm:
         """ Get algorithm from Config"""
-        return self.mode.algorithm
+        return Algorithm(self.mode.algorithm)
 
     def get_preprocessor(self) -> Preprocess:
         """ get preprocessor from Config """
-        return self.mode.preprocessor
+        return Preprocess(self.mode.preprocessor)
     
     def get_class_table(self) -> str:
         """ Gets the class table with database """
@@ -1854,12 +1938,6 @@ def main():
     }
     print(config.debug)
     config.update_configuration(updates)
-    #print(isinstance(config.mode.scoring, enum.Enum))
-    #print(config.mode.scoring.name)
-    #config.export_configuration_to_file()
-    # print(Algorithm.ALL.value)
-    #config.save_to_file(filename="testing")
-
-
+    
 if __name__ == "__main__":
     main()

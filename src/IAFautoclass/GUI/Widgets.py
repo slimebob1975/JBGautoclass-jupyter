@@ -10,7 +10,7 @@ from typing import Callable, Protocol
 import ipywidgets as widgets
 from sklearn.utils import Bunch
 
-from Config import Config, Reduction, Algorithm, Preprocess, ScoreMetric
+from Config import Config, Reduction, Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple, ScoreMetric
 from IAFExceptions import GuiWidgetsException
 from AutomaticClassifier import AutomaticClassifier
 import Helpers
@@ -138,7 +138,22 @@ class EventHandler:
         self.widgets.update_text_columns()
         self.widgets.update_ready() # At the moment enables/disables the continuation_button
     
+    def algorithm_dropdown_handler(self, change: Bunch) -> None:
+        self.check_num_algorithms_and_preprocesses(change)
 
+    def preprocess_dropdown_handler(self, change: Bunch) -> None:
+        self.check_num_algorithms_and_preprocesses(change)
+    
+    def check_num_algorithms_and_preprocesses(self, change: Bunch) -> None:
+        num_alg = len(self.widgets.algorithm_dropdown.value)
+        num_pre = len(self.widgets.preprocess_dropdown.value)
+        if num_alg < 1 or num_pre < 1:
+            if not self.widgets.start_button.disabled:
+                self.widgets.start_button.disabled = True
+        elif num_alg >= 1 and num_pre >= 1:
+            if self.widgets.start_button.disabled:
+                self.widgets.start_button.disabled = False
+    
     def reclassify_dropdown__value(self, change: Bunch) -> None:
         """ Handler for mispredicted/reclassify value-event
             Triggers a correction into the database
@@ -296,8 +311,8 @@ class Widgets:
             "id_column": config.get_id_column_name(),
             "data_columns": config.get_data_column_names(),
             "text_columns": config.get_text_column_names(),
-            "algorithm_dropdown": config.get_algorithm().name,
-            "preprocess_dropdown": config.get_preprocessor().name,
+            "algorithm_dropdown": tuple([str(config.get_algorithm().name)]),
+            "preprocess_dropdown": tuple([str(config.get_preprocessor().name)]), 
             "reduction_dropdown": config.get_feature_selection().name,
             "num_variables": config.get_num_selected_features(),
             "filter_checkbox": config.use_stop_words(),
@@ -416,6 +431,8 @@ class Widgets:
         
     def handle_mispredicted(self, classifier: AutomaticClassifier) -> None:
         mispredicted = classifier.get_mispredicted_dataframe()
+        if mispredicted is None:
+            return
         items = [widgets.Label(mispredicted.index.name)] + \
             [widgets.Label(item) for item in mispredicted.columns] + \
             [widgets.Label("Reclassify as")]
@@ -493,8 +510,8 @@ class Widgets:
                 test_size = float(self.testdata_slider.value) / 100.0,
                 smote = self.smote_checkbox.value,
                 undersample = self.undersample_checkbox.value,
-                algorithm = Algorithm[self.algorithm_dropdown.value],
-                preprocessor = Preprocess[self.preprocess_dropdown.value],
+                algorithm = AlgorithmTuple(self.algorithm_dropdown.value),
+                preprocessor = PreprocessTuple(self.preprocess_dropdown.value),
                 feature_selection = Reduction[self.reduction_dropdown.value],
                 num_selected_features = None,
                 scoring = ScoreMetric[self.scoremetric_dropdown.value],
@@ -720,6 +737,7 @@ class Widgets:
     def update_values(self, updates: dict) -> None:
         """ Given a dict with item: value, update the values """
         for name, value in updates.items():
+            print(name, value)
             item = self.get_item_or_error(name)
             if hasattr(item, "value"):
                 setattr(item, "value", value)
@@ -925,16 +943,14 @@ class Widgets:
     @property
     def algorithm_dropdown(self) -> widgets.Dropdown:
         name = sys._getframe().f_code.co_name # Current function name
-        return self._load_widget(name, calculated_params={
-            "options": Algorithm.get_sorted_list()
-        })
+        return self._load_widget(name, handler=self.eventhandler.algorithm_dropdown_handler, \
+            calculated_params={"options": Algorithm.get_sorted_list()})
         
     @property
     def preprocess_dropdown(self) -> widgets.Dropdown:
         name = sys._getframe().f_code.co_name # Current function name
-        return self._load_widget(name, calculated_params={
-            "options": Preprocess.get_sorted_list()
-        })
+        return self._load_widget(name, handler=self.eventhandler.preprocess_dropdown_handler, \
+            calculated_params={"options": Preprocess.get_sorted_list()})
         
     
     @property
