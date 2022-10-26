@@ -402,6 +402,7 @@ class DatasetHandler:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Something went wrong in inconsistency check at {key}: {item} ({e})")
 
+        self.handler.logger.print_linebreak()
         return dataset
 
     def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:

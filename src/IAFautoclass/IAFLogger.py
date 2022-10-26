@@ -205,7 +205,7 @@ class IAFLogger(terminal.Logger):
         return self.writeln('unformatted', *args)
 
     def print_percentage(self, text: str, percent: float, old_percent: float = 0) -> None:
-        if self._enable_quiet or (old_percent > 0 and old_percent <= percent):
+        if self._enable_quiet or (old_percent > 0 and old_percent >= percent):
             return
 
         print(f"{text}: {percent} %", end='\r')

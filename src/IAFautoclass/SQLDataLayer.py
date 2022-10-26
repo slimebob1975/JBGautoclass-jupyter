@@ -372,6 +372,7 @@ class DataLayer(DataLayerBase):
             # database table in question
             data = np.asarray(data).reshape(num_lines,int(len(data)/num_lines)) 
 
+        self.logger.print_linebreak()
         return data
 
     def get_dataset(self, num_rows: int = None) -> list:
