@@ -147,14 +147,14 @@ class IAFLogger(terminal.Logger):
 
         # 1. Descriptive statistics
         pandas.set_option('display.width', 100)
-        pandas.set_option('precision', 3)
+        pandas.set_option('display.precision', 3)
         description = dataset.describe(datetime_is_numeric = True)
         self.print_unformatted("Description:")
         self.print_unformatted(description)
 
         # 2. Correlations
         pandas.set_option('display.width', 100)
-        pandas.set_option('precision', 3)
+        pandas.set_option('display.precision', 3)
         description = dataset.corr('pearson')
         self.print_unformatted("Correlation between attributes:")
         self.print_unformatted(description)
