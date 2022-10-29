@@ -741,16 +741,20 @@ class DatasetHandler:
         [X_upper, X_lower] = np.split(self.X, [self.X.shape[0]-num_lower], axis = 0)
         [Y_upper, Y_lower] = np.split(self.Y, [self.Y.shape[0]-num_lower], axis = 0)
 
-        # Split-out validation dataset from the upper part (do not use random order here)
+        # Split-out validation dataset from the upper part
         testsize = self.handler.config.get_test_size()
+        stratify_strategy = Y_upper                     # Use None for no stratification on class labels
+        shuffle_data = True                             # Use False for no shuffling of data before split
         self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
-            X_upper, Y_upper, test_size = testsize, shuffle = False, random_state = None, stratify = None
-            )
+            X_upper, Y_upper, test_size = testsize, shuffle = True, random_state = 42, 
+            stratify = Y_upper)
 
         self.Y_unknown = Y_lower
         self.X_unknown = X_lower
+
+        if stratify_strategy is None and not shuffle_data:
+            pandas.testing.assert_series_equal(Y_upper, pandas.concat([self.Y_train, self.Y_validation], axis = 0) )
         
-        pandas.testing.assert_series_equal(Y_upper, pandas.concat([self.Y_train, self.Y_validation], axis = 0) )
         return True
         
     # Find out if a DataFrame column contains categorical data or not
