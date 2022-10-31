@@ -1405,7 +1405,7 @@ class PredictionsHandler:
         self.handler.logger.print_always(f"Total number of mispredicted elements: {self.num_mispredicted}")
         
         joiner = self.handler.config.get_id_column_name() + " = \'"
-        most_mispredicted_query = read_data_query + "WHERE " +  joiner \
+        most_mispredicted_query = read_data_query + " WHERE " +  joiner \
             + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
         
         self.handler.logger.print_formatted_info(f"Most mispredicted during training (using {self.model})")
@@ -1549,8 +1549,10 @@ class PredictionsHandler:
         X_mispredicted = X_mispredicted.drop(self.handler.config.get_class_column_name(), axis = 1)
 
         # Add other columns to mispredicted data
-        X_mispredicted.insert(0, "Actual", Y.loc[X_not])
-        X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].values)
+        #X_mispredicted.insert(0, "Actual", Y.loc[X_not].values)            # values not recommended
+        #X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].values)    # values not recommended
+        X_mispredicted.insert(0, "Actual", Y.loc[X_not].to_numpy())
+        X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].to_numpy())
         
         # Add probabilities and sort only if they could be calculated above, otherwise
         # return a random sample of mispredicted
