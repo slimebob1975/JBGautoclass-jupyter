@@ -1175,8 +1175,21 @@ class ModelHandler:
             # Build pipeline of model and preprocessor.
             current_pipeline = self.get_pipeline(algorithm, modified_estimator, transform)
             
-            # Now make kfolded cross evaluation
-            cv_results = self.get_cross_val_score(current_pipeline, X, y, kfold, algorithm)
+            # Now make k-folded cross evaluation - beware of memory explosion, and handle it by downscaling parallelism
+            n_jobs = psutil.cpu_count()
+            success = False
+            while not success:
+                try:
+                    cv_results = self.get_cross_val_score(current_pipeline, X, y, n_jobs, kfold, algorithm)
+                except MemoryError as ex:
+                    if n_jobs == 1:
+                        raise MemoryError("n_jobs is 1 but not enough memory for cross_val_score") from ex
+                    new_njobs = max(int(n_jobs / 2), 1)
+                    self.handler.logger.print_warning(f"MemoryError in cross_val_score, scaling down n_jobs from {n_jobs} to {new_njobs}")
+                    n_jobs = new_njobs
+                else:
+                    success = True
+
         #except ValueError as exception:
         #    raise ModelException(f"Creating pipeline or getting cross val score failed in {algorithm.name}-{preprocessor.name}")
             # This warning kept to not forget it
@@ -1268,7 +1281,7 @@ class ModelHandler:
         return Pipeline(steps=steps)
 
 
-    def get_cross_val_score(self, pipeline: Pipeline, X: pandas.DataFrame, y: pandas.DataFrame, kfold: StratifiedKFold, algorithm: Algorithm) -> np.ndarray:
+    def get_cross_val_score(self, pipeline: Pipeline, X: pandas.DataFrame, y: pandas.DataFrame, n_jobs: int, kfold: StratifiedKFold, algorithm: Algorithm) -> np.ndarray:
         """ Allows to change call to cross_val_score based on algorithm. 
         
           Parameters
@@ -1301,7 +1314,7 @@ class ModelHandler:
             if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
                 fit_params[key] = func(X, y)
 
-        return cross_val_score(pipeline, X, y=y, n_jobs=psutil.cpu_count(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
+        return cross_val_score(pipeline, X, y=y, n_jobs=n_jobs, cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
 
     # Save ml model and corresponding configuration
     def save_model_to_file(self, filename):
