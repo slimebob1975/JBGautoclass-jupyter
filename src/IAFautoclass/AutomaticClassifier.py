@@ -34,6 +34,7 @@ import Config
 import SQLDataLayer
 import IAFLogger
 from IAFHandler import IAFHandler
+import Helpers
 
 import warnings
 # Sklearn issue a lot of warnings sometimes, we suppress them here
@@ -244,7 +245,7 @@ class AutomaticClassifier:
             ph.make_predictions(mh.model.model, dh.X_unknown, dh.classes)
             
             self.logger.print_formatted_info("Predictions for the unknown data")
-            self.logger.print_info("Predictions:", str(ph.predictions))
+            self.logger.print_info("Predictions:", str(Helpers.count_value_distr_as_dict(ph.predictions.tolist())))
             
             self.logger.print_training_rates(ph)
             

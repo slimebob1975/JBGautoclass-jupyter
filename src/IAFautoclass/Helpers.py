@@ -4,6 +4,7 @@ import getopt
 import importlib
 import os
 import sys
+from typing import Iterable
 
 
 import numpy as np
@@ -130,6 +131,12 @@ def find_smallest_class_number(Y: pandas.DataFrame) -> int:
         else:
             class_count[elem] += 1
     return max(1, min(class_count.values()))
+
+def count_value_distr_as_dict(list: Iterable) -> dict:
+    if isinstance(list, Iterable):
+        return {key: list.count(key) for key in set(list)}
+    else:
+        raise ValueError("Input must be an iterable")
 
 # In case the user has specified some input arguments to command line call
 # As written, you need to call on the class in the src\IAFautoclass dir, with
