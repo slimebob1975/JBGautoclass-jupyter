@@ -613,7 +613,7 @@ class Preprocess(MetaEnum):
         """ Gets a list of preprocessors that are callable (including NON -> None)
             in the form (preprocessor, called function)
         """
-        return [(pp, pp.call_preprocess()) for pp in cls if pp.has_function() and (pp.name != "BIN" or is_text_data)]
+        return [(pp, pp.call_preprocess()) for pp in cls if pp.has_function() ]#and (pp.name != "BIN" or is_text_data)]
 
     def do_NON(self) -> None:
         """ While this return is superfluos, it helps with the listings of preprocessors """
@@ -641,6 +641,7 @@ class Preprocess(MetaEnum):
 class PreprocessTuple:
 
     def __init__(self, list) -> None:
+        #print("preprocess input list:", list)
         if isinstance(list, Iterable):
             preprocessors = []
             for preprocessor in list:
@@ -653,6 +654,8 @@ class PreprocessTuple:
             self.preprocessors = tuple(preprocessors)
         else:
             raise ValueError("Input to PreprocessTuple must be an iterable")
+        #print("Resulting preprocesstuple:", str(self.preprocessors))
+
 
     def __str__(self) -> str:
         output = ""
@@ -673,7 +676,7 @@ class PreprocessTuple:
         """ Gets a list of preprocessors that are callable (including NON -> None)
             in the form (preprocessor, called function)
         """
-        return [(pp, pp.call_preprocess()) for pp in self.preprocessors if pp.has_function() and (pp.name != "BIN" or is_text_data)]
+        return [(pp, pp.call_preprocess()) for pp in self.preprocessors if pp.has_function() ]#and (pp.name != "BIN" or is_text_data)]
 
 class Reduction(MetaEnum):
     NON = "None"

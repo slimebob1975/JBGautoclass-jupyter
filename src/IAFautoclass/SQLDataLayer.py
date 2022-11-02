@@ -252,7 +252,14 @@ class DataLayer(DataLayerBase):
         num_lines = 0
         percent_fetched = 0.0
         result_num = len(results)
-        
+
+        # Get class labels separately
+        try:
+            class_labels = ",".join(model.model.classes_)
+        except AttributeError:
+            self.logger.print_info(f"No classes_ attribute in model")
+            class_labels = "N/A"
+
         columns = OrderedDict({
             "catalog_name": self.config.get_data_catalog(),
             "table_name": self.config.get_data_table(),
@@ -261,7 +268,7 @@ class DataLayer(DataLayerBase):
             "class_result": "", # dict["prediction"]
             "class_rate": "", # dict["rate"]
             "class_rate_type": class_rate_type.name,
-            "class_labels": ",".join(model.model.classes_),
+            "class_labels": class_labels,
             "class_probabilities": "", # dict["probabilities"]
             "class_algorithm": model.get_name(),
             "class_script": self.config.script_path,

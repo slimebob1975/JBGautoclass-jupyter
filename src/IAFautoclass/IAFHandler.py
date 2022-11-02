@@ -972,7 +972,11 @@ class ModelHandler:
             max_iterations=self.handler.config.get_max_iterations()
         )
 
-        preprocessors = Preprocess.list_callable_preprocessors(is_text_data=self.handler.config.is_text_data())
+        #preprocessors = Preprocess.list_callable_preprocessors(is_text_data=self.handler.config.is_text_data())
+        preprocessors = self.handler.config.mode.preprocessor.list_callable_preprocessors(
+            is_text_data=self.handler.config.is_text_data()
+        )
+        
         # Evaluate each model in turn in combination with all preprocessing methods
         best_mean = 0.0
         best_stdev = 1.0
