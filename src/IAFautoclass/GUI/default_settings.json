@@ -136,6 +136,16 @@
                 "description_tooltip": "The classifier will display mispredicted training data for manual inspection and correction"
             }
         },
+        "metas_checkbox": {
+            "type": "Checkbox",
+            "params": {
+                "value": false,
+                "disabled": true,
+                "indent": true,
+                "description": "Mode: Pass on meta data",
+                "description_tooltip": "The classifier will pass on non-selected data columns as meta information when making new predictions"
+            }
+        },
         "algorithm_dropdown": {
             "type": "SelectMultiple",
             "params": {
@@ -389,6 +399,7 @@
             "train_checkbox",
             "predict_checkbox",
             "mispredicted_checkbox",
+            "metas_checkbox",
             "algorithm_dropdown",
             "preprocess_dropdown",
             "scoremetric_dropdown",

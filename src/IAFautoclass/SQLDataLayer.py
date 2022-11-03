@@ -167,10 +167,18 @@ class DataLayer(DataLayerBase):
         """ Produces an SQL command for fetching the recently classified data elements """
         connection = self.config.get_connection()
         id_column = self.config.get_id_column_name()
+        class_column = self.config.get_class_column_name()
         
         dataCols = [
             id_column
         ] + self.config.get_data_column_names()
+
+        if self.config.should_use_metas():
+            metaCols = [
+                col for col in self.get_id_columns(self.config.get_data_catalog(), self.config.get_data_table()).keys()
+                if col not in dataCols and col != class_column
+                ]
+            dataCols += metaCols
 
         classCols = [
             "class_result",

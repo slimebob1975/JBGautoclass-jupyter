@@ -905,6 +905,7 @@ class Config:
         "mode.train": "<train>",
         "mode.predict": "<predict>",
         "mode.mispredicted": "<mispredicted>",
+        "mode.use_metas": "<use_metas>",
         "mode.use_stop_words": "<use_stop_words>",
         "mode.specific_stop_words_threshold": "<specific_stop_words_threshold>",
         "mode.hex_encode": "<hex_encode>",
@@ -1149,6 +1150,7 @@ class Config:
         train: bool = True
         predict: bool = True
         mispredicted: bool = True
+        use_metas: bool = True
         use_stop_words: bool = True
         specific_stop_words_threshold: float = 1.0
         hex_encode: bool = True
@@ -1188,6 +1190,7 @@ class Config:
                 isinstance(self.train, bool),
                 isinstance(self.predict, bool),
                 isinstance(self.mispredicted, bool),
+                isinstance(self.use_metas, bool),
                 (self.train or self.predict)
             ]
             
@@ -1241,6 +1244,7 @@ class Config:
                 f" * Train new model:                         {self.train}",
                 f" * Make predictions with model:             {self.predict}",
                 f" * Display mispredicted training data:      {self.mispredicted}",
+                f" * Pass on meta data for predictions:       {self.mispredicted}",
                 f" * Use stop words:                          {self.use_stop_words}",
                 f" * Material specific stop words threshold:  {self.specific_stop_words_threshold}",
                 f" * Hex encode text data:                    {self.hex_encode}",
@@ -1439,6 +1443,7 @@ class Config:
             saved_config.mode.train = config.mode.train
             saved_config.mode.predict = config.mode.predict
             saved_config.mode.mispredicted = config.mode.mispredicted
+            saved_config.mode.mispredicted = config.mode.use_metas
             saved_config.connection.data_catalog = config.connection.data_catalog
             saved_config.connection.data_table = config.connection.data_table
             saved_config.io.model_name = config.io.model_name
@@ -1497,6 +1502,7 @@ class Config:
                 train=module.mode["train"],
                 predict=module.mode["predict"],
                 mispredicted=module.mode["mispredicted"],
+                use_metas=module.mode["use_metas"],
                 use_stop_words=module.mode["use_stop_words"],
                 specific_stop_words_threshold=float(
                     module.mode["specific_stop_words_threshold"]),
@@ -1560,9 +1566,10 @@ class Config:
                 train=module.mode["train"],
                 predict=module.mode["predict"],
                 mispredicted=module.mode["mispredicted"],
+                use_metas=module.mode["use_metas"],
                 use_stop_words=module.mode["use_stop_words"],
                 specific_stop_words_threshold=float(
-                    module.mode["specific_stop_words_threshold"]),
+                module.mode["specific_stop_words_threshold"]),
                 hex_encode=module.mode["hex_encode"],
                 use_categorization=module.mode["use_categorization"],
                 category_text_columns=category_text_columns,
@@ -1777,6 +1784,10 @@ class Config:
     def should_display_mispredicted(self) -> bool:
         """ Returns if this is a misprediction config """
         return self.mode.mispredicted
+
+    def should_use_metas(self) -> bool:
+        """ Returns if this is a use metas config """
+        return self.mode.use_metas
 
     def use_stop_words(self) -> bool:
         """ Returns whether stop words should be used """

@@ -194,7 +194,7 @@ class IAFLogger(terminal.Logger):
 
         print(
             "{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:8.3f}{6:11.3f} {7:<30s}".
-                                format(algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure)
+                format(algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure)
         )
 
     # This is to avoid the annoying "info:" in front of all lines. Debug/warning/Error should still use the normal

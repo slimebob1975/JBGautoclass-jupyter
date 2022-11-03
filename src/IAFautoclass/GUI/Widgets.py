@@ -162,6 +162,16 @@ class EventHandler:
             new_class, new_index = change.new
             self.widgets.correct_mispredicted_data(new_class, new_index)
 
+    def predict_checkbox(self, change: Bunch) -> None:
+        #Default is that predictions should use meta values, e.g., for comparison afterwards
+        if change['name'] == 'value':                
+            if self.widgets.predict_checkbox.value:
+                self.widgets.metas_checkbox.disabled = False
+                self.widgets.metas_checkbox.value = True
+            else:
+                self.widgets.metas_checkbox.disabled = True
+                self.widgets.metas_checkbox.value = False
+
     def continuation_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
         self.lock_observe_1 = True
@@ -256,7 +266,7 @@ class Widgets:
         self.forms = {
             "catalog": [self.data_catalogs_dropdown, self.data_tables_dropdown],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
-            "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox],
+            "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
             "algorithm": [self.reduction_dropdown, self.algorithm_dropdown, self.preprocess_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.smote_checkbox, self.undersample_checkbox, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.filter_slider],
@@ -360,23 +370,27 @@ class Widgets:
             self.enable_items([
                 "train_checkbox",
                 "predict_checkbox",
-                "mispredicted_checkbox"
+                "mispredicted_checkbox",
+                "metas_checkbox"
             ])
             self.update_values({
                 "train_checkbox": True,
                 "predict_checkbox": False,
-                "mispredicted_checkbox": True
+                "mispredicted_checkbox": True,
+                "metas_checkbox": False
             })
         else:
             self.disable_items([
                 "train_checkbox",
                 "predict_checkbox",
-                "mispredicted_checkbox",
+                "mispredicted_checkbox"
+                #"metas_checkbox"
             ])
             self.update_values({
                 "train_checkbox": False,
                 "predict_checkbox": True,
-                "mispredicted_checkbox": False
+                "mispredicted_checkbox": False,
+                "metas_checkbox": True
             })
             
     def continuation_button_actions(self) -> None:
@@ -502,6 +516,7 @@ class Widgets:
                 train = self.train_checkbox.value,
                 predict = self.predict_checkbox.value,
                 mispredicted = self.mispredicted_checkbox.value,
+                use_metas = self.metas_checkbox.value,
                 use_stop_words = self.filter_checkbox.value,
                 specific_stop_words_threshold = float(self.filter_slider.value) / 100.0,
                 hex_encode = self.encryption_checkbox.value,
@@ -931,6 +946,8 @@ class Widgets:
     @property
     def predict_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
+        if name not in self.widgets:
+            self._load_widget(name, handler=self.eventhandler.predict_checkbox)
         return self._load_widget(name)
         
     
@@ -938,7 +955,11 @@ class Widgets:
     def mispredicted_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
         return self._load_widget(name)
-        
+
+    @property
+    def metas_checkbox(self) -> widgets.Checkbox:
+        name = sys._getframe(  ).f_code.co_name # Current function name
+        return self._load_widget(name)
     
     @property
     def algorithm_dropdown(self) -> widgets.Dropdown:
