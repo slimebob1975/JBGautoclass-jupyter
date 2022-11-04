@@ -924,7 +924,7 @@ class ModelHandler:
         except Exception as ex:
             the_score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
-                exception = str("{0}: {1!r}".format(type(ex).__name__, ex.args))
+                exception = str("{0}: {1}".format(type(ex).__name__, ','.join(ex.args)))
             else:
                 exception = str(traceback.format_exc())
 
@@ -1082,7 +1082,7 @@ class ModelHandler:
                             best_feature_selection = num_features
                     except UnstableModelException as ex:
                         if not failure:
-                            failure = "{0}: {1!r}".format(type(ex).__name__, ex.args)
+                            failure = f"{','.join(ex.args)}"
 
                     # Print results to screen
                     self.handler.logger.print_result_line(
@@ -1120,10 +1120,10 @@ class ModelHandler:
 
     def is_best_run_yet(self, train_score: float, train_stdev: float, best_score: float, best_stdev: float, test_score: float) -> bool:
         """ Calculates if this round is better than any prior 
-        But first check if performance is suspicios (only works for accuracy score) """
+        But first check if performance is suspicios """
         
         if abs(train_score - test_score) > 2.0 * train_stdev:
-            raise UnstableModelException(f"Accuracy difference for cross evaluation and final test exceeds 2*stdev")
+            raise UnstableModelException(f"Performance metric difference for cross evaluation and final test exceeds 2*stdev")
         
         if train_score < best_score:   # Obviously if current is less it's worse
             return False
@@ -1205,7 +1205,7 @@ class ModelHandler:
         except Exception as ex:
             cv_results = np.array([np.nan])
             if not GIVE_EXCEPTION_TRACEBACK:
-                exception = str("{0}: {1!r}".format(type(ex).__name__, ex.args))
+                exception = str("{0}: {1}".format(type(ex).__name__, ','.join(ex.args)))
             else:
                 exception = str(traceback.format_exc())
 
