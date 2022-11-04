@@ -873,12 +873,13 @@ class ModelHandler:
         X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None) -> None:
         try:
             self.model = self.get_model_from(X_train, Y_train, X_test, Y_test)
-    
+        except ModelException as ex:
+            raise ModelException(f"Model could not be trained. Check your training data or your choice of models: {str(ex)}")
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
-            raise ModelException(f"Something went wrong on training model: {str(e)}")
-
-        self.save_model_to_file(self.handler.config.get_model_filename())
+            raise ModelException(f"Something unknown went wrong on training model: {str(e)}")
+        else:
+            self.save_model_to_file(self.handler.config.get_model_filename())
 
     def get_model_from(self, X_train: pandas.DataFrame, Y_train: pandas.DataFrame, \
         X_test: pandas.DataFrame = None, Y_test: pandas.DataFrame = None) -> Model:
@@ -886,12 +887,11 @@ class ModelHandler:
         if k < 10:
             self.handler.logger.print_info(f"Using non-standard k-value for spotcheck of algorithms: {k}")
         
-        model = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
-        
         try:
+            model = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
             model.model.fit(X_train, Y_train)
         except Exception as ex:
-            raise ModelException(f"Failed to train output model from spot_check_ml_algorithm: {str(ex)}")
+            raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
 
         return model
 

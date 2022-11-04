@@ -200,8 +200,8 @@ class AutomaticClassifier:
             try:
                 self.logger.print_progress(message="Check and train algorithms for best model")
                 mh.train_model(dh.X_train, dh.Y_train, dh.X_validation, dh.Y_validation)
-            except Exception as e:
-                self.logger.abort_cleanly(f"Training model failed: {e}")
+            except Exception as ex:
+                self.logger.abort_cleanly(f"Training model failed: {ex}")
 
         self.update_progress(percent=self.progression["percentPerMajorTask"], message=f"Best model is: ({mh.model.get_name()}) with number of features: {self.config.get_num_selected_features()}")
         

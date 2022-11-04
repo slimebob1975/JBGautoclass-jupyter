@@ -101,9 +101,20 @@ class DataLayer(DataLayerBase):
         raise DataLayerException(f"Defined query type {type} does not exist")
 
     def get_catalogs_as_options(self) -> list:
-        """ Used in the GUI, to get the databases """
+        """ Used in the GUI, to get the databases (only return those we can access without exceptions) """
 
-        return self.get_gui_list("databases", "{}")
+        catalogs = self.get_gui_list("databases", "{}")
+        default_catalog = self.config.connection.data_catalog
+        for catalog in list(catalogs): 
+            if catalog != "":
+                self.config.connection.data_catalog = catalog
+                try:
+                    _ = self.get_gui_list("tables", "{}.{}")
+                except Exception:
+                    catalogs.remove(catalog)
+        self.config.connection.data_catalog = default_catalog
+        
+        return catalogs
 
     def get_tables_as_options(self) -> list:
         """ Used in the GUI, to get the tables """

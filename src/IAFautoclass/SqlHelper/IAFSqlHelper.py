@@ -2,6 +2,7 @@ import chunk
 import sys
 import platform
 from typing import List
+from IAFExceptions import SQLException
 
 if platform.system() == 'Windows':
     import pyodbc
@@ -98,11 +99,12 @@ class IAFSqlHelper():
         try:
             return pyodbc.connect(connect_string)
         except Exception as ex:
-            func = str(sys._getframe().f_code.co_name)
-            if (print_fail):
-                print("Connection to database failed: " + connect_string)
-            if not self.ignore_errors:
-                self.end_program( func, str(ex) )
+            raise SQLException(str(ex))
+            #func = str(sys._getframe().f_code.co_name)
+            #if (print_fail):
+            #    print("Connection to database failed: " + connect_string)
+            #if not self.ignore_errors:
+            #    self.end_program( func, str(ex) )
     
     # Disconnect from SQL server and close cursor
     def disconnect(self, commit = False):
@@ -133,11 +135,12 @@ class IAFSqlHelper():
             else:
                 return self.Cursor
         except Exception as ex:
-            func = str(sys._getframe().f_code.co_name)
-            print("Execution of query failed: " + query)
-            print(str(ex))
-            if not self.ignore_errors:
-                self.end_program( func, str(ex) )    
+            raise SQLException(str(ex))
+            #func = str(sys._getframe().f_code.co_name)
+            #print("Execution of query failed: " + query)
+            #print(str(ex))
+            #if not self.ignore_errors:
+            #    self.end_program( func, str(ex) )    
     
     def read_next(self, chunksize: int = None):
         if chunksize:
@@ -152,10 +155,11 @@ class IAFSqlHelper():
             row = self.Cursor.fetchone()
             return row
         except Exception as ex:
-            func = str(sys._getframe().f_code.co_name)
-            print("Execution failed!")
-            if not self.ignore_errors:
-                self.end_program( func, str(ex) )
+            raise SQLException(str(ex))
+            #func = str(sys._getframe().f_code.co_name)
+            #print("Execution failed!")
+            #if not self.ignore_errors:
+            #    self.end_program( func, str(ex) )
 
     # Read many (chunksize) lines of data, if possible
     def read_many_data(self, chunksize=standard_chunksize):
@@ -164,10 +168,11 @@ class IAFSqlHelper():
             data = self.Cursor.fetchmany(chunksize)
             return data
         except Exception as ex:
-            func = str(sys._getframe().f_code.co_name)
-            print("Execution failed!")
-            if not self.ignore_errors:
-                self.end_program( func, str(ex) )
+            raise SQLException(str(ex))
+            #func = str(sys._getframe().f_code.co_name)
+            #print("Execution failed!")
+            #if not self.ignore_errors:
+            #    self.end_program( func, str(ex) )
 
     # Read all (remaining) lines of data, if possible
     def read_all_data(self) -> List[pyodbc.Row]:
@@ -176,11 +181,11 @@ class IAFSqlHelper():
             data = self.Cursor.fetchall()
             return data
         except Exception as ex:
-            func = str(sys._getframe().f_code.co_name)
-            print("Execution failed!")
-            
-            if not self.ignore_errors:
-                self.end_program( func, str(ex) )
+            raise SQLException(str(ex))
+            #func = str(sys._getframe().f_code.co_name)
+            #print("Execution failed!")
+            #if not self.ignore_errors:
+            #    self.end_program( func, str(ex) )
     
     def get_count(self, endQuery: str) -> int:
         """ Creates a COUNT query and returns the count
@@ -191,7 +196,7 @@ class IAFSqlHelper():
         count = -1
 
         if self.execute_query(query, get_data=True):
-                count = self.read_data()[0]
+            count = self.read_data()[0]
 
         # Disconnect from database
         self.disconnect()
@@ -203,12 +208,12 @@ class IAFSqlHelper():
         """ Gets the full set of data from a query """
         try:
             self.execute_query(query, get_data = True)
-        except Exception as e:
-            func = str(sys._getframe().f_code.co_name)
-            print("Execution failed!")
-            
-            if not self.ignore_errors:
-                self.end_program(func, str(e))
+        except Exception as ex:
+            raise SQLException(str(ex))
+            #func = str(sys._getframe().f_code.co_name)
+            #print("Execution failed!")  
+            #if not self.ignore_errors:
+            #    self.end_program(func, str(e))
         
         data = self.read_all_data()
         self.disconnect()
@@ -221,10 +226,10 @@ class IAFSqlHelper():
         return str(pyodbc.drivers())
 
     # End program if something went wrong
-    @staticmethod
-    def end_program(func = "Unknown function", mess = "Unknown error"):
-        sys.exit("Program malfunctioned in: " + func + \
-                 " with error: " + mess)
+    #@staticmethod
+    #def end_program(func = "Unknown function", mess = "Unknown error"):
+    #    sys.exit("Program malfunctioned in: " + func + \
+    #             " with error: " + mess)
 
 # Main method
 def main():

@@ -29,3 +29,7 @@ class ConfigException(Exception):
 class GuiWidgetsException(Exception):
     def __init__(self, message):
         super().__init__(f"GuiWidgetsException: {message}")
+        
+class SQLException(Exception):
+    def __init__(self, message):
+        super().__init__(f"SQLException: {message}")
