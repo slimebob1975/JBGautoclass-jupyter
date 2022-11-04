@@ -888,7 +888,10 @@ class ModelHandler:
         
         model = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
         
-        model.model.fit(X_train, Y_train)
+        try:
+            model.model.fit(X_train, Y_train)
+        except Exception as ex:
+            raise ModelException(f"Failed to train output model from spot_check_ml_algorithm: {str(ex)}")
 
         return model
 
@@ -1097,7 +1100,6 @@ class ModelHandler:
         updates = {"algorithm": best_algorithm, "preprocessor" : best_preprocessor, "num_selected_features": best_feature_selection}
         self.handler.config.update_attributes(type="mode", updates=updates)
         
-
         best_model = self.model
         best_model.algorithm = best_algorithm
         best_model.preprocess = best_preprocessor
