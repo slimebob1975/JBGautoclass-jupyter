@@ -383,8 +383,8 @@ class Widgets:
             self.disable_items([
                 "train_checkbox",
                 "predict_checkbox",
-                "mispredicted_checkbox"
-                #"metas_checkbox"
+                "mispredicted_checkbox",
+                "metas_checkbox"
             ])
             self.update_values({
                 "train_checkbox": False,
@@ -752,7 +752,6 @@ class Widgets:
     def update_values(self, updates: dict) -> None:
         """ Given a dict with item: value, update the values """
         for name, value in updates.items():
-            print(name, value)
             item = self.get_item_or_error(name)
             if hasattr(item, "value"):
                 setattr(item, "value", value)
