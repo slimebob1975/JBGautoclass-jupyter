@@ -371,7 +371,7 @@ class Widgets:
                 "train_checkbox",
                 "predict_checkbox",
                 "mispredicted_checkbox",
-                "metas_checkbox"
+                #"metas_checkbox"
             ])
             self.update_values({
                 "train_checkbox": True,
