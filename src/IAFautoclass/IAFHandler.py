@@ -347,7 +347,8 @@ class DatasetHandler:
         id_column = self.handler.config.get_id_column_name()
         
         # TODO: validate_dataset should probably do a report of potentional issues, or lead into the function that does
-        dataset = self.validate_dataset(data, column_names, class_column)
+        #dataset = self.validate_dataset(data, column_names, class_column)
+        dataset = self.validate_dataset_modified(data, column_names, class_column)
         
         dataset = self.shuffle_dataset(dataset)
         
@@ -401,6 +402,40 @@ class DatasetHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Something went wrong in inconsistency check at {key}: {item} ({e})")
+
+        self.handler.logger.print_linebreak()
+        return dataset
+    
+    def validate_dataset_modified(self, data: list, column_names: list, class_column: str) -> pandas.DataFrame:
+        dataset = pandas.DataFrame(data, columns = column_names)
+        
+        # Make sure the class column is a categorical variable by setting it as string
+        try:
+            dataset.astype({class_column: 'str'}, copy=False)
+        except Exception as e:
+            self.handler.logger.print_dragon(exception=e)
+            raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
+            
+        # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
+        # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
+        # or similar from a certain starting point, if any are left after the conversion above.
+        #self.handler.logger.print_formatted_info(message="Consistency check")
+        percent_checked = 0
+        number_data_columns = len(dataset.columns) - 1
+        column_number = 0
+        try:
+            for key, column in dataset.items():
+                if key != class_column:
+                    column_is_text = self.handler.config.column_is_text(key)
+                    dataset[key] = column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
+                    
+                    column_number += 1
+                    old_percent_checked = percent_checked
+                    percent_checked = round(100.0*float(column_number)/float(number_data_columns))
+                    self.handler.logger.print_percentage("Data checked of fetched", percent_checked, old_percent_checked)
+        except Exception as ex:
+            self.handler.logger.print_dragon(exception=ex)
+            raise DatasetException(f"Something went wrong in inconsistency check at column {key}: {ex}")
 
         self.handler.logger.print_linebreak()
         return dataset
