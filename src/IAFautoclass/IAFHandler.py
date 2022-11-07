@@ -442,10 +442,8 @@ class DatasetHandler:
     def validate_column(self, key: str, column: pandas.Series) -> pandas.Series:
         
         column_is_text = self.handler.config.column_is_text(key)
-        column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
+        return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
         
-        return column 
-
     def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
         """ Impossible to test, due to random being random """
         # Shuffle the upper part of the data, such that all already classified material are
