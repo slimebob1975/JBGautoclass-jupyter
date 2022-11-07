@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
 from typing import Callable, Protocol, Union
-from joblib import Parallel, delayed
 
 import langdetect
 import numpy as np
@@ -441,8 +440,9 @@ class DatasetHandler:
 
     def validate_column(self, key: str, column: pandas.Series) -> pandas.Series:
         
-        column_is_text = self.handler.config.column_is_text(key)
+        column_is_text = self.handler.config.column_is_text(key)    
         return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
+
         
     def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
         """ Impossible to test, due to random being random """
@@ -487,6 +487,9 @@ class DatasetHandler:
 
     def sanitize_value(self, value, column_is_text: bool) -> Union[str, int, float]:
         """ Massages a value into a proper value """
+        import Helpers
+        import datetime
+        
         # Set NoneType objects as zero or empty strings
         if value is None:
             return "" if column_is_text else 0
