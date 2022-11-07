@@ -426,6 +426,8 @@ class DatasetHandler:
         try:
             for key, column in dataset.items():
                 if key != class_column:
+                            
+                    # TODO: If possible, parallelize this call over available CPU:s
                     dataset[key] = self.validate_column(key, column)
                     column_number += 1
                     old_percent_checked = percent_checked
@@ -487,8 +489,6 @@ class DatasetHandler:
 
     def sanitize_value(self, value, column_is_text: bool) -> Union[str, int, float]:
         """ Massages a value into a proper value """
-        import Helpers
-        import datetime
         
         # Set NoneType objects as zero or empty strings
         if value is None:
