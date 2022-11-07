@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
 from typing import Callable, Protocol, Union
+from joblib import Parallel, delayed
 
 import langdetect
 import numpy as np
@@ -426,9 +427,7 @@ class DatasetHandler:
         try:
             for key, column in dataset.items():
                 if key != class_column:
-                    column_is_text = self.handler.config.column_is_text(key)
-                    dataset[key] = column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
-                    
+                    dataset[key] = self.validate_column(key, column)
                     column_number += 1
                     old_percent_checked = percent_checked
                     percent_checked = round(100.0*float(column_number)/float(number_data_columns))
@@ -439,6 +438,13 @@ class DatasetHandler:
 
         self.handler.logger.print_linebreak()
         return dataset
+
+    def validate_column(self, key: str, column: pandas.Series) -> pandas.Series:
+        
+        column_is_text = self.handler.config.column_is_text(key)
+        column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
+        
+        return column 
 
     def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
         """ Impossible to test, due to random being random """
