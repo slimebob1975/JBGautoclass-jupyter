@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
 from typing import Callable, Protocol, Union
+import swifter
 
 import langdetect
 import numpy as np
@@ -415,7 +416,7 @@ class DatasetHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
-            
+                    
         # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
         # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
         # or similar from a certain starting point, if any are left after the conversion above.
@@ -442,8 +443,13 @@ class DatasetHandler:
 
     def validate_column(self, key: str, column: pandas.Series) -> pandas.Series:
         
-        column_is_text = self.handler.config.column_is_text(key)    
-        return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
+        column_is_text = self.handler.config.column_is_text(key)
+        try:
+            return column.swifter.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
+            # Use swifter.progress_bar(False).apply to turn off progressbar
+        except Exception as ex:
+            self.handler.logger.print_warning("Parallelization of pandas apply with swifter failed!", str(ex))
+            return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
 
         
     def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
