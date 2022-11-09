@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
 from typing import Callable, Protocol, Union
-import swifter
 
 import langdetect
 import numpy as np
@@ -430,6 +429,7 @@ class DatasetHandler:
                             
                     # TODO: If possible, parallelize this call over available CPU:s
                     dataset[key] = self.validate_column(key, column)
+                    
                     column_number += 1
                     old_percent_checked = percent_checked
                     percent_checked = round(100.0*float(column_number)/float(number_data_columns))
@@ -444,12 +444,7 @@ class DatasetHandler:
     def validate_column(self, key: str, column: pandas.Series) -> pandas.Series:
         
         column_is_text = self.handler.config.column_is_text(key)
-        try:
-            return column.swifter.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
-            # Use swifter.progress_bar(False).apply to turn off progressbar
-        except Exception as ex:
-            self.handler.logger.print_warning("Parallelization of pandas apply with swifter failed!", str(ex))
-            return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
+        return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
 
         
     def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
