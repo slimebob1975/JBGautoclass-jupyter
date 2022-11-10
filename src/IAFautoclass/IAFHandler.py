@@ -350,7 +350,9 @@ class DatasetHandler:
         
         # TODO: validate_dataset should probably do a report of potentional issues, or lead into the function that does
         #dataset = self.validate_dataset(data, column_names, class_column)
-        dataset = self.validate_dataset_modified(data, column_names, class_column)
+        #dataset = self.validate_dataset_modified(data, column_names, class_column)
+        dataset = self.validate_dataset_parallel(data, column_names, class_column)
+
         
         dataset = self.shuffle_dataset(dataset)
         
