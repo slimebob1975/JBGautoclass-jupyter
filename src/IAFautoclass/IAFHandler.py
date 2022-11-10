@@ -350,9 +350,7 @@ class DatasetHandler:
         
         # TODO: validate_dataset should probably do a report of potentional issues, or lead into the function that does
         #dataset = self.validate_dataset(data, column_names, class_column)
-        #dataset = self.validate_dataset_modified(data, column_names, class_column)
-        dataset = self.validate_dataset_parallel(data, column_names, class_column)
-
+        dataset = self.validate_dataset_modified(data, column_names, class_column)
         
         dataset = self.shuffle_dataset(dataset)
         
@@ -449,68 +447,6 @@ class DatasetHandler:
         
         column_is_text = self.handler.config.column_is_text(key)
         return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
-
-
-    def validate_dataset_parallel(self, data: list, column_names: list, class_column: str) -> pandas.DataFrame:
-        dataset = pandas.DataFrame(data, columns = column_names)
-        
-        # Make sure the class column is a categorical variable by setting it as string
-        try:
-            dataset.astype({class_column: 'str'}, copy=False)
-        except Exception as e:
-            self.handler.logger.print_dragon(exception=e)
-            raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
-                    
-        # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
-        # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
-        # or similar from a certain starting point, if any are left after the conversion above.
-        #self.handler.logger.print_formatted_info(message="Consistency check")
-        
-        try:
-            dataset = dataset.parallel_apply(self.validate_column_parallel, axis=0)
-        except Exception as ex:
-            self.handler.logger.print_dragon(exception=ex)
-            raise DatasetException(f"Something went wrong in inconsistency check at column {key}: {ex}")
-
-        self.handler.logger.print_linebreak()
-        return dataset
-
-    def validate_column_parallel(self, column: pandas.Series) -> pandas.Series:
-        
-        def local_sanitize_value(value, column_is_text: bool) -> Union[str, int, float]:
-            """ Massages a value into a proper value """
-            import Helpers
-            from datetime import datetime
-            
-            # Set NoneType objects as zero or empty strings
-            if value is None:
-                return "" if column_is_text else 0
-
-            if column_is_text:
-                # TODO: I'm unsure on how this should be done. What values breaks this so badly?
-                # Helpers.is_str() should maybe check the type of the value?
-                # Set text values that cannot be casted as strings to empty strings
-                if type(value) != str and not Helpers.is_str(value):
-                    return ""
-
-                # Remove line breaks and superfluous blank spaces from text strings
-                return " ".join(value.split())
-
-            # Only numerical values left now
-            # Convert datetime values to ordinals
-            if datetime_value := Helpers.get_datetime(value):
-                return datetime.toordinal(datetime_value)
-
-            # Set remaining numerical values that cannot be casted as integer or floating point numbers to zero, i.e., do not
-            # take them into account
-            if not (Helpers.is_int(value) or Helpers.is_float(value)):
-                return 0
-
-            return float(value)
-        
-        column_is_text = self.handler.config.column_is_text(column.name)
-        return column.apply(local_sanitize_value, convert_dtype = True, args = (column_is_text,))
-
         
     def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
         """ Impossible to test, due to random being random """
