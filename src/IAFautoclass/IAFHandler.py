@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
 from typing import Callable, Protocol, Union
-from pandarallel import pandarallel
 
 import langdetect
 import numpy as np
@@ -325,7 +324,6 @@ class DatasetHandler:
 
     def __post_init__(self) -> None:
         """ Empty for now """
-        pandarallel.initialize(verbose=1)
     
     # Sets the unpredicted keys
     def set_unpredicted_keys(self, keys: pandas.Series) -> None:
