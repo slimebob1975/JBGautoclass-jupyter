@@ -931,7 +931,8 @@ class ModelHandler:
         
         try:
             model = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
-            model.model.fit(X_train, Y_train)
+            #model.model.fit(X_train, Y_train)
+            model.model = self.train_picked_model(model.model, X_train, Y_train)
         except Exception as ex:
             raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
 
@@ -941,12 +942,10 @@ class ModelHandler:
     def train_picked_model(self, model: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
         # Train model
         try:
-            model.fit(X, Y)
+            return model.fit(X, Y)
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model: {str(e)}")
-            
-        return model
 
     # Train and evaluate picked model (warning for overfitting)
     def train_and_evaluate_picked_model(self, model: Pipeline, X_train: pandas.DataFrame, \
