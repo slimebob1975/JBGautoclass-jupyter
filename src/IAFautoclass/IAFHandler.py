@@ -21,7 +21,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
-                                     train_test_split)
+                                     train_test_split, GridSearchCV)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
@@ -931,8 +931,11 @@ class ModelHandler:
         
         try:
             model = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
-            #model.model.fit(X_train, Y_train)
-            model.model = self.train_picked_model(model.model, X_train, Y_train)
+            
+            if not model.algorithm.search_params.parameters:
+                model.model = self.train_picked_model(model.model, X_train, Y_train)
+            else:
+                model.model = self.train_picked_model_parameter_grid_search(model.model, model.algorithm.search_params.parameters, k, X_train, Y_train)
         except Exception as ex:
             raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
 
@@ -946,6 +949,28 @@ class ModelHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model: {str(e)}")
+        
+    
+    # For models with a specified fit search parameters list, do like this instead
+    def train_picked_model_parameter_grid_search(self, model: Pipeline, search_params: dict, n_splits: int, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
+
+        try:
+            # Make a stratified kfold
+            kfold = StratifiedKFold(n_splits=n_splits, random_state=1, shuffle=True)
+
+            # Create correct scoring mechanism
+            scorer = self.handler.config.get_scoring_mechanism()
+
+            # Create search grid and fit model
+            search = GridSearchCV(model, search_params, scoring=scorer, cv=kfold, refit=True)
+            search.fit(X, Y)
+
+            # Choose best estimator from grid search
+            return search.best_estimator_
+        
+        except Exception as e:
+            self.handler.logger.print_dragon(exception=e)
+            raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
 
     # Train and evaluate picked model (warning for overfitting)
     def train_and_evaluate_picked_model(self, model: Pipeline, X_train: pandas.DataFrame, \
@@ -1353,7 +1378,7 @@ class ModelHandler:
         score : ndarray
            The result from the scoring
         """
-        # Now make kfolded cross evaluation
+        # Now make kfolded cross evaluation. Notice that fit_params are not used right now (just placeholder for future revisions)
         scorer_mechanism = self.handler.config.get_scoring_mechanism()
         fit_params = {}
         

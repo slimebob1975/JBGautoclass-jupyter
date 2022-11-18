@@ -230,65 +230,133 @@ class Detector(MetaEnum):
     def do_RFD(self) -> IAFRandomForestDetector:
         return IAFRandomForestDetector()
 
+class AlgorithmGridSearchParams(MetaEnum):
+    SRF1 = {"parameters": {}}
+    SRF2 = {"parameters": {}} 
+    BARF = {"parameters": {}}
+    BABC = {"parameters": {}}
+    RUBC = {"parameters": {}}
+    EAEC = {"parameters": {}}
+    RTCL = {"parameters": {}}
+    RLRN = {"parameters": {}}
+    RCNT = {"parameters": {}}
+    LRN = {"parameters": {}}
+    KNN = {"parameters": {}}
+    DTC = {"parameters": {}}
+    GNB = {"parameters": {}}
+    MNB = {"parameters": {}}
+    BNB = {"parameters": {}}
+    CNB = {"parameters": {}}
+    REC = {"parameters": {}}
+    PCN = {"parameters": {}}
+    PAC = {"parameters": {}}
+    RFC1 = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
+            'max_features': ('sqrt', 'log2'), 'class_weight': ('balanced', 'balanced_subsample', None)}}
+    RFC2 = {"parameters": {}}
+    LIN1 = {"parameters": {}}
+    LIN2 = {"parameters": {}}
+    LINP = {"parameters": {}}
+    SGD = {"parameters": {}}
+    SGD1 = {"parameters": {}}
+    SGD2 = {"parameters": {}}
+    SGDE = {"parameters": {}}
+    NCT = {"parameters": {}}
+    SVC = {"parameters": {}}
+    LDA = {"parameters": {}}
+    QDA = {"parameters": {}}
+    BDT = {"parameters": {}}
+    ETC = {"parameters": {}}
+    ABC = {"parameters": {}}
+    GBC = {"parameters": {}}
+    MLPR = {"parameters": {}}
+    MLPL = {"parameters": {}}
+    FRFD = {"parameters": {}}
+    FPCD = {"parameters": {}}
+    FFKD = {"parameters": {}}
+    FINH = {"parameters": {}}
+    CSTK = {"parameters": {}}
+    CSTM = {"parameters": {}}
+    CRFD = {"parameters": {}}
+    CPCD = {"parameters": {}}
+    CFKD = {"parameters": {}}
+    CINH = {"parameters": {}}
+    WBGK = {"parameters": {}}
+    WBGM = {"parameters": {}}   
+    WRFD = {"parameters": {}}
+    WPCD = {"parameters": {}}
+    WFKD = {"parameters": {}}
+    WINH = {"parameters": {}}
+    CLRF = {"parameters": {}}
+    CLPC = {"parameters": {}}
+    CLFK = {"parameters": {}}
+    CLIH = {"parameters": {}}
+    
+    @property
+    def parameters(self):
+        if isinstance(self.value, dict):
+            return self.value.get("parameters", {})
+        
+        return {}
+
 class Algorithm(MetaEnum):
-    SRF1 = { "full_name": "Stacking Random Forests Cl. 1"}
-    SRF2 = { "full_name": "Stacking Random Forests Cl. 2"}
-    BARF = { "full_name": "Balanced Random Forest Classifier"}
-    BABC = { "full_name": "Balanced Bagging Classifier"}
-    RUBC = { "full_name": "RUS Boost Classifier"}
-    EAEC = { "full_name": "Easy Ensamble Classifier"}
-    RTCL = { "full_name": "Robust Tree Classifier"}
-    RLRN = { "full_name": "Robust Logistic Regression + Label Encoder"}
-    RCNT = { "full_name": "Robust Centroid + Label Encoder"}
-    LRN = { "full_name": "Logistic Regression"}
-    KNN = { "full_name": "K-Neighbors Classifier"}
-    DTC = { "full_name": "Decision Tree Classifier"}
-    GNB = { "full_name": "Gaussian Naive Bayes"}
-    MNB = { "full_name": "Multinomial Naive Bayes"}
-    BNB = { "full_name": "Bernoulli Naive Bayes"}
-    CNB = { "full_name": "Complement Naive Bayes"}
-    REC = { "full_name": "Ridge Classifier"}
-    PCN = { "full_name": "Perceptron"}
-    PAC = { "full_name": "Passive Aggressive Classifier"}
-    RFC1 = { "full_name": "Random Forest Classifier 1"}
-    RFC2 = { "full_name": "Random Forest Classifier 2"}
-    LIN1 = { "full_name":  "Linear Support Vector L1"}
-    LIN2 = { "full_name": "Linear Support Vector L2"}
-    LINP = { "full_name": "Linear SV L1+L2"}
-    SGD = { "full_name": "Stochastic Gradient Descent"}
-    SGD1 = { "full_name": "Stochastic GD L1"}
-    SGD2 = { "full_name": "Stochastic GD L2"}
-    SGDE = { "full_name": "Stochastic GD Elast."}
-    NCT = { "full_name": "Nearest Centroid"}
-    SVC = { "full_name": "Support Vector Classification", "limit": 10000}
-    LDA = { "full_name": "Linear Discriminant Analysis"}
-    QDA = { "full_name": "Quadratic Discriminant Analysis"}
-    BDT = { "full_name": "Bagging Classifier"}
-    ETC = { "full_name": "Extra Trees Classifier"}
-    ABC = { "full_name": "Ada Boost Classifier"}
-    GBC = { "full_name": "Gradient Boosting Classifier"}
-    MLPR = { "full_name": "ML Neural Network Relu"}
-    MLPL = { "full_name": "ML Neural Network Sigm"}
-    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD}
-    FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC}
-    FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN}
-    FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH}
-    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN}
-    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS}
-    CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD}
-    CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC}
-    CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN}
-    CINH = { "full_name": "Costing + InstanceHardness", "detector": Detector.INH}
-    WBGK = { "full_name": "WeightedBagging + KDN", "detector": Detector.KDN}
-    WBGM = { "full_name": "WeightedBagging + MCS", "detector": Detector.MCS}   
-    WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD}
-    WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC}
-    WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN}
-    WINH = { "full_name": "WeightedBagging + InstanceHardness", "detector": Detector.INH}
-    CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD}
-    CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC}
-    CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN}
-    CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH}
+    SRF1 = { "full_name": "Stacking Random Forests Cl. 1", "search_params": AlgorithmGridSearchParams.SRF1}
+    SRF2 = { "full_name": "Stacking Random Forests Cl. 2", "search_params": AlgorithmGridSearchParams.SRF2}
+    BARF = { "full_name": "Balanced Random Forest Classifier", "search_params": AlgorithmGridSearchParams.BARF}
+    BABC = { "full_name": "Balanced Bagging Classifier", "search_params": AlgorithmGridSearchParams.BABC}
+    RUBC = { "full_name": "RUS Boost Classifier", "search_params": AlgorithmGridSearchParams.RUBC}
+    EAEC = { "full_name": "Easy Ensamble Classifier", "search_params": AlgorithmGridSearchParams.EAEC}
+    RTCL = { "full_name": "Robust Tree Classifier", "search_params": AlgorithmGridSearchParams.RTCL}
+    RLRN = { "full_name": "Robust Logistic Regression + Label Encoder", "search_params": AlgorithmGridSearchParams.RLRN}
+    RCNT = { "full_name": "Robust Centroid + Label Encoder", "search_params": AlgorithmGridSearchParams.RCNT}
+    LRN = { "full_name": "Logistic Regression", "search_params": AlgorithmGridSearchParams.LRN}
+    KNN = { "full_name": "K-Neighbors Classifier", "search_params": AlgorithmGridSearchParams.KNN}
+    DTC = { "full_name": "Decision Tree Classifier", "search_params": AlgorithmGridSearchParams.DTC}
+    GNB = { "full_name": "Gaussian Naive Bayes", "search_params": AlgorithmGridSearchParams.GNB}
+    MNB = { "full_name": "Multinomial Naive Bayes", "search_params": AlgorithmGridSearchParams.MNB}
+    BNB = { "full_name": "Bernoulli Naive Bayes", "search_params": AlgorithmGridSearchParams.BNB}
+    CNB = { "full_name": "Complement Naive Bayes", "search_params": AlgorithmGridSearchParams.CNB}
+    REC = { "full_name": "Ridge Classifier", "search_params": AlgorithmGridSearchParams.REC}
+    PCN = { "full_name": "Perceptron", "search_params": AlgorithmGridSearchParams.PCN}
+    PAC = { "full_name": "Passive Aggressive Classifier", "search_params": AlgorithmGridSearchParams.PAC}
+    RFC1 = { "full_name": "Random Forest Classifier 1", "search_params": AlgorithmGridSearchParams.RFC1}
+    RFC2 = { "full_name": "Random Forest Classifier 2", "search_params": AlgorithmGridSearchParams.RFC2}
+    LIN1 = { "full_name":  "Linear Support Vector L1", "search_params": AlgorithmGridSearchParams.LIN1}
+    LIN2 = { "full_name": "Linear Support Vector L2", "search_params": AlgorithmGridSearchParams.LIN2}
+    LINP = { "full_name": "Linear SV L1+L2", "search_params": AlgorithmGridSearchParams.LINP}
+    SGD = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGD}
+    SGD1 = { "full_name": "Stochastic GD L1", "search_params": AlgorithmGridSearchParams.SGD1}
+    SGD2 = { "full_name": "Stochastic GD L2", "search_params": AlgorithmGridSearchParams.SGD2}
+    SGDE = { "full_name": "Stochastic GD Elast.", "search_params": AlgorithmGridSearchParams.SGDE}
+    NCT = { "full_name": "Nearest Centroid", "search_params": AlgorithmGridSearchParams.NCT}
+    SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC}
+    LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA}
+    QDA = { "full_name": "Quadratic Discriminant Analysis", "search_params": AlgorithmGridSearchParams.QDA}
+    BDT = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BDT}
+    ETC = { "full_name": "Extra Trees Classifier", "search_params": AlgorithmGridSearchParams.ETC}
+    ABC = { "full_name": "Ada Boost Classifier", "search_params": AlgorithmGridSearchParams.ABC}
+    GBC = { "full_name": "Gradient Boosting Classifier", "search_params": AlgorithmGridSearchParams.GBC}
+    MLPR = { "full_name": "ML Neural Network Relu", "search_params": AlgorithmGridSearchParams.MLPR}
+    MLPL = { "full_name": "ML Neural Network Sigm", "search_params": AlgorithmGridSearchParams.MLPL}
+    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD}
+    FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD}
+    FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD}
+    FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.FINH}
+    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.CSTK}
+    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.CSTM}
+    CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CRFD}
+    CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CPCD}
+    CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CFKD}
+    CINH = { "full_name": "Costing + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CINH}
+    WBGK = { "full_name": "WeightedBagging + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.WBGK}
+    WBGM = { "full_name": "WeightedBagging + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.WBGM}   
+    WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.WRFD}
+    WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.WPCD}
+    WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.WFKD}
+    WINH = { "full_name": "WeightedBagging + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.WINH}
+    CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CLRF}
+    CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CLPC}
+    CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK}
+    CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH}
 
     def get_full_name(self) -> str:
         return self.full_name
@@ -307,6 +375,13 @@ class Algorithm(MetaEnum):
 
         return None
 
+    @property
+    def search_params(self):
+        if isinstance(self.value, dict):
+            return self.value.get("search_params")
+        
+        return None
+    
     @property
     def fit_params(self):
         if isinstance(self.value, dict):
