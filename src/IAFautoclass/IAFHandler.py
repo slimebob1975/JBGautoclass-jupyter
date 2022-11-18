@@ -8,7 +8,7 @@ import typing
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
-from typing import Callable, Protocol, Union
+from typing import Callable, Protocol, Union, Any
 
 import langdetect
 import numpy as np
@@ -962,8 +962,8 @@ class ModelHandler:
             scorer = self.handler.config.get_scoring_mechanism()
 
             # Create search grid and fit model
-            search = GridSearchCV(model, search_params, scoring=scorer, cv=kfold, refit=True)
-            search.fit(X, Y)
+            search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True)
+            search.fit(X, Y)                
 
             # Choose best estimator from grid search
             return search.best_estimator_
@@ -996,6 +996,27 @@ class ModelHandler:
 
         return model, the_score, exception
 
+    # Help function for running other functions in parallel
+    def execute_n_job(self, func: function, *args: tuple, **kwargs: dict) -> Any:
+            n_jobs = psutil.cpu_count()
+            success = False
+            result = None
+            while not success:
+                try:
+                    result = func(*args, **kwargs, n_jobs=n_jobs)
+                except MemoryError as ex:
+                    if n_jobs == 1:
+                        raise MemoryError(f"n_jobs is 1 but not enough memory for {func.__name__}") from ex
+                    new_njobs = max(int(n_jobs / 2), 1)
+                    self.handler.logger.print_warning(f"MemoryError in {func.__name__}, scaling down n_jobs from {n_jobs} to {new_njobs}")
+                    n_jobs = new_njobs
+                except Exception as ex:
+                    raise Exception(f"Could not call function {func.__name__} with supplied positional arguments " + \
+                                    f"{str(ex)} and keyword arguments {str(kwargs)}") from ex
+                else:
+                    success = True
+            return result
+    
     # While more code, this should (hopefully) be easier to read
     def should_run_computation(self, current_algorithm: Algorithm, current_preprocessor: Preprocess) -> bool:
         #chosen_algorithm = self.handler.config.get_algorithm()
@@ -1108,7 +1129,6 @@ class ModelHandler:
                     try:
                         current_pipeline, cv_results, failure = \
                             self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
-                        
                         if X_test is not None and Y_test is not None:
                             current_pipeline, test_score, failure = \
                                 self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
@@ -1117,6 +1137,8 @@ class ModelHandler:
                     except ModelException:
                         # If any exceptions happen, continue to next step in the loop
                         break
+                    except Exception as ex:
+                        self.handler.logger.print_warning(f"Exception: {str(ex)}")
 
                     # Stop the stopwatch
                     t = time.time() - t0
@@ -1247,27 +1269,9 @@ class ModelHandler:
             # Build pipeline of model and preprocessor.
             current_pipeline = self.get_pipeline(algorithm, modified_estimator, transform)
             
-            # Now make k-folded cross evaluation - beware of memory explosion, and handle it by downscaling parallelism
-            n_jobs = psutil.cpu_count()
-            success = False
-            while not success:
-                try:
-                    cv_results = self.get_cross_val_score(current_pipeline, X, y, n_jobs, kfold, algorithm)
-                except MemoryError as ex:
-                    if n_jobs == 1:
-                        raise MemoryError("n_jobs is 1 but not enough memory for cross_val_score") from ex
-                    new_njobs = max(int(n_jobs / 2), 1)
-                    self.handler.logger.print_warning(f"MemoryError in cross_val_score, scaling down n_jobs from {n_jobs} to {new_njobs}")
-                    n_jobs = new_njobs
-                else:
-                    success = True
+            # Use parallel processing for k-folded cross evaluation
+            cv_results = self.get_cross_val_score(pipeline=current_pipeline, X=X, y=y, kfold=kfold, algorithm=algorithm)
 
-        #except ValueError as exception:
-        #    raise ModelException(f"Creating pipeline or getting cross val score failed in {algorithm.name}-{preprocessor.name}")
-            # This warning kept to not forget it
-            #self.handler.logger.print_warning(f"Pipeline ({algorithm.name}-{preprocessor.name}) raised a ValueError in cross_val_score. Skipping to next")
-        #except IndexError as exception:
-        #    raise ModelException(f"Creating pipeline failed in {algorithm.name}-{preprocessor.name} because {exception}")
         except Exception as ex:
             cv_results = np.array([np.nan])
             if not GIVE_EXCEPTION_TRACEBACK:
@@ -1353,7 +1357,7 @@ class ModelHandler:
         return Pipeline(steps=steps)
 
 
-    def get_cross_val_score(self, pipeline: Pipeline, X: pandas.DataFrame, y: pandas.DataFrame, n_jobs: int, kfold: StratifiedKFold, algorithm: Algorithm) -> np.ndarray:
+    def get_cross_val_score(self, pipeline: Pipeline, X: pandas.DataFrame, y: pandas.DataFrame, kfold: StratifiedKFold, algorithm: Algorithm) -> np.ndarray:
         """ Allows to change call to cross_val_score based on algorithm. 
         
           Parameters
@@ -1386,7 +1390,8 @@ class ModelHandler:
             if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
                 fit_params[key] = func(X, y)
 
-        return cross_val_score(pipeline, X, y=y, n_jobs=n_jobs, cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
+        cv_results = self.execute_n_job(cross_val_score, pipeline, X, y, cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
+        return cv_results
 
     # Save ml model and corresponding configuration
     def save_model_to_file(self, filename):
@@ -1405,8 +1410,6 @@ class ModelHandler:
 
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on saving model to file: {e}")
-
-
 
 @dataclass
 class PredictionsHandler:
