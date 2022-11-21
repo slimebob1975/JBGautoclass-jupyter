@@ -930,16 +930,24 @@ class ModelHandler:
             self.handler.logger.print_info(f"Using non-standard k-value for spotcheck of algorithms: {k}")
         
         try:
-            model = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
+            pipe = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
             
-            if not model.algorithm.search_params.parameters:
-                model.model = self.train_picked_model(model.model, X_train, Y_train)
+            if not pipe.algorithm.search_params.parameters:
+                pipe.model = self.train_picked_model(pipe.model, X_train, Y_train)
             else:
-                model.model = self.train_picked_model_parameter_grid_search(model.model, model.algorithm.search_params.parameters, k, X_train, Y_train)
+                # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
+                # Notice: we assume the algorithm is the last ('name', model) step in the pipeline
+                prefix = pipe.model.steps[-1][0] + "__"
+                search_params = Helpers.add_prefix_to_dict_keys(prefix, pipe.algorithm.search_params.parameters)
+                #print(search_params)
+                pipe.model, grid_cv_info = \
+                    self.train_picked_model_parameter_grid_search(pipe.model, search_params, k, X_train, Y_train)
+                
+                self.handler.logger.display_matrix("\nResult of grid search:", grid_cv_info)
         except Exception as ex:
             raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
 
-        return model
+        return pipe
 
     # Train ml model
     def train_picked_model(self, model: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
@@ -951,7 +959,7 @@ class ModelHandler:
             raise ModelException(f"Something went wrong on training picked model: {str(e)}")
         
     
-    # For models with a specified fit search parameters list, do like this instead
+    # For pipelines with a specified fit search parameters list, do like this instead
     def train_picked_model_parameter_grid_search(self, model: Pipeline, search_params: dict, n_splits: int, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
 
         try:
@@ -966,7 +974,7 @@ class ModelHandler:
             search.fit(X, Y)                
 
             # Choose best estimator from grid search
-            return search.best_estimator_
+            return search.best_estimator_, pandas.DataFrame.from_dict(search.cv_results_)
         
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)

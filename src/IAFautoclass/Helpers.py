@@ -138,6 +138,12 @@ def count_value_distr_as_dict(list: Iterable) -> dict:
     else:
         raise ValueError("Input must be an iterable")
 
+def add_prefix_to_dict_keys(prefix: str, the_dict: dict):
+    new_dict = {}
+    for key in the_dict.keys():
+        new_dict[prefix+key] = the_dict[key]
+    return new_dict
+
 # In case the user has specified some input arguments to command line call
 # As written, you need to call on the class in the src\IAFautoclass dir, with
 # the configfilename on the format of ".\config\filename.py", where it has to be

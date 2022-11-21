@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Protocol, Type, TypeVar, Union
 
 import pandas
+import numpy as np
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
@@ -233,43 +234,53 @@ class Detector(MetaEnum):
 class AlgorithmGridSearchParams(MetaEnum):
     SRF1 = {"parameters": {}}
     SRF2 = {"parameters": {}} 
-    BARF = {"parameters": {}}
-    BABC = {"parameters": {}}
-    RUBC = {"parameters": {}}
-    EAEC = {"parameters": {}}
-    RTCL = {"parameters": {}}
-    RLRN = {"parameters": {}}
+    BARF = {"parameters": {'criterion': ('gini', 'entropy'), 'n_estimators':[10,50,100,200], 
+            'class_weight': ('balanced', 'balanced_subsample', None)}}
+    BABC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
+            'max_features': (0.5, 1.0, 2.0), 'warm_start': (True, False)}}
+    RUBC = {"parameters": {'n_estimators': (10,30,50,100), 'learning_rate':(0.1, 1.0, 2.0)}}
+    EAEC = {"parameters": {'n_estimators': [5, 10 , 15], 'warm_start': (True, False), 'replacement': (True, False)}}
+    RTCL = {"parameters": {'method': ('simple', 'weighted'), 'K': [5, 10, 15], 'n_estimators': (50,100,150)}}
+    RLRN = {"parameters": {'PN': [0.1, 0.2, 0.5, 0.10], 'NP': [0.1, 0.2, 0.5, 0.10], 'C': [0.1, 1, 10]}}
     RCNT = {"parameters": {}}
-    LRN = {"parameters": {}}
-    KNN = {"parameters": {}}
-    DTC = {"parameters": {}}
-    GNB = {"parameters": {}}
-    MNB = {"parameters": {}}
-    BNB = {"parameters": {}}
-    CNB = {"parameters": {}}
-    REC = {"parameters": {}}
-    PCN = {"parameters": {}}
-    PAC = {"parameters": {}}
-    RFC1 = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
+    LRN = {"parameters": {'penalty':('l1', 'l2', 'elasticnet', 'none'), 'tol': [1e-3, 1e-4, 1e-5], 'C': [0.1, 1, 10],
+           'class_weight': ('balanced', None)}}
+    KNN = {"parameters": {'n_neighbors': (5, 10, 15), 'weights': {'uniform', 'distance'}, 
+           'algorithm': ('ball_tree', 'kd_tree', 'brute'), 'p': (1, 2)}}
+    DTC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'splitter': ('best', 'random'), 
+           'class_weight': ('balanced', None)}}
+    GNB = {"parameters": {'var_smoothing': (1e-7, 1e-8, 1e-9)}}
+    MNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False)}}
+    BNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False)}}
+    CNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False), 'norm': (True, False)}}
+    REC = {"parameters": {'alpha': [0.1, 1.0, 10.0], 'tol': [1e-2, 1e-3, 1e-4], 'class_weight': ('balanced', None)}}
+    PCN = {"parameters": {'penalty': ('l2', 'l1', 'elasticnet'), 'alpha': (1e-3, 1e-4, 1e-5), 
+           'class_weight': ('balanced', None)}}
+    PAC = {"parameters": {'class_weight': ('balanced', None)}}
+    RFCL = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
             'max_features': ('sqrt', 'log2'), 'class_weight': ('balanced', 'balanced_subsample', None)}}
-    RFC2 = {"parameters": {}}
-    LIN1 = {"parameters": {}}
-    LIN2 = {"parameters": {}}
-    LINP = {"parameters": {}}
-    SGD = {"parameters": {}}
-    SGD1 = {"parameters": {}}
-    SGD2 = {"parameters": {}}
-    SGDE = {"parameters": {}}
-    NCT = {"parameters": {}}
-    SVC = {"parameters": {}}
-    LDA = {"parameters": {}}
-    QDA = {"parameters": {}}
-    BDT = {"parameters": {}}
-    ETC = {"parameters": {}}
-    ABC = {"parameters": {}}
-    GBC = {"parameters": {}}
-    MLPR = {"parameters": {}}
-    MLPL = {"parameters": {}}
+    LSVC = {"parameters": {'penalty': ('l1', 'l2'), 'loss': ('hinge', 'squared_hinge'), 'dual': (True, False), 
+            'class_weight': ('balanced', None)}} 
+    SLSV = {"parameters": {}}
+    SGDE = {"parameters": {'loss': ('hinge', 'log_loss', 'log', 'modified_huber', 'squared_hinge', 'perceptron', 
+            'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'), 
+            'penalty': ('l2', 'l1', 'elasticnet')}}
+    NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': np.arange(0, 1.01, 0.01)}}
+    SVC = {"parameters": {'C': [0.1,1, 10, 100], 'gamma': [1 , 0.1 ,0.01 ,0.001],'kernel': ['rbf', 'poly', 'sigmoid']}}
+    LDA = {"parameters": {'solver': ('svd','lsqr','eigen'), 'shrinkage': ('auto', None), 'tol': [1e-3, 1e-4, 1e-5]}}
+    QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
+    BDT = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
+            'max_features': (0.5, 1.0, 2.0), 'warm_start': (True, False)}}
+    ETC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
+            'max_depth': range(1, 10, 1), 'leaf_range': range(1, 15, 1), 'max_features': ('sqrt', 'log2'),
+            'class_weight': ('balanced', 'balanced_subsample', None)}}
+    ABC = {"parameters": {'n_estimators': (10,30,50,100), 'learning_rate':(0.1, 1.0, 2.0)}}
+    GBC = {"parameters": {'loss': ['log_loss', 'exponential'], 
+        'learning_rate': [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2],
+        'min_samples_split': np.linspace(0.1, 0.5, 12), 'min_samples_leaf': np.linspace(0.1, 0.5, 12),
+        'max_depth':[3,5,8], 'max_features':['log2','sqrt'], 'criterion': ['friedman_mse',  'mae'],
+        'subsample':[0.5, 0.618, 0.8, 0.85, 0.9, 0.95, 1.0], 'n_estimators':[10]}}
+    MLPC = {"parameters": {'activation': ('identity', 'logistic', 'tanh', 'relu'), 'solver': ('lbfgs', 'sgd', 'adam')}}
     FRFD = {"parameters": {}}
     FPCD = {"parameters": {}}
     FFKD = {"parameters": {}}
@@ -299,9 +310,9 @@ class AlgorithmGridSearchParams(MetaEnum):
         return {}
 
 class Algorithm(MetaEnum):
-    SRF1 = { "full_name": "Stacking Random Forests Cl. 1", "search_params": AlgorithmGridSearchParams.SRF1}
-    SRF2 = { "full_name": "Stacking Random Forests Cl. 2", "search_params": AlgorithmGridSearchParams.SRF2}
-    BARF = { "full_name": "Balanced Random Forest Classifier", "search_params": AlgorithmGridSearchParams.BARF}
+    SRF1 = { "full_name": "Stacked Random Forests 1", "search_params": AlgorithmGridSearchParams.SRF1}
+    SRF2 = { "full_name": "Stacked Random Forests 2", "search_params": AlgorithmGridSearchParams.SRF2}
+    BARF = { "full_name": "Balanced Random Forest", "search_params": AlgorithmGridSearchParams.BARF}
     BABC = { "full_name": "Balanced Bagging Classifier", "search_params": AlgorithmGridSearchParams.BABC}
     RUBC = { "full_name": "RUS Boost Classifier", "search_params": AlgorithmGridSearchParams.RUBC}
     EAEC = { "full_name": "Easy Ensamble Classifier", "search_params": AlgorithmGridSearchParams.EAEC}
@@ -318,15 +329,10 @@ class Algorithm(MetaEnum):
     REC = { "full_name": "Ridge Classifier", "search_params": AlgorithmGridSearchParams.REC}
     PCN = { "full_name": "Perceptron", "search_params": AlgorithmGridSearchParams.PCN}
     PAC = { "full_name": "Passive Aggressive Classifier", "search_params": AlgorithmGridSearchParams.PAC}
-    RFC1 = { "full_name": "Random Forest Classifier 1", "search_params": AlgorithmGridSearchParams.RFC1}
-    RFC2 = { "full_name": "Random Forest Classifier 2", "search_params": AlgorithmGridSearchParams.RFC2}
-    LIN1 = { "full_name":  "Linear Support Vector L1", "search_params": AlgorithmGridSearchParams.LIN1}
-    LIN2 = { "full_name": "Linear Support Vector L2", "search_params": AlgorithmGridSearchParams.LIN2}
-    LINP = { "full_name": "Linear SV L1+L2", "search_params": AlgorithmGridSearchParams.LINP}
-    SGD = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGD}
-    SGD1 = { "full_name": "Stochastic GD L1", "search_params": AlgorithmGridSearchParams.SGD1}
-    SGD2 = { "full_name": "Stochastic GD L2", "search_params": AlgorithmGridSearchParams.SGD2}
-    SGDE = { "full_name": "Stochastic GD Elast.", "search_params": AlgorithmGridSearchParams.SGDE}
+    RFCL = { "full_name": "Random Forest Classifier", "search_params": AlgorithmGridSearchParams.RFCL}
+    LSVC = { "full_name":  "Linear Support Vector", "search_params": AlgorithmGridSearchParams.LSVC}
+    SLSV = { "full_name": "Stacked Linear SVC", "search_params": AlgorithmGridSearchParams.SLSV}
+    SGDE = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGDE}
     NCT = { "full_name": "Nearest Centroid", "search_params": AlgorithmGridSearchParams.NCT}
     SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC}
     LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA}
@@ -335,8 +341,7 @@ class Algorithm(MetaEnum):
     ETC = { "full_name": "Extra Trees Classifier", "search_params": AlgorithmGridSearchParams.ETC}
     ABC = { "full_name": "Ada Boost Classifier", "search_params": AlgorithmGridSearchParams.ABC}
     GBC = { "full_name": "Gradient Boosting Classifier", "search_params": AlgorithmGridSearchParams.GBC}
-    MLPR = { "full_name": "ML Neural Network Relu", "search_params": AlgorithmGridSearchParams.MLPR}
-    MLPL = { "full_name": "ML Neural Network Sigm", "search_params": AlgorithmGridSearchParams.MLPL}
+    MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC}
     FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD}
     FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD}
     FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD}
@@ -450,7 +455,7 @@ class Algorithm(MetaEnum):
         return IAFRobustCentroid()
 
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
-        return LogisticRegression(solver='liblinear', multi_class='ovr')
+        return LogisticRegression(max_iter=max_iterations)
 
     def do_KNN(self, max_iterations: int, size: int)-> KNeighborsClassifier:
         return KNeighborsClassifier()
@@ -462,16 +467,16 @@ class Algorithm(MetaEnum):
         return GaussianNB()
 
     def do_MNB(self, max_iterations: int, size: int)-> MultinomialNB:
-        return MultinomialNB(alpha=.01)
+        return MultinomialNB()
 
     def do_BNB(self, max_iterations: int, size: int)-> BernoulliNB:
-        return BernoulliNB(alpha=.01)
+        return BernoulliNB()
 
     def do_CNB(self, max_iterations: int, size: int)-> ComplementNB:
-        return ComplementNB(alpha=.01)
+        return ComplementNB()
 
     def do_REC(self, max_iterations: int, size: int)-> RidgeClassifier:
-        return RidgeClassifier(tol=1e-2, solver="sag")
+        return RidgeClassifier(max_iter=max_iterations)
 
     def do_PCN(self, max_iterations: int, size: int)-> Perceptron:
         return Perceptron(max_iter=max_iterations)
@@ -479,60 +484,30 @@ class Algorithm(MetaEnum):
     def do_PAC(self, max_iterations: int, size: int)-> PassiveAggressiveClassifier:
         return PassiveAggressiveClassifier(max_iter=max_iterations)
 
-    def do_RFC1(self, max_iterations: int, size: int)-> RandomForestClassifier:
-        return self.call_RandomForest("sqrt")
+    def do_RFCL(self, max_iterations: int, size: int)-> RandomForestClassifier:
+        return RandomForestClassifier()
 
-    def do_RFC2(self, max_iterations: int, size: int)-> RandomForestClassifier:
-        return self.call_RandomForest("log2")
+    def do_LSVC(self, max_iterations: int, size: int)-> LinearSVC:
+        return LinearSVC(max_iter=max_iterations) 
 
-    def call_RandomForest(self, max_features: str) -> RandomForestClassifier:
-        return RandomForestClassifier(n_estimators=100, max_features=max_features)
-
-    def do_LIN1(self, max_iterations: int, size: int)-> LinearSVC:
-        return self.call_LinearSVC(max_iterations, "l1", False) 
-
-    def do_LIN2(self, max_iterations: int, size: int)-> LinearSVC:  
-        return self.call_LinearSVC(max_iterations, "l2", False)
-
-    def do_LINP(self, max_iterations: int, size: int)-> Pipeline:
+    def do_SLSV(self, max_iterations: int, size: int)-> Pipeline:
         return Pipeline([
-            ('feature_selection', SelectFromModel(self.call_LinearSVC(max_iterations, "l1", False))),
-            ('classification', self.call_LinearSVC(max_iterations, "l2"))])
-
-    def do_SGD(self, max_iterations: int, size: int)-> SGDClassifier:
-        return self.call_SGD(max_iterations)    
-
-    def do_SGD1(self, max_iterations: int, size: int)-> SGDClassifier:
-        return self.call_SGD(max_iterations, "l1")  
-
-    def do_SGD2(self, max_iterations: int, size: int)-> SGDClassifier:
-        return self.call_SGD(max_iterations, "l2")
-
-    def do_SGDE(self, max_iterations: int, size: int)-> SGDClassifier:
-        return self.call_SGD(max_iterations, "elasticnet")
-
-    def call_SGD(self, max_iterations: int,  penalty: str = None) -> SGDClassifier:
-        if penalty is None:
-           return  SGDClassifier()
-        
-        return SGDClassifier(alpha=.0001, max_iter=max_iterations, penalty=penalty)
-
-    def do_NCT(self, max_iterations: int, size: int)-> NearestCentroid:     
-        return NearestCentroid()
+            ('feature_selection', SelectFromModel(LinearSVC(max_iter=max_iterations, penalty="l1", dual=False))),
+            ('classification', LinearSVC(max_iter=max_iterations, penalty="l2", dual=True))])
 
     def do_SVC(self, max_iterations: int, size: int):
         if size < self.limit:
-            return SVC(gamma='auto', probability=True)
+            return SVC(max_iter=max_iterations)
         
         # TODO: communicate with terminal to warn? 
         # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
-        return self.call_LinearSVC(max_iterations, "l1", False)
+        return self.do_LSVC(max_iterations=max_iterations)
 
-    def call_LinearSVC(self, max_iterations: int, penalty: str, dual: bool = None) -> LinearSVC:
-        if dual is None:
-            return LinearSVC(penalty=penalty, max_iter=max_iterations)
-        
-        return LinearSVC(penalty=penalty, dual=dual, tol=1e-3, max_iter=max_iterations)
+    def do_SGDE(self, max_iterations: int, size: int)-> SGDClassifier:
+        return SGDClassifier(max_iter=max_iterations)   
+
+    def do_NCT(self, max_iterations: int, size: int)-> NearestCentroid:     
+        return NearestCentroid()
 
     def do_LDA(self, max_iterations: int, size: int)-> LinearDiscriminantAnalysis:     
         return LinearDiscriminantAnalysis()
@@ -541,25 +516,19 @@ class Algorithm(MetaEnum):
         return QuadraticDiscriminantAnalysis()
 
     def do_BDT(self, max_iterations: int, size: int)-> BaggingClassifier:     
-        return BaggingClassifier(base_estimator=DecisionTreeClassifier(), n_estimators = 100, random_state = 7)
+        return BaggingClassifier()
 
     def do_ETC(self, max_iterations: int, size: int)-> ExtraTreesClassifier:     
-        return ExtraTreesClassifier(n_estimators = 100)
+        return ExtraTreesClassifier()
 
     def do_ABC(self, max_iterations: int, size: int)-> AdaBoostClassifier:     
-        return AdaBoostClassifier(n_estimators = 30, random_state = 7)
+        return AdaBoostClassifier()
 
     def do_GBC(self, max_iterations: int, size: int)-> GradientBoostingClassifier:     
-        return GradientBoostingClassifier(n_estimators = 100, random_state = 7)
+        return GradientBoostingClassifier()
 
-    def do_MLPR(self, max_iterations: int, size: int)-> MLPClassifier:
-        return self.call_MLP(max_iterations, 'relu')  
-
-    def do_MLPL(self, max_iterations: int, size: int)-> MLPClassifier:
-        return self.call_MLP(max_iterations, 'logistic')
-
-    def call_MLP(self, max_iterations: int, activation: str) -> MLPClassifier:
-        return MLPClassifier(activation = activation, solver='adam', alpha=1e-5, hidden_layer_sizes=(100,), max_iter=max_iterations, random_state=1)
+    def do_MLPC(self, max_iterations: int, size: int)-> MLPClassifier:
+        return MLPClassifier(max_iter=max_iterations)
 
     def do_WBGK(self, max_iterations: int, size: int)-> WeightedBagging:
         return self.call_WB(self.detector)

@@ -224,6 +224,14 @@ class IAFLogger(terminal.Logger):
         mean, std = ph.get_rates(as_string = False)
         self.print_info("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
     
+    def display_matrix(title: str, matrix: pandas.DataFrame) -> None:
+        print(title)
+        pandas.set_option('display.max_rows', None)
+        pandas.set_option('display.max_columns', None)
+        pandas.set_option('display.width', 1000)
+        pandas.set_option('display.colheader_justify', 'center')
+        pandas.set_option('display.precision', 2)
+        pandas.display(matrix)
 
     # Makes sure the GUI isn't left hanging if exceptions crash the program
     def abort_cleanly(self, message: str) -> None:
