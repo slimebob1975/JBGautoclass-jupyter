@@ -638,8 +638,10 @@ class Algorithm(MetaEnum):
         return Filter(classifier=SVC(), detector=detector.call_detector())
     
     def do_VOTG(self, max_iterations: int, size: int) -> Filter:
-        estimators = (SVC(), RandomForestClassifier(), LinearDiscriminantAnalysis(), \
-            LogisticRegression())
+        clf1 = LinearSVC()
+        clf2 = RandomForestClassifier()
+        clf3 = LogisticRegression()
+        estimators=[('lsvc', clf1), ('rfc', clf2), ('lrn', clf3)]
         return VotingClassifier(estimators=estimators)
 
 class AlgorithmTuple:
