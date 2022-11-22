@@ -10,6 +10,7 @@ from typing import Callable, Iterable, Protocol, Type, TypeVar, Union
 
 import pandas
 import numpy as np
+from sklearn.preprocessing import FunctionTransformer
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
@@ -642,7 +643,7 @@ class AlgorithmTuple:
         return algorithms
 
 class Preprocess(MetaEnum):
-    NON = "None"
+    NON = "No Scaling"
     STA = "Standard Scaler"
     MIX = "Min-Max Scaler"
     MMX = "Max-Absolute Scaler"
@@ -659,9 +660,12 @@ class Preprocess(MetaEnum):
         """
         return [(pp, pp.call_preprocess()) for pp in cls if pp.has_function() ]#and (pp.name != "BIN" or is_text_data)]
 
-    def do_NON(self) -> None:
+    def do_NON(self) -> NonScaler:
         """ While this return is superfluos, it helps with the listings of preprocessors """
-        return None
+        return self.NonScaler()
+
+    def NonScaler(self):
+        return FunctionTransformer(lambda X: X)
 
     def do_STA(self) -> StandardScaler:
         return StandardScaler(with_mean=False)

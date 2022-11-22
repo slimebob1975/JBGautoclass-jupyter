@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import pickle
+import dill as pickle
+#import pickle
 import time
 import psutil
 import traceback
@@ -931,7 +932,8 @@ class ModelHandler:
         
         try:
             pipe = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
-            
+            if pipe is None:
+                raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             if not pipe.algorithm.search_params.parameters:
                 pipe.model = self.train_picked_model(pipe.model, X_train, Y_train)
             else:
@@ -1137,6 +1139,7 @@ class ModelHandler:
                     try:
                         current_pipeline, cv_results, failure = \
                             self.create_pipeline_and_cv(algorithm, preprocessor, algorithm_callable, preprocessor_callable, kfold, X_train, Y_train, num_features)
+                        #print("Current pipeline:", current_pipeline)
                         if X_test is not None and Y_test is not None:
                             current_pipeline, test_score, failure = \
                                 self.train_and_evaluate_picked_model(current_pipeline, X_train, Y_train, X_test, Y_test)
