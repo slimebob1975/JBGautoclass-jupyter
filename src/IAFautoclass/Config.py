@@ -10,13 +10,17 @@ from typing import Callable, Iterable, Protocol, Type, TypeVar, Union
 
 import pandas
 import numpy as np
+from sklearn.dummy import DummyClassifier
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.decomposition import PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
 from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
                               ExtraTreesClassifier, GradientBoostingClassifier,
-                              RandomForestClassifier, StackingClassifier)
+                              RandomForestClassifier, StackingClassifier,
+                              HistGradientBoostingClassifier, VotingClassifier)
+from sklearn.semi_supervised import SelfTrainingClassifier
+from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.feature_selection import SelectFromModel
 from sklearn.kernel_approximation import Nystroem
 from sklearn.linear_model import (LogisticRegression,
@@ -25,7 +29,8 @@ from sklearn.linear_model import (LogisticRegression,
 from sklearn.manifold import Isomap, LocallyLinearEmbedding
 from sklearn.naive_bayes import (BernoulliNB, ComplementNB, GaussianNB,
                                  MultinomialNB)
-from sklearn.neighbors import KNeighborsClassifier, NearestCentroid
+from sklearn.neighbors import (KNeighborsClassifier, NearestCentroid,
+                               RadiusNeighborsClassifier)
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import (Binarizer, MaxAbsScaler, MinMaxScaler,
@@ -233,6 +238,7 @@ class Detector(MetaEnum):
         return IAFRandomForestDetector()
 
 class AlgorithmGridSearchParams(MetaEnum):
+    DUMY =  {"parameters": {'strategy': ('most_frequent', 'prior', 'stratified', 'uniform', 'constant')}}
     SRF1 = {"parameters": {}}
     SRF2 = {"parameters": {}} 
     BARF = {"parameters": {'criterion': ('gini', 'entropy'), 'n_estimators':[10,50,100,200], 
@@ -248,6 +254,7 @@ class AlgorithmGridSearchParams(MetaEnum):
            'class_weight': ('balanced', None)}}
     KNN = {"parameters": {'n_neighbors': (5, 10, 15), 'weights': {'uniform', 'distance'}, 
            'algorithm': ('ball_tree', 'kd_tree', 'brute'), 'p': (1, 2)}}
+    RADN = {"parameters": {}}
     DTC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'splitter': ('best', 'random'), 
            'class_weight': ('balanced', None)}}
     GNB = {"parameters": {'var_smoothing': (1e-7, 1e-8, 1e-9)}}
@@ -268,6 +275,7 @@ class AlgorithmGridSearchParams(MetaEnum):
             'penalty': ('l2', 'l1', 'elasticnet')}}
     NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': np.arange(0, 1.01, 0.01)}}
     SVC = {"parameters": {'C': [0.1,1, 10, 100], 'gamma': [1 , 0.1 ,0.01 ,0.001],'kernel': ['rbf', 'poly', 'sigmoid']}}
+    SSVC = {"parameters": {}}
     LDA = {"parameters": {'solver': ('svd','lsqr','eigen'), 'shrinkage': ('auto', None), 'tol': [1e-3, 1e-4, 1e-5]}}
     QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
     BDT = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
@@ -281,7 +289,10 @@ class AlgorithmGridSearchParams(MetaEnum):
         'min_samples_split': np.linspace(0.1, 0.5, 12), 'min_samples_leaf': np.linspace(0.1, 0.5, 12),
         'max_depth':[3,5,8], 'max_features':['log2','sqrt'], 'criterion': ['friedman_mse',  'mae'],
         'subsample':[0.5, 0.618, 0.8, 0.85, 0.9, 0.95, 1.0], 'n_estimators':[10]}}
+    HIST = {"parameters": {'learning_rate': [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2],
+        'max_depth' : [25, 50, 75], 'l2_regularization': [0.0, 0.1, 1.5] }} 
     MLPC = {"parameters": {'activation': ('identity', 'logistic', 'tanh', 'relu'), 'solver': ('lbfgs', 'sgd', 'adam')}}
+    GPC =  {"parameters": {'warm_start': (True, False), 'multi_class': ('one_vs_rest', 'one_vs_one')}}
     FRFD = {"parameters": {}}
     FPCD = {"parameters": {}}
     FFKD = {"parameters": {}}
@@ -302,6 +313,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     CLPC = {"parameters": {}}
     CLFK = {"parameters": {}}
     CLIH = {"parameters": {}}
+    VOTG = {"parameters": {'voting': ('hard', 'soft')}}
     
     @property
     def parameters(self):
@@ -311,6 +323,7 @@ class AlgorithmGridSearchParams(MetaEnum):
         return {}
 
 class Algorithm(MetaEnum):
+    DUMY = { "full_name": "Dummy Classifier", "search_params": AlgorithmGridSearchParams.DUMY}
     SRF1 = { "full_name": "Stacked Random Forests 1", "search_params": AlgorithmGridSearchParams.SRF1}
     SRF2 = { "full_name": "Stacked Random Forests 2", "search_params": AlgorithmGridSearchParams.SRF2}
     BARF = { "full_name": "Balanced Random Forest", "search_params": AlgorithmGridSearchParams.BARF}
@@ -322,6 +335,7 @@ class Algorithm(MetaEnum):
     RCNT = { "full_name": "Robust Centroid + Label Encoder", "search_params": AlgorithmGridSearchParams.RCNT}
     LRN = { "full_name": "Logistic Regression", "search_params": AlgorithmGridSearchParams.LRN}
     KNN = { "full_name": "K-Neighbors Classifier", "search_params": AlgorithmGridSearchParams.KNN}
+    RADN = { "full_name": "Radius Neighbors Classifier", "search_params": AlgorithmGridSearchParams.RADN}
     DTC = { "full_name": "Decision Tree Classifier", "search_params": AlgorithmGridSearchParams.DTC}
     GNB = { "full_name": "Gaussian Naive Bayes", "search_params": AlgorithmGridSearchParams.GNB}
     MNB = { "full_name": "Multinomial Naive Bayes", "search_params": AlgorithmGridSearchParams.MNB}
@@ -336,13 +350,16 @@ class Algorithm(MetaEnum):
     SGDE = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGDE}
     NCT = { "full_name": "Nearest Centroid", "search_params": AlgorithmGridSearchParams.NCT}
     SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC}
+    SSVC = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.SSVC}
     LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA}
     QDA = { "full_name": "Quadratic Discriminant Analysis", "search_params": AlgorithmGridSearchParams.QDA}
     BDT = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BDT}
     ETC = { "full_name": "Extra Trees Classifier", "search_params": AlgorithmGridSearchParams.ETC}
     ABC = { "full_name": "Ada Boost Classifier", "search_params": AlgorithmGridSearchParams.ABC}
     GBC = { "full_name": "Gradient Boosting Classifier", "search_params": AlgorithmGridSearchParams.GBC}
+    HIST = { "full_name": "Histogram-based Gradient B. Classifier", "search_params": AlgorithmGridSearchParams.HIST}
     MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC}
+    GPC = { "full_name": "Gaussian Process Classifier", "search_params": AlgorithmGridSearchParams.GPC}
     FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD}
     FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD}
     FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD}
@@ -363,6 +380,8 @@ class Algorithm(MetaEnum):
     CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CLPC}
     CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK}
     CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH}
+    VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG}
+
 
     def get_full_name(self) -> str:
         return self.full_name
@@ -419,6 +438,9 @@ class Algorithm(MetaEnum):
     def use_imb_pipeline(self) -> bool:
         return self in self.get_robust_algorithms()
 
+    def do_DUMY(self, max_iterations: int, size: int)-> DummyClassifier:
+        return DummyClassifier()
+    
     def do_SRF1(self, max_iterations: int, size: int)-> StackingClassifier:
         estimators = [ \
                 ('rfor',RobustForest()),\
@@ -460,6 +482,9 @@ class Algorithm(MetaEnum):
 
     def do_KNN(self, max_iterations: int, size: int)-> KNeighborsClassifier:
         return KNeighborsClassifier()
+
+    def do_RADN(self, max_iterations: int, size: int)-> RadiusNeighborsClassifier:
+        return RadiusNeighborsClassifier()
 
     def do_DTC(self, max_iterations: int, size: int)-> DecisionTreeClassifier:
         return DecisionTreeClassifier()
@@ -504,6 +529,9 @@ class Algorithm(MetaEnum):
         # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
         return self.do_LSVC(max_iterations=max_iterations)
 
+    def do_SSVC(self, max_iterations: int, size: int) -> SelfTrainingClassifier:
+        return SelfTrainingClassifier(self.do_SVC(max_iterations, size))
+
     def do_SGDE(self, max_iterations: int, size: int)-> SGDClassifier:
         return SGDClassifier(max_iter=max_iterations)   
 
@@ -528,8 +556,14 @@ class Algorithm(MetaEnum):
     def do_GBC(self, max_iterations: int, size: int)-> GradientBoostingClassifier:     
         return GradientBoostingClassifier()
 
+    def do_HIST(self, max_iterations: int, size: int)-> HistGradientBoostingClassifier:     
+        return HistGradientBoostingClassifier()
+
     def do_MLPC(self, max_iterations: int, size: int)-> MLPClassifier:
         return MLPClassifier(max_iter=max_iterations)
+
+    def do_GPC(self, max_iterations: int, size: int)-> GaussianProcessClassifier:
+        return GaussianProcessClassifier(max_iter_predict=max_iterations)
 
     def do_WBGK(self, max_iterations: int, size: int)-> WeightedBagging:
         return self.call_WB(self.detector)
@@ -602,6 +636,11 @@ class Algorithm(MetaEnum):
     
     def call_FLT(self, detector) -> Filter:
         return Filter(classifier=SVC(), detector=detector.call_detector())
+    
+    def do_VOTG(self, max_iterations: int, size: int) -> Filter:
+        estimators = (SVC(), RandomForestClassifier(), LinearDiscriminantAnalysis(), \
+            LogisticRegression())
+        return VotingClassifier(estimators=estimators)
 
 class AlgorithmTuple:
 
