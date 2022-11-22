@@ -273,7 +273,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     BDT = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
             'max_features': (0.5, 1.0, 2.0), 'warm_start': (True, False)}}
     ETC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
-            'max_depth': range(1, 10, 1), 'leaf_range': range(1, 15, 1), 'max_features': ('sqrt', 'log2'),
+            'max_depth': range(1, 10, 1), 'max_features': ('sqrt', 'log2', None),
             'class_weight': ('balanced', 'balanced_subsample', None)}}
     ABC = {"parameters": {'n_estimators': (10,30,50,100), 'learning_rate':(0.1, 1.0, 2.0)}}
     GBC = {"parameters": {'loss': ['log_loss', 'exponential'], 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import dill as pickle
-#import pickle
+import dill as pickle   # Ordinary pickle cant handle lamdba functions
 import time
 import psutil
 import traceback
