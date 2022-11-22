@@ -944,7 +944,8 @@ class ModelHandler:
                 pipe.model, grid_cv_info = \
                     self.train_picked_model_parameter_grid_search(pipe.model, search_params, k, X_train, Y_train)
                 
-                self.handler.logger.display_matrix("\nResult of grid search:", grid_cv_info)
+                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(pipe.model.get_params())}")
+                #self.handler.logger.display_matrix("\nResult of grid search:", grid_cv_info)
         except Exception as ex:
             raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
 

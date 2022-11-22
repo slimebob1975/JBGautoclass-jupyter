@@ -516,7 +516,7 @@ class Algorithm(MetaEnum):
     def do_LSVC(self, max_iterations: int, size: int)-> LinearSVC:
         return LinearSVC(max_iter=max_iterations) 
 
-    def do_SLSV(self, max_iterations: int)-> Pipeline:
+    def do_SLSV(self, max_iterations: int, size: int)-> Pipeline:
         return Pipeline([
             ('feature_selection', SelectFromModel(LinearSVC(max_iter=max_iterations, penalty="l1", dual=False))),
             ('classification', LinearSVC(max_iter=max_iterations, penalty="l2", dual=True))])
@@ -527,7 +527,7 @@ class Algorithm(MetaEnum):
         
         # TODO: communicate with terminal to warn? 
         # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
-        return self.do_LSVC(max_iterations=max_iterations)
+        return self.do_LSVC(max_iterations=max_iterations, size=size)
 
     def do_SSVC(self, max_iterations: int, size: int) -> SelfTrainingClassifier:
         return SelfTrainingClassifier(self.do_SVC(max_iterations, size))
