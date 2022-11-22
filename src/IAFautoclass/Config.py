@@ -516,7 +516,7 @@ class Algorithm(MetaEnum):
     def do_LSVC(self, max_iterations: int, size: int)-> LinearSVC:
         return LinearSVC(max_iter=max_iterations) 
 
-    def do_SLSV(self, max_iterations: int, size: int)-> Pipeline:
+    def do_SLSV(self, max_iterations: int)-> Pipeline:
         return Pipeline([
             ('feature_selection', SelectFromModel(LinearSVC(max_iter=max_iterations, penalty="l1", dual=False))),
             ('classification', LinearSVC(max_iter=max_iterations, penalty="l2", dual=True))])
