@@ -933,18 +933,22 @@ class ModelHandler:
             pipe = self.spot_check_ml_algorithms(X_train, Y_train, k, X_test, Y_test)
             if pipe is None:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
+            
+            # Notice: we assume the algorithm is the last ('name', model) step in the pipeline
+            model_name = pipe.model.steps[-1][0]
             if not pipe.algorithm.search_params.parameters:
+                self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
                 pipe.model = self.train_picked_model(pipe.model, X_train, Y_train)
             else:
+                self.handler.logger.print_info(f"\nUsing grid search for final training of model {model_name}...")
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
-                # Notice: we assume the algorithm is the last ('name', model) step in the pipeline
-                prefix = pipe.model.steps[-1][0] + "__"
+                prefix = model_name + "__"
                 search_params = Helpers.add_prefix_to_dict_keys(prefix, pipe.algorithm.search_params.parameters)
                 #print(search_params)
                 pipe.model, grid_cv_info = \
                     self.train_picked_model_parameter_grid_search(pipe.model, search_params, k, X_train, Y_train)
                 
-                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(pipe.model.get_params())}")
+                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(pipe.model.get_params(deep=False))}")
                 #self.handler.logger.display_matrix("\nResult of grid search:", grid_cv_info)
         except Exception as ex:
             raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
