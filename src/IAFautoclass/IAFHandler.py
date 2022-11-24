@@ -936,6 +936,7 @@ class ModelHandler:
             
             # Notice: we assume the algorithm is the last ('name', model) step in the pipeline
             model_name = pipe.model.steps[-1][0]
+            t0 = time.time()
             if not pipe.algorithm.search_params.parameters:
                 self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
                 pipe.model = self.train_picked_model(pipe.model, X_train, Y_train)
@@ -950,6 +951,8 @@ class ModelHandler:
                 
                 self.handler.logger.print_info(f"Optimized parameters after grid search: {str(pipe.model.get_params(deep=False))}")
                 #self.handler.logger.display_matrix("\nResult of grid search:", grid_cv_info)
+            t1 = time.time()
+            self.handler.logger.print_info(f"Final training of model {model_name} took {str(round(t1-t0,2))} secs.")
         except Exception as ex:
             raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
 
