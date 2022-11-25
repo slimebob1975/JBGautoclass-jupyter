@@ -254,7 +254,7 @@ class AlgorithmGridSearchParams(MetaEnum):
            'class_weight': ('balanced', None)}}
     KNN = {"parameters": {'n_neighbors': (5, 10, 15), 'weights': {'uniform', 'distance'}, 
            'algorithm': ('ball_tree', 'kd_tree', 'brute'), 'p': (1, 2)}}
-    RADN = {"parameters": {}}
+    RADN = {"parameters": {'radius': np.arange(0.5, 1.5, 0.1), 'weights': ('uniform','distance'), 'outlier_label': ('most_frequent', None)}}
     DTC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'splitter': ('best', 'random'), 
            'class_weight': ('balanced', None)}}
     GNB = {"parameters": {'var_smoothing': (1e-7, 1e-8, 1e-9)}}
