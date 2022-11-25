@@ -12,7 +12,7 @@ import pandas
 import numpy as np
 from sklearn.dummy import DummyClassifier
 from sklearn.preprocessing import FunctionTransformer
-from sklearn.decomposition import PCA, FastICA, TruncatedSVD
+from sklearn.decomposition import PCA, FastICA, TruncatedSVD, NMF
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
 from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
@@ -774,6 +774,7 @@ class Reduction(MetaEnum):
     NYS = "Nystroem Method"
     TSVD = "Truncated SVD"
     FICA = "Fast Indep. Component Analysis"
+    NMF = "Non-Negative Matrix Factorization"
     GRP = "Gaussion Random Projection"
     ISO = "Isometric Mapping"
     LLE = "Locally Linearized Embedding"
@@ -875,6 +876,18 @@ class Reduction(MetaEnum):
             
         # Make transformation
         transformation = FastICA(n_components=components)
+        
+        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+
+    def do_NMF(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        if num_selected_features != None and num_selected_features > 0:
+            components = num_selected_features
+        else:
+            components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
+            logger.print_components("NMF", components)
+            
+        # Make transformation
+        transformation = NMF(n_components=components)
         
         return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
 
