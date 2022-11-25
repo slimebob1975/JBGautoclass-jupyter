@@ -883,13 +883,36 @@ class Reduction(MetaEnum):
         if num_selected_features != None and num_selected_features > 0:
             components = num_selected_features
         else:
-            components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
+            components = self.find_NMF_components(logger, X, max(Config.LOWER_LIMIT_REDUCTION, min(X.shape)))
+            #components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
             logger.print_components("NMF", components)
             
         # Make transformation
         transformation = NMF(n_components=components)
         
         return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+
+    def find_NMF_components(self, logger: Logger, X: pandas.DataFrame, max_components: int = None):
+        
+        norm = np.linalg.norm(X.to_numpy())
+        tol = 0.05
+
+        # Loop to find the best possible number of component for NMF
+        components = 2
+        while components <= max_components:
+
+            # Make a copy of X so that we do not destroy
+            feature_transform = NMF(n_components=components).fit(X)
+            err = feature_transform.reconstruction_err_
+            rerr = err / norm
+            logger.print_info(f'Components: {components}. NMF reconstruction relative error: {rerr}')
+            if rerr < tol:
+                logger.print_info(f'Tolerance {tol} fulfilled for {components} components')
+                break
+            else:
+                components = min(components*2, max_components)
+
+        return components
 
 
     def do_GRP(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
