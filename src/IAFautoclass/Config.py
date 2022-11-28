@@ -484,7 +484,7 @@ class Algorithm(MetaEnum):
         return KNeighborsClassifier()
 
     def do_RADN(self, max_iterations: int, size: int)-> RadiusNeighborsClassifier:
-        return RadiusNeighborsClassifier()
+        return RadiusNeighborsClassifier(outlier_label="most_frequent")
 
     def do_DTC(self, max_iterations: int, size: int)-> DecisionTreeClassifier:
         return DecisionTreeClassifier()
