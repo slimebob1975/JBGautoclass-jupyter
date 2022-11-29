@@ -16,3 +16,4 @@ scikit_learn==1.1.2
 scipy==1.7.1
 stop_words==2018.7.23
 terminal==0.4.0
+dill
