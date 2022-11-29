@@ -62,7 +62,7 @@ class DataLayer(DataLayerBase):
         
         driver = self.config.get_attribute("connection.odbc_driver")
         if driver not in drivers:
-            raise ValueError("Given ODBC driver ({driver}) cannot be found")
+            raise ValueError(f"Given ODBC driver ({driver}) cannot be found")
 
         """ Checks that the server connection is valid """
         if not self.can_connect():
@@ -491,6 +491,89 @@ class DataLayer(DataLayerBase):
             self.logger.print_dragon(e)
             raise DataLayerException(f"Correction of mispredicted data: {query} failed: {e}")
     
+    def save_data_revised(self, results: list, class_rate_type: RateType, model: Model)-> int:
+        """ Save the classifications in the database """
+        # This is rewriting save_data--once it works the save_data can be deleted and this renamed to save_data
+        # Once I have a working config fil, ta bort staticmethod och börja använd self igen
+
+        return self.get_insert_many_statement(self.config.connection.get_formatted_class_table(), ["a", "b", "c"])
+        # Loop through the data
+        num_lines = 0
+        percent_fetched = 0.0
+        result_num = len(results)
+
+        # Get class labels separately
+        """
+        try:
+            class_labels = ",".join(model.model.classes_)
+        except AttributeError:
+            self.logger.print_info(f"No classes_ attribute in model")
+            class_labels = "N/A"
+
+        columns = OrderedDict({
+            "catalog_name": self.config.get_data_catalog(),
+            "table_name": self.config.get_data_table(),
+            "column_names": ",".join(self.config.get_data_column_names()), 
+            "unique_key": "", # dict["key"]
+            "class_result": "", # dict["prediction"]
+            "class_rate": "", # dict["rate"]
+            "class_rate_type": class_rate_type.name,
+            "class_labels": class_labels,
+            "class_probabilities": "", # dict["probabilities"]
+            "class_algorithm": model.get_name(),
+            "class_script": self.config.script_path,
+            "class_user": self.config.get_data_username()
+        })
+        
+        
+        # Build up the base query outside of the range
+        insert = self.get_save_classification_insert(columns.keys())
+        
+        try:
+            # Get a sql handler and connect to data database
+            sqlHelper = self.get_connection()
+        
+            for row in results:
+                columns["unique_key"] = row["key"]
+                columns["class_result"] = row["prediction"]
+                columns["class_rate"] = row["rate"]
+                columns["class_probabilities"] = row["probabilities"]
+
+                values = ",".join([to_quoted_string(elem) for elem in columns.values()])
+                query = insert + f" VALUES ({values})"
+                
+                # Execute a query without getting any data
+                # Delay the commit until the connection is closed
+                if sqlHelper.execute_query(query, get_data=False, commit=False):
+                    num_lines += 1
+                    percent_fetched = round(100.0 * float(num_lines) / float(result_num))
+                    self.logger.print_percentage("Part of data saved", percent_fetched)
+                
+
+            self.logger.print_linebreak()
+            
+            if num_lines > 0:
+                # Disconnect from database and commit all inserts
+                sqlHelper.disconnect(commit=True)
+            
+            # Return the number of inserted rows
+            return num_lines
+        except KeyError as ke:
+            raise DataLayerException(f"Something went wrong when saving data ({ke})")
+        except Exception as e:
+            self.logger.print_dragon(e)
+            raise DataLayerException(f"Something went wrong when saving data ({e})")
+        """
+
+    @staticmethod
+    def get_insert_many_statement(table: str, columns) -> str:
+        """ Given a table and an iterable of column names returns an insert statement with placeholders """
+        columns_string = ",".join([column for column in columns])
+        values = ",".join(["?" for x in range(len(columns))]) # A string of ?, ?, ?, with the number of ? being based on the number of columns
+        insert = f"INSERT INTO {table} ({columns_string}) VALUES({values})"
+        
+        return insert
+
 # Main method
 def main():
     from IAFLogger import IAFLogger
@@ -501,8 +584,11 @@ def main():
     dl = DataLayer(config, logger)
     table = 'aterkommande_automat.iris'
     database = 'Arbetsdatabas'
-    dataset, query = dl.get_dataset(15)
-    print(dataset)
+    #insert = DataLayer.get_insert_many_statement("table", ["a", "b", "c"])
+    #print(insert)
+    print(dl.save_data_revised([], "", ""))
+    #dataset, query = dl.get_dataset(15)
+    #print(dataset)
 
 
     #print(dl.get_connection())
