@@ -149,7 +149,7 @@
         "algorithm_dropdown": {
             "type": "SelectMultiple",
             "params": {
-                "value": ["ABC"],
+                "value": ["DUMY"],
                 "description": "Algorithm:",
                 "disabled": true,
                 "description_tooltip": "Pick which algorithms to use"
