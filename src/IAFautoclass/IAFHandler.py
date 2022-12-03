@@ -1156,15 +1156,20 @@ class ModelHandler:
                         t0 = time.time()
                         
                         try:
+                            # Create pipeline and cross validate
                             current_pipeline, cv_results, failure = \
                                 self.create_pipeline_and_cv(reduction, algorithm, preprocessor, reduction_callable, \
                                     algorithm_callable, preprocessor_callable, kfold, dh, num_features)
-                            num_components = self.get_components_from_pipeline(reduction, current_pipeline, num_features)
+                            
+                            # Train and evaluate on test data
                             if dh.X_validation is not None and dh.Y_validation is not None:
                                 current_pipeline, test_score, failure = \
                                     self.train_and_evaluate_picked_model(current_pipeline, dh)
                             else:
                                 test_score = 0.0
+
+                            # Get used number of features after reduction (components)
+                            num_components = self.get_components_from_pipeline(reduction, current_pipeline, num_features)
                         except ModelException:
                             # If any exceptions happen, continue to next step in the loop
                             self.handler.logger.print_warning(f"ModelException: {str(ex)}")
