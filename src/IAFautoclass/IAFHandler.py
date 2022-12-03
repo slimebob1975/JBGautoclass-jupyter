@@ -1086,7 +1086,7 @@ class ModelHandler:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"StratifiedKfold raised an exception with message: {e}")
         
-        self.handler.logger.print_table_row(items=["Pre","Red","Algo","Comp","Train","Stdev","Test","Time","Except"], divisor="=")
+        self.handler.logger.print_table_row(items=["Pre.","Red.","Alg.","Comp","Train","Stdev","Test","Time","Except"], divisor="=")
 
         numMinorTasks = len(reductions) * len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)

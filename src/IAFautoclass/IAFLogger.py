@@ -45,7 +45,7 @@ class IAFLogger(terminal.Logger):
         self.print_unformatted(config)
 
     def get_table_format(self) -> str:
-        return "{0:>4s}-{1:>4s}-{2:<6s}{3:>6s}{4:>8s}{5:>8s}{6:>8s}{7:>11s} {8:<30s}"
+        return "{0:>4s}{1:>4s}{2:<6s}{3:>6s}{4:>8s}{5:>8s}{6:>8s}{7:>11s} {8:<30s}"
 
     def print_table_row(self, items: list[str], divisor: str = None) -> None:
         """ Prints a row with optional divisor"""
