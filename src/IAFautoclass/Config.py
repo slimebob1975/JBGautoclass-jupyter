@@ -176,19 +176,27 @@ class MetaEnum(enum.Enum):
         
         return prefix_list + listed_enums
 
-    def get_function_name(self) -> str:
-        return f"do_{self.name}"
+    def get_function_name(self, do_or_get: str = 'do') -> str:
+        if do_or_get == 'get':
+            return f"get_{self.name}"
+        elif do_or_get == 'do':
+            return f"do_{self.name}"
+        else:
+            return None
 
     def has_function(self) -> bool:
         do = self.get_function_name()
         return hasattr(self, do) and callable(getattr(self, do))
 
-    def call_function(self, **kwargs):
-        do = self.get_function_name()
-        if hasattr(self, do) and callable(func := getattr(self, do)):
+    def call_function(self, do_or_get: str = 'do', **kwargs):
+        do_or_get = self.get_function_name(do_or_get)
+        if hasattr(self, do_or_get) and callable(func := getattr(self, do_or_get)):
             return func(**kwargs)
         
         return None
+
+    def get_function(self, **kwargs):
+        return self.call_function(self, 'get', **kwargs)
 
 class Detector(MetaEnum):
     ALL = { "full_name": "All" }
@@ -210,7 +218,7 @@ class Detector(MetaEnum):
 
     def call_detector(self)  -> Union[Detecter, None]: 
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
-        return self.call_function()
+        return self.call_function('do')
 
     def do_NON(self) -> None:
         """ While this return is superfluos, it helps with the listings of detectors """
@@ -252,7 +260,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     RCNT = {"parameters": {}}
     LRN = {"parameters": {'penalty':('l1', 'l2', 'elasticnet', 'none'), 'tol': [1e-3, 1e-4, 1e-5], 'C': [0.1, 1, 10],
            'class_weight': ('balanced', None)}}
-    KNN = {"parameters": {'n_neighbors': (5, 10, 15), 'weights': {'uniform', 'distance'}, 
+    KNN = {"parameters": {'n_neighbors': (5, 10, 15), 'weights': ('uniform', 'distance'), 
            'algorithm': ('ball_tree', 'kd_tree', 'brute'), 'p': (1, 2)}}
     RADN = {"parameters": {'radius': np.arange(0.5, 1.5, 0.1), 'weights': ('uniform','distance'), 'outlier_label': ('most_frequent', None)}}
     DTC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'splitter': ('best', 'random'), 
@@ -278,7 +286,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     SSVC = {"parameters": {}}
     LDA = {"parameters": {'solver': ('svd','lsqr','eigen'), 'shrinkage': ('auto', None), 'tol': [1e-3, 1e-4, 1e-5]}}
     QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
-    BDT = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
+    BGC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
             'max_features': (0.5, 1.0, 2.0), 'warm_start': (True, False)}}
     ETC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
             'max_depth': range(1, 10, 1), 'max_features': ('sqrt', 'log2', None),
@@ -353,7 +361,7 @@ class Algorithm(MetaEnum):
     SSVC = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.SSVC}
     LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA}
     QDA = { "full_name": "Quadratic Discriminant Analysis", "search_params": AlgorithmGridSearchParams.QDA}
-    BDT = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BDT}
+    BGC = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BGC}
     ETC = { "full_name": "Extra Trees Classifier", "search_params": AlgorithmGridSearchParams.ETC}
     ABC = { "full_name": "Ada Boost Classifier", "search_params": AlgorithmGridSearchParams.ABC}
     GBC = { "full_name": "Gradient Boosting Classifier", "search_params": AlgorithmGridSearchParams.GBC}
@@ -433,7 +441,7 @@ class Algorithm(MetaEnum):
 
     def call_algorithm(self, max_iterations: int, size: int) -> Union[Estimator, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
-        return self.call_function(max_iterations=max_iterations, size=size)
+        return self.call_function('do', max_iterations=max_iterations, size=size)
 
     def use_imb_pipeline(self) -> bool:
         return self in self.get_robust_algorithms()
@@ -544,7 +552,7 @@ class Algorithm(MetaEnum):
     def do_QDA(self, max_iterations: int, size: int)-> QuadraticDiscriminantAnalysis:     
         return QuadraticDiscriminantAnalysis()
 
-    def do_BDT(self, max_iterations: int, size: int)-> BaggingClassifier:     
+    def do_BGC(self, max_iterations: int, size: int)-> BaggingClassifier:     
         return BaggingClassifier()
 
     def do_ETC(self, max_iterations: int, size: int)-> ExtraTreesClassifier:     
@@ -684,7 +692,7 @@ class AlgorithmTuple:
         return algorithms
 
 class Preprocess(MetaEnum):
-    NON = "No Scaling"
+    NOS = "No Scaling"
     STA = "Standard Scaler"
     MIX = "Min-Max Scaler"
     MMX = "Max-Absolute Scaler"
@@ -696,12 +704,12 @@ class Preprocess(MetaEnum):
 
     @classmethod
     def list_callable_preprocessors(cls, is_text_data: bool) -> list[tuple]:
-        """ Gets a list of preprocessors that are callable (including NON -> None)
+        """ Gets a list of preprocessors that are callable (including NOS -> None)
             in the form (preprocessor, called function)
         """
         return [(pp, pp.call_preprocess()) for pp in cls if pp.has_function() ]#and (pp.name != "BIN" or is_text_data)]
 
-    def do_NON(self) -> NonScaler:
+    def do_NOS(self) -> NonScaler:
         """ While this return is superfluos, it helps with the listings of preprocessors """
         return self.NonScaler()
 
@@ -725,7 +733,7 @@ class Preprocess(MetaEnum):
 
     def call_preprocess(self) -> Union[Transform, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
-        return self.call_function()
+        return self.call_function('do')
 
 class PreprocessTuple:
 
@@ -762,13 +770,13 @@ class PreprocessTuple:
         return self.get_full_names()
 
     def list_callable_preprocessors(self, is_text_data: bool) -> list[tuple]:
-        """ Gets a list of preprocessors that are callable (including NON -> None)
+        """ Gets a list of preprocessors that are callable (including NOS -> None)
             in the form (preprocessor, called function)
         """
         return [(pp, pp.call_preprocess()) for pp in self.preprocessors if pp.has_function() ]#and (pp.name != "BIN" or is_text_data)]
 
 class Reduction(MetaEnum):
-    NON = "None"
+    NOR = "No Reduction"
     RFE = "Recursive Feature Elimination"
     PCA = "Principal Component Analysis"
     NYS = "Nystroem Method"
@@ -782,9 +790,16 @@ class Reduction(MetaEnum):
     def get_full_name(self) -> str:
         return self.full_name
 
+    @classmethod
+    def list_callable_reductions(cls) -> list[tuple]:
+        """ Gets a list of reductions that are callable (including NOR -> None)
+            in the form (reduction, called function)
+        """
+        return [(rd, rd.call_transformation_theory()) for rd in cls if rd.has_function() ]
+
     def call_transformation(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
-        return self.call_function(logger=logger, X=X, num_selected_features=num_selected_features)
+        return self.call_function('do', logger=logger, X=X, num_selected_features=num_selected_features)
 
     def call_transformation_theory(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
         """ This is a possible idea to optimise perform_feature_selection(), with code from there below
@@ -796,17 +811,15 @@ class Reduction(MetaEnum):
                 logger=self.handler.logger, X=self.X, num_selected_features=num_selected_features
             )
         """
-        logger.print_info(f"{self.full_name} transformation of dataset under way...")
+        #logger.print_info(f"{self.full_name} transformation of dataset under way...")
         new_X = X
         transform = None
         try:
-            new_X, transform = self.call_function(logger=logger, X=X, num_selected_features=num_selected_features)
+            new_X, transform = self.call_function('do', logger=logger, X=X, num_selected_features=num_selected_features)
         except TypeError:
             """ Acceptable error, call_function() returned None """
 
         return new_X, transform
-
-
 
     def _do_transformation(self, logger: Logger, X: pandas.DataFrame, transformation, components):
         try:
@@ -814,83 +827,82 @@ class Reduction(MetaEnum):
             feature_selection_transform.fit(X)
             X = feature_selection_transform.transform(X)
         except Exception as e:
-            logger.print_components(self.name, components, str(e))
+            #logger.print_components(self.name, components, str(e))
             feature_selection_transform = None
         else:
             # Else in a try-except clause means that there were no exceptions
-            logger.print_info(f"...new shape of data matrix is: ({X.shape[0]},{X.shape[1]})")
+            #logger.print_info(f"...new shape of data matrix is: ({X.shape[0]},{X.shape[1]})")
 
-        return X, feature_selection_transform
+            return X, feature_selection_transform
 
-    def do_PCA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        components = None
-        components_options = []
-        if num_selected_features != None and num_selected_features > 0:
-            components_options.append(num_selected_features)
+    def get_NOR(self, num_samples: int, num_features: int, num_selected_features: int = None) -> NonReduction:
+        return self.NonReduction()
+    
+    def do_NOR(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        """ While this return is superfluos, it helps with the listings of reductions """
+        return self.NonReduction(X), self.NonReduction()
+
+    def NonReduction(self):
+        return FunctionTransformer(lambda X: X)
+    
+    def get_PCA(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        if num_selected_features is not None:
             components = num_selected_features
-        if X.shape[0] >= X.shape[1]:
-            components_options.append('mle')
+        elif num_samples >= num_features:
             components = 'mle'
-        components_options.append(Config.PCA_VARIANCE_EXPLAINED)
-        components_options.append(min(X.shape[0], X.shape[1]) - 1)
-        X_original = X
-        # Make transformation
-        for components in components_options:
-            logger.print_components("PCA", components)
-            transformation = PCA(n_components=components)
-            X, feature_selection_transform = self._do_transformation(logger=logger, X=X_original, transformation=transformation, components=components)
-            
-            if feature_selection_transform is not None:
-                break
+        else:
+            components = Config.PCA_VARIANCE_EXPLAINED
+        return PCA(n_components=None)
+    
+    def do_PCA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
 
-        return X, feature_selection_transform
+        tf = self.get_PCA(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
 
+    def get_NYS(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        if num_selected_features is not None:
+            components = num_selected_features
+        else:
+            components = max(Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+        return Nystroem(n_components=components)
+    
     def do_NYS(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        if num_selected_features != None and num_selected_features > 0:
+        tf = self.get_NYS(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
+
+    def get_TSVD(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
-            logger.print_components("Nystroem", components)
-        # Make transformation
-        transformation = Nystroem(n_components=components)
-        
-        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+            components = max(Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
 
+        return TruncatedSVD(n_components=components)
+    
     def do_TSVD(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        if num_selected_features != None and num_selected_features > 0:
+        tf = self.get_TSVD(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
+
+    def get_FICA(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
-            logger.print_components("Truncated SVD", components)
-        # Make transformation
-        transformation = TruncatedSVD(n_components=components)
-        
-        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
-
+            components = max(Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+        return FastICA(n_components=components)
+    
     def do_FICA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        if num_selected_features != None and num_selected_features > 0:
+        tf = self.get_FICA(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
+        
+    def get_NMF(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
-            logger.print_components("Fast ICA", components)
-            
-        # Make transformation
-        transformation = FastICA(n_components=components)
-        
-        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
-
+            components = max(Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+        return NMF(n_components=components)
+    
     def do_NMF(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        if num_selected_features != None and num_selected_features > 0:
-            components = num_selected_features
-        else:
-            components = self.find_NMF_components(logger, X, max(Config.LOWER_LIMIT_REDUCTION, min(X.shape)))
-            #components = max(Config.LOWER_LIMIT_REDUCTION, min(X.shape))
-            logger.print_components("NMF", components)
-            
-        # Make transformation
-        transformation = NMF(n_components=components)
-        
-        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+        tf = self.get_NMF(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
 
     def find_NMF_components(self, logger: Logger, X: pandas.DataFrame, max_components: int = None):
         
@@ -905,49 +917,93 @@ class Reduction(MetaEnum):
             feature_transform = NMF(n_components=components).fit(X)
             err = feature_transform.reconstruction_err_
             rerr = err / norm
-            logger.print_info(f'Components: {components}. NMF reconstruction relative error: {rerr}')
+            #logger.print_info(f'Components: {components}. NMF reconstruction relative error: {rerr}')
             if rerr < tol:
-                logger.print_info(f'Tolerance {tol} fulfilled for {components} components')
+                #logger.print_info(f'Tolerance {tol} fulfilled for {components} components')
                 break
             else:
                 components = min(components*2, max_components)
 
         return components
 
-
-    def do_GRP(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        if num_selected_features != None and num_selected_features > 0:
+    def get_GRP(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        if num_selected_features is not None:
             components = num_selected_features
         else:
             components = 'auto'
-            logger.print_components("GRP", components)
-        # Make transformation
-        transformation = GaussianRandomProjection(n_components=components)
+        return GaussianRandomProjection(n_components=components)
+
+    def do_GRP(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+        tf = self.get_GRP(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
         
-        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+    def get_ISO(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        if num_selected_features is not None:
+            components = num_selected_features
+        else:
+            components = Config.NON_LINEAR_REDUCTION_COMPONENTS
+        return Isomap(n_components=components)
 
     def do_ISO(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        if num_selected_features != None and num_selected_features > 0:
+        tf = self.get_ISO(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
+
+    def get_LLE(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        if num_selected_features is not None:
             components = num_selected_features
         else:
             components = Config.NON_LINEAR_REDUCTION_COMPONENTS
-            logger.print_components("ISO", components)
-        # Make transformation
-        transformation = Isomap(n_components=components)
-        
-        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
-
+        return LocallyLinearEmbedding(n_components=components)
+    
     def do_LLE(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
-        if num_selected_features != None and num_selected_features > 0:
-            components = num_selected_features
-        else:
-            components = Config.NON_LINEAR_REDUCTION_COMPONENTS
-            logger.print_components("LLE", components)
-        # Make transformation
-        transformation = LocallyLinearEmbedding(n_components=components)
-        
-        return self._do_transformation(logger=logger, X=X, transformation=transformation, components=components)
+        tf = self.get_LLE(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
 
+    def call_reduction(self, num_samples: int, num_features: int, num_selected_features: int = None) -> Reduction:
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function('get', num_samples=num_samples, num_features=num_features, \
+            num_selected_features=num_selected_features)
+
+class ReductionTuple:
+
+    def __init__(self, list) -> None:
+        if isinstance(list, Iterable):
+            reductions = []
+            for reduction in list:
+                if isinstance(reduction, Reduction):
+                    reductions.append(reduction)
+                elif isinstance(reduction, str):
+                    reductions.append(Reduction[reduction])
+                else:
+                    raise ValueError("Each element in input list must be an Reduction instance")
+            self.reductions = tuple(reductions)
+        else:
+            raise ValueError("Input to ReductionTuple must be an iterable")
+
+    def __str__(self) -> str:
+        output = ""
+        for reduction in self.reductions:
+            output += ',' + str(reduction.name)
+        return output[1:]
+
+    def get_full_names(self) -> str:
+        output = ""
+        for reduction in self.reductions:
+            output += ', ' + str(reduction.get_full_name())
+        return output[2:]
+
+    def get_full_name(self) -> str:
+        return self.get_full_names()
+
+    def list_callable_reductions(self, num_samples: int, num_features: int, \
+        num_selected_features: int = None) -> list[tuple]:
+        """ Gets a list of reductions that are callable
+            in the form (reduction, called function)
+        """
+        reductions =  [(red, red.call_reduction(num_samples, num_features, num_selected_features)) \
+            for red in self.reductions if red.has_function()]
+        reductions.sort(key=lambda redtuple: redtuple[0].name)
+        return reductions
 
 class ScoreMetric(MetaEnum):
     accuracy = {"full_name": "Accuracy", "callable": accuracy_score, "kwargs": None}
@@ -1284,9 +1340,9 @@ class Config:
         test_size: float = 0.2
         smote: bool = False
         undersample: bool = False
-        algorithm: Algorithm = AlgorithmTuple([Algorithm.LDA])
-        preprocessor: Preprocess = PreprocessTuple([Preprocess.NON])
-        feature_selection: Reduction = Reduction.NON
+        algorithm: AlgorithmTuple = AlgorithmTuple([Algorithm.LDA])
+        preprocessor: PreprocessTuple = PreprocessTuple([Preprocess.NOS])
+        feature_selection: ReductionTuple = ReductionTuple([Reduction.NOR])
         num_selected_features: int = None
         scoring: ScoreMetric = ScoreMetric.accuracy
         max_iterations: int = None
@@ -1351,8 +1407,8 @@ class Config:
             if not (isinstance(self.preprocessor, PreprocessTuple)):
                 raise TypeError("Argument preprocessor is invalid")
 
-            if not (isinstance(self.feature_selection, Reduction)):
-                raise TypeError("Argument feature_selection is invalid")
+            if not (isinstance(self.feature_selection, ReductionTuple)):
+                raise TypeError(f"Argument feature_selection is invalid: {str(self.feature_selection)}")
 
             for item in [
                 "use_stop_words",
@@ -1825,13 +1881,9 @@ class Config:
 
         return False
 
-    def use_RFE(self) -> bool:
-        """ Gets whether RFE is used or not """
-        return self.mode.feature_selection == Reduction.RFE
-
     def use_feature_selection(self) -> bool:
         """ Checks if feature selection should be used """
-        return self.mode.feature_selection != Reduction.NON
+        return self.mode.feature_selection is not ReductionTuple([Reduction.NOR])
 
     def get_test_size(self) -> float:
         """ Gets the test_size """

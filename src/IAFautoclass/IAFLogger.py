@@ -45,14 +45,14 @@ class IAFLogger(terminal.Logger):
         self.print_unformatted(config)
 
     def get_table_format(self) -> str:
-        return "{0:>4s}-{1:<6s}{2:>6s}{3:>8s}{4:>8s}{5:>8s}{6:>11s} {7:<30s}"
+        return "{0:>4s}-{1:>4s}-{2:<6s}{3:>6s}{4:>8s}{5:>8s}{6:>8s}{7:>11s} {8:<30s}"
 
     def print_table_row(self, items: list[str], divisor: str = None) -> None:
         """ Prints a row with optional divisor"""
         self.print_unformatted(self.get_table_format().format(*items))
 
         if divisor is not None:
-            self.print_unformatted(divisor*60)
+            self.print_unformatted(divisor*65)
 
     def print_components(self, component, components, exception = None) -> None:
         if exception is None:
@@ -188,14 +188,15 @@ class IAFLogger(terminal.Logger):
         message = f"Here be dragons: {type(exception)}"
         self.print_warning(message)
     
-    def print_result_line(self, algorithm_name: str, preprocessor_name: str, num_features: float, temp_score, temp_stdev, test_score, t, failure:str) -> None:
+    def print_result_line(self, reduction_name: str, algorithm_name: str, preprocessor_name: str, num_features: float, \
+        temp_score, temp_stdev, test_score, t, failure:str) -> None:
         """ Prints information about a specific result line """
         if self._enable_quiet:
             return self
 
         print(
-            "{0:>4s}-{1:<6s}{2:6d}{3:8.3f}{4:8.3f}{5:8.3f}{6:11.3f} {7:<30s}".
-                format(algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure)
+            "{0:>4s}-{1:>4s}-{2:<6s}{3:6d}{4:8.3f}{5:8.3f}{6:8.3f}{7:11.3f} {8:<30s}".
+                format(reduction_name,algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure)
         )
 
     # This is to avoid the annoying "info:" in front of all lines. Debug/warning/Error should still use the normal

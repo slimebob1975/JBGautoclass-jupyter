@@ -159,7 +159,7 @@
             "_type": "Dropdown",
             "type": "SelectMultiple",
             "params": {
-                "value": ["NON"],
+                "value": ["NOS"],
                 "description": "Preprocess:",
                 "disabled": true,
                 "description_tooltip": "Pick which data preprocessors to use"
@@ -175,12 +175,12 @@
             }
         },
         "reduction_dropdown": {
-            "type": "Dropdown",
+            "type": "SelectMultiple",
             "params": {
-                "value": "NON",
+                "value": ["NOR"],
                 "description": "Reduction:",
                 "disabled": true,
-                "description_tooltip": "Pick by which method the number of features (variables) are reduced"
+                "description_tooltip": "Pick by which methods the number of features (variables) are reduced"
             }
         },
         "smote_checkbox": {
