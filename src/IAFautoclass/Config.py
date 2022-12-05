@@ -21,7 +21,7 @@ from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
                               HistGradientBoostingClassifier, VotingClassifier)
 from sklearn.semi_supervised import SelfTrainingClassifier
 from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.feature_selection import SelectFromModel
+from sklearn.feature_selection import SelectFromModel, RFE
 from sklearn.kernel_approximation import Nystroem
 from sklearn.linear_model import (LogisticRegression,
                                   PassiveAggressiveClassifier, Perceptron,
@@ -184,9 +184,9 @@ class MetaEnum(enum.Enum):
         else:
             return None
 
-    def has_function(self) -> bool:
-        do = self.get_function_name()
-        return hasattr(self, do) and callable(getattr(self, do))
+    def has_function(self, do_or_get: str = 'do') -> bool:
+        do_or_get = self.get_function_name(do_or_get)
+        return hasattr(self, do_or_get) and callable(getattr(self, do_or_get))
 
     def call_function(self, do_or_get: str = 'do', **kwargs):
         do_or_get = self.get_function_name(do_or_get)
@@ -844,6 +844,16 @@ class Reduction(MetaEnum):
 
     def NonReduction(self):
         return FunctionTransformer(lambda X: X)
+    
+    # For now, use temporary fixed argument for estimator. Can be changed later!
+    def do_RFE(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
+
+        tf = self.get_RFE(*X.shape, num_selected_features)
+        return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
+    
+    def get_RFE(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        
+        return RFE(estimator=LinearSVC(), n_features_to_select=num_selected_features)
     
     def get_PCA(self, num_samples: int, num_features: int, num_selected_features: int = None):
         if num_selected_features is not None:
@@ -1696,7 +1706,7 @@ class Config:
                 undersample=module.mode["undersample"],
                 algorithm=AlgorithmTuple(module.mode["algorithm"].split(",")),
                 preprocessor=PreprocessTuple(module.mode["preprocessor"].split(",")),
-                feature_selection=Reduction[module.mode["feature_selection"]],
+                feature_selection=ReductionTuple(module.mode["feature_selection"].split(",")),
                 num_selected_features=num_selected_features,
                 scoring=ScoreMetric[module.mode["scoring"]],
                 max_iterations=max_iterations

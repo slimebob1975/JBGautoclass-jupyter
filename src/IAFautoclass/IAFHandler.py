@@ -834,10 +834,15 @@ class Model:
             setattr(self, field, value)
 
     def get_name(self) -> str:
-        if self.algorithm is None or self.preprocess is None:
-            return ""
+        if self.model is None:
+            return "Empty model"
 
-        return self.algorithm.get_compound_name(self.preprocess)
+        name = ""
+        for step in self.model.steps:
+            name = name  + step[0] + '-'
+        name = name[:-1]
+
+        return name
 
     def get_num_selected_features(self, X) -> int:
         if self.transform is None:
@@ -933,10 +938,7 @@ class ModelHandler:
             # Now train the picked model on training data, either with a grid search or ordinary fit.
             # We assume the algorithm is the last step in the pipeline.
             # TODO: Here the pipeline is called model. It should be that the model has a pipeline.
-            pipe_name = ""
-            for step in pipe.model.steps:
-                pipe_name = pipe_name  + step[0] + '-'
-            pipe_name = pipe_name[:-1]
+            pipe_name = pipe.get_name()
             model_name = pipe_name.split('-')[-1]
             t0 = time.time()
             if not pipe.algorithm.search_params.parameters:
@@ -1292,15 +1294,18 @@ class ModelHandler:
         rfe_features: int = None) -> Union[Pipeline, Estimator]:
        
         try:
-            # First modify algorithm if RFE should be used
-            if reduction == Reduction.RFE:
-                steps = self.rfe_modify_algorithm_step(estimator, algorithm.name,  max_features, rfe_features)
-            else:
-                steps = [(algorithm.name, estimator)]
+            # First, put estimator/algorithm in pipeline
+            steps = [(algorithm.name, estimator)]
             
             # Secondly, add the other steps to the pipeline BEFORE the algorithm
             steps.insert(0, (preprocessor.name, scaler))
-            steps.insert(1, (reduction.name, feature_reducer))
+            
+            # RFE object must unfortunately be updated with the correct estimator
+            if reduction == Reduction.RFE:
+                the_feature_reducer = RFE(estimator=estimator, n_features_to_select=rfe_features)
+            else:
+                the_feature_reducer = feature_reducer
+            steps.insert(1, (reduction.name, the_feature_reducer))
             steps.insert(2, ("smote", self.handler.config.get_smote()))
             steps.insert(3, ("undersampling", self.handler.config.get_undersampler()))
             

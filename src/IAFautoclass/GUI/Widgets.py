@@ -140,18 +140,22 @@ class EventHandler:
         self.widgets.update_ready() # At the moment enables/disables the continuation_button
     
     def algorithm_dropdown_handler(self, change: Bunch) -> None:
-        self.check_num_algorithms_and_preprocesses(change)
+        self.check_num_alg_pre_red(change)
 
     def preprocess_dropdown_handler(self, change: Bunch) -> None:
-        self.check_num_algorithms_and_preprocesses(change)
+        self.check_num_alg_pre_red(change)
+
+    def reduction_dropdown_handler(self, change: Bunch) -> None:
+        self.check_num_alg_pre_red(change)
     
-    def check_num_algorithms_and_preprocesses(self, change: Bunch) -> None:
+    def check_num_alg_pre_red(self, change: Bunch) -> None:
         num_alg = len(self.widgets.algorithm_dropdown.value)
         num_pre = len(self.widgets.preprocess_dropdown.value)
-        if num_alg < 1 or num_pre < 1:
+        num_red = len(self.widgets.reduction_dropdown.value)
+        if num_alg < 1 or num_pre < 1 or num_red < 1:
             if not self.widgets.start_button.disabled:
                 self.widgets.start_button.disabled = True
-        elif num_alg >= 1 and num_pre >= 1:
+        elif num_alg >= 1 and num_pre >= 1 and num_red >= 1:
             if self.widgets.start_button.disabled:
                 self.widgets.start_button.disabled = False
     
@@ -985,8 +989,8 @@ class Widgets:
     @property
     def reduction_dropdown(self) -> widgets.Dropdown:
         name = sys._getframe().f_code.co_name # Current function name
-        return self._load_widget(name, calculated_params={
-            "options": Reduction.get_sorted_list()
+        return self._load_widget(name, handler=self.eventhandler.reduction_dropdown_handler, \
+            calculated_params={"options": Reduction.get_sorted_list()
         })
     
     

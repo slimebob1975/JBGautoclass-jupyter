@@ -173,6 +173,7 @@ class AutomaticClassifier:
 
         # Separate training and test data from data with unknown class
         dh.separate_dataset()
+        self.update_progress(self.progression["percentPerMajorTask"])
 
         # Rearrange dataset such that all text columns are merged into one single
         # column, and convert text to numbers. Return the data in left-hand and
@@ -181,8 +182,7 @@ class AutomaticClassifier:
         mh.model.update_fields(fields=["label_binarizers", "count_vectorizer", "tfid_transformer"], \
             update_function=dh.convert_textdata_to_numbers)
 
-        # TODO: remove two progress-bar-updates corresponding to these lines
-        self.update_progress(self.progression["percentPerMajorTask"])
+        # TODO: remove one progress-bar-updates corresponding to these lines
         self.update_progress(self.progression["percentPerMajorTask"])
 
         # TODO: Since we moved feature reduction into the pipeline, is this really necessary???
