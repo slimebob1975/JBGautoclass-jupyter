@@ -1624,7 +1624,7 @@ class Config:
             saved_config.mode.train = config.mode.train
             saved_config.mode.predict = config.mode.predict
             saved_config.mode.mispredicted = config.mode.mispredicted
-            saved_config.mode.mispredicted = config.mode.use_metas
+            saved_config.mode.use_metas = config.mode.use_metas
             saved_config.connection.data_catalog = config.connection.data_catalog
             saved_config.connection.data_table = config.connection.data_table
             saved_config.io.model_name = config.io.model_name
@@ -1642,14 +1642,12 @@ class Config:
             version = module.version
 
         if (version == '1.0'):
-            # Will not write test case for this, since it's deprecated
-            return Config.load_config_1(module)
+            raise ConfigException("V1.0 config is deprecated")
         
-        if (version == '2.0'):
-            return Config.load_config_2(module)
+        return Config.load_config(module)
 
     @classmethod
-    def load_config_2(cls: Type[T], module) -> T:
+    def load_config(cls: Type[T], module) -> T:
         if "num_rows" in module.debug:
             data_limit = Helpers.set_none_or_int(module.debug["num_rows"])
         else:
@@ -1659,6 +1657,9 @@ class Config:
         data_text_columns = Helpers.get_from_string_or_list(module.connection["data_text_columns"])
         data_numerical_columns = Helpers.get_from_string_or_list( module.connection["data_numerical_columns"])
         category_text_columns = Helpers.get_from_string_or_list(module.mode["category_text_columns"])
+        use_metas = module.mode["predict"]
+        if "use_metas" in module.mode:
+            use_metas = module.mode["use_metas"]
        
         config = cls(
             Config.Connection(
@@ -1683,7 +1684,7 @@ class Config:
                 train=module.mode["train"],
                 predict=module.mode["predict"],
                 mispredicted=module.mode["mispredicted"],
-                use_metas=module.mode["use_metas"],
+                use_metas=use_metas,
                 use_stop_words=module.mode["use_stop_words"],
                 specific_stop_words_threshold=float(
                     module.mode["specific_stop_words_threshold"]),
@@ -1693,8 +1694,8 @@ class Config:
                 test_size=float(module.mode["test_size"]),
                 smote=module.mode["smote"],
                 undersample=module.mode["undersample"],
-                algorithm=Algorithm[module.mode["algorithm"]],
-                preprocessor=Preprocess[module.mode["preprocessor"]],
+                algorithm=AlgorithmTuple(module.mode["algorithm"].split(",")),
+                preprocessor=PreprocessTuple(module.mode["preprocessor"].split(",")),
                 feature_selection=Reduction[module.mode["feature_selection"]],
                 num_selected_features=num_selected_features,
                 scoring=ScoreMetric[module.mode["scoring"]],
@@ -1714,69 +1715,6 @@ class Config:
 
         return config
         
-    @classmethod
-    def load_config_1(cls: Type[T], module) -> T:
-        num_rows = Helpers.set_none_or_int(module.debug["num_rows"])
-        num_selected_features = Helpers.set_none_or_int(module.mode["num_selected_features"])
-        max_iterations = Helpers.set_none_or_int(module.mode["max_iterations"])
-        
-        data_text_columns = Helpers.clean_column_names_list(module.sql["data_text_columns"])
-        data_numerical_columns = Helpers.clean_column_names_list( module.sql["data_numerical_columns"])
-        category_text_columns = Helpers.clean_column_names_list(module.mode["category_text_columns"])
-        
-        config = cls(
-            Config.Connection(
-                odbc_driver=module.sql["odbc_driver"],
-                host=module.sql["host"],
-                trusted_connection=module.sql["trusted_connection"],
-                class_catalog=module.sql["class_catalog"],
-                class_table=module.sql["class_table"],
-                class_table_script=module.sql["class_table_script"],
-                class_username=module.sql["class_username"],
-                class_password=module.sql["class_password"],
-                data_catalog=module.sql["data_catalog"],
-                data_table=module.sql["data_table"],
-                class_column=module.sql["class_column"],
-                data_text_columns=data_text_columns,
-                data_numerical_columns=data_numerical_columns,
-                id_column=module.sql["id_column"],
-                data_username=module.sql["data_username"],
-                data_password=module.sql["data_password"]
-            ),
-            Config.Mode(
-                train=module.mode["train"],
-                predict=module.mode["predict"],
-                mispredicted=module.mode["mispredicted"],
-                use_metas=module.mode["use_metas"],
-                use_stop_words=module.mode["use_stop_words"],
-                specific_stop_words_threshold=float(
-                module.mode["specific_stop_words_threshold"]),
-                hex_encode=module.mode["hex_encode"],
-                use_categorization=module.mode["use_categorization"],
-                category_text_columns=category_text_columns,
-                test_size=float(module.mode["test_size"]),
-                smote=module.mode["smote"],
-                undersample=module.mode["undersample"],
-                algorithm=Algorithm[module.mode["algorithm"]],
-                preprocessor=Preprocess[module.mode["preprocessor"]],
-                feature_selection=Reduction[module.mode["feature_selection"]],
-                num_selected_features=num_selected_features,
-                scoring=ScoreMetric[module.mode["scoring"]],
-                max_iterations=max_iterations
-            ),
-            Config.IO(
-                verbose=module.io["verbose"],
-                model_path=module.io["model_path"],
-                model_name=module.io["model_name"]
-            ),
-            Config.Debug(
-                on=module.debug["debug_on"],
-                data_limit=num_rows
-            ),
-            name=module.project["name"]
-        )
-
-        return config
     
     # Methods to hide implementation of Config
     def update_configuration(self, updates: dict) -> bool:
