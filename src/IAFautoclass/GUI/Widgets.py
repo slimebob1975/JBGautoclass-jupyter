@@ -10,7 +10,8 @@ from typing import Callable, Protocol
 import ipywidgets as widgets
 from sklearn.utils import Bunch
 
-from Config import Config, Reduction, Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple, ScoreMetric
+from Config import (Config, Reduction, ReductionTuple, Algorithm, 
+    AlgorithmTuple, Preprocess, PreprocessTuple, ScoreMetric)
 from IAFExceptions import GuiWidgetsException
 from AutomaticClassifier import AutomaticClassifier
 import Helpers
@@ -267,7 +268,7 @@ class Widgets:
             "catalog": [self.data_catalogs_dropdown, self.data_tables_dropdown],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
-            "algorithm": [self.reduction_dropdown, self.algorithm_dropdown, self.preprocess_dropdown, self.scoremetric_dropdown],
+            "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.smote_checkbox, self.undersample_checkbox, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.filter_slider],
             "debug": [self.data_limit, self.show_info_checkbox, self.num_variables],
@@ -527,7 +528,7 @@ class Widgets:
                 undersample = self.undersample_checkbox.value,
                 algorithm = AlgorithmTuple(self.algorithm_dropdown.value),
                 preprocessor = PreprocessTuple(self.preprocess_dropdown.value),
-                feature_selection = Reduction[self.reduction_dropdown.value],
+                feature_selection = ReductionTuple(self.reduction_dropdown.value),
                 num_selected_features = None,
                 scoring = ScoreMetric[self.scoremetric_dropdown.value],
                 max_iterations = self.iterations_slider.value

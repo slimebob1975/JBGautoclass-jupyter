@@ -158,8 +158,10 @@ class AutomaticClassifier:
         self.datalayer.prepare_for_classification()
         self.update_progress(self.progression["percentPerMajorTask"])
 
+        # Do some things prior to running the classification itself
         self.pre_run()
 
+        # Read in data
         try:
             if not dh.read_in_data(): #should return true or false
                 self.logger.print_progress(message="Process finished", percent=1.0)
@@ -169,64 +171,60 @@ class AutomaticClassifier:
         
         self.update_progress(self.progression["percentPerMajorTask"])
 
-        dh.set_training_data()
-        
+        # Separate training and test data from data with unknown class
+        dh.separate_dataset()
+
         # Rearrange dataset such that all text columns are merged into one single
         # column, and convert text to numbers. Return the data in left-hand and
         # right hand side parts
         self.logger.print_progress(message="Rearrange dataset for possible textclassification, etc.")
-        mh.model.update_fields(fields=["label_binarizers", "count_vectorizer", "tfid_transformer"], update_function=dh.convert_textdata_to_numbers)
+        mh.model.update_fields(fields=["label_binarizers", "count_vectorizer", "tfid_transformer"], \
+            update_function=dh.convert_textdata_to_numbers)
 
+        # TODO: remove two progress-bar-updates corresponding to these lines
+        self.update_progress(self.progression["percentPerMajorTask"])
         self.update_progress(self.progression["percentPerMajorTask"])
 
-        mh.model.update_field("transform", dh.perform_feature_selection(mh.model))
-        self.update_progress(self.progression["percentPerMajorTask"])
-
+        # TODO: Since we moved feature reduction into the pipeline, is this really necessary???
         try:
             self.config.set_num_selected_features(mh.model.get_num_selected_features(dh.X))
         except Exception as e:
             self.logger.abort_cleanly(f"Transform error: {e}")
         
-        # Split dataset for machine learning
-        # TODO: Byt namn?
-        dh.split_dataset()
-        
         self.update_progress(self.progression["percentPerMajorTask"])
 
-         # This is where the Model starts
         # Check algorithms for best model and train that model. K-value should be 10 or below.
         # Or just use the model previously trained.
         if self.config.should_train():
             try:
                 self.logger.print_progress(message="Check and train algorithms for best model")
-                mh.train_model(dh.X_train, dh.Y_train, dh.X_validation, dh.Y_validation)
+                mh.train_model(dh)
             except Exception as ex:
                 self.logger.abort_cleanly(f"Training model failed: {ex}")
 
         self.update_progress(percent=self.progression["percentPerMajorTask"], message=f"Best model is: ({mh.model.get_name()}) with number of features: {self.config.get_num_selected_features()}")
         
+        # Evalutate trained model on know testdata
         if self.config.should_train():
-            # shape[0] = number of rows
-            # shape[1] = number of columns
+           
             if dh.X_validation.shape[0] > 0:
-                # Make predictions on known testdata
+                
+                # Make predictions on known testdata and report the results
                 self.logger.print_progress(message="Make predictions on known testdata")
                 
                 ph.make_predictions(mh.model.model, dh.X_validation, dh.classes, dh.Y_validation)
                 
                 ph.report_results(dh.Y_validation, mh.model)
                 
-
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
-
-            # RETRAIN best model on whole dataset: Xtrain + Xvalidation
-            # Y and X here are both derived from the dataset without unknowns/non-classified elements
+            # Now RETRAIN the best model on whole dataset with known classification
             if (dh.X_train.shape[0] + dh.X_validation.shape[0]) > 0:
                 self.logger.print_progress(message="Retrain model on whole dataset")
 
-                cross_trained_model = mh.load_pipeline_from_file(self.config.get_model_filename()) # Returns a 
-                dh.X_transformed =  concat([pandas.DataFrame(dh.X_train), pandas.DataFrame(dh.X_validation)], axis = 0)
+                cross_trained_model = mh.load_pipeline_from_file(self.config.get_model_filename())
+                dh.X_transformed = concat([pandas.DataFrame(dh.X_train), pandas.DataFrame(dh.X_validation)], axis = 0)
+                
                 # TODO: Maybe create this one up in the split_dataset, so we save Y_known, since neither Y_train nor Y_validation changes after calculation
                 Y_known = concat([dh.Y_train, dh.Y_validation], axis = 0)
 
