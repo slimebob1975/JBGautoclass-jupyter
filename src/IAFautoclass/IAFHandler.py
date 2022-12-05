@@ -933,10 +933,10 @@ class ModelHandler:
             # Now train the picked model on training data, either with a grid search or ordinary fit.
             # We assume the algorithm is the last step in the pipeline.
             # TODO: Here the pipeline is called model. It should be that the model has a pipeline.
-            model_name = pipe.model.steps[-1][0]
-            pipe_name = model_name
+            pipe_name = ""
             for step in pipe.model.steps[:-1]:
                 pipe_name = step[0] + '-' + pipe_name
+            model_name = pipe_name.split('-')[0]
             t0 = time.time()
             if not pipe.algorithm.search_params.parameters:
                 self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {pipe_name}...(consider adding grid search parameters)")
