@@ -17,6 +17,8 @@ from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from lexicalrichness import LexicalRichness
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.utils.validation import check_is_fitted
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
@@ -1041,11 +1043,8 @@ class ModelHandler:
         #chosen_algorithm = self.handler.config.get_algorithm()
         #chosen_preprocessor = self.handler.config.get_preprocessor()
 
-        # RLRN and RFE do not get along
-        if current_algorithm == Algorithm.RLRN and current_reduction == Reduction.RFE:
-            return False
-        # Neither do BABC/BGC and RFE (raises ValueError about importance_getter == 'auto')
-        elif current_algorithm in [Algorithm.BABC, Algorithm.BGC] and current_reduction == Reduction.RFE:
+        # Some algorithms and RFE do not get along
+        if current_reduction == Reduction.RFE and not current_algorithm.rfe_compatible:
             return False
         else:
             return True
