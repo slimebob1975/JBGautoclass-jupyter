@@ -15,94 +15,128 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
     LIMIT_IS_CATEGORICAL = 30
 
     # Create new instance of converter object
-    def __init__(self, text_columns: list[str], category_columns: list[str], \
+    def __init__(self, text_columns: list[str] = None, category_columns: list[str] = None, \
         limit_categorize: int = LIMIT_IS_CATEGORICAL, language: str = None, \
         stop_words: bool = True, df: float = 1.0, use_encryption: bool = True):
-        
+                
         # Take care of input
-        self.text_columns_ = text_columns.copy()
-        self.category_columns_ = category_columns.copy()
+        if text_columns:
+            self.text_columns_ = text_columns.copy()
+        else:
+            self.text_columns_ = []
+        if category_columns:
+            self.category_columns_ = category_columns.copy()
+        else:
+            self.category_columns_ = []
         self.limit_categorize_ = limit_categorize
         self.language_ = language
         self.stop_words_ = stop_words
         self.df_ = df
         self.use_encryption_ = use_encryption
 
-        # Internal transforms for conversion
+        # Internal transforms for conversion (placeholders)
         self.tfidvectorizer_ = None
         self.ordinalencoder_ = None
-
+        
+        return None
+        
     # Fit converter to data
     def fit(self, X: pd.DataFrame):
         
-        # Handle stop words option
-        if self.stop_words_:
-            the_stop_words = self._get_stop_words()
-        else:
-            the_stop_words = None
+        if self.text_columns_:
+        
+            # Investigate language option
+            if not self.language_:
+                try:
+                    self.language_ = langdetect.detect(' '.join(X))
+                except Exception as e:
+                    self.language_ = TextDataToNumbersConverter.STANDARD_LANGUAGE  
+            
+            # Handle stop words option
+            if self.stop_words_:
+                the_stop_words = self._get_stop_words()
+            else:
+                the_stop_words = None
 
-        # Find out what text columns in text list that are categorical and separate them into
-        # list of categories
-        for column in self.text_columns_:
-            if self._is_categorical_column(X, column):
-                self.category_columns_.append(column)
-        self.text_columns_ = [col for col in self.text_columns_ if col not in self.category_columns_]
+            # Find out what text columns in text list that are categorical and separate them into
+            # list of categories
+            for column in self.text_columns_:
+                if self._is_categorical_column(X, column):
+                    self.category_columns_.append(column)
+            if self.category_columns_:
+                self.text_columns_ = [col for col in self.text_columns_ if col not in self.category_columns_]
 
         # Prepare data for transform
-        X_document, X_category = self._separate_and_encrypt_input_data(X)
+        if self.text_columns_ or self.category_columns_:
+            X_document, X_category = self._separate_and_encrypt_input_data(X)
 
         # Depending on the division of columns, create conversion objects using fit.
-        self.tfidvectorizer_ = TfidfVectorizer(stop_words=the_stop_words, max_df=self.df_).fit(X_document)
-        self.ordinalencoder_ = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1).fit(X_category)
-
-        # Clean up unnecessary submatrices
-        X_document = None
-        X_category = None
+        if self.text_columns_:
+            self.tfidvectorizer_ = TfidfVectorizer(stop_words=the_stop_words, max_df=self.df_).fit(X_document)
+        if self.category_columns_:
+            self.ordinalencoder_ = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1).fit(X_category)
 
     def transform(self, X: pd.DataFrame):
         
         check_is_fitted(self)
 
+        # Prepare placeholders for converted data (are dropped silently in concat below if None)
+        X_document = None
+        X_category = None
+
         # Prepare data for transform
-        X_document, X_category = self._separate_and_encrypt_input_data(X)
+        if self.text_columns_ or self.category_columns_:
+            X_document, X_category = self._separate_and_encrypt_input_data(X)
 
         # Depending on the division of columns, transform text and categories. Add new columns names.
-        X_document = pd.DataFrame.sparse.from_spmatrix(self.tfidvectorizer_.transform(X_document), \
-            columns = self.tfidvectorizer_.get_feature_names_out(), index=X.index)
-        X_category = pd.DataFrame(self.ordinalencoder_.transform(X_category), \
-            columns = self.ordinalencoder_.get_feature_names_out(), index=X.index)
+        if self.text_columns_:
+            X_document = pd.DataFrame.sparse.from_spmatrix(self.tfidvectorizer_.transform(X_document), \
+                columns = self.tfidvectorizer_.get_feature_names_out(), index=X.index)
+        if self.category_columns_:
+            X_category = pd.DataFrame(self.ordinalencoder_.transform(X_category), \
+                columns = self.ordinalencoder_.get_feature_names_out(), index=X.index)
 
         # Remove text and category columns from X and put conversion result there instead.
-        # Concatenate matrices and column names.
-        X = X.drop(self.text_columns_ + self.category_columns_, axis=1)
+        # Concatenate matrices and column names. Any Nones are dropped silently as long as X is not None.
+        if self.text_columns_ or self.category_columns_:
+            X = X.drop(self.text_columns_ + self.category_columns_, axis=1)
+        
         X = pd.concat([X, X_category, X_document], axis=1, ignore_index=False)
 
         return X
-
+    
+    # Do we really need this?
+    def fit_transform(self, X: pd.DataFrame):
+        self.fit(X)
+        return self.transform(X)
+    
+    # Some help functions below
     def _is_categorical_column(self, X: pd.DataFrame, column: str) -> bool:
         
-        return X[column].value_counts().count() <= self.limit_categorize_
+        if X is None or X[column] is None:
+            return X[column].value_counts().count() <= self.limit_categorize_
+        else:
+            return False
 
     def _separate_and_encrypt_input_data(self, X: pd.DataFrame):
-        
+         
         # Separate text data from categorical data and collapse text data into one "document" column
-        X_document = X[self.text_columns_].astype(str).agg(' '.join, axis=1)
-        X_category = X[self.category_columns_].astype(str)
+        if self.text_columns_:
+            X_document = X[self.text_columns_].astype(str).agg(' '.join, axis=1)
+        else:
+            X_document = None
+        if self.category_columns_:
+            X_category = X[self.category_columns_].astype(str)
+        else:
+            X_category = None
 
         # Use encryption on document part if set
-        if self.use_encryption_:
+        if X_document is not None and self.use_encryption_:
             X_document = Helpers.do_hex_base64_encode_on_data(X_document)
 
         return X_document, X_category
 
     def _get_stop_words(self):
-         
-         # Handle what language to use for stop words
-        if self.language_ is None:
-            try:
-                self.language_ = langdetect.detect(' '.join(X))
-            except Exception as e:
-                self.language_ = TextDataToNumbersConverter.STANDARD_LANGUAGE
 
         the_stop_words = get_stop_words(self.language_)
         

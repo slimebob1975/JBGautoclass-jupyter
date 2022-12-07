@@ -171,16 +171,20 @@ class AutomaticClassifier:
         
         self.update_progress(self.progression["percentPerMajorTask"])
 
-        # Separate training and test data from data with unknown class
+        # Separate data with know classifications from data with unknown class
         dh.separate_dataset()
         self.update_progress(self.progression["percentPerMajorTask"])
+        
+        # Split data in training and test sets
+        dh.split_dataset()
 
-        # Rearrange dataset such that all text columns are merged into one single
-        # column, and convert text to numbers. Return the data in left-hand and
-        # right hand side parts
+        # Text and categorical variables must be converted to numbers at this point
         self.logger.print_progress(message="Rearrange dataset for possible textclassification, etc.")
-        mh.model.update_fields(fields=["label_binarizers", "count_vectorizer", "tfid_transformer"], \
-            update_function=dh.convert_textdata_to_numbers)
+        #mh.model.update_fields(fields=["label_binarizers", "count_vectorizer", "tfid_transformer"], \
+        #    update_function=dh.convert_textdata_to_numbers)
+        if dh.handler.config.get_text_column_names():
+            mh.model.update_fields(fields=["text_converter"], \
+                update_function=dh.convert_text_and_categorical_features)
 
         # TODO: remove one progress-bar-updates corresponding to these lines
         self.update_progress(self.progression["percentPerMajorTask"])
@@ -239,8 +243,8 @@ class AutomaticClassifier:
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
         # Now make predictions on non-classified dataset: X_unknown -> Y_unknown
-        if self.config.should_predict() and dh.X_unknown.shape[0] > 0:
-            ph.make_predictions(mh.model.model, dh.X_unknown, dh.classes)
+        if self.config.should_predict() and dh.X_prediction.shape[0] > 0:
+            ph.make_predictions(mh.model.model, dh.X_prediction, dh.classes)
             
             self.logger.print_formatted_info("Predictions for the unknown data")
             self.logger.print_info("Predictions:", str(Helpers.count_value_distr_as_dict(ph.predictions.tolist())))
