@@ -309,7 +309,7 @@ class DatasetHandler:
     unpredicted_keys: pandas.Series = field(init=False)
     X_original: pandas.DataFrame = field(init=False)
     Y_original: pandas.DataFrame = field(init=False)
-    X_unreduced: pandas.DataFrame = field(init=False)
+    #X_unreduced: pandas.DataFrame = field(init=False)
     X: pandas.DataFrame = field(init=False)
     Y: pandas.Series = field(init=False)
     X_train: pandas.DataFrame = field(init=False)
@@ -516,8 +516,11 @@ class DatasetHandler:
     # Text handling a more nice way
     def convert_text_and_categorical_features(self, model: Model):
         
+        # Get the old converter even if None
+        ttnc = model.text_converter
+        
         # The model has no text converter means we need to train a new one
-        if model.text_converter is None:
+        if self.handler.config.should_train():
             try:
                 ttnc = TextDataToNumbersConverter(
                     text_columns=self.handler.config.get_text_column_names(), 
@@ -531,20 +534,19 @@ class DatasetHandler:
             except Exception as ex:
                 raise Exception(f"Could not initiate text converter object: {str(ex)}") from ex 
             
-            # Fit converter to training data and transform it
-            self.X_train = ttnc.fit_transform(self.X_train)
+            # Fit converter to training data only, which is important for not getting to optimistic results
+            ttnc.fit_transform(self.X_train)
             
-            # Apply converter to validation data
+            # Apply converter to the whole of X (for future references) and the parts X_train and X_validation
+            self.X = ttnc.transform(self.X)
+            self.X_train = ttnc.transform(self.X_train)
             self.X_validation = ttnc.transform(self.X_validation)
             
-            return ttnc
+        # If we should predict, apply converter even to X_prediction part of data
+        if self.handler.config.should_predict():
+            self.X_prediction = ttnc.transform(self.X_prediction)
             
-        # There is a trained text converter already, use it to convert prediction part
-        # of dataset
-        else:
-            self.dataset = model.text_converter.transform(self.X_prediction)
-            
-            return model.text_converter
+        return ttnc
     
     # Collapse all data text columns into a new column, which is necessary
     # for word-in-a-bag-technique
@@ -669,9 +671,7 @@ class DatasetHandler:
         # Original training+validation data are stored for later reference
         self.X_original = self.X.copy(deep=True)
         self.Y_original = self.Y.copy(deep=True)
-        
-        print(self.X.shape, self.X_prediction.shape)
-        
+                
     # Use the bag of words technique to convert text corpus into numbers
     def word_in_a_bag_conversion(self, dataset: pandas.DataFrame, model: Model ) -> tuple:
 
@@ -814,7 +814,6 @@ class DatasetHandler:
             self.Y_prediction = self.Y
             
             return False
-        
         else:
         
             # Split data validation dataset from the upper part
@@ -956,7 +955,7 @@ class ModelHandler:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
             # Make sure data is restored from original
-            dh.X = dh.X_unreduced.copy(deep=True)
+            #dh.X = dh.X_unreduced.copy(deep=True)
 
             # Now train the picked model on training data, either with a grid search or ordinary fit.
             # We assume the algorithm is the last step in the pipeline.
@@ -1016,18 +1015,18 @@ class ModelHandler:
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
 
     # Train and evaluate picked model (warning for overfitting)
-    def train_and_evaluate_picked_model(self, model: Pipeline, dh):
+    def train_and_evaluate_picked_model(self, pipeline: Pipeline, dh):
 
         exception = ""
         the_score = -1.0
         try:
             # First train model on whole of test data (no k-folded cross validation here)
-            model.fit(dh.X_train, dh.Y_train)
+            pipeline.fit(dh.X_train, dh.Y_train)
 
             # Evaluate on test_data with correct scorer
             if dh.X_validation is not None and dh.Y_validation is not None:
                 scorer = self.handler.config.get_scoring_mechanism()
-                the_score = scorer(model, dh.X_validation, dh.Y_validation)
+                the_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
         except Exception as ex:
             the_score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
@@ -1035,7 +1034,7 @@ class ModelHandler:
             else:
                 exception = str(traceback.format_exc())
 
-        return model, the_score, exception
+        return pipeline, the_score, exception
 
     # Help function for running other functions in parallel
     def execute_n_job(self, func: function, *args: tuple, **kwargs: dict) -> Any:
@@ -1116,8 +1115,8 @@ class ModelHandler:
 
         # Keep a copy of the unreduced matrix not subject to any transforms
         # (dh.X_original won't do it since it could include text variables not yet converted to numbers via word-in-a-bag)
-        dh.X_unreduced = dh.X.copy(deep=True)
-        data_changed = False
+        #dh.X_unreduced = dh.X.copy(deep=True)
+        #data_changed = False
         
         # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
         success = False
@@ -1144,10 +1143,10 @@ class ModelHandler:
                             continue
 
                         # Keep track if X needs to be copied back from original data because of previous changes to data
-                        if not data_changed:
-                            data_changed = True
-                        else:
-                            dh.X = dh.X_unreduced.copy(deep=True)
+                        #if not data_changed:
+                        #    data_changed = True
+                        #else:
+                        #    dh.X = dh.X_unreduced.copy(deep=True)
                     
                         # Divide data in training and test parts according to settings X -> X_train, X_validation etc...
                         dh.split_dataset_for_training_and_validation()
