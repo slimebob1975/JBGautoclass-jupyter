@@ -1015,18 +1015,29 @@ class ModelHandler:
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
 
     # Train and evaluate picked model (warning for overfitting)
-    def train_and_evaluate_picked_model(self, pipeline: Pipeline, dh):
+    def train_and_evaluate_picked_model(self, pipeline: Pipeline, dh: DatasetHandler):
 
         exception = ""
         the_score = -1.0
         try:
-            # First train model on whole of test data (no k-folded cross validation here)
-            pipeline.fit(dh.X_train, dh.Y_train)
+            # First train model on whole of test data (no k-folded cross validation here).
+            # Handle problems with sparse input by conversion to numpy, if needed
+            try:
+                pipeline.fit(dh.X_train, dh.Y_train)
+            except TypeError:
+                pipeline.fit(dh.X_train.to_numpy(), dh.Y_train.to_numpy())
+            except Exception as ex:
+                raise TypeError(f"Pipeline does not accept input data format to fit: {str(ex)}") from ex
 
             # Evaluate on test_data with correct scorer
             if dh.X_validation is not None and dh.Y_validation is not None:
                 scorer = self.handler.config.get_scoring_mechanism()
-                the_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
+                try:
+                    the_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
+                except TypeError:
+                    the_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
+                except Exception as ex:
+                    raise TypeError(f"Scorer construction failed because of wrong input data format: {str(ex)}") from ex
         except Exception as ex:
             the_score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
@@ -1392,8 +1403,23 @@ class ModelHandler:
             if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
                 fit_params[key] = func(dh.X_train, dh.Y_train)
 
-        cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
-            scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
+        # We want to executed the job with as many threads as possible, but as a final alternative use
+        # only one. Exception typically arises when input data is sparse, and a possible remedy to convert 
+        # it to dense numpy arrays.
+        try:
+            cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
+                scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
+        except Exception as ex:
+            try:
+                cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
+                    dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, \
+                    error_score='raise') 
+            except Exception as ex:
+                try:
+                    cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
+                        cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise')
+                except Exception as ex:
+                    raise ModelException(f"Unexpected error in cross_val_score: {str(ex)}") from ex
         
         return cv_results
     
@@ -1408,7 +1434,6 @@ class ModelHandler:
                 self.model.pipeline,
                 self.model.n_features_out
             ]
-            print(self.model)
             pickle.dump(data, open(filename,'wb'))
 
         except Exception as e:
