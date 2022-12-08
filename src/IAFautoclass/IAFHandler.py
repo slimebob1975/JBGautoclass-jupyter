@@ -17,6 +17,7 @@ from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from lexicalrichness import LexicalRichness
+from sklearn.utils.validation import check_is_fitted
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
@@ -26,13 +27,14 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
-
 from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
 from IAFExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
+from IAFTextHandling import TextDataToNumbersConverter
 import Helpers
 
 GIVE_EXCEPTION_TRACEBACK = False
+SPOT_CHECK_REPETITIONS = 5
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -306,6 +308,7 @@ class DatasetHandler:
     keys: pandas.Series = field(init=False)
     unpredicted_keys: pandas.Series = field(init=False)
     X_original: pandas.DataFrame = field(init=False)
+    Y_original: pandas.DataFrame = field(init=False)
     X_unreduced: pandas.DataFrame = field(init=False)
     X: pandas.DataFrame = field(init=False)
     Y: pandas.Series = field(init=False)
@@ -313,8 +316,8 @@ class DatasetHandler:
     X_validation: pandas.DataFrame = field(init=False)
     Y_train: pandas.DataFrame = field(init=False)
     Y_validation: pandas.DataFrame = field(init=False)
-    Y_unknown: pandas.DataFrame = field(init=False)
-    X_unknown: pandas.DataFrame = field(init=False)
+    Y_prediction: pandas.DataFrame = field(init=False)
+    X_prediction: pandas.DataFrame = field(init=False)
     X_transformed: pandas.DataFrame = field(init=False)
 
     def __post_init__(self) -> None:
@@ -352,10 +355,7 @@ class DatasetHandler:
         # Extract unique class labels from dataset
         self.classes = list(set(self.dataset[class_column].tolist()))
 
-        # Pick out the classification column. This is the "right hand side" of the problem.
-        self.Y = self.dataset[class_column]
-
-        
+        # Investigare dataset
         if self.handler.config.should_train():
             self.handler.logger.investigate_dataset(self.dataset, class_column) # Returns True if the investigation/printing was not suppressed
         
@@ -513,6 +513,39 @@ class DatasetHandler:
 
         return float(value)
     
+    # Text handling a more nice way
+    def convert_text_and_categorical_features(self, model: Model):
+        
+        # The model has no text converter means we need to train a new one
+        if model.text_converter is None:
+            try:
+                ttnc = TextDataToNumbersConverter(
+                    text_columns=self.handler.config.get_text_column_names(), 
+                    category_columns=self.handler.config.get_categorical_text_column_names(), \
+                    limit_categorize=TextDataToNumbersConverter.LIMIT_IS_CATEGORICAL, \
+                    language=None, \
+                    stop_words=self.handler.config.use_stop_words(), \
+                    df=self.handler.config.get_stop_words_threshold(), \
+                    use_encryption=self.handler.config.should_hex_encode() \
+                )
+            except Exception as ex:
+                raise Exception(f"Could not initiate text converter object: {str(ex)}") from ex 
+            
+            # Fit converter to training data and transform it
+            self.X_train = ttnc.fit_transform(self.X_train)
+            
+            # Apply converter to validation data
+            self.X_validation = ttnc.transform(self.X_validation)
+            
+            return ttnc
+            
+        # There is a trained text converter already, use it to convert prediction part
+        # of dataset
+        else:
+            self.dataset = model.text_converter.transform(self.X_prediction)
+            
+            return model.text_converter
+    
     # Collapse all data text columns into a new column, which is necessary
     # for word-in-a-bag-technique
     def convert_textdata_to_numbers(self, model: Model):
@@ -614,20 +647,31 @@ class DatasetHandler:
         
         return pandas.concat([concat, X], axis = 1)
 
+    # Separate data in X and Y and in parts where classification is known and not known.
+    # X and Y are further split in training and validation part in split_dataset
     def separate_dataset(self) -> None:
-        # We need to know the number of data rows that are currently not
-        # classified (assuming that they are last in the dataset because they
-        # were sorted above). Separate keys from data elements that are
-        # already classified from the rest.
+        
         num_un_pred = self.get_num_unpredicted_rows()
         self.unpredicted_keys = self.keys[-num_un_pred:]
-
-        # Original training data are stored for later reference
+        class_column = self.handler.config.get_class_column_name()
+        
         if num_un_pred > 0:
-            self.X_original = self.dataset.head(-num_un_pred)
+            self.Y = self.dataset.head(-num_un_pred)[class_column]
+            self.X = self.dataset.head(-num_un_pred).drop([class_column], axis = 1, inplace=False)
+            self.Y_prediction = self.dataset.tail(num_un_pred)[class_column]
+            self.X_prediction = self.dataset.tail(num_un_pred).drop([class_column], axis = 1, inplace=False)
         else:
-            self.X_original = self.dataset.copy(deep=True)
-
+            self.Y = self.dataset[class_column]
+            self.X = self.dataset.drop([class_column], axis = 1, inplace=False)
+            self.Y_prediction = None
+            self.X_prediction = None
+        
+        # Original training+validation data are stored for later reference
+        self.X_original = self.X.copy(deep=True)
+        self.Y_original = self.Y.copy(deep=True)
+        
+        print(self.X.shape, self.X_prediction.shape)
+        
     # Use the bag of words technique to convert text corpus into numbers
     def word_in_a_bag_conversion(self, dataset: pandas.DataFrame, model: Model ) -> tuple:
 
@@ -760,36 +804,25 @@ class DatasetHandler:
         return feature_selection_transform
         
     # Split dataset into training and validation parts
-    def split_dataset(self) -> bool:
+    def split_dataset_for_training_and_validation(self) -> bool:
+        
+        self.handler.logger.print_progress(message="Split dataset for machine learning")
+        
+        # Quick return if no training
         if not self.handler.config.should_train():
-            self.X_unknown = self.X
-            self.Y_unknown = self.Y
+            self.X_prediction = self.X
+            self.Y_prediction = self.Y
             
             return False
         
-        self.handler.logger.print_progress(message="Split dataset for machine learning")
-        num_lower = self.get_num_unpredicted_rows()
+        else:
         
-        # First, split X and Y in two parts: the upper part, to be used in training,
-        # and the lower part, to be classified later on
-        [X_upper, X_lower] = np.split(self.X, [self.X.shape[0]-num_lower], axis = 0)
-        [Y_upper, Y_lower] = np.split(self.Y, [self.Y.shape[0]-num_lower], axis = 0)
+            # Split data validation dataset from the upper part
+            self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
+                self.X, self.Y, test_size = self.handler.config.get_test_size(), shuffle = True, random_state = 42, 
+                stratify = self.Y)
 
-        # Split-out validation dataset from the upper part
-        testsize = self.handler.config.get_test_size()
-        stratify_strategy = Y_upper                     # Use None for no stratification on class labels
-        shuffle_data = True                             # Use False for no shuffling of data before split
-        self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
-            X_upper, Y_upper, test_size = testsize, shuffle = True, random_state = 42, 
-            stratify = Y_upper)
-
-        self.Y_unknown = Y_lower
-        self.X_unknown = X_lower
-
-        if stratify_strategy is None and not shuffle_data:
-            pandas.testing.assert_series_equal(Y_upper, pandas.concat([self.Y_train, self.Y_validation], axis = 0) )
-        
-        return True
+            return True
         
     # Find out if a DataFrame column contains categorical data or not
     def is_categorical_data(self, column: pandas.Series) -> bool:
@@ -810,13 +843,13 @@ class DatasetHandler:
 
 @dataclass
 class Model:
-    label_binarizers: dict = field(default_factory=dict)
-    count_vectorizer: CountVectorizer = field(default=None)
-    tfid_transformer: TfidfTransformer = field(default=None)
-    algorithm: Algorithm = field(default=None)
+
+    text_converter: TextDataToNumbersConverter = field(default=None)
     preprocess: Preprocess = field(default=None)
-    model: Pipeline = field(default=None)
-    transform: typing.Any = field(default=None)
+    reduction: Reduction = field(default=None)
+    algorithm: Algorithm = field(default=None)
+    pipeline: Pipeline = field(default=None)
+    n_features_out: int = field(default=None)
 
     def update_fields(self, fields: list[str], update_function: Callable) -> bool:
         """ Updates fields, getting the values from a Callable (ex dh.convert_textdata_to_numbers) """
@@ -834,28 +867,26 @@ class Model:
             setattr(self, field, value)
 
     def get_name(self) -> str:
-        if self.algorithm is None or self.preprocess is None:
-            return ""
+        if self.pipeline is None:
+            return "Empty model"
 
-        return self.algorithm.get_compound_name(self.preprocess)
+        name = ""
+        for step in self.pipeline.steps:
+            name = name  + step[0] + '-'
+        name = name[:-1]
+
+        return name
 
     def get_num_selected_features(self, X) -> int:
-        if self.transform is None:
+        if self.n_features_out is None:
             return X.shape[1]
 
-        if hasattr(self.transform, "n_components_"):
-            return self.transform.n_components_
-        
-        if hasattr(self.transform, "n_components"):
-            return self.transform.n_components
-        
-        raise ModelException(f"Transform {type(self.transform)} have neither 'n_components_' 'or n_components'. Please check")
+        return self.n_features_out
 
 @dataclass
 class ModelHandler:
     handler: IAFHandler
     model: Model = field(init=False)
-    
     use_feature_selection: bool = field(init=False)
     text_data: bool = field(init=False)
     
@@ -872,36 +903,35 @@ class ModelHandler:
     # Load ml model
     def load_model_from_file(self, filename: str) -> Model:
         try:
-            _, label_binarizers, count_vectorizer, tfid_transformer, feature_selection_transform, model_name, model = pickle.load(open(filename, 'rb'))
+            _config, text_converter, pipeline_names, pipeline, n_features = pickle.load(open(filename, 'rb'))
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on loading model from file: {e}")
             return None
         
-        model_class = Model(
-            label_binarizers=label_binarizers,
-            count_vectorizer=count_vectorizer,
-            tfid_transformer=tfid_transformer,
-            transform=feature_selection_transform,
-            algorithm=model_name[0],
-            preprocess=model_name[1],
-            model=model
+        the_model = Model(
+            text_converter=text_converter,
+            preprocess=pipeline_names[0],
+            reduction=pipeline_names[1],
+            algorithm=pipeline_names[2],
+            pipeline=pipeline,
+            n_features_out=n_features
         )
         
         if self.handler.config.should_predict():
-            self.handler.config.set_num_selected_features(model.n_features_in_)
+            self.handler.config.set_num_selected_features(n_features)
 
-        return model_class
+        return the_model
 
     # load pipeline
     def load_pipeline_from_file(self, filename: str) -> Pipeline:
         self.handler.logger.print_info(f"loading pipeline from {filename}")
         model = self.load_model_from_file(filename)
 
-        return model.model
+        return model.pipeline
     
     # Sets default (read: empty) values
     def load_empty_model(self) -> Model:
-        return Model(label_binarizers={}, count_vectorizer=None, tfid_transformer=None, transform=None)
+        return Model()
 
     def train_model(self, dh: DatasetHandler) -> None:
         try:
@@ -911,8 +941,6 @@ class ModelHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something unknown went wrong on training model: {str(e)}")
-        else:
-            self.save_model_to_file(self.handler.config.get_model_filename())
 
     def get_model_from(self, dh) -> Model:
         
@@ -923,8 +951,8 @@ class ModelHandler:
         
         try:
             # Find the best model
-            pipe = self.spot_check_ml_algorithms(dh, k)
-            if pipe is None:
+            model = self.spot_check_machine_learning_models(dh, k)
+            if model is None:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
             # Make sure data is restored from original
@@ -932,32 +960,29 @@ class ModelHandler:
 
             # Now train the picked model on training data, either with a grid search or ordinary fit.
             # We assume the algorithm is the last step in the pipeline.
-            # TODO: Here the pipeline is called model. It should be that the model has a pipeline.
-            pipe_name = ""
-            for step in pipe.model.steps[:-1]:
-                pipe_name = step[0] + '-' + pipe_name
-            model_name = pipe_name.split('-')[0]
+            model_name = model.get_name()
+            alg_name = model_name.split('-')[-1]
             t0 = time.time()
-            if not pipe.algorithm.search_params.parameters:
-                self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {pipe_name}...(consider adding grid search parameters)")
-                pipe.model = self.train_picked_model(pipe.model, dh.X_train, dh.Y_train)
+            if not model.algorithm.search_params.parameters:
+                self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
+                model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             else:
-                self.handler.logger.print_info(f"\nUsing grid search for final training of model {pipe_name}...")
+                self.handler.logger.print_info(f"\nUsing grid search for final training of model {model_name}...")
                 
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
-                prefix = model_name + "__"
-                search_params = Helpers.add_prefix_to_dict_keys(prefix, pipe.algorithm.search_params.parameters)
-                pipe.model, grid_cv_info = \
-                    self.train_picked_model_parameter_grid_search(pipe.model, search_params, k, dh.X_train, dh.Y_train)
+                prefix = alg_name + "__"
+                search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
+                model.pipeline, grid_cv_info = \
+                    self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
                 
-                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(pipe.model.get_params(deep=False))}")
+                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
             
             t1 = time.time()
-            self.handler.logger.print_info(f"Final training of model {model_name} took {str(round(t1-t0,2))} secs.")
+            self.handler.logger.print_info(f"Final training of model {alg_name} took {str(round(t1-t0,2))} secs.")
         except Exception as ex:
-            raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
+            raise ModelException(f"Model from spot_check_machine_learning_models failed: {str(ex)}")
 
-        return pipe
+        return model
 
     # Train ml model
     def train_picked_model(self, model: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
@@ -1038,11 +1063,8 @@ class ModelHandler:
         #chosen_algorithm = self.handler.config.get_algorithm()
         #chosen_preprocessor = self.handler.config.get_preprocessor()
 
-        # RLRN and RFE do not get along
-        if current_algorithm == Algorithm.RLRN and current_reduction == Reduction.RFE:
-            return False
-        # Neither do BABC/BGC and RFE (raises ValueError about importance_getter == 'auto')
-        elif current_algorithm in [Algorithm.BABC, Algorithm.BGC] and current_reduction == Reduction.RFE:
+        # Some algorithms and RFE do not get along
+        if current_reduction == Reduction.RFE and not current_algorithm.rfe_compatible:
             return False
         else:
             return True
@@ -1050,7 +1072,7 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_ml_algorithms(self, dh: DatasetHandler,  k: int=10) -> Model:
+    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10) -> Model:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
@@ -1077,6 +1099,7 @@ class ModelHandler:
         best_algorithm = None
         best_preprocessor = None
         best_reduction = None
+        best_num_components = dh.X_train.shape[1]
         
         # Make evaluation of model
         try:
@@ -1096,140 +1119,150 @@ class ModelHandler:
         dh.X_unreduced = dh.X.copy(deep=True)
         data_changed = False
         
-         # Loop over pre-processing methods
-        for preprocessor, preprocessor_callable in preprocessors:
-            
-            # Loop over feature reduction transforms
-            for reduction, reduction_callable in reductions:
-
-                # For RFE only
-                best_rfe_feature_selection = dh.X.shape[1]
-                first_rfe_round = True
-
-                # Loop over the algorithms
-                for algorithm, algorithm_callable in algorithms:
-                    
-                    # Some combinations of reductions, algorithms and/or preprocessors are error prone
-                    # and should be skipped
-                    if not self.should_run_computation(reduction, algorithm, preprocessor):
-                        continue
-
-                     # Keep track if X needs to be copied back from original data because of previous changes to data
-                    if not data_changed:
-                        data_changed = True
-                    else:
-                        dh.X = dh.X_unreduced.copy(deep=True)
+        # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
+        success = False
+        repetitions = 0
+        while not success and repetitions < SPOT_CHECK_REPETITIONS:
+            repetitions += 1
+        
+            # Loop over pre-processing methods
+            for preprocessor, preprocessor_callable in preprocessors:
                 
-                    # Divide data in training and test parts according to settings X -> X_train, X_validation etc...
-                    dh.split_dataset()
-                    
-                    # Update progressbar percent and label
-                    self.handler.logger.print_progress(message=f"{standardProgressText} ({preprocessor.name}-{reduction.name}-{algorithm.name})")
-                    if not first_rfe_round: 
-                        self.handler.update_progress(percent=percentAddPerMinorTask)
-                    else:
-                        first_rfe_round = False
+                # Loop over feature reduction transforms
+                for reduction, reduction_callable in reductions:
 
-                    # Add RFE feature selection if selected, i.e., the option of reducing the number of variables recursively.
-                    # With RFE, we make a binary search for the optimal number of features.
-                    max_features_selection = dh.X.shape[1]
-                    min_features_selection = 0 if reduction == Reduction.RFE else max_features_selection
-                    num_components = max_features_selection
-                    
-                    # Loop over feature selections span: break this loop when min and max reach the same value
-                    rfe_score = 0.0                                             # Save the best values so far.
-                    num_features = max_features_selection                       # Start with all features.
-                    first_feature_selection = True                              # Make special first round: use all features
-                    
-                    while first_feature_selection or min_features_selection < max_features_selection:
+                    # For RFE only
+                    best_rfe_feature_selection = dh.X.shape[1]
+                    first_rfe_round = True
+
+                    # Loop over the algorithms
+                    for algorithm, algorithm_callable in algorithms:
                         
-                        # Update limits for binary search, and end loop if needed
-                        if not first_feature_selection:
-                            num_features = ceil((min_features_selection+max_features_selection) / 2)
-                            if num_features == max_features_selection:          
-                                break
+                        # Some combinations of reductions, algorithms and/or preprocessors are error prone
+                        # and should be skipped
+                        if not self.should_run_computation(reduction, algorithm, preprocessor):
+                            continue
+
+                        # Keep track if X needs to be copied back from original data because of previous changes to data
+                        if not data_changed:
+                            data_changed = True
                         else:
-                            first_feature_selection = False
-                            num_features = max_features_selection
-
-                        # Calculate the time for this setting
-                        t0 = time.time()
+                            dh.X = dh.X_unreduced.copy(deep=True)
+                    
+                        # Divide data in training and test parts according to settings X -> X_train, X_validation etc...
+                        dh.split_dataset_for_training_and_validation()
                         
-                        try:
-                            # Create pipeline and cross validate
-                            current_pipeline, cv_results, failure = \
-                                self.create_pipeline_and_cv(reduction, algorithm, preprocessor, reduction_callable, \
-                                    algorithm_callable, preprocessor_callable, kfold, dh, num_features)
+                        # Update progressbar percent and label
+                        self.handler.logger.print_progress(message=f"{standardProgressText} ({preprocessor.name}-{reduction.name}-{algorithm.name})")
+                        if not first_rfe_round: 
+                            self.handler.update_progress(percent=percentAddPerMinorTask)
+                        else:
+                            first_rfe_round = False
+
+                        # Add RFE feature selection if selected, i.e., the option of reducing the number of variables recursively.
+                        # With RFE, we make a binary search for the optimal number of features.
+                        max_features_selection = dh.X.shape[1]
+                        min_features_selection = 0 if reduction == Reduction.RFE else max_features_selection
+                        num_components = max_features_selection
+                        
+                        # Loop over feature selections span: break this loop when min and max reach the same value
+                        rfe_score = 0.0                                             # Save the best values so far.
+                        num_features = max_features_selection                       # Start with all features.
+                        first_feature_selection = True                              # Make special first round: use all features
+                        
+                        while first_feature_selection or min_features_selection < max_features_selection:
                             
-                            # Train and evaluate on test data
-                            if dh.X_validation is not None and dh.Y_validation is not None:
-                                current_pipeline, test_score, failure = \
-                                    self.train_and_evaluate_picked_model(current_pipeline, dh)
+                            # Update limits for binary search, and end loop if needed
+                            if not first_feature_selection:
+                                num_features = ceil((min_features_selection+max_features_selection) / 2)
+                                if num_features == max_features_selection:          
+                                    break
                             else:
-                                test_score = 0.0
+                                first_feature_selection = False
+                                num_features = max_features_selection
 
-                            # Get used number of features after reduction (components)
-                            num_components = self.get_components_from_pipeline(reduction, current_pipeline, num_features)
-                        except ModelException:
-                            # If any exceptions happen, continue to next step in the loop
-                            self.handler.logger.print_warning(f"ModelException: {str(ex)}")
-                            break
-                        except Exception as ex:
-                            self.handler.logger.print_warning(f"Exception: {str(ex)}")
+                            # Calculate the time for this setting
+                            t0 = time.time()
+                            
+                            try:
+                                # Create pipeline and cross validate
+                                current_pipeline, cv_results, failure = \
+                                    self.create_pipeline_and_cv(reduction, algorithm, preprocessor, reduction_callable, \
+                                        algorithm_callable, preprocessor_callable, kfold, dh, num_features)
+                                
+                                # Train and evaluate on test data
+                                if dh.X_validation is not None and dh.Y_validation is not None:
+                                    current_pipeline, test_score, failure = \
+                                        self.train_and_evaluate_picked_model(current_pipeline, dh)
+                                else:
+                                    test_score = 0.0
 
-                        # Stop the stopwatch
-                        t = time.time() - t0
+                                # Get used number of features after reduction (components)
+                                num_components = self.get_components_from_pipeline(reduction, current_pipeline, num_features)
+                            except ModelException:
+                                # If any exceptions happen, continue to next step in the loop
+                                self.handler.logger.print_warning(f"ModelException: {str(ex)}")
+                                break
+                            except Exception as ex:
+                                self.handler.logger.print_warning(f"Exception: {str(ex)}")
 
-                        # For current settings, calculate score
-                        temp_score = cv_results.mean()
-                        temp_stdev = cv_results.std()
+                            # Stop the stopwatch
+                            t = time.time() - t0
 
-                        # Evaluate if feature selection changed accuracy or not. 
-                        # Notice: Better or same score with less variables are both seen as an improvement,
-                        # since the chance of finding an improvement increases when number of variables decrease
-                        if  temp_score >= rfe_score:
-                            rfe_score = temp_score
-                            max_features_selection = num_features   # We need to reduce more features
-                        else:
-                            min_features_selection = num_features   # We have reduced too much already  
+                            # For current settings, calculate score
+                            temp_score = cv_results.mean()
+                            temp_stdev = cv_results.std()
 
-                        # Save result if it is the overall best (inside RFE-while)
-                        # Notice the difference from above, here we demand a better score.
-                        try:
-                            if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev, test_score):
-                                trained_pipeline = current_pipeline
-                                best_reduction = reduction
-                                best_algorithm = algorithm
-                                best_preprocessor = preprocessor
-                                best_mean = temp_score
-                                best_stdev = temp_stdev
-                                best_rfe_feature_selection = num_features
-                        except UnstableModelException as ex:
-                            if not failure:
-                                failure = f"{','.join(ex.args)}"
+                            # Evaluate if feature selection changed accuracy or not. 
+                            # Notice: Better or same score with less variables are both seen as an improvement,
+                            # since the chance of finding an improvement increases when number of variables decrease
+                            if  temp_score >= rfe_score:
+                                rfe_score = temp_score
+                                max_features_selection = num_features   # We need to reduce more features
+                            else:
+                                min_features_selection = num_features   # We have reduced too much already  
 
-                        # Print results to screen
-                        self.handler.logger.print_result_line(
-                            preprocessor.name,
-                            reduction.name,
-                            algorithm.name,
-                            min(num_components, num_features),
-                            temp_score,
-                            temp_stdev,
-                            test_score,
-                            t,
-                            failure
-                        )
+                            # Save result if it is the overall best (inside RFE-while)
+                            # Notice the difference from above, here we demand a better score.
+                            try:
+                                if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev, test_score):
+                                    trained_pipeline = current_pipeline
+                                    best_reduction = reduction
+                                    best_algorithm = algorithm
+                                    best_preprocessor = preprocessor
+                                    best_mean = temp_score
+                                    best_stdev = temp_stdev
+                                    best_rfe_feature_selection = num_features
+                                    best_num_components = num_components
+                            except UnstableModelException as ex:
+                                if not failure:
+                                    failure = f"{','.join(ex.args)}"
+                            else:
+                                success = True
+
+                            # Print results to screen
+                            self.handler.logger.print_result_line(
+                                preprocessor.name,
+                                reduction.name,
+                                algorithm.name,
+                                min(num_components, num_features),
+                                temp_score,
+                                temp_stdev,
+                                test_score,
+                                t,
+                                failure
+                            )
                     
         updates = {"feature_selection": reduction, "algorithm": best_algorithm, \
             "preprocessor" : best_preprocessor, "num_selected_features": best_rfe_feature_selection}
         self.handler.config.update_attributes(type="mode", updates=updates)
         
         best_model = self.model
-        best_model.transform = best_reduction
-        best_model.algorithm = best_algorithm
         best_model.preprocess = best_preprocessor
-        best_model.model = trained_pipeline
+        best_model.reduction = best_reduction
+        best_model.algorithm = best_algorithm
+        best_model.pipeline = trained_pipeline
+        best_model.num_feaures_out = best_num_components
         
         # Return best model for start making predictions
         return best_model
@@ -1291,15 +1324,18 @@ class ModelHandler:
         rfe_features: int = None) -> Union[Pipeline, Estimator]:
        
         try:
-            # First modify algorithm if RFE should be used
-            if reduction == Reduction.RFE:
-                steps = self.rfe_modify_algorithm_step(estimator, algorithm.name,  max_features, rfe_features)
-            else:
-                steps = [(algorithm.name, estimator)]
+            # First, put estimator/algorithm in pipeline
+            steps = [(algorithm.name, estimator)]
             
             # Secondly, add the other steps to the pipeline BEFORE the algorithm
             steps.insert(0, (preprocessor.name, scaler))
-            steps.insert(1, (reduction.name, feature_reducer))
+            
+            # RFE object must unfortunately be updated with the correct estimator
+            if reduction == Reduction.RFE:
+                the_feature_reducer = RFE(estimator=estimator, n_features_to_select=rfe_features)
+            else:
+                the_feature_reducer = feature_reducer
+            steps.insert(1, (reduction.name, the_feature_reducer))
             steps.insert(2, ("smote", self.handler.config.get_smote()))
             steps.insert(3, ("undersampling", self.handler.config.get_undersampler()))
             
@@ -1368,13 +1404,12 @@ class ModelHandler:
             save_config = self.handler.config.get_clean_config()
             data = [
                 save_config,
-                self.model.label_binarizers,
-                self.model.count_vectorizer,
-                self.model.tfid_transformer,
-                self.model.transform,
-                (self.model.algorithm, self.model.preprocess),
-                self.model.model
+                self.model.text_converter,
+                (self.model.preprocess, self.model.reduction, self.model.algorithm),
+                self.model.pipeline,
+                self.model.n_features_out
             ]
+            print(self.model)
             pickle.dump(data, open(filename,'wb'))
 
         except Exception as e:
@@ -1558,9 +1593,11 @@ class PredictionsHandler:
     
     # Function for finding the n most mispredicted data rows
     # TODO: Clean up a bit more
-    def most_mispredicted(self, X_original: pandas.DataFrame, model: Pipeline, ct_model: Pipeline, X_transformed: pandas.DataFrame, Y: pandas.DataFrame) -> None:
+    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X_transformed: pandas.DataFrame, Y: pandas.DataFrame) -> None:
+        
         # Calculate predictions for both total model and cross trained model
-        for what_model, the_model in [("model retrained on all data", model), ("model cross trained on training data", ct_model)]:
+        for what_model, the_model in [("model retrained on all data", full_pipe), ("model cross trained on training data", ct_pipe)]:
+            
             Y_pred = pandas.DataFrame(the_model.predict(X_transformed), index = Y.index)
 
             # Find the data rows where the real category is different from the predictions
@@ -1585,7 +1622,6 @@ class PredictionsHandler:
         if num_mispredicted == 0:
             self.X_mispredicted = pandas.DataFrame()
             self.model = "no model produced mispredictions"
-            
             return
         
         self.handler.logger.print_always(f"Accuracy score for {what_model}: {accuracy_score(Y, Y_pred)}")
@@ -1603,7 +1639,7 @@ class PredictionsHandler:
 
         #  Re-insert original data columns but drop the class column
         X_mispredicted = X_original.loc[X_not]
-        X_mispredicted = X_mispredicted.drop(self.handler.config.get_class_column_name(), axis = 1)
+        #X_mispredicted = X_mispredicted.drop(self.handler.config.get_class_column_name(), axis = 1)
 
         # Add other columns to mispredicted data
         #X_mispredicted.insert(0, "Actual", Y.loc[X_not].values)            # values not recommended
@@ -1649,28 +1685,12 @@ def main():
         config = Config.Config.load_config_from_module(sys.argv)
     else:
         config = Config.Config()
-        #pwd = os.path.dirname(os.path.realpath(__file__))
-        #
-        #model_path = Path(pwd) / "./model/"
-        #
-        #filename =  model_path / "hpl_förutsättningar_2020.sav"
-        #config = Config.Config.load_config_from_model_file(filename)
-        #config.io.model_name = "hpl_förutsättningar_2020"
 
     logger = IAFLogger.IAFLogger(not config.io.verbose)
     
     datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
-    #handler = IAFHandler(DataLayer, Config, Logger)
+    
     handler = IAFHandler(datalayer, config, logger)
-    #handler.get_dataset()
-
-    #print(handler.read_data_query)
-    # Should hopefully not give errors
-    #handler.add_handler(name="dataset")
-
-    # Gives exception
-    #handler.add_handler(name="model")
-
-
+    
 if __name__ == "__main__":
     main()
