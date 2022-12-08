@@ -539,12 +539,10 @@ class DatasetHandler:
             
             return ttnc
             
-        # There is a trained text converter already, use it to convert entire dataset
-        # TODO: if part of the dataset belong to training, we are unnecessarily converting
-        # training and validation sets too even though they are not used in predictions with
-        # an already trained text converter
+        # There is a trained text converter already, use it to convert prediction part
+        # of dataset
         else:
-            self.dataset = model.text_converter.transform(self.dataset)
+            self.dataset = model.text_converter.transform(self.X_prediction)
             
             return model.text_converter
     
@@ -671,6 +669,8 @@ class DatasetHandler:
         # Original training+validation data are stored for later reference
         self.X_original = self.X.copy(deep=True)
         self.Y_original = self.Y.copy(deep=True)
+        
+        print(self.X.shape, self.X_prediction.shape)
         
     # Use the bag of words technique to convert text corpus into numbers
     def word_in_a_bag_conversion(self, dataset: pandas.DataFrame, model: Model ) -> tuple:
@@ -804,36 +804,25 @@ class DatasetHandler:
         return feature_selection_transform
         
     # Split dataset into training and validation parts
-    def split_dataset(self) -> bool:
+    def split_dataset_for_training_and_validation(self) -> bool:
+        
+        self.handler.logger.print_progress(message="Split dataset for machine learning")
+        
+        # Quick return if no training
         if not self.handler.config.should_train():
             self.X_prediction = self.X
             self.Y_prediction = self.Y
             
             return False
         
-        self.handler.logger.print_progress(message="Split dataset for machine learning")
-        num_lower = self.get_num_unpredicted_rows()
+        else:
         
-        # First, split X and Y in two parts: the upper part, to be used in training,
-        # and the lower part, to be classified later on
-        [X_upper, X_lower] = np.split(self.X, [self.X.shape[0]-num_lower], axis = 0)
-        [Y_upper, Y_lower] = np.split(self.Y, [self.Y.shape[0]-num_lower], axis = 0)
+            # Split data validation dataset from the upper part
+            self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
+                self.X, self.Y, test_size = self.handler.config.get_test_size(), shuffle = True, random_state = 42, 
+                stratify = self.Y)
 
-        # Split-out validation dataset from the upper part
-        testsize = self.handler.config.get_test_size()
-        stratify_strategy = Y_upper                     # Use None for no stratification on class labels
-        shuffle_data = True                             # Use False for no shuffling of data before split
-        self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
-            X_upper, Y_upper, test_size = testsize, shuffle = True, random_state = 42, 
-            stratify = Y_upper)
-
-        self.Y_prediction = Y_lower
-        self.X_prediction = X_lower
-
-        if stratify_strategy is None and not shuffle_data:
-            pandas.testing.assert_series_equal(Y_upper, pandas.concat([self.Y_train, self.Y_validation], axis = 0) )
-        
-        return True
+            return True
         
     # Find out if a DataFrame column contains categorical data or not
     def is_categorical_data(self, column: pandas.Series) -> bool:
@@ -854,15 +843,13 @@ class DatasetHandler:
 
 @dataclass
 class Model:
-    #label_binarizers: dict = field(default_factory=dict)
-    #count_vectorizer: CountVectorizer = field(default=None)
-    #tfid_transformer: TfidfTransformer = field(default=None)
+
     text_converter: TextDataToNumbersConverter = field(default=None)
     preprocess: Preprocess = field(default=None)
     reduction: Reduction = field(default=None)
     algorithm: Algorithm = field(default=None)
     pipeline: Pipeline = field(default=None)
-    transform: typing.Any = field(default=None)
+    n_features_out: int = field(default=None)
 
     def update_fields(self, fields: list[str], update_function: Callable) -> bool:
         """ Updates fields, getting the values from a Callable (ex dh.convert_textdata_to_numbers) """
@@ -880,27 +867,21 @@ class Model:
             setattr(self, field, value)
 
     def get_name(self) -> str:
-        if self.model is None:
+        if self.pipeline is None:
             return "Empty model"
 
         name = ""
-        for step in self.model.steps:
+        for step in self.pipeline.steps:
             name = name  + step[0] + '-'
         name = name[:-1]
 
         return name
 
     def get_num_selected_features(self, X) -> int:
-        if self.transform is None:
+        if self.n_features_out is None:
             return X.shape[1]
 
-        if hasattr(self.transform, "n_components_"):
-            return self.transform.n_components_
-        
-        if hasattr(self.transform, "n_components"):
-            return self.transform.n_components
-        
-        raise ModelException(f"Transform {type(self.transform)} have neither 'n_components_' 'or n_components'. Please check")
+        return self.n_features_out
 
 @dataclass
 class ModelHandler:
@@ -922,7 +903,7 @@ class ModelHandler:
     # Load ml model
     def load_model_from_file(self, filename: str) -> Model:
         try:
-            _config, text_converter, pipeline_names, pipeline = pickle.load(open(filename, 'rb'))
+            _config, text_converter, pipeline_names, pipeline, n_features = pickle.load(open(filename, 'rb'))
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on loading model from file: {e}")
             return None
@@ -932,11 +913,12 @@ class ModelHandler:
             preprocess=pipeline_names[0],
             reduction=pipeline_names[1],
             algorithm=pipeline_names[2],
-            pipeline=pipeline
+            pipeline=pipeline,
+            n_features_out=n_features
         )
         
         if self.handler.config.should_predict():
-            self.handler.config.set_num_selected_features(pipeline.n_features_in_)
+            self.handler.config.set_num_selected_features(n_features)
 
         return the_model
 
@@ -949,8 +931,7 @@ class ModelHandler:
     
     # Sets default (read: empty) values
     def load_empty_model(self) -> Model:
-        #return Model(label_binarizers={}, count_vectorizer=None, tfid_transformer=None, transform=None)
-        return Model(text_converter=None, transform=None)
+        return Model()
 
     def train_model(self, dh: DatasetHandler) -> None:
         try:
@@ -960,8 +941,6 @@ class ModelHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something unknown went wrong on training model: {str(e)}")
-        else:
-            self.save_model_to_file(self.handler.config.get_model_filename())
 
     def get_model_from(self, dh) -> Model:
         
@@ -972,8 +951,8 @@ class ModelHandler:
         
         try:
             # Find the best model
-            pipe = self.spot_check_ml_algorithms(dh, k)
-            if pipe is None:
+            model = self.spot_check_machine_learning_models(dh, k)
+            if model is None:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
             # Make sure data is restored from original
@@ -981,30 +960,29 @@ class ModelHandler:
 
             # Now train the picked model on training data, either with a grid search or ordinary fit.
             # We assume the algorithm is the last step in the pipeline.
-            # TODO: Here the pipeline is called model. It should be that the model has a pipeline.
-            pipe_name = pipe.get_name()
-            model_name = pipe_name.split('-')[-1]
+            model_name = model.get_name()
+            alg_name = model_name.split('-')[-1]
             t0 = time.time()
-            if not pipe.algorithm.search_params.parameters:
-                self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {pipe_name}...(consider adding grid search parameters)")
-                pipe.model = self.train_picked_model(pipe.model, dh.X_train, dh.Y_train)
+            if not model.algorithm.search_params.parameters:
+                self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
+                model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             else:
-                self.handler.logger.print_info(f"\nUsing grid search for final training of model {pipe_name}...")
+                self.handler.logger.print_info(f"\nUsing grid search for final training of model {model_name}...")
                 
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
-                prefix = model_name + "__"
-                search_params = Helpers.add_prefix_to_dict_keys(prefix, pipe.algorithm.search_params.parameters)
-                pipe.model, grid_cv_info = \
-                    self.train_picked_model_parameter_grid_search(pipe.model, search_params, k, dh.X_train, dh.Y_train)
+                prefix = alg_name + "__"
+                search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
+                model.pipeline, grid_cv_info = \
+                    self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
                 
-                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(pipe.model.get_params(deep=False))}")
+                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
             
             t1 = time.time()
-            self.handler.logger.print_info(f"Final training of model {model_name} took {str(round(t1-t0,2))} secs.")
+            self.handler.logger.print_info(f"Final training of model {alg_name} took {str(round(t1-t0,2))} secs.")
         except Exception as ex:
-            raise ModelException(f"Model from spot_check_ml_algorithms failed: {str(ex)}")
+            raise ModelException(f"Model from spot_check_machine_learning_models failed: {str(ex)}")
 
-        return pipe
+        return model
 
     # Train ml model
     def train_picked_model(self, model: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
@@ -1094,7 +1072,7 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_ml_algorithms(self, dh: DatasetHandler,  k: int=10) -> Model:
+    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10) -> Model:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
@@ -1121,6 +1099,7 @@ class ModelHandler:
         best_algorithm = None
         best_preprocessor = None
         best_reduction = None
+        best_num_components = dh.X_train.shape[1]
         
         # Make evaluation of model
         try:
@@ -1171,7 +1150,7 @@ class ModelHandler:
                             dh.X = dh.X_unreduced.copy(deep=True)
                     
                         # Divide data in training and test parts according to settings X -> X_train, X_validation etc...
-                        dh.split_dataset()
+                        dh.split_dataset_for_training_and_validation()
                         
                         # Update progressbar percent and label
                         self.handler.logger.print_progress(message=f"{standardProgressText} ({preprocessor.name}-{reduction.name}-{algorithm.name})")
@@ -1254,6 +1233,7 @@ class ModelHandler:
                                     best_mean = temp_score
                                     best_stdev = temp_stdev
                                     best_rfe_feature_selection = num_features
+                                    best_num_components = num_components
                             except UnstableModelException as ex:
                                 if not failure:
                                     failure = f"{','.join(ex.args)}"
@@ -1278,10 +1258,11 @@ class ModelHandler:
         self.handler.config.update_attributes(type="mode", updates=updates)
         
         best_model = self.model
-        best_model.transform = best_reduction
-        best_model.algorithm = best_algorithm
         best_model.preprocess = best_preprocessor
-        best_model.model = trained_pipeline
+        best_model.reduction = best_reduction
+        best_model.algorithm = best_algorithm
+        best_model.pipeline = trained_pipeline
+        best_model.num_feaures_out = best_num_components
         
         # Return best model for start making predictions
         return best_model
@@ -1425,8 +1406,10 @@ class ModelHandler:
                 save_config,
                 self.model.text_converter,
                 (self.model.preprocess, self.model.reduction, self.model.algorithm),
-                self.model.pipeline
+                self.model.pipeline,
+                self.model.n_features_out
             ]
+            print(self.model)
             pickle.dump(data, open(filename,'wb'))
 
         except Exception as e:
@@ -1610,9 +1593,11 @@ class PredictionsHandler:
     
     # Function for finding the n most mispredicted data rows
     # TODO: Clean up a bit more
-    def most_mispredicted(self, X_original: pandas.DataFrame, model: Pipeline, ct_model: Pipeline, X_transformed: pandas.DataFrame, Y: pandas.DataFrame) -> None:
+    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X_transformed: pandas.DataFrame, Y: pandas.DataFrame) -> None:
+        
         # Calculate predictions for both total model and cross trained model
-        for what_model, the_model in [("model retrained on all data", model), ("model cross trained on training data", ct_model)]:
+        for what_model, the_model in [("model retrained on all data", full_pipe), ("model cross trained on training data", ct_pipe)]:
+            
             Y_pred = pandas.DataFrame(the_model.predict(X_transformed), index = Y.index)
 
             # Find the data rows where the real category is different from the predictions
@@ -1637,7 +1622,6 @@ class PredictionsHandler:
         if num_mispredicted == 0:
             self.X_mispredicted = pandas.DataFrame()
             self.model = "no model produced mispredictions"
-            
             return
         
         self.handler.logger.print_always(f"Accuracy score for {what_model}: {accuracy_score(Y, Y_pred)}")
@@ -1701,28 +1685,12 @@ def main():
         config = Config.Config.load_config_from_module(sys.argv)
     else:
         config = Config.Config()
-        #pwd = os.path.dirname(os.path.realpath(__file__))
-        #
-        #model_path = Path(pwd) / "./model/"
-        #
-        #filename =  model_path / "hpl_förutsättningar_2020.sav"
-        #config = Config.Config.load_config_from_model_file(filename)
-        #config.io.model_name = "hpl_förutsättningar_2020"
 
     logger = IAFLogger.IAFLogger(not config.io.verbose)
     
     datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
-    #handler = IAFHandler(DataLayer, Config, Logger)
+    
     handler = IAFHandler(datalayer, config, logger)
-    #handler.get_dataset()
-
-    #print(handler.read_data_query)
-    # Should hopefully not give errors
-    #handler.add_handler(name="dataset")
-
-    # Gives exception
-    #handler.add_handler(name="model")
-
-
+    
 if __name__ == "__main__":
     main()

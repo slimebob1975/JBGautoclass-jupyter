@@ -176,15 +176,14 @@ class AutomaticClassifier:
         self.update_progress(self.progression["percentPerMajorTask"])
         
         # Split data in training and test sets
-        dh.split_dataset()
+        dh.split_dataset_for_training_and_validation()
 
         # Text and categorical variables must be converted to numbers at this point
         self.logger.print_progress(message="Rearrange dataset for possible textclassification, etc.")
         #mh.model.update_fields(fields=["label_binarizers", "count_vectorizer", "tfid_transformer"], \
         #    update_function=dh.convert_textdata_to_numbers)
         if dh.handler.config.get_text_column_names():
-            mh.model.update_fields(fields=["text_converter"], \
-                update_function=dh.convert_text_and_categorical_features)
+            mh.model.update_field(field="text_converter", value=dh.convert_text_and_categorical_features(mh.model))
 
         # TODO: remove one progress-bar-updates corresponding to these lines
         self.update_progress(self.progression["percentPerMajorTask"])
@@ -203,8 +202,9 @@ class AutomaticClassifier:
             try:
                 self.logger.print_progress(message="Check and train algorithms for best model")
                 mh.train_model(dh)
+                mh.save_model_to_file(mh.handler.config.get_model_filename())
             except Exception as ex:
-                self.logger.abort_cleanly(f"Training model failed: {ex}")
+                self.logger.abort_cleanly(f"Training or saving model failed: {ex}")
 
         self.update_progress(percent=self.progression["percentPerMajorTask"], message=f"Best model is: ({mh.model.get_name()}) with number of features: {self.config.get_num_selected_features()}")
         
@@ -216,7 +216,7 @@ class AutomaticClassifier:
                 # Make predictions on known testdata and report the results
                 self.logger.print_progress(message="Make predictions on known testdata")
                 
-                ph.make_predictions(mh.model.model, dh.X_validation, dh.classes, dh.Y_validation)
+                ph.make_predictions(mh.model.pipeline, dh.X_validation, dh.classes, dh.Y_validation)
                 
                 ph.report_results(dh.Y_validation, mh.model)
                 
@@ -232,7 +232,7 @@ class AutomaticClassifier:
                 # TODO: Maybe create this one up in the split_dataset, so we save Y_known, since neither Y_train nor Y_validation changes after calculation
                 Y_known = concat([dh.Y_train, dh.Y_validation], axis = 0)
 
-                trained_model = mh.train_picked_model( mh.model.model, dh.X_transformed, Y_known)
+                trained_model = mh.train_picked_model( mh.model.pipeline, dh.X_transformed, Y_known)
                 
                 mh.save_model_to_file(self.config.get_model_filename())
                 
@@ -244,7 +244,7 @@ class AutomaticClassifier:
 
         # Now make predictions on non-classified dataset: X_unknown -> Y_unknown
         if self.config.should_predict() and dh.X_prediction.shape[0] > 0:
-            ph.make_predictions(mh.model.model, dh.X_prediction, dh.classes)
+            ph.make_predictions(mh.model.pipeline, dh.X_prediction, dh.classes)
             
             self.logger.print_formatted_info("Predictions for the unknown data")
             self.logger.print_info("Predictions:", str(Helpers.count_value_distr_as_dict(ph.predictions.tolist())))
