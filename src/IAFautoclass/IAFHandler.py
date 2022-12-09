@@ -541,11 +541,13 @@ class DatasetHandler:
             self.X = ttnc.transform(self.X)
             self.X_train = ttnc.transform(self.X_train)
             self.X_validation = ttnc.transform(self.X_validation)
+
+            self.handler.logger.print_info(f"Number of features after text and category conversion: {self.X.shape[1]}")
             
         # If we should predict, apply converter even to X_prediction part of data
         if self.handler.config.should_predict():
             self.X_prediction = ttnc.transform(self.X_prediction)
-            
+
         return ttnc
     
     # Collapse all data text columns into a new column, which is necessary
@@ -1026,8 +1028,6 @@ class ModelHandler:
                 pipeline.fit(dh.X_train, dh.Y_train)
             except TypeError:
                 pipeline.fit(dh.X_train.to_numpy(), dh.Y_train.to_numpy())
-            except Exception as ex:
-                raise TypeError(f"Pipeline does not accept input data format to fit: {str(ex)}") from ex
 
             # Evaluate on test_data with correct scorer
             if dh.X_validation is not None and dh.Y_validation is not None:
@@ -1036,8 +1036,7 @@ class ModelHandler:
                     the_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
                 except TypeError:
                     the_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
-                except Exception as ex:
-                    raise TypeError(f"Scorer construction failed because of wrong input data format: {str(ex)}") from ex
+
         except Exception as ex:
             the_score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
