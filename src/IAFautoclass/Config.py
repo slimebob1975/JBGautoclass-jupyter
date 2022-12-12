@@ -1081,6 +1081,7 @@ class Config:
     DEFAULT_TRAIN_OPTION = "Train a new model"
 
     TEXT_DATATYPES = ["nvarchar", "varchar", "char", "text", "enum", "set"]
+    INT_DATATYPES = ["bigint", "int", "smallint", "tinyint"]
 
     TEMPLATE_TAGS = {
         "name": "<name>",
