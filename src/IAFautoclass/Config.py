@@ -368,10 +368,10 @@ class Algorithm(MetaEnum):
     HIST = { "full_name": "Histogram-based Gradient B. Classifier", "search_params": AlgorithmGridSearchParams.HIST, "rfe_compatible": False}
     MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC, "rfe_compatible": False}
     GPC = { "full_name": "Gaussian Process Classifier", "search_params": AlgorithmGridSearchParams.GPC, "rfe_compatible": False}
-    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD, "rfe_compatible": True}
-    FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD, "rfe_compatible": True}
-    FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD, "rfe_compatible": True}
-    FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.FINH, "rfe_compatible": True}
+    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD, "rfe_compatible": False}
+    FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD, "rfe_compatible": False}
+    FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD, "rfe_compatible": False}
+    FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.FINH, "rfe_compatible": False}
     CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.CSTK, "rfe_compatible": False}
     CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.CSTM, "rfe_compatible": False}
     CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CRFD, "rfe_compatible": False}
