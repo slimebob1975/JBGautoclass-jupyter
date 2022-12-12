@@ -967,7 +967,10 @@ class ModelHandler:
             if not model.algorithm.search_params.parameters:
                 self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
                 self.handler.logger.print_progress(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
-                model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
+                try:
+                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
+                except TypeError:
+                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy())
             else:
                 self.handler.logger.print_info(f"\nUsing grid search for final training of model {model_name}...")
                 self.handler.logger.print_progress(f"\nUsing grid search for final training of model {model_name}...")
@@ -975,8 +978,12 @@ class ModelHandler:
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
                 prefix = alg_name + "__"
                 search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
-                model.pipeline, grid_cv_info = \
-                    self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
+                try:
+                    model.pipeline, grid_cv_info = \
+                        self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
+                except TypeError:
+                    model.pipeline, grid_cv_info = \
+                        self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train.to_numpy(), dh.Y_train.to_numpy())
                 
                 self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
             

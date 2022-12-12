@@ -40,7 +40,7 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.metrics import (make_scorer, accuracy_score, balanced_accuracy_score,
                              f1_score, recall_score, precision_score,
-                             matthews_corrcoef)
+                             matthews_corrcoef, average_precision_score)
 
 from skclean.models import RobustForest
 from skclean.detectors import (KDN, ForestKDN, RkDN)
@@ -332,15 +332,15 @@ class AlgorithmGridSearchParams(MetaEnum):
 
 class Algorithm(MetaEnum):
     DUMY = { "full_name": "Dummy Classifier", "search_params": AlgorithmGridSearchParams.DUMY, "rfe_compatible": False}
-    SRF1 = { "full_name": "Stacked Random Forests 1", "search_params": AlgorithmGridSearchParams.SRF1, "rfe_compatible": True}
-    SRF2 = { "full_name": "Stacked Random Forests 2", "search_params": AlgorithmGridSearchParams.SRF2, "rfe_compatible": True}
+    SRF1 = { "full_name": "Stacked Random Forests 1", "search_params": AlgorithmGridSearchParams.SRF1, "rfe_compatible": False}
+    SRF2 = { "full_name": "Stacked Random Forests 2", "search_params": AlgorithmGridSearchParams.SRF2, "rfe_compatible": False}
     BARF = { "full_name": "Balanced Random Forest", "search_params": AlgorithmGridSearchParams.BARF, "rfe_compatible": True}
     BABC = { "full_name": "Balanced Bagging Classifier", "search_params": AlgorithmGridSearchParams.BABC, "rfe_compatible": False}
     RUBC = { "full_name": "RUS Boost Classifier", "search_params": AlgorithmGridSearchParams.RUBC, "rfe_compatible": True}
     EAEC = { "full_name": "Easy Ensamble Classifier", "search_params": AlgorithmGridSearchParams.EAEC, "rfe_compatible": False}
     RTCL = { "full_name": "Robust Tree Classifier", "search_params": AlgorithmGridSearchParams.RTCL, "rfe_compatible": False}
     RLRN = { "full_name": "Robust Logistic Regression + Label Encoder", "search_params": AlgorithmGridSearchParams.RLRN, "rfe_compatible": False}
-    RCNT = { "full_name": "Robust Centroid + Label Encoder", "search_params": AlgorithmGridSearchParams.RCNT, "rfe_compatible": True}
+    RCNT = { "full_name": "Robust Centroid + Label Encoder", "search_params": AlgorithmGridSearchParams.RCNT, "rfe_compatible": False}
     LRN = { "full_name": "Logistic Regression", "search_params": AlgorithmGridSearchParams.LRN, "rfe_compatible": True}
     KNN = { "full_name": "K-Neighbors Classifier", "search_params": AlgorithmGridSearchParams.KNN, "rfe_compatible": False}
     RADN = { "full_name": "Radius Neighbors Classifier", "search_params": AlgorithmGridSearchParams.RADN, "rfe_compatible": False}
@@ -357,8 +357,8 @@ class Algorithm(MetaEnum):
     SLSV = { "full_name": "Stacked Linear SVC", "search_params": AlgorithmGridSearchParams.SLSV, "rfe_compatible": False}
     SGDE = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGDE, "rfe_compatible": True}
     NCT = { "full_name": "Nearest Centroid", "search_params": AlgorithmGridSearchParams.NCT, "rfe_compatible": False}
-    SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC, "rfe_compatible": True}
-    SSVC = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.SSVC, "rfe_compatible": True}
+    SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC, "rfe_compatible": False}
+    SSVC = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.SSVC, "rfe_compatible": False}
     LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA, "rfe_compatible": True}
     QDA = { "full_name": "Quadratic Discriminant Analysis", "search_params": AlgorithmGridSearchParams.QDA, "rfe_compatible": False}
     BGC = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BGC, "rfe_compatible": False}
@@ -1024,8 +1024,10 @@ class ReductionTuple:
 
 class ScoreMetric(MetaEnum):
     accuracy = {"full_name": "Accuracy", "callable": accuracy_score, "kwargs": None}
-    balanced_accuracy = {"full_name": "Balanced Accuracy", "callable": balanced_accuracy_score, "kwargs": None}
+    balanced_accuracy = {"full_name": "Balanced Accuracy", "callable": balanced_accuracy_score, "kwargs": {"adjusted": False}}
+    balanced_accuracy_adjusted = {"full_name": "Balanced Accuracy (Adjusted)", "callable": balanced_accuracy_score, "kwargs": {"adjusted": True}}
     f1_micro = {"full_name": "Balanced F1 Micro", "callable": f1_score, "kwargs": {"average": 'micro'}}
+    f1_macro = {"full_name": "Balanced F1 Macro", "callable": f1_score, "kwargs": {"average": 'macro'}}
     f1_weighted = {"full_name": "Balanced F1 Weighted", "callable": f1_score, "kwargs": {"average": 'weighted'}}
     recall_micro = {"full_name": "Recall Micro", "callable": recall_score, "kwargs": {"average": 'micro'}}
     recall_macro = {"full_name": "Recall Macro", "callable": recall_score, "kwargs": {"average": 'macro'}}
@@ -1034,6 +1036,9 @@ class ScoreMetric(MetaEnum):
     precision_macro = {"full_name": "Precision Macro", "callable": precision_score, "kwargs": {"average": 'macro'}}
     precision_weighted = {"full_name": "Precision Weighted", "callable": precision_score, "kwargs": {"average": 'weighted'}}
     mcc = {"full_name":"Matthews Corr. Coefficient", "callable": matthews_corrcoef, "kwargs": None}
+    average_precision_micro = {"full_name": "Average Precision Micro", "callable": average_precision_score, "kwargs": {"average": 'micro'}}
+    average_precision_macro = {"full_name": "Average Precision Macro", "callable": average_precision_score, "kwargs": {"average": 'macro'}}
+    average_precision_weighted = {"full_name": "Average Precision Weighted", "callable": average_precision_score, "kwargs": {"average": 'weighted'}}
 
     def get_full_name(self) -> str:
         return self.full_name

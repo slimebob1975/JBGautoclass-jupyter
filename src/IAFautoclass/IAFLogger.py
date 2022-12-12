@@ -1,7 +1,7 @@
 from datetime import datetime
 import sys
 from numpy import ndarray
-import pandas
+import pandas as pd
 import terminal
 from typing import Protocol
 import IPython.display
@@ -106,7 +106,7 @@ class IAFLogger(terminal.Logger):
         if widget in self.widgets:
             self.widgets[widget].value = value
 
-    def investigate_dataset(self, dataset: pandas.DataFrame, class_column: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
+    def investigate_dataset(self, dataset: pd.DataFrame, class_column: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
         if self._enable_quiet:
             # This function should only run if info can be shown
             return False
@@ -128,15 +128,18 @@ class IAFLogger(terminal.Logger):
             self.print_unformatted("Shape:", dataset.shape)
             
             # 2. head
-            self.print_unformatted("Head:",dataset.head(20))
+            #self.print_unformatted("Head:",dataset.head(20))
+            self.display_matrix("Head:", dataset.head(20))
             
             # 3. Data types
-            self.print_unformatted("Datatypes:",dataset.dtypes)
+            #self.print_unformatted("Datatypes:",dataset.dtypes)
+            self.display_matrix("Datatypes:", pd.DataFrame(dataset.dtypes))
             
             if show_class_distribution:
                 # 4. Class distribution
-                self.print_unformatted("Class distribution: ")
-                self.print_unformatted(dataset.groupby(dataset[class_column]).size()) 
+                #self.print_unformatted("Class distribution: ")
+                #self.print_unformatted(dataset.groupby(dataset[class_column]).size()) 
+                self.display_matrix("Class distribution: ", pd.DataFrame(dataset.groupby(dataset[class_column]).size()))
         except Exception as e:
             self.print_warning(f"An error occured in investigate_dataset: {str(e)}")
 
@@ -147,15 +150,15 @@ class IAFLogger(terminal.Logger):
     def show_statistics_on_dataset(self, dataset):
 
         # 1. Descriptive statistics
-        pandas.set_option('display.width', 100)
-        pandas.set_option('display.precision', 3)
+        pd.set_option('display.width', 100)
+        pd.set_option('display.precision', 3)
         description = dataset.describe(datetime_is_numeric = True)
         self.print_unformatted("Description:")
         self.print_unformatted(description)
 
         # 2. Correlations
-        pandas.set_option('display.width', 100)
-        pandas.set_option('display.precision', 3)
+        pd.set_option('display.width', 100)
+        pd.set_option('display.precision', 3)
         description = dataset.corr('pearson')
         self.print_unformatted("Correlation between attributes:")
         self.print_unformatted(description)
@@ -226,13 +229,13 @@ class IAFLogger(terminal.Logger):
         mean, std = ph.get_rates(as_string = False)
         self.print_info("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
     
-    def display_matrix(self, title: str, matrix: pandas.DataFrame) -> None:
+    def display_matrix(self, title: str, matrix: pd.DataFrame) -> None:
         print(title)
-        pandas.set_option('display.max_rows', None)
-        pandas.set_option('display.max_columns', None)
-        pandas.set_option('display.width', 1000)
-        pandas.set_option('display.colheader_justify', 'center')
-        pandas.set_option('display.precision', 2)
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', 1000)
+        pd.set_option('display.colheader_justify', 'center')
+        pd.set_option('display.precision', 2)
         IPython.display.display(matrix)
 
     # Makes sure the GUI isn't left hanging if exceptions crash the program

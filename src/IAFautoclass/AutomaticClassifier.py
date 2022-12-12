@@ -17,6 +17,7 @@ import os
 import sys
 
 from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
+from scipy.sparse import SparseEfficiencyWarning
 
 from IAFExceptions import HandlerException
 
@@ -44,6 +45,7 @@ warnings.filterwarnings("ignore", category=FitFailedWarning)
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
 
 class AutomaticClassifier:
 
