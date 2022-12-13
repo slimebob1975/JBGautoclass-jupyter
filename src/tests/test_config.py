@@ -3,7 +3,7 @@ from typing import Callable
 from path import Path
 import pytest
 from Config import (Algorithm, Config, Detector, Preprocess, Reduction, ScoreMetric)
-from IAFExceptions import ConfigException
+from JBGExceptions import ConfigException
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
@@ -12,7 +12,7 @@ def valid_iris_config() -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
-            host="tcp:database.iaf.mock",
+            host="tcp:database.jbg.mock",
             trusted_connection=True,
             class_catalog="DatabaseOne",
             class_table="ResultTable",
@@ -66,7 +66,7 @@ def bare_iris_config() -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
-            host="tcp:database.iaf.mock",
+            host="tcp:database.jbg.mock",
             trusted_connection=True,
             class_catalog="DatabaseOne",
             class_table="ResultTable",
@@ -129,7 +129,7 @@ def saved_with_valid_iris_config() -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
-            host="tcp:database.iaf.mock",
+            host="tcp:database.jbg.mock",
             trusted_connection=True,
             class_catalog="DatabaseOne",
             class_table="ResultTable",

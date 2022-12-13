@@ -7,9 +7,9 @@ from typing import Protocol
 import numpy as np
 import pyodbc
 from Config import RateType, Config as Cf, to_quoted_string, period_to_brackets
-from IAFHandler import Model
-import SqlHelper.IAFSqlHelper as sql
-from IAFExceptions import DataLayerException
+from JBGHandler import Model
+import SqlHelper.JBGSqlHelper as sql
+from JBGExceptions import DataLayerException
 from DataLayer.Base import DataLayerBase
 
 class Logger(Protocol):
@@ -69,11 +69,11 @@ class DataLayer(DataLayerBase):
             raise ValueError(f"Connection to server failed")
         
     # TODO: This *explicitly* only uses class_catalog_params--it never connects to the data_catalog
-    def get_connection(self) -> sql.IAFSqlHelper:
+    def get_connection(self) -> sql.JBGSqlHelper:
         """ Get an odbc-based sql handler """
-        return sql.IAFSqlHelper(**self.config.get_class_catalog_params())
+        return sql.JBGSqlHelper(**self.config.get_class_catalog_params())
         # TODO: Should work if needed 
-        # return sql.IAFSqlHelper(**self.config.get_data_catalog_params())
+        # return sql.JBGSqlHelper(**self.config.get_data_catalog_params())
 
     def get_data_list_from_query(self, query: str) -> list:
         """ Gets a list from the data source, based on the query """
@@ -576,11 +576,11 @@ class DataLayer(DataLayerBase):
 
 # Main method
 def main():
-    from IAFLogger import IAFLogger
+    from JBGLogger import JBGLogger
 
     # python SQLDataLayer.py -f .\config\test_iris.py
     config = Cf.load_config_from_module(sys.argv)
-    logger = IAFLogger(False)
+    logger = JBGLogger(False)
     dl = DataLayer(config, logger)
     table = 'aterkommande_automat.iris'
     database = 'Arbetsdatabas'

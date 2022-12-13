@@ -1,8 +1,8 @@
-THE README INSTRUCTION FILE FOR Autoclass_GUI.ipynd
+THE README INSTRUCTION FILE FOR JBG classification with an additional Jupyter GUI.
 
 To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 
-1. Get a hold of the JBGautoclass GUI codes in exactly one of the two following ways:
+1. Get a hold of the JBGclassification GUI codes in exactly one of the two following ways:
     a) Use GIT:
         i) Install GIT, see https://github.com/git-guides/install-git 
         ii) Clone the code from the repository in a terminal window: 
@@ -33,16 +33,16 @@ Troubleshooting:
 
 == Terminal ==
 
-To run the script in the terminal you need to have a file in `src\JBGautoclass\config` with a functional config. 
+To run the script in the terminal you need to have a file in `src\JBGclassification\config` with a functional config. 
 Configs start with `autoclassconfig_` as the name, and will be saved when you create a new model using the GUI.
 
-Go into `src\JBGautoclass` and run `python JBGautomaticClassifier.py -f <path-to-file>`. The path to the file needs to
+Go into `src\JBGclassification` and run `python JBGautomaticClassifier.py -f <path-to-file>`. The path to the file needs to
 be on the format of `.config\filename.py`, so assuming that the config-file is `autoclassconfig_iris_abc0123.py` 
 (check the `config` directory for the right name), the command is: `python JBGautomaticClassifier.py -f autoclassconfig_iris_abc0123.py`
 
 === Troubleshooting ===
 
-1. You have to run the terminal command from the src\JBGautoclass directory, due to imports and such
+1. You have to run the terminal command from the src\JBGclassification directory, due to imports and such
 2. There are a lot of (unnecessary) warnings coming out of the 3rd-party libraries (in particular sklearn), which will clutter up
 the terminal. To ignore them, use the `W` flag in the command (see below for usage)
 

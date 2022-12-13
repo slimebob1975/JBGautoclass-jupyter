@@ -3,7 +3,7 @@
 #
 # General code for automatic classification of texts and numbers in databases
 #
-# Implemented by Robert Granat, IAF, March - May 2021
+# Implemented by Robert Granat, JBG, March - May 2021
 # Updated by Robert Granat, August 2021 - May 2022.
 # Updated by Marie Hogebrandt, May 2022-October 2022
 #
@@ -19,7 +19,7 @@ import sys
 from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
 from scipy.sparse import SparseEfficiencyWarning
 
-from IAFExceptions import HandlerException
+from JBGExceptions import HandlerException
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
     
@@ -33,8 +33,8 @@ from pandas import DataFrame, concat
 # Imports of local help class for communication with SQL Server
 import Config
 import SQLDataLayer
-import IAFLogger
-from IAFHandler import IAFHandler
+import JBGLogger
+from JBGHandler import JBGHandler
 import Helpers
 
 import warnings
@@ -55,7 +55,7 @@ class AutomaticClassifier:
     MAX_HEAD_COLUMNS = 10
     
     # Constructor with arguments
-    def __init__(self, config: Config.Config, logger: IAFLogger.IAFLogger, datalayer: SQLDataLayer.DataLayer):
+    def __init__(self, config: Config.Config, logger: JBGLogger.JBGLogger, datalayer: SQLDataLayer.DataLayer):
         self.config = config
 
         self.logger = logger
@@ -125,7 +125,7 @@ class AutomaticClassifier:
     def create_handlers(self):
         """ Creates the handler and returns a tuple with handlers """
 
-        self.handler = IAFHandler(self.datalayer, self.config, self.logger, self.progression)
+        self.handler = JBGHandler(self.datalayer, self.config, self.logger, self.progression)
         dh = self.handler.add_handler("dataset")
         mh = self.handler.add_handler("model")
         ph = self.handler.add_handler("predictions")
@@ -308,7 +308,7 @@ def main(argv):
         #config = Config.Config.load_config_from_model_file(filename)
         #config.io.model_name = "hpl_förutsättningar_2020"
 
-    logger = IAFLogger.IAFLogger(quiet=not config.io.verbose, in_terminal=True)
+    logger = JBGLogger.JBGLogger(quiet=not config.io.verbose, in_terminal=True)
     
     datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
     # Use the loaded configuration module argument

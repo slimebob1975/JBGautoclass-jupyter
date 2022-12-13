@@ -9,9 +9,9 @@ from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
 from Config import Algorithm, Preprocess, Reduction
-from IAFExceptions import DatasetException, HandlerException
+from JBGExceptions import DatasetException, HandlerException
 
-from IAFHandler import IAFHandler, DatasetHandler, Model, ModelHandler, PredictionsHandler
+from JBGHandler import JBGHandler, DatasetHandler, Model, ModelHandler, PredictionsHandler
 # One class per class in the module
 
 class MockLogger():
@@ -199,8 +199,8 @@ def get_fixture_path() -> Path:
     return Path(pwd) / "fixtures"
 
 @pytest.fixture
-def default_handler() -> IAFHandler:
-    handler = IAFHandler(datalayer=MockDataLayer(), config=MockConfig(), logger=MockLogger(), progression={"progress": 0.0})
+def default_handler() -> JBGHandler:
+    handler = JBGHandler(datalayer=MockDataLayer(), config=MockConfig(), logger=MockLogger(), progression={"progress": 0.0})
 
     return handler
 
@@ -228,7 +228,7 @@ def default_predictions_handler(default_handler) -> PredictionsHandler:
 class TestHandler():
     """ The main class """
 
-    def add_handlers(self, handler: IAFHandler) -> None:
+    def add_handlers(self, handler: JBGHandler) -> None:
         handler.add_handler("dataset")
         handler.add_handler("predictions")
         handler.add_handler("model")

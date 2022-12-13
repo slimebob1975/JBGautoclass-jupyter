@@ -17,7 +17,7 @@ def bare_iris_config() -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
-            host="tcp:database.iaf.mock",
+            host="tcp:database.jbg.mock",
             trusted_connection=True,
             class_catalog="DatabaseOne",
             class_table="ResultTable",
@@ -77,7 +77,7 @@ def bare_iris_config() -> Config:
     return config
 
 def save_model_to_file(filename, config, model = None):
-    """ This is a copy of save_model_to_file in IAFHandler, update if necessary"""
+    """ This is a copy of save_model_to_file in JBGHandler, update if necessary"""
     try:
         save_config = config.get_clean_config()
         if model is None:

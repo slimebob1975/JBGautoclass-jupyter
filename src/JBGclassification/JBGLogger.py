@@ -6,14 +6,14 @@ import terminal
 from typing import Protocol
 import IPython.display
 
-from IAFHandler import Model, PredictionsHandler
+from JBGHandler import Model, PredictionsHandler
 
 # Using Protocol to simplify imports
 class Config(Protocol):
     def __str__(self) -> str:
         print("Config Protocol")
 
-class IAFLogger(terminal.Logger):
+class JBGLogger(terminal.Logger):
 
     # TODO: In terminal we can set more levels than our program. We have verbose which means "show info too", so has been
     # translated into quiet (IE "not verbose"). This can be tweaked, IE:
@@ -38,7 +38,7 @@ class IAFLogger(terminal.Logger):
     def print_welcoming_message(self, config: Config, date_now: datetime) -> None:
         
         # Print welcoming message
-        self.print_unformatted("\n *** WELCOME TO IAF AUTOMATIC CLASSIFICATION SCRIPT ***\n")
+        self.print_unformatted("\n *** WELCOME TO JBG AUTOMATIC CLASSIFICATION SCRIPT ***\n")
         self.print_unformatted("Execution started at: {0:>30s} \n".format(str(date_now)))
 
         # Print configuration settings
@@ -254,7 +254,7 @@ class IAFLogger(terminal.Logger):
 def main():
     config = Config()
     date_now = datetime.now()
-    myLogger = IAFLogger(quiet=False)
+    myLogger = JBGLogger(quiet=False)
 
     myLogger.print_welcoming_message(config=config, date_now=date_now)
 

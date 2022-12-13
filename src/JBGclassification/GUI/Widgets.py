@@ -12,7 +12,7 @@ from sklearn.utils import Bunch
 
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
     AlgorithmTuple, Preprocess, PreprocessTuple, ScoreMetric)
-from IAFExceptions import GuiWidgetsException
+from JBGExceptions import GuiWidgetsException
 from AutomaticClassifier import AutomaticClassifier
 import Helpers
 

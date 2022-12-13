@@ -3,7 +3,7 @@
 #
 # General code for automatic classification of texts and numbers in databases
 #
-# Implemented by Robert Granat, IAF, March - May 2021
+# Implemented by Robert Granat, JBG, March - May 2021
 # Updated by Robert Granat, August 2021 - May 2022.
 #
 # Major revisions:
@@ -59,7 +59,7 @@ except Exception as ex:
     
 
 # Imports of local help class for communication with SQL Server
-import SqlHelper.IAFSqlHelper as sql
+import SqlHelper.JBGSqlHelper as sql
 
 # General imports
 import base64, getopt, pickle, scipy, numpy as np
@@ -121,7 +121,7 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 #warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
 
-class IAFautomaticClassiphyer:
+class JBGautomaticClassiphyer:
 
     # Internal constants
     ALGORITHMS = [ "ALL", "LRN", "KNN", "CART", "GNB", "MNB", "BNB", "CNB", "REC", "PCN", \
@@ -223,7 +223,7 @@ class IAFautomaticClassiphyer:
         else:
             if not self.is_str(name):
                 raise ValueError("Argument name must be a string!")
-            elif sql.IAFSqlHelper.drivers().find(odbc_driver) == -1:
+            elif sql.JBGSqlHelper.drivers().find(odbc_driver) == -1:
                 raise ValueError("Specified ODBC driver cannot be found!")
             elif not self.is_str(host) or not self.is_str(class_catalog) or \
                 not self.is_str(class_table) or not self.is_str(class_table_script) or \
@@ -369,7 +369,7 @@ class IAFautomaticClassiphyer:
     def __str__(self):
         return str(type(self))
 
-    # Internal configuration class, used by IAFautomaticClassiphyer. No default
+    # Internal configuration class, used by JBGautomaticClassiphyer. No default
     # arguments for this class constructor, since they are given in the outer class.
     class Config:
         
@@ -455,7 +455,7 @@ class IAFautomaticClassiphyer:
         if self.config.io["verbose"]: print("Creating classification table if not exists...")
 
         # Get a sql handler and connect to data database
-        sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+        sqlHelper = sql.JBGSqlHelper(driver = self.config.sql["odbc_driver"], \
             host = self.config.sql["host"], catalog = self.config.sql["class_catalog"], \
             trusted_connection = self.config.sql["trusted_connection"], \
             username = self.config.sql["class_username"], \
@@ -477,7 +477,7 @@ class IAFautomaticClassiphyer:
             if self.config.io["verbose"]: print("Marking execution started in database...-please wait!")
 
             # Get a sql handler and connect to data database
-            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+            sqlHelper = sql.JBGSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["class_catalog"], \
                 trusted_connection = self.config.sql["trusted_connection"], \
                 username = self.config.sql["class_username"], \
@@ -521,7 +521,7 @@ class IAFautomaticClassiphyer:
             if self.config.io["verbose"]: print("Marking execution ended in database...")
 
             # Get a sql handler and connect to data database
-            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+            sqlHelper = sql.JBGSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["class_catalog"], \
                 trusted_connection = self.config.sql["trusted_connection"], \
                 username = self.config.sql["class_username"], \
@@ -561,7 +561,7 @@ class IAFautomaticClassiphyer:
             if self.config.io["verbose"]: print("Reading in dataset from database...-please wait!")
 
             # Get a sql handler and connect to data database
-            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+            sqlHelper = sql.JBGSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["data_catalog"], \
                 trusted_connection = self.config.sql["trusted_connection"], \
                 username = self.config.sql["data_username"], \
@@ -761,7 +761,7 @@ class IAFautomaticClassiphyer:
             # Use the unique id column from the data as the index column and take a copy, 
             # since it will not be used in the classification but only to reconnect each 
             # data row with classification results later on
-            keys = dataset[self.config.sql["id_column"]].copy(deep = True).apply(IAFautomaticClassiphyer.get_rid_of_decimals)
+            keys = dataset[self.config.sql["id_column"]].copy(deep = True).apply(JBGautomaticClassiphyer.get_rid_of_decimals)
             try:
                 dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True, \
                                   verify_integrity=False)
@@ -790,7 +790,7 @@ class IAFautomaticClassiphyer:
         try:
 
             # Get a sql handler and connect to data database
-            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+            sqlHelper = sql.JBGSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["data_catalog"], \
                 trusted_connection = self.config.sql["trusted_connection"], \
                 username = self.config.sql["data_username"], \
@@ -823,7 +823,7 @@ class IAFautomaticClassiphyer:
         try:
 
             # Get a sql handler and connect to data database
-            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+            sqlHelper = sql.JBGSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["data_catalog"], \
                 trusted_connection = self.config.sql["trusted_connection"], \
                 username = self.config.sql["data_username"], \
@@ -891,10 +891,10 @@ class IAFautomaticClassiphyer:
     @staticmethod
     def is_str(val):
         is_other_type = \
-            IAFautomaticClassiphyer.is_float(val) or \
-            IAFautomaticClassiphyer.is_int(val) or \
-            IAFautomaticClassiphyer.is_bool(val) or \
-            IAFautomaticClassiphyer.is_datetime(val)
+            JBGautomaticClassiphyer.is_float(val) or \
+            JBGautomaticClassiphyer.is_int(val) or \
+            JBGautomaticClassiphyer.is_bool(val) or \
+            JBGautomaticClassiphyer.is_datetime(val)
         return not is_other_type 
     
     @staticmethod
@@ -1164,7 +1164,7 @@ class IAFautomaticClassiphyer:
         with np.nditer(XX, op_flags=['readwrite'], flags=["refs_ok"]) as iterator:
             for x in iterator:
                 xval = str(x)
-                xhex = IAFautomaticClassiphyer.cipher_encode_string(xval)
+                xhex = JBGautomaticClassiphyer.cipher_encode_string(xval)
                 x[...] = xhex 
 
         return XX
@@ -1780,7 +1780,7 @@ class IAFautomaticClassiphyer:
             if self.config.io["verbose"]: print("Save predictions to database...-please wait!")
 
             # Get a sql handler and connect to data database
-            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+            sqlHelper = sql.JBGSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["class_catalog"], \
                 trusted_connection = self.config.sql["trusted_connection"], \
                 username = self.config.sql["class_username"], \
@@ -1837,7 +1837,7 @@ class IAFautomaticClassiphyer:
             if self.config.io["verbose"]: print("Changing data row {0} to {1}: ".format(index, new_class))
 
             # Get a sql handler and connect to data database
-            sqlHelper = sql.IAFSqlHelper(driver = self.config.sql["odbc_driver"], \
+            sqlHelper = sql.JBGSqlHelper(driver = self.config.sql["odbc_driver"], \
                 host = self.config.sql["host"], catalog = self.config.sql["data_catalog"], \
                 trusted_connection = self.config.sql["trusted_connection"], \
                 username = self.config.sql["data_username"], \
@@ -2177,7 +2177,7 @@ class IAFautomaticClassiphyer:
     def _print_welcoming_message(self):
         
         # Print welcoming message
-        if self.config.io["verbose"]: print("\n *** WELCOME TO IAF AUTOMATIC CLASSIFICATION SCRIPT ***\n")
+        if self.config.io["verbose"]: print("\n *** WELCOME TO JBG AUTOMATIC CLASSIFICATION SCRIPT ***\n")
         if self.config.io["verbose"]: print("Execution started at: {0:>30s} \n".format(str(self.date_now)))
 
         # Print configuration settings
@@ -2263,7 +2263,7 @@ def check_input_arguments(argv):
                 sys.exit();
             print("Importing specified configuration file:",arg)
             if not arg[0] == '.':
-                arg = IAFautomaticClassiphyer.convert_absolut_path_to_relative(arg)
+                arg = JBGautomaticClassiphyer.convert_absolut_path_to_relative(arg)
             file = arg.split('\\')[-1]
             filename = file.split('.')[0]
             filepath = '\\'.join(arg.split('\\')[:-1])
@@ -2297,7 +2297,7 @@ def main(argv):
 
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
-    myClassiphyer = IAFautomaticClassiphyer(config=config)
+    myClassiphyer = JBGautomaticClassiphyer(config=config)
     
     # Run the classifier
     myClassiphyer.run()
