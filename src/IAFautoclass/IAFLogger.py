@@ -1,7 +1,7 @@
 from datetime import datetime
 import sys
 from numpy import ndarray
-import pandas
+import pandas as pd
 import terminal
 from typing import Protocol
 import IPython.display
@@ -72,14 +72,15 @@ class IAFLogger(terminal.Logger):
         
         return self.writeln("always", *args)
 
-    def print_prediction_report(self, evaluation_data: str, accuracy_score: float, confusion_matrix: ndarray, classification_matrix: str) -> None:
+    def print_prediction_report(self, evaluation_data: str, accuracy_score: float, confusion_matrix: ndarray, class_labels: list, \
+        classification_matrix: dict) -> None:
         """ Printing out info about the prediction"""
         self.print_progress(message="Evaluate predictions")
 
         self.print_always(f"Evaluation performed with evaluation data: " + evaluation_data)
         self.print_always(f"Accuracy score for evaluation data: {accuracy_score}")
-        self.print_always(f"Confusion matrix for evaluation data: \n\n{confusion_matrix}")
-        self.print_always(f"Classification matrix for evaluation data: \n\n{classification_matrix}")
+        self.display_matrix(f"Confusion matrix for evaluation data:", pd.DataFrame(confusion_matrix, columns=class_labels, index=class_labels))
+        self.display_matrix(f"Classification matrix for evaluation data:", pd.DataFrame.from_dict(classification_matrix).transpose())
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
         if message is not None:
@@ -106,7 +107,7 @@ class IAFLogger(terminal.Logger):
         if widget in self.widgets:
             self.widgets[widget].value = value
 
-    def investigate_dataset(self, dataset: pandas.DataFrame, class_column: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
+    def investigate_dataset(self, dataset: pd.DataFrame, class_column: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
         if self._enable_quiet:
             # This function should only run if info can be shown
             return False
@@ -128,15 +129,19 @@ class IAFLogger(terminal.Logger):
             self.print_unformatted("Shape:", dataset.shape)
             
             # 2. head
-            self.print_unformatted("Head:",dataset.head(20))
+            #self.print_unformatted("Head:",dataset.head(20))
+            self.display_matrix("Head:", dataset.head(20))
             
             # 3. Data types
-            self.print_unformatted("Datatypes:",dataset.dtypes)
+            #self.print_unformatted("Datatypes:",dataset.dtypes)
+            self.display_matrix("Datatypes:", pd.DataFrame(dataset.dtypes, columns=["Datatype"]))
             
             if show_class_distribution:
                 # 4. Class distribution
-                self.print_unformatted("Class distribution: ")
-                self.print_unformatted(dataset.groupby(dataset[class_column]).size()) 
+                #self.print_unformatted("Class distribution: ")
+                #self.print_unformatted(dataset.groupby(dataset[class_column]).size()) 
+                self.display_matrix("Class distribution: ", pd.DataFrame(dataset.groupby(dataset[class_column]).size(), \
+                    columns=["Support"]))
         except Exception as e:
             self.print_warning(f"An error occured in investigate_dataset: {str(e)}")
 
@@ -147,30 +152,35 @@ class IAFLogger(terminal.Logger):
     def show_statistics_on_dataset(self, dataset):
 
         # 1. Descriptive statistics
-        pandas.set_option('display.width', 100)
-        pandas.set_option('display.precision', 3)
+        pd.set_option('display.width', 100)
+        pd.set_option('display.precision', 3)
         description = dataset.describe(datetime_is_numeric = True)
-        self.print_unformatted("Description:")
-        self.print_unformatted(description)
+        #self.print_unformatted("Description:")
+        #self.print_unformatted(description)
+        self.display_matrix("Description:", pd.DataFrame(description))
+
 
         # 2. Correlations
-        pandas.set_option('display.width', 100)
-        pandas.set_option('display.precision', 3)
-        description = dataset.corr('pearson')
-        self.print_unformatted("Correlation between attributes:")
-        self.print_unformatted(description)
+        pd.set_option('display.width', 100)
+        pd.set_option('display.precision', 3)
+        correlations = dataset.corr('pearson')
+        #self.print_unformatted("Correlation between attributes:")
+        #self.print_unformatted(description)
+        self.display_matrix("Correlation between attributes:", pd.DataFrame(correlations))
 
         # 3. Skew
         skew = dataset.skew()
-        self.print_unformatted("Skew of Univariate descriptions")
-        self.print_unformatted(skew, "\n")
+        #self.print_unformatted("Skew of Univariate descriptions")
+        #self.print_unformatted(skew, "\n")
+        self.display_matrix("Skew of Univariate descriptions:", pd.DataFrame(skew, columns=["Skew"]))
+
 
     def print_classification_report(self, report: dict, model: Model, num_features: int):
         """ Should only be printed if verbose """
         if self._enable_quiet:
             return self
 
-        self.start(f"Classification report for {model.algorithm.name}/{model.preprocess.name} with #features: {num_features}")
+        self.start(f"Classification report for {model.preprocess.name}-{model.reduction.name}-{model.algorithm.name} with #features: {num_features}")
         for key, value in report.items():
             self.print_unformatted(f"{key}: {value}")
 
@@ -226,13 +236,13 @@ class IAFLogger(terminal.Logger):
         mean, std = ph.get_rates(as_string = False)
         self.print_info("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
     
-    def display_matrix(self, title: str, matrix: pandas.DataFrame) -> None:
-        print(title)
-        pandas.set_option('display.max_rows', None)
-        pandas.set_option('display.max_columns', None)
-        pandas.set_option('display.width', 1000)
-        pandas.set_option('display.colheader_justify', 'center')
-        pandas.set_option('display.precision', 2)
+    def display_matrix(self, title: str, matrix: pd.DataFrame) -> None:
+        self.print_unformatted(title)
+        pd.set_option('display.max_rows', None)
+        pd.set_option('display.max_columns', None)
+        pd.set_option('display.width', 1000)
+        pd.set_option('display.colheader_justify', 'center')
+        pd.set_option('display.precision', 2)
         IPython.display.display(matrix)
 
     # Makes sure the GUI isn't left hanging if exceptions crash the program

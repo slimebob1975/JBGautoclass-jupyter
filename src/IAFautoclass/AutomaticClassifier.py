@@ -17,6 +17,7 @@ import os
 import sys
 
 from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
+from scipy.sparse import SparseEfficiencyWarning
 
 from IAFExceptions import HandlerException
 
@@ -44,6 +45,7 @@ warnings.filterwarnings("ignore", category=FitFailedWarning)
 warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
+warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
 
 class AutomaticClassifier:
 
@@ -179,9 +181,7 @@ class AutomaticClassifier:
         dh.split_dataset_for_training_and_validation()
 
         # Text and categorical variables must be converted to numbers at this point
-        self.logger.print_progress(message="Rearrange dataset for possible textclassification, etc.")
-        #mh.model.update_fields(fields=["label_binarizers", "count_vectorizer", "tfid_transformer"], \
-        #    update_function=dh.convert_textdata_to_numbers)
+        self.logger.print_progress(message="Convert dataset to numbers only")
         if dh.handler.config.get_text_column_names():
             mh.model.update_field(field="text_converter", value=dh.convert_text_and_categorical_features(mh.model))
 

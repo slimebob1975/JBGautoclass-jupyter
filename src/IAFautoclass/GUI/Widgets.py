@@ -638,15 +638,24 @@ class Widgets:
         self.datatype_dict = columns
         columns_list = list(columns.keys())
 
-        self.class_column.options = columns_list
-        self.class_column.value = columns_list[0]
+        self.class_column.options = \
+            [var for var in columns_list if self.datatype_dict[var] in (Config.TEXT_DATATYPES + Config.INT_DATATYPES)] 
+        if self.class_column.options:
+            self.class_column.value = self.class_column.options[0]
+        else:
+            self.class_column.value = None
         self.class_column.disabled = False
         
-        self.id_column.options = columns_list[1:]
-        self.id_column.value = columns_list[1]
+        self.id_column.options =  \
+            [var for var in columns_list if self.datatype_dict[var] in Config.INT_DATATYPES and var != self.class_column.value]
+        if self.id_column.options:
+            self.id_column.value = self.id_column.options[0]
+        else:
+            self.id_column.value = None
         self.id_column.disabled = False
         
-        self.data_columns.options = columns_list[2:]
+        self.data_columns.options = \
+            [var for var in columns_list if var not in (self.class_column.value, self.id_column.value)]
         self.data_columns.value = []
         self.data_columns.disabled = False
     
@@ -707,11 +716,19 @@ class Widgets:
 
     def update_id_column(self) -> None:
         """ Removes class_column from the id_column options """
-        self.update_item("id_column", { "options": self.options_excluding_selected(self.class_column) })
+
+        self.id_column.options = \
+            [var for var in list(self.datatype_dict.keys()) if var != self.class_column.value and self.datatype_dict[var] in Config.INT_DATATYPES]
+       
+        #self.update_item("id_column", { "options": self.options_excluding_selected(self.class_column) })
 
     def update_data_columns(self) -> None:
         """ Removes id column from data columns """
-        self.update_item("data_columns", { "options": self.options_excluding_selected(self.id_column) })
+
+        self.data_columns.options = \
+            [var for var in list(self.datatype_dict.keys()) if var not in (self.class_column.value, self.id_column.value)]
+
+        #self.update_item("data_columns", { "options": self.options_excluding_selected(self.id_column) })
 
 
     def options_excluding_selected(self, source: widgets.Select) -> list:
@@ -733,7 +750,7 @@ class Widgets:
         num_vars = len(self.data_columns.value)
         self.num_variables.value = num_vars
 
-        ready_for_classifier = num_vars > 0
+        ready_for_classifier = num_vars > 0 and self.id_column.value and self.class_column.value
         if ready_for_classifier:
             self.enable_button("continuation_button")
         else:

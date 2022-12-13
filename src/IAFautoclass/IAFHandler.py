@@ -309,7 +309,7 @@ class DatasetHandler:
     unpredicted_keys: pandas.Series = field(init=False)
     X_original: pandas.DataFrame = field(init=False)
     Y_original: pandas.DataFrame = field(init=False)
-    X_unreduced: pandas.DataFrame = field(init=False)
+    #X_unreduced: pandas.DataFrame = field(init=False)
     X: pandas.DataFrame = field(init=False)
     Y: pandas.Series = field(init=False)
     X_train: pandas.DataFrame = field(init=False)
@@ -516,8 +516,11 @@ class DatasetHandler:
     # Text handling a more nice way
     def convert_text_and_categorical_features(self, model: Model):
         
+        # Get the old converter even if None
+        ttnc = model.text_converter
+        
         # The model has no text converter means we need to train a new one
-        if model.text_converter is None:
+        if self.handler.config.should_train():
             try:
                 ttnc = TextDataToNumbersConverter(
                     text_columns=self.handler.config.get_text_column_names(), 
@@ -531,20 +534,21 @@ class DatasetHandler:
             except Exception as ex:
                 raise Exception(f"Could not initiate text converter object: {str(ex)}") from ex 
             
-            # Fit converter to training data and transform it
-            self.X_train = ttnc.fit_transform(self.X_train)
+            # Fit converter to training data only, which is important for not getting to optimistic results
+            ttnc.fit_transform(self.X_train)
             
-            # Apply converter to validation data
+            # Apply converter to the whole of X (for future references) and the parts X_train and X_validation
+            self.X = ttnc.transform(self.X)
+            self.X_train = ttnc.transform(self.X_train)
             self.X_validation = ttnc.transform(self.X_validation)
+
+            self.handler.logger.print_info(f"Number of features after text and category conversion: {self.X.shape[1]}")
             
-            return ttnc
-            
-        # There is a trained text converter already, use it to convert prediction part
-        # of dataset
-        else:
-            self.dataset = model.text_converter.transform(self.X_prediction)
-            
-            return model.text_converter
+        # If we should predict, apply converter even to X_prediction part of data
+        if self.handler.config.should_predict():
+            self.X_prediction = ttnc.transform(self.X_prediction)
+
+        return ttnc
     
     # Collapse all data text columns into a new column, which is necessary
     # for word-in-a-bag-technique
@@ -669,9 +673,7 @@ class DatasetHandler:
         # Original training+validation data are stored for later reference
         self.X_original = self.X.copy(deep=True)
         self.Y_original = self.Y.copy(deep=True)
-        
-        print(self.X.shape, self.X_prediction.shape)
-        
+                
     # Use the bag of words technique to convert text corpus into numbers
     def word_in_a_bag_conversion(self, dataset: pandas.DataFrame, model: Model ) -> tuple:
 
@@ -814,7 +816,6 @@ class DatasetHandler:
             self.Y_prediction = self.Y
             
             return False
-        
         else:
         
             # Split data validation dataset from the upper part
@@ -956,7 +957,7 @@ class ModelHandler:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
             # Make sure data is restored from original
-            dh.X = dh.X_unreduced.copy(deep=True)
+            #dh.X = dh.X_unreduced.copy(deep=True)
 
             # Now train the picked model on training data, either with a grid search or ordinary fit.
             # We assume the algorithm is the last step in the pipeline.
@@ -965,15 +966,24 @@ class ModelHandler:
             t0 = time.time()
             if not model.algorithm.search_params.parameters:
                 self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
-                model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
+                self.handler.logger.print_progress(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
+                try:
+                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
+                except TypeError:
+                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy())
             else:
                 self.handler.logger.print_info(f"\nUsing grid search for final training of model {model_name}...")
-                
+                self.handler.logger.print_progress(f"\nUsing grid search for final training of model {model_name}...")
+
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
                 prefix = alg_name + "__"
                 search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
-                model.pipeline, grid_cv_info = \
-                    self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
+                try:
+                    model.pipeline, grid_cv_info = \
+                        self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
+                except TypeError:
+                    model.pipeline, grid_cv_info = \
+                        self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train.to_numpy(), dh.Y_train.to_numpy())
                 
                 self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
             
@@ -1016,18 +1026,26 @@ class ModelHandler:
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
 
     # Train and evaluate picked model (warning for overfitting)
-    def train_and_evaluate_picked_model(self, model: Pipeline, dh):
+    def train_and_evaluate_picked_model(self, pipeline: Pipeline, dh: DatasetHandler):
 
         exception = ""
         the_score = -1.0
         try:
-            # First train model on whole of test data (no k-folded cross validation here)
-            model.fit(dh.X_train, dh.Y_train)
+            # First train model on whole of test data (no k-folded cross validation here).
+            # Handle problems with sparse input by conversion to numpy, if needed
+            try:
+                pipeline.fit(dh.X_train, dh.Y_train)
+            except TypeError:
+                pipeline.fit(dh.X_train.to_numpy(), dh.Y_train.to_numpy())
 
             # Evaluate on test_data with correct scorer
             if dh.X_validation is not None and dh.Y_validation is not None:
                 scorer = self.handler.config.get_scoring_mechanism()
-                the_score = scorer(model, dh.X_validation, dh.Y_validation)
+                try:
+                    the_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
+                except TypeError:
+                    the_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
+
         except Exception as ex:
             the_score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
@@ -1035,7 +1053,7 @@ class ModelHandler:
             else:
                 exception = str(traceback.format_exc())
 
-        return model, the_score, exception
+        return pipeline, the_score, exception
 
     # Help function for running other functions in parallel
     def execute_n_job(self, func: function, *args: tuple, **kwargs: dict) -> Any:
@@ -1116,8 +1134,8 @@ class ModelHandler:
 
         # Keep a copy of the unreduced matrix not subject to any transforms
         # (dh.X_original won't do it since it could include text variables not yet converted to numbers via word-in-a-bag)
-        dh.X_unreduced = dh.X.copy(deep=True)
-        data_changed = False
+        #dh.X_unreduced = dh.X.copy(deep=True)
+        #data_changed = False
         
         # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
         success = False
@@ -1144,10 +1162,10 @@ class ModelHandler:
                             continue
 
                         # Keep track if X needs to be copied back from original data because of previous changes to data
-                        if not data_changed:
-                            data_changed = True
-                        else:
-                            dh.X = dh.X_unreduced.copy(deep=True)
+                        #if not data_changed:
+                        #    data_changed = True
+                        #else:
+                        #    dh.X = dh.X_unreduced.copy(deep=True)
                     
                         # Divide data in training and test parts according to settings X -> X_train, X_validation etc...
                         dh.split_dataset_for_training_and_validation()
@@ -1393,8 +1411,23 @@ class ModelHandler:
             if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
                 fit_params[key] = func(dh.X_train, dh.Y_train)
 
-        cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
-            scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
+        # We want to executed the job with as many threads as possible, but as a final alternative use
+        # only one. Exception typically arises when input data is sparse, and a possible remedy to convert 
+        # it to dense numpy arrays.
+        try:
+            cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
+                scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
+        except Exception as ex:
+            try:
+                cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
+                    dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, \
+                    error_score='raise') 
+            except Exception as ex:
+                try:
+                    cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
+                        cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise')
+                except Exception as ex:
+                    raise ModelException(f"Unexpected error in cross_val_score: {str(ex)}") from ex
         
         return cv_results
     
@@ -1409,7 +1442,6 @@ class ModelHandler:
                 self.model.pipeline,
                 self.model.n_features_out
             ]
-            print(self.model)
             pickle.dump(data, open(filename,'wb'))
 
         except Exception as e:
@@ -1474,16 +1506,18 @@ class PredictionsHandler:
         evaluation_data = "ML algorithm: " + model.get_name()
         accuracy = accuracy_score(Y, self.predictions)
         con_matrix = confusion_matrix(Y, self.predictions)
-        class_matrix = classification_report(Y, self.predictions, zero_division='warn')
+        class_labels = sorted(set(Y.tolist() + self.predictions.tolist()))
+        class_matrix = classification_report(Y, self.predictions, zero_division='warn', output_dict=True)
         self.handler.logger.print_prediction_report(
             evaluation_data=evaluation_data,
             accuracy_score=accuracy,
             confusion_matrix=con_matrix,
+            class_labels= class_labels,
             classification_matrix=class_matrix
         )
 
         # Get accumulated classification score report for all predictions
-        self.handler.logger.print_classification_report(*self.get_classification_report(Y, model))
+        #self.handler.logger.print_classification_report(*self.get_classification_report(Y, model))
 
     # Evaluates mispredictions
     def evaluate_mispredictions(self, misplaced_filepath: str) -> None:
@@ -1500,8 +1534,7 @@ class PredictionsHandler:
         most_mispredicted_query = read_data_query + " WHERE " +  joiner \
             + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
         
-        self.handler.logger.print_formatted_info(f"Most mispredicted during training (using {self.model})")
-        self.handler.logger.print_info(str(self.X_most_mispredicted))
+        self.handler.logger.display_matrix(f"Most mispredicted during training (using {self.model})", self.X_most_mispredicted)
         self.handler.logger.print_info(f"Get the most misplaced data by SQL query:\n {most_mispredicted_query}")
         self.handler.logger.print_info(f"Or open the following csv-data file: \n\t {misplaced_filepath}")
         
