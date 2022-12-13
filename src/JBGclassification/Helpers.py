@@ -144,10 +144,10 @@ def add_prefix_to_dict_keys(prefix: str, the_dict: dict):
         new_dict[prefix+key] = the_dict[key]
     return new_dict
 
-# In case the user has specified some input arguments to command line call
-# As written, you need to call on the class in the src\JBGautoclass dir, with
+# In case the user has specified some input arguments to command line calls
+# As written, you need to call on the class in the src\JBGclassification dir, with
 # the configfilename on the format of ".\config\filename.py", where it has to be
-# a subfolder in the src\JBGautoclass dir
+# a subfolder in the src\JBGclassification dir
 # This complicates testing a Config loaded from a file 
 def check_input_arguments(argv: list):
     command_line_instructions = \
