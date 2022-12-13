@@ -1506,16 +1506,18 @@ class PredictionsHandler:
         evaluation_data = "ML algorithm: " + model.get_name()
         accuracy = accuracy_score(Y, self.predictions)
         con_matrix = confusion_matrix(Y, self.predictions)
-        class_matrix = classification_report(Y, self.predictions, zero_division='warn')
+        class_labels = sorted(set(Y.tolist() + self.predictions.tolist()))
+        class_matrix = classification_report(Y, self.predictions, zero_division='warn', output_dict=True)
         self.handler.logger.print_prediction_report(
             evaluation_data=evaluation_data,
             accuracy_score=accuracy,
             confusion_matrix=con_matrix,
+            class_labels= class_labels,
             classification_matrix=class_matrix
         )
 
         # Get accumulated classification score report for all predictions
-        self.handler.logger.print_classification_report(*self.get_classification_report(Y, model))
+        #self.handler.logger.print_classification_report(*self.get_classification_report(Y, model))
 
     # Evaluates mispredictions
     def evaluate_mispredictions(self, misplaced_filepath: str) -> None:
@@ -1532,8 +1534,7 @@ class PredictionsHandler:
         most_mispredicted_query = read_data_query + " WHERE " +  joiner \
             + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
         
-        self.handler.logger.print_formatted_info(f"Most mispredicted during training (using {self.model})")
-        self.handler.logger.print_info(str(self.X_most_mispredicted))
+        self.handler.logger.display_matrix(f"Most mispredicted during training (using {self.model})", self.X_most_mispredicted)
         self.handler.logger.print_info(f"Get the most misplaced data by SQL query:\n {most_mispredicted_query}")
         self.handler.logger.print_info(f"Or open the following csv-data file: \n\t {misplaced_filepath}")
         
