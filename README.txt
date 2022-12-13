@@ -1,4 +1,4 @@
-THE README INSTRUCTION FILE FOR Autoclass_GUI.ipynd
+THE README INSTRUCTION FILE FOR JBG classification with an additional Jupyter GUI.
 
 To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 
