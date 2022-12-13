@@ -359,7 +359,10 @@
         "mispredicted_gridbox": {
             "type": "HTML",
             "params": {
-                "value": "<p>No mispredicted training data was detected yet</p>"
+                "description": "Label changer table:",
+                "value": "<p>No mispredicted training data was detected yet</p>",
+                "description_tooltip": "The computational process is shown here"
+
             }
         }
     },

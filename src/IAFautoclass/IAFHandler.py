@@ -1528,13 +1528,13 @@ class PredictionsHandler:
         except AttributeError: # In some cases X_most_mispredicted is not even defined
             return
         
-        self.handler.logger.print_always(f"Total number of mispredicted elements: {self.num_mispredicted}")
+        self.handler.logger.print_always(f"\nTotal number of mispredicted elements: {self.num_mispredicted}")
         
         joiner = self.handler.config.get_id_column_name() + " = \'"
         most_mispredicted_query = read_data_query + " WHERE " +  joiner \
             + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
         
-        self.handler.logger.display_matrix(f"Most mispredicted during training (using {self.model})", self.X_most_mispredicted)
+        #self.handler.logger.display_matrix(f"Most mispredicted during training (using {self.model})", self.X_most_mispredicted)
         self.handler.logger.print_info(f"Get the most misplaced data by SQL query:\n {most_mispredicted_query}")
         self.handler.logger.print_info(f"Or open the following csv-data file: \n\t {misplaced_filepath}")
         
