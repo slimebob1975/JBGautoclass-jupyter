@@ -42,7 +42,7 @@ def valid_iris_config() -> Config:
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
-            host="tcp:database.iaf.mock",
+            host="tcp:database.jbg.mock",
             trusted_connection=True,
             class_catalog="Schema.DatabaseOne",
             class_table="ResultTable",
@@ -122,9 +122,9 @@ class TestDataLayer():
 
     def test_get_connection(self, default_sqldatalayer) -> None:
         con = default_sqldatalayer.get_connection()
-        expected_con_str = "DRIVER=Mock Server;SERVER=tcp:database.iaf.mock;DATABASE=Schema.DatabaseOne;TRUSTED_CONNECTION=yes"
+        expected_con_str = "DRIVER=Mock Server;SERVER=tcp:database.jbg.mock;DATABASE=Schema.DatabaseOne;TRUSTED_CONNECTION=yes"
         
-        # While this will also hit an error if the IAFSqlHelper changes it's str-method
+        # While this will also hit an error if the JBGSqlHelper changes it's str-method
         # that isn't necessarily a bug
         assert str(con) == expected_con_str
 

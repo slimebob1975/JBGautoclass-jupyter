@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import os
 from typing import Protocol
 
-from IAFExceptions import DataLayerException
+from JBGExceptions import DataLayerException
 from Config import Config
 
 

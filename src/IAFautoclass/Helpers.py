@@ -145,9 +145,9 @@ def add_prefix_to_dict_keys(prefix: str, the_dict: dict):
     return new_dict
 
 # In case the user has specified some input arguments to command line call
-# As written, you need to call on the class in the src\IAFautoclass dir, with
+# As written, you need to call on the class in the src\JBGautoclass dir, with
 # the configfilename on the format of ".\config\filename.py", where it has to be
-# a subfolder in the src\IAFautoclass dir
+# a subfolder in the src\JBGautoclass dir
 # This complicates testing a Config loaded from a file 
 def check_input_arguments(argv: list):
     command_line_instructions = \

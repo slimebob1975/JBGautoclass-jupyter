@@ -28,9 +28,9 @@ from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
 from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
-from IAFExceptions import (DatasetException, ModelException, HandlerException, 
+from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
-from IAFTextHandling import TextDataToNumbersConverter
+from JBGTextHandling import TextDataToNumbersConverter
 import Helpers
 
 GIVE_EXCEPTION_TRACEBACK = False
@@ -204,7 +204,7 @@ class Config(Protocol):
         """ get preprocessor from Config """
         
 @dataclass
-class IAFHandler:
+class JBGHandler:
     datalayer: DataLayer
     config: Config
     logger: Logger
@@ -286,7 +286,7 @@ class IAFHandler:
         self.logger.print_info(f"Added {results_saved} rows to classification table. Get them with SQL query:\n\n{saved_query}")
 
     # Updates the progress and notifies the logger
-    # Currently duplicated over Classifier and IAFHandler, but that's for later
+    # Currently duplicated over Classifier and JBGHandler, but that's for later
     def update_progress(self, percent: float, message: str = None) -> float:
         self.progression["progress"] += percent
 
@@ -302,7 +302,7 @@ class DatasetHandler:
     STANDARD_LANG = "sv"
     LIMIT_IS_CATEGORICAL = 30
     
-    handler: IAFHandler
+    handler: JBGHandler
     dataset: pandas.DataFrame = field(init=False)
     classes: list[str] = field(init=False)
     keys: pandas.Series = field(init=False)
@@ -886,7 +886,7 @@ class Model:
 
 @dataclass
 class ModelHandler:
-    handler: IAFHandler
+    handler: JBGHandler
     model: Model = field(init=False)
     use_feature_selection: bool = field(init=False)
     text_data: bool = field(init=False)
@@ -1451,7 +1451,7 @@ class ModelHandler:
 class PredictionsHandler:
     LIMIT_MISPREDICTED = 20
     
-    handler: IAFHandler
+    handler: JBGHandler
     could_predict_proba: bool = False
     probabilites: np.ndarray = field(init=False)
     predictions: np.ndarray = field(init=False)
@@ -1712,18 +1712,18 @@ class PredictionsHandler:
 
 
 def main():
-    import IAFLogger, SQLDataLayer, Config, sys
+    import JBGLogger, SQLDataLayer, Config, sys
 
     if len(sys.argv) > 1:
         config = Config.Config.load_config_from_module(sys.argv)
     else:
         config = Config.Config()
 
-    logger = IAFLogger.IAFLogger(not config.io.verbose)
+    logger = JBGLogger.JBGLogger(not config.io.verbose)
     
     datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
     
-    handler = IAFHandler(datalayer, config, logger)
+    handler = JBGHandler(datalayer, config, logger)
     
 if __name__ == "__main__":
     main()

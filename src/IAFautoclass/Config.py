@@ -51,10 +51,10 @@ from imblearn.under_sampling import RandomUnderSampler
 from imblearn.ensemble import (EasyEnsembleClassifier, RUSBoostClassifier, 
      BalancedBaggingClassifier, BalancedRandomForestClassifier)
 
-from IAFExceptions import ConfigException
-from IAFExperimental import (IAFRobustLogisticRegression, IAFRobustCentroid, 
-                            IAFPartitioningDetector, IAFMCS, IAFInstanceHardness,
-                            IAFRandomForestDetector)
+from JBGExceptions import ConfigException
+from JBGExperimental import (JBGRobustLogisticRegression, JBGRobustCentroid, 
+                            JBGPartitioningDetector, JBGMCS, JBGInstanceHardness,
+                            JBGRandomForestDetector)
 import Helpers
 
 
@@ -233,17 +233,17 @@ class Detector(MetaEnum):
     def do_RKDN(self) -> RkDN:
         return RkDN()
 
-    def do_PDEC(self) -> IAFPartitioningDetector:
-        return IAFPartitioningDetector()
+    def do_PDEC(self) -> JBGPartitioningDetector:
+        return JBGPartitioningDetector()
 
-    def do_MCS(self) -> IAFMCS:
-        return IAFMCS()
+    def do_MCS(self) -> JBGMCS:
+        return JBGMCS()
 
-    def do_INH(self) -> IAFInstanceHardness:
-        return IAFInstanceHardness()
+    def do_INH(self) -> JBGInstanceHardness:
+        return JBGInstanceHardness()
 
-    def do_RFD(self) -> IAFRandomForestDetector:
-        return IAFRandomForestDetector()
+    def do_RFD(self) -> JBGRandomForestDetector:
+        return JBGRandomForestDetector()
 
 class AlgorithmGridSearchParams(MetaEnum):
     DUMY =  {"parameters": {'strategy': ('most_frequent', 'prior', 'stratified', 'uniform', 'constant')}}
@@ -486,11 +486,11 @@ class Algorithm(MetaEnum):
     def do_RTCL(self, max_iterations: int, size: int)-> RobustForest:
         return RobustForest()
 
-    def do_RLRN(self, max_iterations: int, size: int)-> IAFRobustLogisticRegression:
-        return IAFRobustLogisticRegression()
+    def do_RLRN(self, max_iterations: int, size: int)-> JBGRobustLogisticRegression:
+        return JBGRobustLogisticRegression()
 
-    def do_RCNT(self, max_iterations: int, size: int)-> IAFRobustCentroid:
-        return IAFRobustCentroid()
+    def do_RCNT(self, max_iterations: int, size: int)-> JBGRobustCentroid:
+        return JBGRobustCentroid()
 
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
         return LogisticRegression(max_iter=max_iterations)

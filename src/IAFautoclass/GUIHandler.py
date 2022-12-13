@@ -17,8 +17,8 @@ sys.path.append(src_dir)
 
 from dotenv import load_dotenv
 
-from IAFExceptions import DataLayerException
-from IAFLogger import IAFLogger
+from JBGExceptions import DataLayerException
+from JBGLogger import JBGLogger
 from AutomaticClassifier import AutomaticClassifier as autoclass
 from Config import Config
 from SQLDataLayer import DataLayer
@@ -45,7 +45,7 @@ class GUIHandler:
         # This datalayer object only works with the GUI
         self.gui_datalayer = None 
         
-        self.logger = IAFLogger(False, self.widgets.progress) # Quiet is set to false here
+        self.logger = JBGLogger(False, self.widgets.progress) # Quiet is set to false here
         
         config = Config(
             connection=Config.Connection(

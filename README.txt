@@ -6,7 +6,7 @@ To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
     a) Use GIT:
         i) Install GIT, see https://github.com/git-guides/install-git 
         ii) Clone the code from the repository in a terminal window: 
-                git clone https://github.com/slimebob1975/IAFautoclass-jupyter.git
+                git clone https://github.com/slimebob1975/JBGautoclass-jupyter.git
             into an appropriate directory
     b) Ask a friend to get a copy of the code
 

@@ -2,15 +2,15 @@ import chunk
 import sys
 import platform
 from typing import List
-from IAFExceptions import SQLException
+from JBGExceptions import SQLException
 
 if platform.system() == 'Windows':
     import pyodbc
 else:
     sys.exit("Aborting! This application cannot run on platform: " + str(platform.system()))      
 
-class IAFSqlHelper():
-    """IAF SQL helper class, using ODBC to connect to database"""
+class JBGSqlHelper():
+    """JBG SQL helper class, using ODBC to connect to database"""
     standard_chunksize = 10000
     
     # Constructor with arguments
@@ -233,7 +233,7 @@ class IAFSqlHelper():
 
 # Main method
 def main():
-    print(IAFSqlHelper.drivers())
+    print(JBGSqlHelper.drivers())
 
 # Start main
 if __name__ == "__main__":
