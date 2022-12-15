@@ -689,6 +689,12 @@ class AlgorithmTuple:
         for algorithm in self.algorithms:
             output += ', ' + str(algorithm.get_full_name())
         return output[2:]
+    
+    def get_full_names_and_abbrevs(self) -> str:
+        output = ""
+        for algorithm in self.algorithms:
+            output += ', ' + str(algorithm.get_full_name()) + " (" + str(algorithm) + ")"
+        return output[2:]
 
     def list_callable_algorithms(self, size: int, max_iterations: int) -> list[tuple]:
         """ Gets a list of algorithms that are callable
@@ -771,6 +777,12 @@ class PreprocessTuple:
         output = ""
         for preprocessor in self.preprocessors:
             output += ', ' + str(preprocessor.get_full_name())
+        return output[2:]
+    
+    def get_full_names_and_abbrevs(self) -> str:
+        output = ""
+        for preprocessor in self.preprocessors:
+            output += ', ' + str(preprocessor.get_full_name()) + " (" + str(preprocessor) + ")"
         return output[2:]
 
     def get_full_name(self) -> str:
@@ -1007,6 +1019,12 @@ class ReductionTuple:
         output = ""
         for reduction in self.reductions:
             output += ', ' + str(reduction.get_full_name())
+        return output[2:]
+    
+    def get_full_names_and_abbrevs(self) -> str:
+        output = ""
+        for reduction in self.reductions:
+            output += ', ' + str(reduction.get_full_name()) + " (" + str(reduction) + ")"
         return output[2:]
 
     def get_full_name(self) -> str:

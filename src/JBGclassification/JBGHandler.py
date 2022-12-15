@@ -967,10 +967,7 @@ class ModelHandler:
             if not model.algorithm.search_params.parameters:
                 self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
                 self.handler.logger.print_progress(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
-                try:
-                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
-                except TypeError:
-                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy())
+                model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             else:
                 self.handler.logger.print_info(f"\nUsing grid search for final training of model {model_name}...")
                 self.handler.logger.print_progress(f"\nUsing grid search for final training of model {model_name}...")
@@ -978,13 +975,8 @@ class ModelHandler:
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
                 prefix = alg_name + "__"
                 search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
-                try:
-                    model.pipeline, grid_cv_info = \
+                model.pipeline, grid_cv_info = \
                         self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
-                except TypeError:
-                    model.pipeline, grid_cv_info = \
-                        self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train.to_numpy(), dh.Y_train.to_numpy())
-                
                 self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
             
             t1 = time.time()
@@ -996,9 +988,12 @@ class ModelHandler:
 
     # Train ml model
     def train_picked_model(self, model: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
+        
         # Train model
         try:
             return model.fit(X, Y)
+        except TypeError:
+            return model.fit(X.to_numpy(), Y.to_numpy())
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model: {str(e)}")
@@ -1016,7 +1011,14 @@ class ModelHandler:
 
             # Create search grid and fit model
             search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True)
-            search.fit(X, Y)                
+            
+            try:
+                search.fit(X, Y)
+            except TypeError:
+                search.fit(X.to_numpy(), Y.to_numpy())
+            except Exception as e:
+                self.handler.logger.print_dragon(exception=e)
+                raise ModelException(f"Something went wrong on grid search training of picked model: {str(e)}")                
 
             # Choose best estimator from grid search
             return search.best_estimator_, pandas.DataFrame.from_dict(search.cv_results_)
@@ -1550,10 +1552,15 @@ class PredictionsHandler:
         could_predict_proba = False
         try:
             predictions = model.predict(X)
+        except TypeError:
+            predictions = model.predict(X.to_numpy())
         except ValueError as e:
             self.handler.logger.abort_cleanly(message=f"It seems like you need to regenerate your prediction model: {e}")
         try:
-            probabilities = model.predict_proba(X)
+            try:
+                probabilities = model.predict_proba(X)
+            except TypeError:
+                probabilities = model.predict_proba(X.to_numpy())
             rates = np.amax(probabilities, axis=1)
             could_predict_proba = True
         except Exception as e:
@@ -1631,7 +1638,10 @@ class PredictionsHandler:
         # Calculate predictions for both total model and cross trained model
         for what_model, the_model in [("model retrained on all data", full_pipe), ("model cross trained on training data", ct_pipe)]:
             
-            Y_pred = pandas.DataFrame(the_model.predict(X_transformed), index = Y.index)
+            try:
+                Y_pred = pandas.DataFrame(the_model.predict(X_transformed), index = Y.index)
+            except TypeError:
+                Y_pred = pandas.DataFrame(the_model.predict(X_transformed.to_numpy()), index = Y.index)
 
             # Find the data rows where the real category is different from the predictions
             # Iterate over the indexes (they are now not in order)
@@ -1664,7 +1674,10 @@ class PredictionsHandler:
 
         # Predict probabilites
         try:
-            Y_prob = the_model.predict_proba(X_mispredicted)
+            try:
+                Y_prob = the_model.predict_proba(X_mispredicted)
+            except TypeError:
+                Y_prob = the_model.predict_proba(X_mispredicted.to_numpy())
             could_predict_proba = True
         except Exception as e:
             self.handler.logger.print_info(f"Could not predict probabilities: {e}")
