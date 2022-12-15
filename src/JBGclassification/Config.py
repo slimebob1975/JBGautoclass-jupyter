@@ -1965,10 +1965,10 @@ class Config:
         """ Returns if categorization should be used """
         return self.mode.use_categorization
 
-    def get_smote(self) -> Union[SMOTE, None]:
+    def get_smote(self, k_neighbors=5) -> Union[SMOTE, None]:
         """ Gets the SMOTE for the model, or None if it shouldn't be """
         if self.mode.smote:
-            return SMOTE(sampling_strategy='auto')
+            return SMOTE(sampling_strategy='auto', k_neighbors=k_neighbors)
 
         return None
     

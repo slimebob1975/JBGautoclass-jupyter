@@ -947,8 +947,10 @@ class ModelHandler:
         
         # Prepare for k-folded cross evaluation
         k = min(10, Helpers.find_smallest_class_number(dh.Y))
+        if self.handler.config.mode.smote:
+            k = max(2, int(round(k / 2)))
         if k < 10:
-            self.handler.logger.print_info(f"Using non-standard k-value for spotcheck of algorithms: {k}")
+            self.handler.logger.print_info(f"Using non-standard k-value for cross-validation of algorithms: {k}")
         
         try:
             # Find the best model
@@ -1324,7 +1326,7 @@ class ModelHandler:
                     
             # Build pipeline of model and preprocessor.
             pipe = self.get_pipeline(reduction, feature_reducer, algorithm, estimator, preprocessor, scaler, \
-                dh.X_train.shape[1], num_features)
+                dh.X_train.shape[1], num_features, kfold.get_n_splits())
             
             # Use parallel processing for k-folded cross evaluation
             cv_results = self.get_cross_val_score(pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm)
@@ -1341,7 +1343,7 @@ class ModelHandler:
     # Build the pipeline
     def get_pipeline(self, reduction: Reduction, feature_reducer: Transform, algorithm: Algorithm, \
         estimator: Estimator, preprocessor: Preprocess, scaler: Transform, max_features: int, \
-        rfe_features: int = None) -> Union[Pipeline, Estimator]:
+        rfe_features: int = None, max_k_neighbors: int = 2) -> Union[Pipeline, Estimator]:
        
         try:
             # First, put estimator/algorithm in pipeline
@@ -1356,7 +1358,7 @@ class ModelHandler:
             else:
                 the_feature_reducer = feature_reducer
             steps.insert(1, (reduction.name, the_feature_reducer))
-            steps.insert(2, ("smote", self.handler.config.get_smote()))
+            steps.insert(2, ("smote", self.handler.config.get_smote(k_neighbors=max_k_neighbors)))
             steps.insert(3, ("undersampling", self.handler.config.get_undersampler()))
             
             steps = [step for step in steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] # List of 1 to 4 elements
@@ -1420,11 +1422,13 @@ class ModelHandler:
             cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
                 scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
         except Exception as ex:
+            print("1",ex)
             try:
                 cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
                     dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, \
                     error_score='raise') 
             except Exception as ex:
+                print("2",ex)
                 try:
                     cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
                         cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise')
