@@ -27,7 +27,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
-from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
+from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform, Config
 from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
 from JBGTextHandling import TextDataToNumbersConverter
@@ -523,7 +523,7 @@ class DatasetHandler:
                     text_columns=self.handler.config.get_text_column_names(), 
                     category_columns=self.handler.config.get_categorical_text_column_names(), \
                     limit_categorize=TextDataToNumbersConverter.LIMIT_IS_CATEGORICAL, \
-                    language=None, \
+                    language=TextDataToNumbersConverter.STANDARD_LANGUAGE, \
                     stop_words=self.handler.config.use_stop_words(), \
                     df=self.handler.config.get_stop_words_threshold(), \
                     use_encryption=self.handler.config.should_hex_encode() \
@@ -887,6 +887,9 @@ class ModelHandler:
     model: Model = field(init=False)
     use_feature_selection: bool = field(init=False)
     text_data: bool = field(init=False)
+    SPOT_CHECK_REPETITIONS: int = 5
+    STANDARD_K_FOLDS: int = 10
+    STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE: int = 2
     
     def __post_init__(self) -> None:
         """ Empty for now """
@@ -946,17 +949,17 @@ class ModelHandler:
         # Calculate the number of possible folds of the training data. The k-value is chosen such that
         # each fold contains at least one sample of the smallest class
         k_train = int(Helpers.find_smallest_class_number(dh.Y) * 1.0-self.handler.config.get_test_size())
-        k = min(Config.STANDARD_K_FOLDS, k_train)
+        k = min(self.STANDARD_K_FOLDS, k_train)
         
         # If smote is turned on, we need to have at least two samples of the smallest class in each fold
         if self.handler.config.mode.smote:
-            k2 = int(float(k_train) / Config.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE)
+            k2 = int(float(k_train) / self.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE)
             if k2 < 2:
                 self.handler.logger.print_warning(f"The smallest class is of size {k}, which is to small for using smote in cross-validation. Turning SMOTE off!") 
                 self.handler.config.mode.smote = False
             else:
                 k = min(k, k2)
-        if k < Config.STANDARD_K_FOLDS:
+        if k < self.STANDARD_K_FOLDS:
             self.handler.logger.print_info(f"Using non-standard k-value for cross-validation of algorithms: {k}")
         
         try:
@@ -1106,7 +1109,7 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=Config.STANDARD_K_FOLDS) -> Model:
+    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10) -> Model:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
@@ -1156,7 +1159,7 @@ class ModelHandler:
         # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
         success = False
         repetitions = 0
-        while not success and repetitions < Config.SPOT_CHECK_REPETITIONS:
+        while repetitions < self.SPOT_CHECK_REPETITIONS and not success:
             repetitions += 1
         
             # Loop over pre-processing methods
