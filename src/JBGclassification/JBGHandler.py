@@ -309,7 +309,6 @@ class DatasetHandler:
     unpredicted_keys: pandas.Series = field(init=False)
     X_original: pandas.DataFrame = field(init=False)
     Y_original: pandas.DataFrame = field(init=False)
-    #X_unreduced: pandas.DataFrame = field(init=False)
     X: pandas.DataFrame = field(init=False)
     Y: pandas.Series = field(init=False)
     X_train: pandas.DataFrame = field(init=False)
@@ -318,7 +317,6 @@ class DatasetHandler:
     Y_validation: pandas.DataFrame = field(init=False)
     Y_prediction: pandas.DataFrame = field(init=False)
     X_prediction: pandas.DataFrame = field(init=False)
-    X_transformed: pandas.DataFrame = field(init=False)
 
     def __post_init__(self) -> None:
         """ Empty for now """
@@ -977,10 +975,15 @@ class ModelHandler:
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
                 prefix = alg_name + "__"
                 search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
-                model.pipeline, grid_cv_info = \
-                        self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
-                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
-            
+                try:
+                    model.pipeline, grid_cv_info = \
+                            self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
+                    self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
+                except ModelException as ex:
+                    # In case all estimators failed to fit, use ordinary fit as fallback
+                    self.handler.logger.print_info(f"\nGrid search failed: {str(ex)}. Using ordinary fit as fallback for: {model_name}. " + \
+                        f"You might need to adjust grid search parameters for pipeline: {str(model.pipeline)}")
+                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             t1 = time.time()
             self.handler.logger.print_info(f"Final training of model {alg_name} took {str(round(t1-t0,2))} secs.")
         except Exception as ex:
@@ -1422,13 +1425,11 @@ class ModelHandler:
             cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
                 scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
         except Exception as ex:
-            print("1",ex)
             try:
                 cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
                     dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, \
                     error_score='raise') 
             except Exception as ex:
-                print("2",ex)
                 try:
                     cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
                         cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise')
@@ -1611,7 +1612,7 @@ class PredictionsHandler:
             except KeyError as e:
                 self.handler.logger.print_warning(f"probability collection failed for key {prediction} with error {e}")
     
-        self.handler.logger.print_info("Probabilities:", str(prob))
+        #self.handler.logger.print_info("Probabilities:", str(prob))
         self.probabilites = prob
         
     
@@ -1637,15 +1638,15 @@ class PredictionsHandler:
     
     # Function for finding the n most mispredicted data rows
     # TODO: Clean up a bit more
-    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X_transformed: pandas.DataFrame, Y: pandas.DataFrame) -> None:
+    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> None:
         
         # Calculate predictions for both total model and cross trained model
         for what_model, the_model in [("model retrained on all data", full_pipe), ("model cross trained on training data", ct_pipe)]:
             
             try:
-                Y_pred = pandas.DataFrame(the_model.predict(X_transformed), index = Y.index)
+                Y_pred = pandas.DataFrame(the_model.predict(X), index = Y.index)
             except TypeError:
-                Y_pred = pandas.DataFrame(the_model.predict(X_transformed.to_numpy()), index = Y.index)
+                Y_pred = pandas.DataFrame(the_model.predict(X.to_numpy()), index = Y.index)
 
             # Find the data rows where the real category is different from the predictions
             # Iterate over the indexes (they are now not in order)
@@ -1674,7 +1675,7 @@ class PredictionsHandler:
         self.handler.logger.print_always(f"Accuracy score for {what_model}: {accuracy_score(Y, Y_pred)}")
 
         # Select the found mispredicted data
-        X_mispredicted = X_transformed.loc[X_not]
+        X_mispredicted = X.loc[X_not]
 
         # Predict probabilites
         try:

@@ -282,7 +282,8 @@ class AlgorithmGridSearchParams(MetaEnum):
             'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'), 
             'penalty': ('l2', 'l1', 'elasticnet')}}
     NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': np.arange(0, 1.01, 0.01)}}
-    SVC = {"parameters": {'C': [0.1,1, 10, 100], 'gamma': [1 , 0.1 ,0.01 ,0.001],'kernel': ['rbf', 'poly', 'sigmoid']}}
+    SVC = {"parameters": {'C': [1, 10, 100, 1000], 'gamma': ['scale', 'auto'], 'max_iter': [-1], 'verbose': [True],
+                          'kernel': ['linear', 'rbf', 'poly', 'sigmoid'], 'class_weight': ('balanced', None)}}
     SSVC = {"parameters": {}}
     LDA = {"parameters": {'solver': ('svd','lsqr','eigen'), 'shrinkage': ('auto', None), 'tol': [1e-3, 1e-4, 1e-5]}}
     QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
