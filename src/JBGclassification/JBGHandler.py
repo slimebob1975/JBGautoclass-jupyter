@@ -944,9 +944,19 @@ class ModelHandler:
     def get_model_from(self, dh) -> Model:
         
         # Prepare for k-folded cross evaluation
-        k = min(10, Helpers.find_smallest_class_number(dh.Y))
+        # Calculate the number of possible folds of the training data. The k-value is chosen such that
+        # each fold contains at least one sample of the smallest class
+        print(Helpers.find_smallest_class_number(dh.Y),self.handler.config.get_test_size())
+        k = min(10, int(Helpers.find_smallest_class_number(dh.Y) * 1.0-self.handler.config.get_test_size()))
+        
+        # If smote is turned on, we need to have at least two samples of the smallest class in each fold
         if self.handler.config.mode.smote:
-            k = max(2, int(round(k / 2)))
+            k2 = int(float(k) / 2.0)
+            if k2 < 2:
+                self.handler.logger.print_warning(f"The smallest class is of size {k}, which is to small for using smote in cross-validation. Turning SMOTE off!") 
+                self.handler.config.mode.smote = False
+            else:
+                k = k2
         if k < 10:
             self.handler.logger.print_info(f"Using non-standard k-value for cross-validation of algorithms: {k}")
         
@@ -1361,8 +1371,8 @@ class ModelHandler:
             else:
                 the_feature_reducer = feature_reducer
             steps.insert(1, (reduction.name, the_feature_reducer))
-            steps.insert(2, ("smote", self.handler.config.get_smote(k_neighbors=max_k_neighbors)))
-            steps.insert(3, ("undersampling", self.handler.config.get_undersampler()))
+            steps.insert(2, ("SMOTE", self.handler.config.get_smote(k_neighbors=max_k_neighbors)))
+            steps.insert(3, ("Undersampler", self.handler.config.get_undersampler()))
             
             steps = [step for step in steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] # List of 1 to 4 elements
         except Exception as ex:
@@ -1425,15 +1435,18 @@ class ModelHandler:
             cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
                 scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
         except Exception as ex:
+            #print("cross_val_score Exception 1:", str(ex))
             try:
                 cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
                     dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, \
                     error_score='raise') 
             except Exception as ex:
+                #print("cross_val_score Exception 2:",str(ex))
                 try:
                     cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
                         cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise')
                 except Exception as ex:
+                    #print("cross_val_score Exception 3:",str(ex))
                     raise ModelException(f"Unexpected error in cross_val_score: {str(ex)}") from ex
         
         return cv_results
