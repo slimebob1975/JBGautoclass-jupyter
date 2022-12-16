@@ -34,7 +34,6 @@ from JBGTextHandling import TextDataToNumbersConverter
 import Helpers
 
 GIVE_EXCEPTION_TRACEBACK = False
-SPOT_CHECK_REPETITIONS = 5
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -946,18 +945,18 @@ class ModelHandler:
         # Prepare for k-folded cross evaluation
         # Calculate the number of possible folds of the training data. The k-value is chosen such that
         # each fold contains at least one sample of the smallest class
-        print(Helpers.find_smallest_class_number(dh.Y),self.handler.config.get_test_size())
-        k = min(10, int(Helpers.find_smallest_class_number(dh.Y) * 1.0-self.handler.config.get_test_size()))
+        k_train = int(Helpers.find_smallest_class_number(dh.Y) * 1.0-self.handler.config.get_test_size())
+        k = min(Config.STANDARD_K_FOLDS, k_train)
         
         # If smote is turned on, we need to have at least two samples of the smallest class in each fold
         if self.handler.config.mode.smote:
-            k2 = int(float(k) / 2.0)
+            k2 = int(float(k_train) / Config.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE)
             if k2 < 2:
                 self.handler.logger.print_warning(f"The smallest class is of size {k}, which is to small for using smote in cross-validation. Turning SMOTE off!") 
                 self.handler.config.mode.smote = False
             else:
-                k = k2
-        if k < 10:
+                k = min(k, k2)
+        if k < Config.STANDARD_K_FOLDS:
             self.handler.logger.print_info(f"Using non-standard k-value for cross-validation of algorithms: {k}")
         
         try:
@@ -1107,7 +1106,7 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10) -> Model:
+    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=Config.STANDARD_K_FOLDS) -> Model:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
@@ -1157,7 +1156,7 @@ class ModelHandler:
         # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
         success = False
         repetitions = 0
-        while not success and repetitions < SPOT_CHECK_REPETITIONS:
+        while not success and repetitions < Config.SPOT_CHECK_REPETITIONS:
             repetitions += 1
         
             # Loop over pre-processing methods
