@@ -282,7 +282,8 @@ class AlgorithmGridSearchParams(MetaEnum):
             'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'), 
             'penalty': ('l2', 'l1', 'elasticnet')}}
     NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': np.arange(0, 1.01, 0.01)}}
-    SVC = {"parameters": {'C': [0.1,1, 10, 100], 'gamma': [1 , 0.1 ,0.01 ,0.001],'kernel': ['rbf', 'poly', 'sigmoid']}}
+    SVC = {"parameters": {'C': [1, 10, 100, 1000], 'gamma': ['scale', 'auto'], 'max_iter': [-1],
+                          'kernel': ['linear', 'rbf', 'poly', 'sigmoid'], 'class_weight': ('balanced', None)}}
     SSVC = {"parameters": {}}
     LDA = {"parameters": {'solver': ('svd','lsqr','eigen'), 'shrinkage': ('auto', None), 'tol': [1e-3, 1e-4, 1e-5]}}
     QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
@@ -689,6 +690,12 @@ class AlgorithmTuple:
         for algorithm in self.algorithms:
             output += ', ' + str(algorithm.get_full_name())
         return output[2:]
+    
+    def get_full_names_and_abbrevs(self) -> str:
+        output = ""
+        for algorithm in self.algorithms:
+            output += ', ' + str(algorithm.get_full_name()) + " (" + str(algorithm) + ")"
+        return output[2:]
 
     def list_callable_algorithms(self, size: int, max_iterations: int) -> list[tuple]:
         """ Gets a list of algorithms that are callable
@@ -771,6 +778,12 @@ class PreprocessTuple:
         output = ""
         for preprocessor in self.preprocessors:
             output += ', ' + str(preprocessor.get_full_name())
+        return output[2:]
+    
+    def get_full_names_and_abbrevs(self) -> str:
+        output = ""
+        for preprocessor in self.preprocessors:
+            output += ', ' + str(preprocessor.get_full_name()) + " (" + str(preprocessor) + ")"
         return output[2:]
 
     def get_full_name(self) -> str:
@@ -1007,6 +1020,12 @@ class ReductionTuple:
         output = ""
         for reduction in self.reductions:
             output += ', ' + str(reduction.get_full_name())
+        return output[2:]
+    
+    def get_full_names_and_abbrevs(self) -> str:
+        output = ""
+        for reduction in self.reductions:
+            output += ', ' + str(reduction.get_full_name()) + " (" + str(reduction) + ")"
         return output[2:]
 
     def get_full_name(self) -> str:
@@ -1947,10 +1966,10 @@ class Config:
         """ Returns if categorization should be used """
         return self.mode.use_categorization
 
-    def get_smote(self) -> Union[SMOTE, None]:
+    def get_smote(self, k_neighbors=5) -> Union[SMOTE, None]:
         """ Gets the SMOTE for the model, or None if it shouldn't be """
         if self.mode.smote:
-            return SMOTE(sampling_strategy='auto')
+            return SMOTE(sampling_strategy='auto', k_neighbors=k_neighbors)
 
         return None
     

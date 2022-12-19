@@ -223,22 +223,16 @@ class AutomaticClassifier:
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
             # Now RETRAIN the best model on whole dataset with known classification
-            if (dh.X_train.shape[0] + dh.X_validation.shape[0]) > 0:
-                self.logger.print_progress(message="Retrain model on whole dataset")
-
-                cross_trained_model = mh.load_pipeline_from_file(self.config.get_model_filename())
-                dh.X_transformed = concat([pandas.DataFrame(dh.X_train), pandas.DataFrame(dh.X_validation)], axis = 0)
+            self.logger.print_progress(message="Retrain model on whole dataset")
+            
+            cross_trained_model = mh.load_pipeline_from_file(self.config.get_model_filename())
+            trained_model = mh.train_picked_model( mh.model.pipeline, dh.X, dh.Y)
                 
-                # TODO: Maybe create this one up in the split_dataset, so we save Y_known, since neither Y_train nor Y_validation changes after calculation
-                Y_known = concat([dh.Y_train, dh.Y_validation], axis = 0)
-
-                trained_model = mh.train_picked_model( mh.model.pipeline, dh.X_transformed, Y_known)
+            mh.save_model_to_file(self.config.get_model_filename())
                 
-                mh.save_model_to_file(self.config.get_model_filename())
-                
-                ph.most_mispredicted(dh.X_original, trained_model, cross_trained_model, dh.X_transformed, Y_known)
+            ph.most_mispredicted(dh.X_original, trained_model, cross_trained_model, dh.X, dh.Y)
 
-                ph.evaluate_mispredictions(self.get_output_filename("misplaced"))
+            ph.evaluate_mispredictions(self.get_output_filename("misplaced"))
             
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 

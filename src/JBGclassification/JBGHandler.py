@@ -27,14 +27,13 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
-from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
+from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform, Config
 from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
 from JBGTextHandling import TextDataToNumbersConverter
 import Helpers
 
 GIVE_EXCEPTION_TRACEBACK = False
-SPOT_CHECK_REPETITIONS = 5
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -309,7 +308,6 @@ class DatasetHandler:
     unpredicted_keys: pandas.Series = field(init=False)
     X_original: pandas.DataFrame = field(init=False)
     Y_original: pandas.DataFrame = field(init=False)
-    #X_unreduced: pandas.DataFrame = field(init=False)
     X: pandas.DataFrame = field(init=False)
     Y: pandas.Series = field(init=False)
     X_train: pandas.DataFrame = field(init=False)
@@ -318,7 +316,6 @@ class DatasetHandler:
     Y_validation: pandas.DataFrame = field(init=False)
     Y_prediction: pandas.DataFrame = field(init=False)
     X_prediction: pandas.DataFrame = field(init=False)
-    X_transformed: pandas.DataFrame = field(init=False)
 
     def __post_init__(self) -> None:
         """ Empty for now """
@@ -526,7 +523,7 @@ class DatasetHandler:
                     text_columns=self.handler.config.get_text_column_names(), 
                     category_columns=self.handler.config.get_categorical_text_column_names(), \
                     limit_categorize=TextDataToNumbersConverter.LIMIT_IS_CATEGORICAL, \
-                    language=None, \
+                    language=TextDataToNumbersConverter.STANDARD_LANGUAGE, \
                     stop_words=self.handler.config.use_stop_words(), \
                     df=self.handler.config.get_stop_words_threshold(), \
                     use_encryption=self.handler.config.should_hex_encode() \
@@ -890,6 +887,9 @@ class ModelHandler:
     model: Model = field(init=False)
     use_feature_selection: bool = field(init=False)
     text_data: bool = field(init=False)
+    SPOT_CHECK_REPETITIONS: int = 5
+    STANDARD_K_FOLDS: int = 10
+    STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE: int = 2
     
     def __post_init__(self) -> None:
         """ Empty for now """
@@ -946,9 +946,21 @@ class ModelHandler:
     def get_model_from(self, dh) -> Model:
         
         # Prepare for k-folded cross evaluation
-        k = min(10, Helpers.find_smallest_class_number(dh.Y))
-        if k < 10:
-            self.handler.logger.print_info(f"Using non-standard k-value for spotcheck of algorithms: {k}")
+        # Calculate the number of possible folds of the training data. The k-value is chosen such that
+        # each fold contains at least one sample of the smallest class
+        k_train = int(Helpers.find_smallest_class_number(dh.Y) * 1.0-self.handler.config.get_test_size())
+        k = min(self.STANDARD_K_FOLDS, k_train)
+        
+        # If smote is turned on, we need to have at least two samples of the smallest class in each fold
+        if self.handler.config.mode.smote:
+            k2 = int(float(k_train) / self.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE)
+            if k2 < 2:
+                self.handler.logger.print_warning(f"The smallest class is of size {k}, which is to small for using smote in cross-validation. Turning SMOTE off!") 
+                self.handler.config.mode.smote = False
+            else:
+                k = min(k, k2)
+        if k < self.STANDARD_K_FOLDS:
+            self.handler.logger.print_info(f"Using non-standard k-value for cross-validation of algorithms: {k}")
         
         try:
             # Find the best model
@@ -967,10 +979,7 @@ class ModelHandler:
             if not model.algorithm.search_params.parameters:
                 self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
                 self.handler.logger.print_progress(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
-                try:
-                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
-                except TypeError:
-                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy())
+                model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             else:
                 self.handler.logger.print_info(f"\nUsing grid search for final training of model {model_name}...")
                 self.handler.logger.print_progress(f"\nUsing grid search for final training of model {model_name}...")
@@ -980,13 +989,13 @@ class ModelHandler:
                 search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
                 try:
                     model.pipeline, grid_cv_info = \
-                        self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
-                except TypeError:
-                    model.pipeline, grid_cv_info = \
-                        self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train.to_numpy(), dh.Y_train.to_numpy())
-                
-                self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
-            
+                            self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
+                    self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
+                except ModelException as ex:
+                    # In case all estimators failed to fit, use ordinary fit as fallback
+                    self.handler.logger.print_info(f"\nGrid search failed: {str(ex)}. Using ordinary fit as fallback for: {model_name}. " + \
+                        f"You might need to adjust grid search parameters for pipeline: {str(model.pipeline)}")
+                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             t1 = time.time()
             self.handler.logger.print_info(f"Final training of model {alg_name} took {str(round(t1-t0,2))} secs.")
         except Exception as ex:
@@ -996,9 +1005,12 @@ class ModelHandler:
 
     # Train ml model
     def train_picked_model(self, model: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
+        
         # Train model
         try:
             return model.fit(X, Y)
+        except TypeError:
+            return model.fit(X.to_numpy(), Y.to_numpy())
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model: {str(e)}")
@@ -1016,7 +1028,14 @@ class ModelHandler:
 
             # Create search grid and fit model
             search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True)
-            search.fit(X, Y)                
+            
+            try:
+                search.fit(X, Y)
+            except TypeError:
+                search.fit(X.to_numpy(), Y.to_numpy())
+            except Exception as e:
+                self.handler.logger.print_dragon(exception=e)
+                raise ModelException(f"Something went wrong on grid search training of picked model: {str(e)}")                
 
             # Choose best estimator from grid search
             return search.best_estimator_, pandas.DataFrame.from_dict(search.cv_results_)
@@ -1140,7 +1159,7 @@ class ModelHandler:
         # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
         success = False
         repetitions = 0
-        while not success and repetitions < SPOT_CHECK_REPETITIONS:
+        while repetitions < self.SPOT_CHECK_REPETITIONS and not success:
             repetitions += 1
         
             # Loop over pre-processing methods
@@ -1322,7 +1341,7 @@ class ModelHandler:
                     
             # Build pipeline of model and preprocessor.
             pipe = self.get_pipeline(reduction, feature_reducer, algorithm, estimator, preprocessor, scaler, \
-                dh.X_train.shape[1], num_features)
+                dh.X_train.shape[1], num_features, kfold.get_n_splits())
             
             # Use parallel processing for k-folded cross evaluation
             cv_results = self.get_cross_val_score(pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm)
@@ -1339,7 +1358,7 @@ class ModelHandler:
     # Build the pipeline
     def get_pipeline(self, reduction: Reduction, feature_reducer: Transform, algorithm: Algorithm, \
         estimator: Estimator, preprocessor: Preprocess, scaler: Transform, max_features: int, \
-        rfe_features: int = None) -> Union[Pipeline, Estimator]:
+        rfe_features: int = None, max_k_neighbors: int = 2) -> Union[Pipeline, Estimator]:
        
         try:
             # First, put estimator/algorithm in pipeline
@@ -1354,8 +1373,8 @@ class ModelHandler:
             else:
                 the_feature_reducer = feature_reducer
             steps.insert(1, (reduction.name, the_feature_reducer))
-            steps.insert(2, ("smote", self.handler.config.get_smote()))
-            steps.insert(3, ("undersampling", self.handler.config.get_undersampler()))
+            steps.insert(2, ("SMOTE", self.handler.config.get_smote(k_neighbors=max_k_neighbors)))
+            steps.insert(3, ("Undersampler", self.handler.config.get_undersampler()))
             
             steps = [step for step in steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] # List of 1 to 4 elements
         except Exception as ex:
@@ -1418,15 +1437,18 @@ class ModelHandler:
             cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
                 scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
         except Exception as ex:
+            #print("cross_val_score Exception 1:", str(ex))
             try:
                 cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
                     dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, \
                     error_score='raise') 
             except Exception as ex:
+                #print("cross_val_score Exception 2:",str(ex))
                 try:
                     cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
                         cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise')
                 except Exception as ex:
+                    #print("cross_val_score Exception 3:",str(ex))
                     raise ModelException(f"Unexpected error in cross_val_score: {str(ex)}") from ex
         
         return cv_results
@@ -1550,10 +1572,15 @@ class PredictionsHandler:
         could_predict_proba = False
         try:
             predictions = model.predict(X)
+        except TypeError:
+            predictions = model.predict(X.to_numpy())
         except ValueError as e:
             self.handler.logger.abort_cleanly(message=f"It seems like you need to regenerate your prediction model: {e}")
         try:
-            probabilities = model.predict_proba(X)
+            try:
+                probabilities = model.predict_proba(X)
+            except TypeError:
+                probabilities = model.predict_proba(X.to_numpy())
             rates = np.amax(probabilities, axis=1)
             could_predict_proba = True
         except Exception as e:
@@ -1600,7 +1627,7 @@ class PredictionsHandler:
             except KeyError as e:
                 self.handler.logger.print_warning(f"probability collection failed for key {prediction} with error {e}")
     
-        self.handler.logger.print_info("Probabilities:", str(prob))
+        #self.handler.logger.print_info("Probabilities:", str(prob))
         self.probabilites = prob
         
     
@@ -1626,12 +1653,15 @@ class PredictionsHandler:
     
     # Function for finding the n most mispredicted data rows
     # TODO: Clean up a bit more
-    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X_transformed: pandas.DataFrame, Y: pandas.DataFrame) -> None:
+    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> None:
         
         # Calculate predictions for both total model and cross trained model
         for what_model, the_model in [("model retrained on all data", full_pipe), ("model cross trained on training data", ct_pipe)]:
             
-            Y_pred = pandas.DataFrame(the_model.predict(X_transformed), index = Y.index)
+            try:
+                Y_pred = pandas.DataFrame(the_model.predict(X), index = Y.index)
+            except TypeError:
+                Y_pred = pandas.DataFrame(the_model.predict(X.to_numpy()), index = Y.index)
 
             # Find the data rows where the real category is different from the predictions
             # Iterate over the indexes (they are now not in order)
@@ -1660,11 +1690,14 @@ class PredictionsHandler:
         self.handler.logger.print_always(f"Accuracy score for {what_model}: {accuracy_score(Y, Y_pred)}")
 
         # Select the found mispredicted data
-        X_mispredicted = X_transformed.loc[X_not]
+        X_mispredicted = X.loc[X_not]
 
         # Predict probabilites
         try:
-            Y_prob = the_model.predict_proba(X_mispredicted)
+            try:
+                Y_prob = the_model.predict_proba(X_mispredicted)
+            except TypeError:
+                Y_prob = the_model.predict_proba(X_mispredicted.to_numpy())
             could_predict_proba = True
         except Exception as e:
             self.handler.logger.print_info(f"Could not predict probabilities: {e}")

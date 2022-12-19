@@ -158,18 +158,23 @@ class JBGLogger(terminal.Logger):
         #self.print_unformatted("Description:")
         #self.print_unformatted(description)
         self.display_matrix("Description:", pd.DataFrame(description))
-
-
+        
         # 2. Correlations
         pd.set_option('display.width', 100)
         pd.set_option('display.precision', 3)
-        correlations = dataset.corr('pearson')
+        try:
+            correlations = dataset.corr('pearson', numeric_only=False)
+        except Exception as ex:
+            correlations = dataset.corr('pearson')
         #self.print_unformatted("Correlation between attributes:")
         #self.print_unformatted(description)
         self.display_matrix("Correlation between attributes:", pd.DataFrame(correlations))
 
         # 3. Skew
-        skew = dataset.skew()
+        try:
+            skew = dataset.skew(numeric_only=False)
+        except Exception as ex:
+            skew = dataset.skew()
         #self.print_unformatted("Skew of Univariate descriptions")
         #self.print_unformatted(skew, "\n")
         self.display_matrix("Skew of Univariate descriptions:", pd.DataFrame(skew, columns=["Skew"]))
