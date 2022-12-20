@@ -94,10 +94,6 @@ class DataLayerBase:
     def get_data_from_query(self, query:str) -> list:
         """ Parses data returned from data source """
         raise NotImplementedError
-    
-    def prepare_for_classification(self) -> bool:
-        """ Setting up tables or similar things in preparation for the classifictions """
-        raise NotImplementedError
 
     def count_data_rows(self, data_catalog: str, data_table: str) -> int:
         """ Function for counting the number of rows in data to classify """

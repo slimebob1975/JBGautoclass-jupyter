@@ -137,19 +137,12 @@ class DataLayer(DataLayerBase):
         
         data = self.get_data_list_from_query(query)
 
-        if (len(data) < 3):
-            raise ValueError(f"Selected data table has too few columns ({len(data)}) . Minimum is three (3).")
-        
         return {column[0]:column[1] for column in data}
-    
-    def prepare_for_classification(self) -> bool: # Anropas från Classifier->Run()
-        """ Setting up tables or similar things in preparation for the classifictions """
-        query = "\n".join(self.create_classification_table_query())
-        self.create_classification_table(query)
 
-    def create_classification_table(self, query: str) -> None:
-        """ Create the classification table """
-        self.logger.print_progress(message="Create the classification table")
+
+    def create_predictions_table(self, query: str) -> None:
+        """ Create the predictions table """
+        self.logger.print_progress(message="Create the predictions table")
         
         
         # Get a sql handler and connect to data database
@@ -159,64 +152,6 @@ class DataLayer(DataLayerBase):
         sqlHelper.execute_query(query, get_data=False, commit = True)
 
         sqlHelper.disconnect(commit=False)
-
-    def create_classification_table_query(self, path: str = None) -> list:
-        """ Creates a table query from a given text file """
-        path = path if path else self.config.get_classification_script_path()
-        
-        if not path.is_file():
-            raise DataLayerException(f"File {path} does not exist.")
-        
-        query_list = []
-        class_catalog = self.config.get_connection().get_formatted_class_catalog()
-        class_table = self.config.get_connection().get_formatted_class_table(include_database=False)
-        with open(path, mode="rt") as f:
-            for line in f:
-                transformed_line = line.strip().replace("<class_catalog>", class_catalog)
-                transformed_line = transformed_line.replace("<class_table>", class_table)
-                
-                query_list.append(transformed_line)
-        
-        return query_list
-
-    def get_sql_command_for_recently_classified_data(self, num_rows: int) -> str:
-        """ Produces an SQL command for fetching the recently classified data elements """
-        connection = self.config.get_connection()
-        id_column = self.config.get_id_column_name()
-        class_column = self.config.get_class_column_name()
-        
-        dataCols = [
-            id_column
-        ] + self.config.get_data_column_names()
-
-        if self.config.should_use_metas():
-            metaCols = [
-                col for col in self.get_id_columns(self.config.get_data_catalog(), self.config.get_data_table()).keys()
-                if col not in dataCols and col != class_column
-                ]
-            dataCols += metaCols
-
-        classCols = [
-            "class_result",
-            "class_rate",
-            "class_time",
-            "class_algorithm"
-        ]
-
-        columns = f"TOP({num_rows}) " + ", ".join([f"A.[{a}]" for a in dataCols] + [f"B.[{b}]" for b in classCols])
-
-        classTable = connection.get_formatted_class_table() + " B"
-        dataTable = connection.get_formatted_data_table() + " A"
-        
-        class_user = self.config.get_quoted_attribute("connection.class_username")
-        table_name = self.config.get_quoted_attribute("connection.data_table")
-        
-        join = f"A.[{id_column}] = B.[unique_key]"
-        where = f"B.[class_user] = {class_user} AND B.[table_name] = {table_name}"
-        query = f"SELECT {columns} FROM {dataTable} INNER JOIN {classTable} ON {join} WHERE {where} ORDER BY B.[class_time] DESC"
-
-        return query
-
 
     def count_data_rows(self, data_catalog: str, data_table: str) -> int:
         """ Function for counting the number of rows in data to classify """
@@ -559,7 +494,7 @@ class DataLayer(DataLayerBase):
     def create_prediction_tables(self, tables: dict) -> None:
         """ Creates tables for prediction data """
         query = "\n".join(self.create_predictions_tables_query(tables))
-        self.create_classification_table(query)
+        self.create_predictions_table(query)
 
     def create_predictions_tables_query(self, tables: dict, path: str = None) -> list:
         """ Creates a table query from a given text file """
