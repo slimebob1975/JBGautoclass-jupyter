@@ -3,10 +3,10 @@ sql_config.py
 __pycache__
 .vscode
 autoclassconfig_*.py
-src/IAFautoclass/config/test_*.py
+src/JBGclassification/config/test_*.py
 !autoclassconfig_template.py
-src/IAFautoclass/output/*.csv
-src/IAFautoclass/model/*.sav
+src/JBGclassification/output/*.csv
+src/JBGclassification/model/*.sav
 .env
 .ideas
 .pytest_cache

@@ -1265,7 +1265,7 @@ class Config:
             """
             return self._get_formatted_catalog("data")
 
-        def _get_formatted_table(self, type: str, include_database: bool = True) -> str:
+        def _get_formatted_table(self, type: str, include_database: bool = True, before: str = None, after: str = None) -> str:
             """ Gets a class table formatted for the type, which is based on odbc_driver
             """
             if not self.driver_is_implemented():
@@ -1273,6 +1273,11 @@ class Config:
 
             table_attr = type + "_table"
             table = getattr(self, table_attr)
+            if before:
+                table = before + table
+            if after:
+                table = table + after
+            
             formatted_table = f"[{ period_to_brackets(table) }]"
 
             if not include_database:
@@ -1282,17 +1287,27 @@ class Config:
 
             return f"{formatted_catalog}.{formatted_table}"
 
-        def get_formatted_class_table(self, include_database: bool = True) -> str:
+        def get_formatted_class_table(self, include_database: bool = True, before: str = None, after: str = None) -> str:
             """ Gets the class table as a formatted string for the correct driver
                 In the type of [schema].[catalog].[table]
             """
-            return self._get_formatted_table("class", include_database)
+            return self._get_formatted_table("class", include_database, before, after)
 
         def get_formatted_data_table(self, include_database: bool = True) -> str:
             """ Gets the data table as a formatted string for the correct driver
                 In the type of [schema].[catalog].[table]
             """
             return self._get_formatted_table("data", include_database)
+
+        def get_formatted_prediction_tables(self, include_database: bool = True) -> dict:
+            """ Gets header and row tables based on the class table in the config """
+            
+            results = {
+                "header": self.get_formatted_class_table(include_database, after="Header"),
+                "row": self.get_formatted_class_table(include_database, after="Row")
+            }
+            
+            return results
 
             
         def get_catalog_params(self, type) -> dict:
@@ -2057,17 +2072,25 @@ class Config:
         """ get preprocessor from Config """
         return Preprocess(self.mode.preprocessor)
     
-    def get_class_table(self) -> str:
-        """ Gets the class table with database """
-        return f"{self.connection.class_catalog}.{self.connection.class_table}"
+    def get_class_catalog(self) -> str:
+        """ Gets the class catalog """
+        return self.connection.get_formatted_class_catalog()
+
+    def get_class_table(self, include_database: bool = True) -> str:
+        """ Gets the class table """
+        return self.connection.get_formatted_class_table(include_database=include_database)
     
+    def get_prediction_tables(self, include_database: bool = True) -> dict:
+        """ Gets a dict with 'header' and 'row', based on class_table"""
+        return self.connection.get_formatted_prediction_tables(include_database)
+
     def get_data_catalog(self) -> str:
         """ Gets the data catalog """
-        return self.connection.data_catalog
+        return self.connection.get_formatted_data_catalog()
 
-    def get_data_table(self) -> str:
+    def get_data_table(self, include_database: bool = False) -> str:
         """ Gets the data table """
-        return self.connection.data_table
+        return self.connection.get_formatted_data_table(include_database=include_database)
 
     def get_data_username(self) -> str:
         """ Gets the data user name """

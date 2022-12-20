@@ -17,7 +17,6 @@ from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.under_sampling import RandomUnderSampler
 from lexicalrichness import LexicalRichness
-from sklearn.utils.validation import check_is_fitted
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
@@ -93,6 +92,9 @@ class DataLayer(Protocol):
 
     def get_sql_command_for_recently_classified_data(self, num_rows: int) -> str:
         """ What name says """
+
+    def save_prediction_data(self, results: list, class_rate_type: RateType, model_name: str, class_labels, create_tables: bool = True, test_run: int = 0) -> dict:
+        """ Saves prediction data, with the side-effect of creating the tables if necessary """
 
 class Config(Protocol):
     # Methods to hide implementation of Config
@@ -284,6 +286,17 @@ class JBGHandler:
         saved_query = self.datalayer.get_sql_command_for_recently_classified_data(results_saved)
         self.logger.print_info(f"Added {results_saved} rows to classification table. Get them with SQL query:\n\n{saved_query}")
 
+    def save_predictions(self) -> dict:
+        """ Save new predictions for X_unknown in prediction tables """
+        try:
+            dh = self.get_handler("dataset")
+            ph = self.get_handler("predictions")
+            mh = self.get_handler("model")
+        except HandlerException as e:
+            raise e
+
+        return ph.save_predictions(dh, mh)
+    
     # Updates the progress and notifies the logger
     # Currently duplicated over Classifier and JBGHandler, but that's for later
     def update_progress(self, percent: float, message: str = None) -> float:
@@ -670,6 +683,7 @@ class DatasetHandler:
         # Original training+validation data are stored for later reference
         self.X_original = self.X.copy(deep=True)
         self.Y_original = self.Y.copy(deep=True)
+        
                 
     # Use the bag of words technique to convert text corpus into numbers
     def word_in_a_bag_conversion(self, dataset: pandas.DataFrame, model: Model ) -> tuple:
@@ -1493,9 +1507,9 @@ class PredictionsHandler:
         try:
             for k,y,r,p in zip(keys.values, self.predictions, self.rates, self.probabilites):
                 item = {
-                    "key": k,
+                    "key": int(k),
                     "prediction": y,
-                    "rate": r,
+                    "rate": float(r),
                     "probabilities": self.get_probablities_as_string(p)
                 }
 
@@ -1504,6 +1518,31 @@ class PredictionsHandler:
             return []
         
         return return_list
+
+    def save_predictions(self, dh, mh) -> dict:
+        """ Saves the predictions in the database, to be fetched later """
+        try:
+            results = self.get_prediction_results(dh.unpredicted_keys)
+        except AttributeError as e: 
+            raise HandlerException(e)
+
+        try:
+            class_labels = mh.model.classes_
+        except AttributeError as e:
+            self.handler.logger.print_info(f"No classes_ attribute in model, using original classes as fallback: {e}")
+            class_labels = [y for y in set(dh.Y) if y is not None]
+
+        try:
+            return self.handler.datalayer.save_prediction_data(
+                results,
+                class_rate_type=self.get_rate_type(),
+                model_name=mh.model.get_name(),
+                class_labels=class_labels
+            )
+            
+        except Exception as e:
+            self.handler.logger.print_dragon(exception=e)
+            raise HandlerException(e)
 
     def get_probablities_as_string(self, item) -> str:
         """ Gets a probabilities list as a comma-delimited string """
@@ -1705,11 +1744,8 @@ class PredictionsHandler:
 
         #  Re-insert original data columns but drop the class column
         X_mispredicted = X_original.loc[X_not]
-        #X_mispredicted = X_mispredicted.drop(self.handler.config.get_class_column_name(), axis = 1)
-
+        
         # Add other columns to mispredicted data
-        #X_mispredicted.insert(0, "Actual", Y.loc[X_not].values)            # values not recommended
-        #X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].values)    # values not recommended
         X_mispredicted.insert(0, "Actual", Y.loc[X_not].to_numpy())
         X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].to_numpy())
         

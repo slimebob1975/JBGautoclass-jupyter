@@ -11,7 +11,7 @@
 # 
 # * Jan 26 - Febr 27, 2022: Rewritten the code as a Python Class
 # * May-October, 2022: Breaking the script class into smaller, more manageable parts
-#
+# * November-?, 2022-?: Version 3 with new namespace and optimisations
 # Standard imports
 import os
 import sys
@@ -156,8 +156,6 @@ class AutomaticClassifier:
         else:
             self.logger.abort_cleanly("User must choose either to train a new model or use an old one for predictions")
         
-        # Create the classification table, if it does not exist already
-        self.datalayer.prepare_for_classification()
         self.update_progress(self.progression["percentPerMajorTask"])
 
         # Do some things prior to running the classification itself
@@ -248,7 +246,14 @@ class AutomaticClassifier:
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
             try:
-                self.handler.save_classification_data()
+                saved_results = self.handler.save_predictions()
+                if (saved_results["error"] is not None):
+                    self.logger.print_error(f"Saving predictions failed: {saved_results['error']}")
+
+                else:
+                    results = saved_results["results"]
+                    line =  f"Added {results['row_count']} rows to prediction table. Get them with SQL query:\n\n{results['query']}"
+                    self.logger.print_info(line)
             except HandlerException as e:
                 self.logger.abort_cleanly(f"Save of predictions failed: {e}")
 
