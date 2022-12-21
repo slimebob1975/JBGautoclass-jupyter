@@ -1,0 +1,42 @@
+CREATE TABLE <header_table>(
+	[run_id] [int] NOT NULL IDENTITY,
+	[catalog_name] [varchar](255) NOT NULL,
+	[table_name] [varchar](255) NOT NULL,
+	[column_names] [nvarchar](1024) NOT NULL,
+	[test_run] [bit] NOT NULL,
+	[class_rate_type] [char](1) NULL,
+	[class_labels] [varchar](255) NOT NULL,
+	[class_algorithm] [varchar](255) NULL,
+	[class_time] [datetime] NULL,
+	[class_script] [varchar](255) NULL,
+	[class_user] [varchar](255) NULL,
+CONSTRAINT [PK_<run_header>] PRIMARY KEY CLUSTERED 
+(
+	[run_id] ASC
+)
+) ON [PRIMARY];
+
+CREATE TABLE <row_table>(
+	[run_id] [int] NOT NULL,
+	[unique_key] [bigint] NOT NULL,
+	[class_result] [varchar](255) NOT NULL,
+	[class_rate] [float] NULL,
+	[class_probabilities] [varchar](255) NOT NULL,
+CONSTRAINT [PK_<run_row>] PRIMARY KEY CLUSTERED 
+(
+	[run_id],
+	[unique_key] ASC
+)
+) ON [PRIMARY];
+ALTER TABLE <header_table> ADD  CONSTRAINT [DF_<run_header>_test_run]  DEFAULT ((0)) FOR [test_run];
+ALTER TABLE <header_table> ADD  CONSTRAINT [DF_<run_header>_class_rate_type]  DEFAULT ('U') FOR [class_rate_type];
+ALTER TABLE <header_table> ADD  CONSTRAINT [DF_<run_header>_class_time]  DEFAULT (getdate()) FOR [class_time];
+ALTER TABLE <row_table>  WITH CHECK ADD  CONSTRAINT [FK_<run_header>_<run_row>] FOREIGN KEY([run_id])
+REFERENCES <header_table> ([run_id]);
+ALTER TABLE <row_table> CHECK CONSTRAINT [FK_<run_header>_<run_row>];
+ALTER TABLE <header_table>  WITH CHECK ADD  CONSTRAINT [CK_<run_header>_class_rate_type] CHECK  ((charindex([class_rate_type],'UAI')>(0)));
+ALTER TABLE <header_table> CHECK CONSTRAINT [CK_<run_header>_class_rate_type];
+ALTER TABLE <header_table>  WITH CHECK ADD  CONSTRAINT [CK_<run_header>_table_name] CHECK  ((object_id(concat([catalog_name],'.',[table_name])) IS NOT NULL));
+ALTER TABLE <header_table> CHECK CONSTRAINT [CK_<run_header>_table_name];
+ALTER TABLE <row_table>  WITH CHECK ADD  CONSTRAINT [CK_<run_row>_class_rate] CHECK  (([class_rate]>=(0.0) AND [class_rate]<=(1.0) OR [class_rate]=(-1.0)));
+ALTER TABLE <row_table> CHECK CONSTRAINT [CK_<run_row>_class_rate];

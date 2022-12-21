@@ -1,16 +1,18 @@
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-import sys
-from collections import OrderedDict
 from typing import Protocol
+import hashlib
+
 import numpy as np
 import pyodbc
-from Config import RateType, Config as Cf, to_quoted_string, period_to_brackets
-from JBGHandler import Model
 import SqlHelper.JBGSqlHelper as sql
-from JBGExceptions import DataLayerException
+from Config import Config as Cf
+from Config import RateType, period_to_brackets, to_quoted_string
 from DataLayer.Base import DataLayerBase
+from JBGExceptions import DataLayerException
+
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -36,6 +38,9 @@ class Config(Protocol):
 
     def get_classification_script_path(self) -> Path:
         """ Gives a calculated path based on config"""
+    
+    def get_prediction_tables(self, include_database: bool = True) -> dict:
+        """ Gets a dict with 'header' and 'row', based on class_table"""
 
     
 
@@ -62,7 +67,7 @@ class DataLayer(DataLayerBase):
         
         driver = self.config.get_attribute("connection.odbc_driver")
         if driver not in drivers:
-            raise ValueError("Given ODBC driver ({driver}) cannot be found")
+            raise ValueError(f"Given ODBC driver ({driver}) cannot be found")
 
         """ Checks that the server connection is valid """
         if not self.can_connect():
@@ -137,7 +142,7 @@ class DataLayer(DataLayerBase):
         
         return {column[0]:column[1] for column in data}
     
-    def prepare_for_classification(self) -> bool:
+    def prepare_for_classification(self) -> bool: # Anropas från Classifier->Run()
         """ Setting up tables or similar things in preparation for the classifictions """
         query = "\n".join(self.create_classification_table_query())
         self.create_classification_table(query)
@@ -256,82 +261,6 @@ class DataLayer(DataLayerBase):
         
         return dict
 
-    def get_save_classification_insert(self, column_keys) -> str:
-        # Build up the base query outside of the range
-        insert = f"INSERT INTO {self.config.connection.get_formatted_class_table()} "
-        column_names = ",".join([column for column in column_keys])
-        insert += f"({column_names})"
-
-        return insert
-
-    def save_data(self, results: list, class_rate_type: RateType, model: Model)-> int:
-        """ Save the classifications in the database """
-
-        # Loop through the data
-        num_lines = 0
-        percent_fetched = 0.0
-        result_num = len(results)
-
-        # Get class labels separately
-        try:
-            class_labels = ",".join(model.model.classes_)
-        except AttributeError:
-            self.logger.print_info(f"No classes_ attribute in model")
-            class_labels = "N/A"
-
-        columns = OrderedDict({
-            "catalog_name": self.config.get_data_catalog(),
-            "table_name": self.config.get_data_table(),
-            "column_names": ",".join(self.config.get_data_column_names()), 
-            "unique_key": "", # dict["key"]
-            "class_result": "", # dict["prediction"]
-            "class_rate": "", # dict["rate"]
-            "class_rate_type": class_rate_type.name,
-            "class_labels": class_labels,
-            "class_probabilities": "", # dict["probabilities"]
-            "class_algorithm": model.get_name(),
-            "class_script": self.config.script_path,
-            "class_user": self.config.get_data_username()
-        })
-        
-        
-        # Build up the base query outside of the range
-        insert = self.get_save_classification_insert(columns.keys())
-        
-        try:
-            # Get a sql handler and connect to data database
-            sqlHelper = self.get_connection()
-        
-            for row in results:
-                columns["unique_key"] = row["key"]
-                columns["class_result"] = row["prediction"]
-                columns["class_rate"] = row["rate"]
-                columns["class_probabilities"] = row["probabilities"]
-
-                values = ",".join([to_quoted_string(elem) for elem in columns.values()])
-                query = insert + f" VALUES ({values})"
-                
-                # Execute a query without getting any data
-                # Delay the commit until the connection is closed
-                if sqlHelper.execute_query(query, get_data=False, commit=False):
-                    num_lines += 1
-                    percent_fetched = round(100.0 * float(num_lines) / float(result_num))
-                    self.logger.print_percentage("Part of data saved", percent_fetched)
-                
-
-            self.logger.print_linebreak()
-            
-            if num_lines > 0:
-                # Disconnect from database and commit all inserts
-                sqlHelper.disconnect(commit=True)
-            
-            # Return the number of inserted rows
-            return num_lines
-        except KeyError as ke:
-            raise DataLayerException(f"Something went wrong when saving data ({ke})")
-        except Exception as e:
-            self.logger.print_dragon(e)
-            raise DataLayerException(f"Something went wrong when saving data ({e})")
 
     def get_data_query(self, num_rows: int) -> str:
         """ Prepares the query for getting data from the database """
@@ -490,7 +419,171 @@ class DataLayer(DataLayerBase):
         except Exception as e:
             self.logger.print_dragon(e)
             raise DataLayerException(f"Correction of mispredicted data: {query} failed: {e}")
+
+    @staticmethod
+    def get_insert_many_statement(table: str, columns) -> str:
+        """ Given a table and an iterable of column names returns an insert statement with placeholders """
+        columns_string = ",".join([column for column in columns])
+        values = ",".join(["?" for x in range(len(columns))]) # A string of ?, ?, ?, with the number of ? being based on the number of columns
+        insert = f"INSERT INTO {table} ({columns_string}) VALUES({values})"
+        
+        return insert
     
+    def save_prediction_data(self, results: list, class_rate_type: RateType, model_name: str, class_labels: list, test_run: int = 0, commit: bool = True) -> dict:
+        """ Saves prediction data, with the side-effect of creating the tables if necessary """
+        # 1: Check if the main table exists. If not it will either create them, or fail gracefully
+        
+        tables = self.config.get_prediction_tables()
+        if not self.prepare_predictions(tables, commit):
+            error = "Database" if commit else f"Table '{tables['header']}' does not exist"
+            return {"error": error}
+    
+        # 2: Insert information into the tables in two sets
+        # a) Insert header info, get the ID
+        header_columns = [
+            "catalog_name",
+            "table_name",
+            "column_names",
+            "test_run",
+            "class_rate_type",
+            "class_labels",
+            "class_algorithm",
+            "class_script",
+            "class_user"
+        ]
+        
+        header_values = (
+            self.config.get_data_catalog(),
+            self.config.get_data_table(),
+            ",".join(self.config.get_data_column_names()),
+            test_run,
+            class_rate_type.name,
+            ",".join(class_labels),
+            model_name,
+            str(self.config.script_path),
+            self.config.get_data_username()
+        )
+        
+        try:
+            run_id = self.get_connection().insert_row(
+                table=tables['header'], columns=header_columns, values=header_values, return_id=True, commit=commit
+            )
+        except Exception as e:
+            self.logger.print_dragon(e)
+            raise DataLayerException(f"Something went wrong when creating meta header row for predictions: ({e})")
+        
+        # b) Rows, run_id = id 
+        row_columns = [
+            "run_id",
+            "unique_key",
+            "class_result",
+            "class_rate",
+            "class_probabilities"
+        ]
+
+        row_values = [
+            [
+                run_id, 
+                row["key"], 
+                row["prediction"], 
+                row["rate"], 
+                row["probabilities"]
+            ] for row in results
+        ]
+
+        try:
+            row_count = self.get_connection().insert_many_rows(
+                tables['row'], columns=row_columns, params=row_values, commit=commit
+            )
+        except Exception as e:
+            self.logger.print_dragon(e)
+            raise DataLayerException(f"Something went wrong when creating rows for predictions: ({e})")
+        
+        return {
+            "error": None,
+            "results": {
+                "run_id": int(run_id),
+                "row_count": row_count,
+                "query": self.get_run_query(run_id)
+            }
+        }
+
+    def get_run_query(self, run_id: int) -> str:
+        """ Produces an SQL command for fetching the recently classified data elements """
+        connection = self.config.get_connection()
+        id_column = self.config.get_id_column_name()
+        class_column = self.config.get_class_column_name()
+        
+        dataCols = [
+            id_column
+        ] + self.config.get_data_column_names()
+        
+        if self.config.should_use_metas():
+            metaCols = [
+                col for col in self.get_id_columns(self.config.get_data_catalog(), self.config.get_data_table()).keys()
+                if col not in dataCols and col != class_column
+                ]
+            dataCols += metaCols
+        
+        metaCols = [
+            "RR.[class_result]",
+            "RR.[class_rate]",
+            "RH.[class_time]",
+            "RH.[class_algorithm]"
+        ]
+        columns = ", ".join([f"A.[{a}]" for a in dataCols] + [r for r in metaCols])
+        
+        dataTable = connection.get_formatted_data_table() + " A"
+        predictionTables = connection.get_formatted_prediction_tables()
+
+        query_strings = [
+            f"SELECT {columns} FROM {dataTable}",
+            f"INNER JOIN {predictionTables['row']} RR ON A.[id] = RR.[unique_key]",
+            f"INNER JOIN {predictionTables['header']} RH ON RR.[run_id] = RH.[run_id]",
+            f"WHERE RH.[run_id] = {run_id}",
+            f"ORDER BY A.[{id_column}]"
+        ]
+        return " ".join(query_strings)
+        
+
+    def prepare_predictions(self, tables: dict, create_tables: bool) -> bool:
+        header_table = tables["header"]
+        if not self.get_connection().check_table_exists(header_table):
+            if not create_tables:
+                return False
+
+            self.create_prediction_tables(tables)
+
+        return True
+
+    def create_prediction_tables(self, tables: dict) -> None:
+        """ Creates tables for prediction data """
+        query = "\n".join(self.create_predictions_tables_query(tables))
+        self.create_classification_table(query)
+
+    def create_predictions_tables_query(self, tables: dict, path: str = None) -> list:
+        """ Creates a table query from a given text file """
+        path = path if path else self.config.get_classification_script_path()
+
+        if not path.is_file():
+            raise DataLayerException(f"File {path} does not exist.")
+
+        query_list = []
+        
+        unique_run_header = hashlib.md5(tables["header"].encode('utf-8')).hexdigest()
+        unique_run_row = hashlib.md5(tables["row"].encode('utf-8')).hexdigest()
+
+        with open(path, mode="rt") as f:
+            for line in f:
+                transformed_line = line.strip().replace("<header_table>", tables["header"])
+                transformed_line = transformed_line.replace("<row_table>", tables["row"])
+                transformed_line = transformed_line.replace("<run_header>", unique_run_header)
+                transformed_line = transformed_line.replace("<run_row>", unique_run_row)
+                
+                query_list.append(transformed_line)
+        
+        return query_list
+
 # Main method
 def main():
     from JBGLogger import JBGLogger
@@ -501,8 +594,98 @@ def main():
     dl = DataLayer(config, logger)
     table = 'aterkommande_automat.iris'
     database = 'Arbetsdatabas'
-    dataset, query = dl.get_dataset(15)
-    print(dataset)
+    model_name = "name"
+    class_labels=["a", "b", "c"]
+    
+    results = [
+        {
+            "key": 60, 
+            "prediction": "Iris-versicolor", 
+            "rate": 1,
+            "probabilities": "0.0,1.0,0.0"
+        }, {
+            "key": 40, 
+            "prediction": "Iris-setosa", 
+            "rate": 1,
+            "probabilities": "1.0,0.0,0.0"
+        }, {
+            "key": 140, 
+            "prediction": "Iris-virginica", 
+            "rate": 1,
+            "probabilities": "0.0,0.0,1.0"
+        }, {
+            "key": 50, 
+            "prediction": "Iris-setosa", 
+            "rate": 1,
+            "probabilities": "1.0,0.0,0.0"
+        }, {
+            "key": 120, 
+            "prediction": "Iris-versicolor", 
+            "rate": 1,
+            "probabilities": "0.0,1.0,0.0"
+        }, {
+            "key": 130, 
+            "prediction": "Iris-versicolor", 
+            "rate": 1,
+            "probabilities": "0.0,1.0,0.0"
+        }, {
+            "key": 20, 
+            "prediction": "Iris-setosa", 
+            "rate": 1,
+            "probabilities": "1.0,0.0,0.0"
+        }, {
+            "key": 90, 
+            "prediction": "Iris-versicolor", 
+            "rate": 1,
+            "probabilities": "0.0,1.0,0.0"
+        }, {
+            "key": 30, 
+            "prediction": "Iris-setosa", 
+            "rate": 1,
+            "probabilities": "1.0,0.0,0.0"
+        }, {
+            "key": 150, 
+            "prediction": "Iris-virginica", 
+            "rate": 1,
+            "probabilities": "0,6;0.0,0.4,0.6"
+        }, {
+            "key": 10, 
+            "prediction": "Iris-setosa", 
+            "rate": 1,
+            "probabilities": "1.0,0.0,0.0"
+        }, {
+            "key": 100, 
+            "prediction": "Iris-versicolor", 
+            "rate": 1,
+            "probabilities": "0.0,1.0,0.0"
+        }, {
+            "key": 110, 
+            "prediction": "Iris-virginica", 
+            "rate": 1,
+            "probabilities": "0.0,0.0,1.0"
+        }, {
+            "key": 70, 
+            "prediction": "Iris-versicolor", 
+            "rate": 1,
+            "probabilities": "0.0,1.0,0.0"
+        }, {
+            "key": 80, 
+            "prediction": "Iris-versicolor", 
+            "rate": 1,
+            "probabilities": "0.0,1.0,0.0"
+        }
+    ]
+    rate_type = RateType.I
+
+    print(dl.save_prediction_data(
+        commit=False, 
+        test_run=1,
+        model_name = model_name,
+        class_labels=class_labels,
+        results=results,
+        class_rate_type=rate_type))
+    #dataset, query = dl.get_dataset(15)
+    #print(dataset)
 
 
     #print(dl.get_connection())
