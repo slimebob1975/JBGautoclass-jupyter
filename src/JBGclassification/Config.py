@@ -157,12 +157,12 @@ class MetaEnum(enum.Enum):
         return self.value
     
     @classmethod
-    def get_sorted_list(cls, none_all_first: bool = True) -> list[tuple[str, str]]:
-        if not none_all_first:
+    def get_sorted_list(cls, default_terms_first: bool = True) -> list[tuple[str, str]]:
+        if not default_terms_first:
             return sorted([(item.full_name, item.name) for item in cls])
 
         excluded_enums = []
-        for name in ["NON", "ALL"]:
+        for name in ["ALL", "DUMY", "NOR", "NOS"]:
             try:
                 item = cls[name]
             except KeyError:
@@ -197,6 +197,126 @@ class MetaEnum(enum.Enum):
 
     def get_function(self, **kwargs):
         return self.call_function(self, 'get', **kwargs)
+
+    def __eq__(self, other: MetaEnum) -> bool:
+        """
+        This bases the comparisons on the name
+        """
+        if (type(self) == type(other)):
+            return self.name == other.name
+        
+        return False
+
+        # TODO: Make a less naive "equals" comparison
+        # Att jämföra två Algorithm objekt bör ske i två steg. 
+        # Att det är samma typ av objekt, dvs samma förkortning 
+        # eller typ på objektet. Vill man gå vidare kan man 
+        # plocka ut alla parameterar via get_params och jämföra 
+        # att de är exakt lika också
+
+    def __lt__(self, other: MetaEnum) -> bool:
+        """
+        This bases the comparisons on the name
+        """
+        return self.name < other.name
+
+        # TODO: Implement so that default values (all/none/dumy/etc) are first
+
+    def __gt__(self, other: MetaEnum) -> bool:
+        """
+        This bases the comparisons on the name
+        """
+        return self.name > other.name
+
+    def __le__(self, other: MetaEnum) -> bool:
+        """
+        This bases the comparisons on the name
+        """
+        return self.name <= other.name
+
+    def __ge__(self, other: MetaEnum) -> bool:
+        """
+        This bases the comparisons on the name
+        """
+        return self.name >= other.name
+
+class MetaTuple:
+    """ Takes a list of MetaEnums and turns it into a Tuple"""
+
+    @property
+    def type(self) -> MetaEnum:
+        if hasattr(self, "_type"):
+            return self._type
+        
+        return MetaEnum
+
+    @property
+    def full_name(self):
+        return self.get_full_names()
+
+
+    def __init__(self, initiating_values: Iterable) -> None:
+        
+        if isinstance(initiating_values, Iterable):
+            metaEnums = []
+            for metaEnum in initiating_values:
+                if isinstance(metaEnum, self.type):
+                    metaEnums.append(metaEnum)
+                elif isinstance(metaEnum, str):
+                    metaEnums.append(self.type[metaEnum])
+                else:
+                    raise ValueError(f"Each element in input list must be an instance of {self.type.__name__}")
+            self.metaEnums = tuple(metaEnums)
+        else:
+            raise ValueError(f"Input to {self.__class__.__name__} must be an iterable")
+
+
+    def __eq__(self, other: MetaTuple) -> bool:
+        """
+        This compares that the list of metaEnums contains the same metaEnums, does not care about order
+        """
+        return sorted(self.metaEnums) == sorted(other.metaEnums)
+        
+
+    def __str__(self) -> str:
+        """ 
+        Returns a comma-separated list of the abbreviations
+        The list is the same order as the values were initiated in
+        """
+        return ", ".join([x.name for x in self.metaEnums])
+
+    def get_full_names(self) -> str:
+        """ 
+        Returns a comma-separated list of the full names
+        The list is the same order as the values were initiated in
+        """
+        return ", ".join([x.full_name for x in self.metaEnums])
+    
+    def get_full_names_and_abbrevs(self) -> str:
+        """ 
+        Returns a comma-separated list of the full names + abbreviations
+        The list is the same order as the values were initiated in
+        """
+        list = [f"{x.full_name} ({x})" for x in self.metaEnums]
+        return ", ".join(list)
+
+
+    def list_callables(self, do_or_get: str, **kwargs) -> list[tuple]:
+        """ Gets a list of metaEnums that are callable
+            in the form (metaEnum, called function)
+        """
+        # TODO: Semantically speaking, it should be "get" for all MetaEnum
+        # Tuples, but that requires a larger operation to rewrite the function
+        # names in the MetaEnums. Needs done, but not right now
+        metaEnums = [(
+            metaEnum,
+            metaEnum.call_function(do_or_get, **kwargs)) 
+                for metaEnum in self.metaEnums if metaEnum.has_function(do_or_get)
+            ]
+        metaEnums.sort(key=lambda enumtuple: enumtuple[0].name)
+        return metaEnums    
+
+
 
 class Detector(MetaEnum):
     ALL = { "full_name": "All" }
@@ -660,51 +780,6 @@ class Algorithm(MetaEnum):
         estimators=[('lsvc', clf1), ('rfc', clf2), ('lrn', clf3)]
         return VotingClassifier(estimators=estimators)
 
-class AlgorithmTuple:
-
-    def __init__(self, list) -> None:
-        if isinstance(list, Iterable):
-            algorithms = []
-            for algorithm in list:
-                if isinstance(algorithm, Algorithm):
-                    algorithms.append(algorithm)
-                elif isinstance(algorithm, str):
-                    algorithms.append(Algorithm[algorithm])
-                else:
-                    raise ValueError("Each element in input list must be an Algorithm instance")
-            self.algorithms = tuple(algorithms)
-        else:
-            raise ValueError("Input to AlgorithmTuple must be an iterable")
-
-    def __str__(self) -> str:
-        output = ""
-        for algorithm in self.algorithms:
-            output += ',' + str(algorithm.name)
-        return output[1:]
-
-    def get_full_name(self) -> str:
-        return self.get_full_names()
-    
-    def get_full_names(self) -> str:
-        output = ""
-        for algorithm in self.algorithms:
-            output += ', ' + str(algorithm.get_full_name())
-        return output[2:]
-    
-    def get_full_names_and_abbrevs(self) -> str:
-        output = ""
-        for algorithm in self.algorithms:
-            output += ', ' + str(algorithm.get_full_name()) + " (" + str(algorithm) + ")"
-        return output[2:]
-
-    def list_callable_algorithms(self, size: int, max_iterations: int) -> list[tuple]:
-        """ Gets a list of algorithms that are callable
-            in the form (algorithm, called function)
-        """
-        algorithms =  [(algo, algo.call_algorithm(max_iterations=max_iterations, size=size)) for algo in self.algorithms if algo.has_function()]
-        algorithms.sort(key=lambda algotuple: algotuple[0].name)
-        return algorithms
-
 class Preprocess(MetaEnum):
     NOS = "No Scaling"
     STA = "Standard Scaler"
@@ -717,11 +792,11 @@ class Preprocess(MetaEnum):
         return self.full_name
 
     @classmethod
-    def list_callable_preprocessors(cls, is_text_data: bool) -> list[tuple]:
+    def list_callable_preprocessors(cls) -> list[tuple]:
         """ Gets a list of preprocessors that are callable (including NOS -> None)
             in the form (preprocessor, called function)
         """
-        return [(pp, pp.call_preprocess()) for pp in cls if pp.has_function() ]#and (pp.name != "BIN" or is_text_data)]
+        return [(pp, pp.call_preprocess()) for pp in cls if pp.has_function() ]
 
     def do_NOS(self) -> NonScaler:
         """ While this return is superfluos, it helps with the listings of preprocessors """
@@ -748,52 +823,6 @@ class Preprocess(MetaEnum):
     def call_preprocess(self) -> Union[Transform, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
         return self.call_function('do')
-
-class PreprocessTuple:
-
-    def __init__(self, list) -> None:
-        #print("preprocess input list:", list)
-        if isinstance(list, Iterable):
-            preprocessors = []
-            for preprocessor in list:
-                if isinstance(preprocessor, Preprocess):
-                    preprocessors.append(preprocessor)
-                elif isinstance(preprocessor, str):
-                    preprocessors.append(Preprocess[preprocessor])
-                else:
-                    raise ValueError("Each element in input list must be an Preprocess instance")
-            self.preprocessors = tuple(preprocessors)
-        else:
-            raise ValueError("Input to PreprocessTuple must be an iterable")
-        #print("Resulting preprocesstuple:", str(self.preprocessors))
-
-
-    def __str__(self) -> str:
-        output = ""
-        for preprocessor in self.preprocessors:
-            output += ',' + str(preprocessor.name)
-        return output[1:]
-
-    def get_full_names(self) -> str:
-        output = ""
-        for preprocessor in self.preprocessors:
-            output += ', ' + str(preprocessor.get_full_name())
-        return output[2:]
-    
-    def get_full_names_and_abbrevs(self) -> str:
-        output = ""
-        for preprocessor in self.preprocessors:
-            output += ', ' + str(preprocessor.get_full_name()) + " (" + str(preprocessor) + ")"
-        return output[2:]
-
-    def get_full_name(self) -> str:
-        return self.get_full_names()
-
-    def list_callable_preprocessors(self, is_text_data: bool) -> list[tuple]:
-        """ Gets a list of preprocessors that are callable (including NOS -> None)
-            in the form (preprocessor, called function)
-        """
-        return [(pp, pp.call_preprocess()) for pp in self.preprocessors if pp.has_function() ]#and (pp.name != "BIN" or is_text_data)]
 
 class Reduction(MetaEnum):
     NOR = "No Reduction"
@@ -994,53 +1023,6 @@ class Reduction(MetaEnum):
         return self.call_function('get', num_samples=num_samples, num_features=num_features, \
             num_selected_features=num_selected_features)
 
-class ReductionTuple:
-
-    def __init__(self, list) -> None:
-        if isinstance(list, Iterable):
-            reductions = []
-            for reduction in list:
-                if isinstance(reduction, Reduction):
-                    reductions.append(reduction)
-                elif isinstance(reduction, str):
-                    reductions.append(Reduction[reduction])
-                else:
-                    raise ValueError("Each element in input list must be an Reduction instance")
-            self.reductions = tuple(reductions)
-        else:
-            raise ValueError("Input to ReductionTuple must be an iterable")
-
-    def __str__(self) -> str:
-        output = ""
-        for reduction in self.reductions:
-            output += ',' + str(reduction.name)
-        return output[1:]
-
-    def get_full_names(self) -> str:
-        output = ""
-        for reduction in self.reductions:
-            output += ', ' + str(reduction.get_full_name())
-        return output[2:]
-    
-    def get_full_names_and_abbrevs(self) -> str:
-        output = ""
-        for reduction in self.reductions:
-            output += ', ' + str(reduction.get_full_name()) + " (" + str(reduction) + ")"
-        return output[2:]
-
-    def get_full_name(self) -> str:
-        return self.get_full_names()
-
-    def list_callable_reductions(self, num_samples: int, num_features: int, \
-        num_selected_features: int = None) -> list[tuple]:
-        """ Gets a list of reductions that are callable
-            in the form (reduction, called function)
-        """
-        reductions =  [(red, red.call_reduction(num_samples, num_features, num_selected_features)) \
-            for red in self.reductions if red.has_function()]
-        reductions.sort(key=lambda redtuple: redtuple[0].name)
-        return reductions
-
 class ScoreMetric(MetaEnum):
     accuracy = {"full_name": "Accuracy", "callable": accuracy_score, "kwargs": None}
     balanced_accuracy = {"full_name": "Balanced Accuracy", "callable": balanced_accuracy_score, "kwargs": {"adjusted": False}}
@@ -1088,7 +1070,46 @@ class ScoreMetric(MetaEnum):
         else:
             return make_scorer(self.callable)
 
+class AlgorithmTuple(MetaTuple):
+
+    _type = Algorithm
+
+    def list_callable_algorithms(self, size: int, max_iterations: int) -> list[tuple]:
+        """ Gets a list of algorithms that are callable
+            in the form (algorithm, called function)
+        """
+        return self.list_callables("do", max_iterations=max_iterations, size=size)
+
+class PreprocessTuple(MetaTuple):
+
+    _type = Preprocess
+
+    def list_callable_preprocessors(self) -> list[tuple]:
+        """ Gets a list of preprocessors that are callable (including NOS -> None)
+            in the form (preprocessor, called function)
+        """
+        return self.list_callables("do")
+
+    
+class ReductionTuple(MetaTuple):
+
+    _type = Reduction
+
+    def list_callable_reductions(self, num_samples: int, num_features: int, \
+        num_selected_features: int = None) -> list[tuple]:
+        """ Gets a list of preprocessors that are callable (including NOS -> None)
+            in the form (preprocessor, called function)
+        """
+        return self.list_callables(
+            "get",
+            num_samples=num_samples,
+            num_features=num_features,
+            num_selected_features=num_selected_features
+        )
+
+
 T = TypeVar('T', bound='Config')
+
 
 @dataclass
 class Config:
@@ -1491,10 +1512,10 @@ class Config:
                 f" * Test size for trainings:                 {self.test_size}",
                 f" * Use SMOTE:                               {self.smote}",
                 f" * Use undersampling of majority class:     {self.undersample}",
-                f" * Algorithms of choice:                    {self.algorithm.get_full_name()}",
-                f" * Preprocessing method of choice:          {self.preprocessor.get_full_name()}",
-                f" * Scoring method:                          {self.scoring.get_full_name()}",
-                f" * Feature selection:                       {self.feature_selection.get_full_name()}",
+                f" * Algorithms of choice:                    {self.algorithm.full_name}",
+                f" * Preprocessing method of choice:          {self.preprocessor.full_name}",
+                f" * Scoring method:                          {self.scoring.full_name}",
+                f" * Feature selection:                       {self.feature_selection.full_name}",
                 f" * Number of selected features:             {self.num_selected_features}",
                 f" * Maximum iterations (where applicable):   {self.max_iterations}"
             ]
@@ -1786,9 +1807,6 @@ class Config:
         self.__post_init__()
 
 
-    def is_text_data(self) -> bool:
-        return len(self.connection.data_text_columns) > 0
-    
     def is_numerical_data(self) -> bool:
         return len(self.connection.data_numerical_columns) > 0
 
@@ -1815,10 +1833,6 @@ class Config:
         
         return self.script_path / self.connection.class_table_script
     
-    def get_feature_selection(self) -> Reduction:
-        """ Gets the given feature selection Reduction """
-        return self.mode.feature_selection
-
     def get_none_or_positive_value(self, attribute: str) -> int:
         value = self.get_attribute(attribute)
         
@@ -1868,18 +1882,6 @@ class Config:
     def get_num_selected_features(self) -> int:
         return self.get_none_or_positive_value("mode.num_selected_features")
         
-    def feature_selection_in(self, selection: list[Reduction]) -> bool:
-        """ Checks if the selection is one of the given Reductions"""
-        for reduction in selection:
-            if self.mode.feature_selection == reduction:
-                return True
-
-        return False
-
-    def use_feature_selection(self) -> bool:
-        """ Checks if feature selection should be used """
-        return self.mode.feature_selection is not ReductionTuple([Reduction.NOR])
-
     def get_test_size(self) -> float:
         """ Gets the test_size """
         return self.mode.test_size
@@ -2064,14 +2066,6 @@ class Config:
         """ While the actual function is in the mechanism, this allows us to hide where Scoring is """
         return self.mode.scoring.get_mechanism()
 
-    def get_algorithm(self) -> Algorithm:
-        """ Get algorithm from Config"""
-        return Algorithm(self.mode.algorithm)
-
-    def get_preprocessor(self) -> Preprocess:
-        """ get preprocessor from Config """
-        return Preprocess(self.mode.preprocessor)
-    
     def get_class_catalog(self) -> str:
         """ Gets the class catalog """
         return self.connection.get_formatted_class_catalog()
