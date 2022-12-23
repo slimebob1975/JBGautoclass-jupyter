@@ -161,7 +161,8 @@ class AutomaticClassifier:
         # Do some things prior to running the classification itself
         self.pre_run()
 
-        # Read in data
+        # Major task: Read in data, validate and process it
+        # Perhaps TODO: move validate_dataset out of read_in_data and make it another major task
         try:
             if not dh.read_in_data(): #should return true or false
                 self.logger.print_progress(message="Process finished", percent=1.0)
@@ -178,7 +179,7 @@ class AutomaticClassifier:
         # Split data in training and test sets
         dh.split_dataset_for_training_and_validation()
 
-        # Text and categorical variables must be converted to numbers at this point
+        # Major task: Text and categorical variables must be converted to numbers at this point
         self.logger.print_progress(message="Convert dataset to numbers only")
         if dh.handler.config.get_text_column_names():
             mh.model.update_field(field="text_converter", value=dh.convert_text_and_categorical_features(mh.model))
@@ -194,8 +195,10 @@ class AutomaticClassifier:
         
         self.update_progress(self.progression["percentPerMajorTask"])
 
-        # Check algorithms for best model and train that model. K-value should be 10 or below.
+        # Major task: Check algorithms for best model and train that model. K-value should be 10 or below.
         # Or just use the model previously trained.
+        # NOTICE: This major task uses another progressbar share inside DatasetHandler.spot_check_machine_learning_models,
+        # so the number of progress bar shares will be the total number of "Major task":s + 1.
         if self.config.should_train():
             try:
                 self.logger.print_progress(message="Check and train algorithms for best model")
@@ -206,7 +209,7 @@ class AutomaticClassifier:
 
         self.update_progress(percent=self.progression["percentPerMajorTask"], message=f"Best model is: ({mh.model.get_name()}) with number of features: {self.config.get_num_selected_features()}")
         
-        # Evalutate trained model on know testdata
+        # Major task: Evalutate trained model on know testdata
         if self.config.should_train():
            
             if dh.X_validation.shape[0] > 0:
@@ -220,7 +223,8 @@ class AutomaticClassifier:
                 
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
-            # Now RETRAIN the best model on whole dataset with known classification
+        # Major task: Now RETRAIN the best model on whole dataset with known classification
+        if self.config.should_train():
             self.logger.print_progress(message="Retrain model on whole dataset")
             
             cross_trained_model = mh.load_pipeline_from_file(self.config.get_model_filename())
@@ -228,13 +232,15 @@ class AutomaticClassifier:
                 
             mh.save_model_to_file(self.config.get_model_filename())
                 
+        # Major task: Compute and display mot mispredicted data samples for possible manual correction
+        if self.config.should_display_mispredicted():    
             ph.most_mispredicted(dh.X_original, trained_model, cross_trained_model, dh.X, dh.Y)
 
             ph.evaluate_mispredictions(self.get_output_filename("misplaced"))
             
             self.update_progress(percent=self.progression["percentPerMajorTask"])
 
-        # Now make predictions on non-classified dataset: X_unknown -> Y_unknown
+        # Major task: Now make predictions on non-classified dataset: X_unknown -> Y_unknown
         if self.config.should_predict() and dh.X_prediction.shape[0] > 0:
             ph.make_predictions(mh.model.pipeline, dh.X_prediction, dh.classes)
             
