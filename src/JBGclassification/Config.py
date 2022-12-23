@@ -1157,7 +1157,7 @@ class Config:
         trusted_connection: bool = True
         class_catalog: str = ""
         class_table: str = ""
-        class_table_script: str = "./sql/autoClassCreateTable.sql.txt"
+        class_table_script: str = "./sql/CreatePredictionTables.sql.txt"
         class_username: str = ""
         class_password: str = ""
         data_catalog: str = ""
