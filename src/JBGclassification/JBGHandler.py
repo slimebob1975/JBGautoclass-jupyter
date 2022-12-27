@@ -1485,7 +1485,7 @@ class ModelHandler:
 
 @dataclass
 class PredictionsHandler:
-    LIMIT_MISPREDICTED = 20
+    LIMIT_MISPREDICTED = 50
     
     handler: JBGHandler
     could_predict_proba: bool = False
