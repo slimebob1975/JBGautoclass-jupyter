@@ -269,7 +269,8 @@ class AlgorithmGridSearchParams(MetaEnum):
     MNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False)}}
     BNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False)}}
     CNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False), 'norm': (True, False)}}
-    REC = {"parameters": {'alpha': [0.1, 1.0, 10.0], 'tol': [1e-2, 1e-3, 1e-4], 'class_weight': ('balanced', None)}}
+    REC = {"parameters": {'alpha': [1.0, 0.1, 0.01, 0.001, 0.0001], 'tol': [1e-1, 1e-2, 1e-3, 1e-4, 1e-5], "fit_intercept": [True, False], 
+           'class_weight': ('balanced', None)}}
     PCN = {"parameters": {'penalty': ('l2', 'l1', 'elasticnet'), 'alpha': (1e-3, 1e-4, 1e-5), 
            'class_weight': ('balanced', None)}}
     PAC = {"parameters": {'class_weight': ('balanced', None)}}
