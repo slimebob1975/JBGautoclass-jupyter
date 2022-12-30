@@ -285,7 +285,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': np.arange(0, 1.01, 0.01)}}
     SVC = {"parameters": {'C': [1, 10, 100, 1000], 'gamma': ['scale', 'auto'], 'max_iter': [-1],
                           'kernel': ['linear', 'rbf', 'poly', 'sigmoid'], 'class_weight': ('balanced', None)}}
-    SSVC = {"parameters": {}}
+    STCL = {"parameters": {}}
     LDA = {"parameters": {'solver': ('svd','lsqr','eigen'), 'shrinkage': ('auto', None), 'tol': [1e-3, 1e-4, 1e-5]}}
     QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
     BGC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
@@ -360,7 +360,7 @@ class Algorithm(MetaEnum):
     SGDE = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGDE, "rfe_compatible": True}
     NCT = { "full_name": "Nearest Centroid", "search_params": AlgorithmGridSearchParams.NCT, "rfe_compatible": False}
     SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC, "rfe_compatible": False}
-    SSVC = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.SSVC, "rfe_compatible": False}
+    STCL = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.STCL, "rfe_compatible": False}
     LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA, "rfe_compatible": True}
     QDA = { "full_name": "Quadratic Discriminant Analysis", "search_params": AlgorithmGridSearchParams.QDA, "rfe_compatible": False}
     BGC = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BGC, "rfe_compatible": False}
@@ -546,7 +546,7 @@ class Algorithm(MetaEnum):
         # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
         return self.do_LSVC(max_iterations=max_iterations, size=size)
 
-    def do_SSVC(self, max_iterations: int, size: int) -> SelfTrainingClassifier:
+    def do_STCL(self, max_iterations: int, size: int) -> SelfTrainingClassifier:
         return SelfTrainingClassifier(self.do_SVC(max_iterations, size))
 
     def do_SGDE(self, max_iterations: int, size: int)-> SGDClassifier:
