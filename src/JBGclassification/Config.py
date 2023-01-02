@@ -710,7 +710,7 @@ class Preprocess(MetaEnum):
     NOS = "No Scaling"
     STA = "Standard Scaler"
     MIX = "Min-Max Scaler"
-    MMX = "Max-Absolute Scaler"
+    MAX = "Max-Absolute Scaler"
     NRM = "Normalizer"
     BIN = "Binarizer"
 
@@ -737,7 +737,7 @@ class Preprocess(MetaEnum):
     def do_MIX(self) -> MinMaxScaler:
         return MinMaxScaler()
 
-    def do_MMX(self) -> MaxAbsScaler:
+    def do_MAX(self) -> MaxAbsScaler:
         return MaxAbsScaler()
 
     def do_NRM(self) -> Normalizer:
