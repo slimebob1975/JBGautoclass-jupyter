@@ -475,7 +475,7 @@ class Widgets:
 
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
         """ From the reclassify dropdown change"""
-        self.guihandler.correct_mispredicted_data(new_class, index)
+        self.guihandler.classifier_datalayer.correct_mispredicted_data(new_class, index)
 
 
     def get_text_widget(self, element):
