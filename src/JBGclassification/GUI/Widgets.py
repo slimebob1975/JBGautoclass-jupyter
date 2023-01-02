@@ -1103,6 +1103,11 @@ class Widgets:
     
     @property
     def output(self) -> widgets.Output:
+        # TODO: Should be scrollable
+        """ Jag har lagt till en scrollable-option på Output-widgeten. 
+        Men den verkar inte fungera. Skulle vilja se att man verkligen 
+        kan scrolla horisontellt när det är stora utskrifter som görs.
+        """
         name = sys._getframe().f_code.co_name # Current function name
         return self._load_widget(name)
     

@@ -1,6 +1,15 @@
 # README
 
-- To run test: pytest (in root, src or tests)
+## Running tests
+
+To run tests: pytest (in root, src or tests)
+
+### Variations (if you don't want to run all tests)
+- Single file: pytest <path-to-test-file>
+- Single test function: pytest <path-to-test-file>::<test_func>
+- Single test class: pytest <path-to-test-file>::<test_class>
+- Single function in test class: pytest <path-to-test-file>::<test_class>::<test_func>
+
 
 Files related to tests:
 - src/tests/*

@@ -28,7 +28,7 @@ import time
 from datetime import datetime, timedelta
 
 import pandas
-from pandas import DataFrame, concat
+from pandas import DataFrame
 
 # Imports of local help class for communication with SQL Server
 import Config
@@ -61,9 +61,9 @@ class AutomaticClassifier:
         self.logger = logger
 
         self.progression = {
-            "majorTasks": 12,
+            "majorTasks": 5,
             "progress": 0.0,
-            "percentPerMajorTask": 0.03
+            "percentPerMajorTask": 0.10
         }
 
         self.logger.print_progress(message="Starting up ...", percent=self.progression["progress"])

@@ -117,6 +117,8 @@ mode = {
     # For iterative algorithms where we can specify the maximum
     # number of iterations, we do this here
     "max_iterations": "20000",
+
+    "use_metas": False,
 }
 
 # Specifies how to direct output, where to save model, etc
