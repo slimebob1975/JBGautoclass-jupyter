@@ -1355,7 +1355,7 @@ class ModelHandler:
                     
             # Build pipeline of model and preprocessor.
             pipe = self.get_pipeline(reduction, feature_reducer, algorithm, estimator, preprocessor, scaler, \
-                dh.X_train.shape[1], num_features, kfold.get_n_splits())
+                dh.X_train.shape[1], num_features, min(Config.SMOTE_K_NEIGHBORS_DEFAULT, kfold.get_n_splits()))
             
             # Use parallel processing for k-folded cross evaluation
             cv_results = self.get_cross_val_score(pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm)
