@@ -192,7 +192,7 @@ def widget_parameters() -> dict:
         },
         "algorithm_dropdown": {
             "pre__load": {
-                "value": "ALL",
+                "value": ("DUMY",),
                 "description": "Algorithm:",
                 "disabled": True,
                 "description_tooltip": "Pick which algorithms to use"
@@ -200,7 +200,7 @@ def widget_parameters() -> dict:
         },
         "preprocess_dropdown": {
             "pre__load": {
-                "value": "ALL",
+                "value": ("NOS",),
                 "description": "Preprocess:",
                 "disabled": True,
                 "description_tooltip": "Pick which data preprocessors to use"
@@ -216,10 +216,10 @@ def widget_parameters() -> dict:
         },
         "reduction_dropdown": {
             "pre__load": {
-                "value": "NON",
+                "value": ("NOR",),
                 "description": "Reduction:",
                 "disabled": True,
-                "description_tooltip": "Pick by which method the number of features (variables) are reduced"
+                "description_tooltip": "Pick by which methods the number of features (variables) are reduced"
             },
         },
         "smote_checkbox": {
@@ -524,18 +524,18 @@ class TestWidgets:
         assert mispredicted_checkbox.description == widget_parameters["mispredicted_checkbox"]["pre__load"]["description"]
         assert mispredicted_checkbox.description_tooltip == widget_parameters["mispredicted_checkbox"]["pre__load"]["description_tooltip"]
        
-        # Algorithm, Dropdown
+        # Algorithm, SelectMultiple
         algorithm_dropdown = widgets.algorithm_dropdown
-        assert isinstance(algorithm_dropdown, ipywidgets.Dropdown)
+        assert isinstance(algorithm_dropdown, ipywidgets.SelectMultiple)
         # Note, explicitly not checking the options, since they are based on Algorithm and subject to change too quickly
         assert algorithm_dropdown.value == widget_parameters["algorithm_dropdown"]["pre__load"]["value"]
         assert algorithm_dropdown.disabled == widget_parameters["algorithm_dropdown"]["pre__load"]["disabled"]
         assert algorithm_dropdown.description == widget_parameters["algorithm_dropdown"]["pre__load"]["description"]
         assert algorithm_dropdown.description_tooltip == widget_parameters["algorithm_dropdown"]["pre__load"]["description_tooltip"]
         
-        # Preprocess, Dropdown
+        # Preprocess, SelectMultiple
         preprocess_dropdown = widgets.preprocess_dropdown
-        assert isinstance(preprocess_dropdown, ipywidgets.Dropdown)
+        assert isinstance(preprocess_dropdown, ipywidgets.SelectMultiple)
         # Note, explicitly not checking the options, since they are based on Preprocess and subject to change too quickly
         assert preprocess_dropdown.value == widget_parameters["preprocess_dropdown"]["pre__load"]["value"]
         assert preprocess_dropdown.disabled == widget_parameters["preprocess_dropdown"]["pre__load"]["disabled"]
@@ -551,9 +551,9 @@ class TestWidgets:
         assert scoremetric_dropdown.description == widget_parameters["scoremetric_dropdown"]["pre__load"]["description"]
         assert scoremetric_dropdown.description_tooltip == widget_parameters["scoremetric_dropdown"]["pre__load"]["description_tooltip"]
         
-        # Reduction, Dropdown
+        # Reduction, SelectMultiple
         reduction_dropdown = widgets.reduction_dropdown
-        assert isinstance(reduction_dropdown, ipywidgets.Dropdown)
+        assert isinstance(reduction_dropdown, ipywidgets.SelectMultiple)
         # Note, explicitly not checking the options, since they are based on Reduction and subject to change too quickly
         assert reduction_dropdown.value == widget_parameters["reduction_dropdown"]["pre__load"]["value"]
         assert reduction_dropdown.disabled == widget_parameters["reduction_dropdown"]["pre__load"]["disabled"]

@@ -9,7 +9,8 @@ import numpy as np
 import pyodbc
 import SqlHelper.JBGSqlHelper as sql
 from Config import Config as Cf
-from Config import RateType, period_to_brackets, to_quoted_string
+from Config import period_to_brackets, to_quoted_string
+from JBGMeta import  RateType
 from DataLayer.Base import DataLayerBase
 from JBGExceptions import DataLayerException
 
@@ -66,6 +67,7 @@ class DataLayer(DataLayerBase):
         drivers = pyodbc.drivers()
         
         driver = self.config.get_attribute("connection.odbc_driver")
+        
         if driver not in drivers:
             raise ValueError(f"Given ODBC driver ({driver}) cannot be found")
 

@@ -82,15 +82,16 @@ class JBGSqlHelper():
 
     def can_connect(self) -> bool:
         connect_string = self.build_connection()
-        connection = self.connect(connect_string, False)
+        
+        try: 
+            self.connect(connect_string)
+        except SQLException:
+            return False # Exception means it didn't work
 
-        if (type(connection) == pyodbc.Connection):
-            return True
-
-        return False
+        return True
 
     # Make a connection to database
-    def connect(self, connect: str = None, print_fail: bool = True) -> pyodbc.Connection:
+    def connect(self, connect: str = None) -> pyodbc.Connection:
         connect_string = connect
         if not connect_string:
             connect_string = self.build_connection()

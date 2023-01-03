@@ -13,7 +13,7 @@ connection = {
     "odbc_driver": "Mock Server",
 
     # Database host
-    "host": "tcp:database.iaf.mock", 
+    "host": "tcp:database.jbg.mock", 
     
     # Trusted connection or not
     "trusted_connection": True,
@@ -102,10 +102,10 @@ mode = {
     "algorithm": "LDA",
 
     # What pre-processing method to use
-    "preprocessor": "STA",
+    "preprocessor": "NOS",
 
     # If to use feature_selection of not
-    "feature_selection": "PCA",
+    "feature_selection": "NOR",
 
     # If feature selection is on, and we want to specify the 
     # numbers of features to use

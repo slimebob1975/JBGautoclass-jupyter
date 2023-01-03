@@ -36,6 +36,7 @@ import SQLDataLayer
 import JBGLogger
 from JBGHandler import JBGHandler
 import Helpers
+import JBGMeta
 
 import warnings
 # Sklearn issue a lot of warnings sometimes, we suppress them here

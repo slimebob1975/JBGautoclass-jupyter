@@ -156,7 +156,6 @@
             }
         },
         "preprocess_dropdown": {
-            "_type": "Dropdown",
             "type": "SelectMultiple",
             "params": {
                 "value": ["NOS"],

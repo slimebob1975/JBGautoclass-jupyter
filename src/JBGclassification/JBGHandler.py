@@ -4,7 +4,6 @@ import dill as pickle   # Ordinary pickle cant handle lamdba functions
 import time
 import psutil
 import traceback
-import typing
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
@@ -26,7 +25,8 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
-from Config import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform, Config
+from Config import Config
+from JBGMeta import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
 from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
 from JBGTextHandling import TextDataToNumbersConverter

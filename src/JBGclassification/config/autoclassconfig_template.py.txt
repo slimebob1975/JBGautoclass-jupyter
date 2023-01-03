@@ -118,7 +118,7 @@ mode = {
     # number of iterations, we do this here
     "max_iterations": "<max_iterations>",
 
-    "use_metas":<use_metas>,
+    "use_metas": <use_metas>,
 }
 
 # Specifies how to direct output, where to save model, etc

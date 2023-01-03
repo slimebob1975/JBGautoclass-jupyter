@@ -137,7 +137,8 @@ class TestPreprocess:
         """ This function gives a list of tuples: (value, name) """
         sorted_list_default = Preprocess.get_sorted_list(default_terms_first=False)
         sorted_list_nos_first = Preprocess.get_sorted_list()
-
+        
+        
         assert len(sorted_list_default) == 6
         assert len(sorted_list_nos_first) == 6
 

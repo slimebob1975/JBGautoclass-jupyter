@@ -1,6 +1,7 @@
 import os
 import pickle
-from Config import Config, Algorithm, Preprocess, Reduction, ScoreMetric, AlgorithmTuple, PreprocessTuple, ReductionTuple
+from Config import Config
+from JBGMeta import Algorithm, Preprocess, Reduction, ScoreMetric, AlgorithmTuple, PreprocessTuple, ReductionTuple
 
 """ This is a script to quick-and-dirty regenerate some fixtures that might be annoying otherwise
 
@@ -13,7 +14,7 @@ from Config import Config, Algorithm, Preprocess, Reduction, ScoreMetric, Algori
 """
 
 def bare_iris_config() -> Config:
-    """ This is the bare_iris_config from test_config, so if that one has changed, this one should too """
+    """ This is the bare_iris_config from conftest.py, so if that one has changed, this one should too """
     config = Config(
         Config.Connection(
             odbc_driver="Mock Server",
@@ -81,20 +82,13 @@ def save_model_to_file(filename, config, model = None):
     """ This is a copy of save_model_to_file in JBGHandler, update if necessary"""
     try:
         save_config = config.get_clean_config()
-        if model is None:
-            data = [
-                save_config
-            ]
-        else:
-            data = [
-                save_config,
-                {},
-                None,
-                None,
-                None,
-                (None, None),
-                None
-            ]
+        data = [
+            save_config,
+            (None, None, None),
+            None,
+            None,
+            None
+        ]
         
         pickle.dump(data, open(filename,'wb'))
     except Exception as e:

@@ -125,6 +125,7 @@ class RateType(enum.Enum):
     # U = Okänd. Lade jag till som en framtida utväg ifall ingen av de ovanstående fanns tillgängliga.
     U = "Unknown"
 
+META_ENUM_DEFAULT_TERMS = ("ALL", "DUMY", "NOR", "NOS")
 
 class MetaEnum(enum.Enum):
     @property
@@ -140,7 +141,7 @@ class MetaEnum(enum.Enum):
             return sorted([(item.full_name, item.name) for item in cls])
 
         excluded_enums = []
-        for name in ["ALL", "DUMY", "NOR", "NOS"]:
+        for name in META_ENUM_DEFAULT_TERMS:
             try:
                 item = cls[name]
             except KeyError:
@@ -150,9 +151,9 @@ class MetaEnum(enum.Enum):
         
         listed_enums = sorted([(item.full_name, item.name) for item in cls if item not in excluded_enums])
 
-        prefix_list = [(item.full_name, item.name) for item in excluded_enums]
+        default_list = [(item.full_name, item.name) for item in excluded_enums]
         
-        return prefix_list + listed_enums
+        return default_list + listed_enums
 
     def get_function_name(self, do_or_get: str = 'do') -> str:
         if do_or_get == 'get':
@@ -367,7 +368,8 @@ class AlgorithmGridSearchParams(MetaEnum):
     MNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False)}}
     BNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False)}}
     CNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False), 'norm': (True, False)}}
-    REC = {"parameters": {'alpha': [0.1, 1.0, 10.0], 'tol': [1e-2, 1e-3, 1e-4], 'class_weight': ('balanced', None)}}
+    REC = {"parameters": {'alpha': [1.0, 0.1, 0.01, 0.001, 0.0001], 'tol': [1e-1, 1e-2, 1e-3, 1e-4, 1e-5], "fit_intercept": [True, False], 
+           'class_weight': ('balanced', None)}}
     PCN = {"parameters": {'penalty': ('l2', 'l1', 'elasticnet'), 'alpha': (1e-3, 1e-4, 1e-5), 
            'class_weight': ('balanced', None)}}
     PAC = {"parameters": {'class_weight': ('balanced', None)}}
@@ -382,7 +384,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': np.arange(0, 1.01, 0.01)}}
     SVC = {"parameters": {'C': [1, 10, 100, 1000], 'gamma': ['scale', 'auto'], 'max_iter': [-1],
                           'kernel': ['linear', 'rbf', 'poly', 'sigmoid'], 'class_weight': ('balanced', None)}}
-    SSVC = {"parameters": {}}
+    STCL = {"parameters": {}}
     LDA = {"parameters": {'solver': ('svd','lsqr','eigen'), 'shrinkage': ('auto', None), 'tol': [1e-3, 1e-4, 1e-5]}}
     QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
     BGC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
@@ -457,7 +459,7 @@ class Algorithm(MetaEnum):
     SGDE = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGDE, "rfe_compatible": True}
     NCT = { "full_name": "Nearest Centroid", "search_params": AlgorithmGridSearchParams.NCT, "rfe_compatible": False}
     SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC, "rfe_compatible": False}
-    SSVC = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.SSVC, "rfe_compatible": False}
+    STCL = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.STCL, "rfe_compatible": False}
     LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA, "rfe_compatible": True}
     QDA = { "full_name": "Quadratic Discriminant Analysis", "search_params": AlgorithmGridSearchParams.QDA, "rfe_compatible": False}
     BGC = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BGC, "rfe_compatible": False}
@@ -643,7 +645,7 @@ class Algorithm(MetaEnum):
         # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
         return self.do_LSVC(max_iterations=max_iterations, size=size)
 
-    def do_SSVC(self, max_iterations: int, size: int) -> SelfTrainingClassifier:
+    def do_STCL(self, max_iterations: int, size: int) -> SelfTrainingClassifier:
         return SelfTrainingClassifier(self.do_SVC(max_iterations, size))
 
     def do_SGDE(self, max_iterations: int, size: int)-> SGDClassifier:
@@ -762,7 +764,7 @@ class Preprocess(MetaEnum):
     NOS = "No Scaling"
     STA = "Standard Scaler"
     MIX = "Min-Max Scaler"
-    MMX = "Max-Absolute Scaler"
+    MAX = "Max-Absolute Scaler"
     NRM = "Normalizer"
     BIN = "Binarizer"
 
@@ -789,7 +791,7 @@ class Preprocess(MetaEnum):
     def do_MIX(self) -> MinMaxScaler:
         return MinMaxScaler()
 
-    def do_MMX(self) -> MaxAbsScaler:
+    def do_MAX(self) -> MaxAbsScaler:
         return MaxAbsScaler()
 
     def do_NRM(self) -> Normalizer:

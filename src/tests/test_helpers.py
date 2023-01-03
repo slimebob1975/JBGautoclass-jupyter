@@ -1,6 +1,5 @@
 from decimal import Decimal
 from datetime import datetime
-import pytest
 
 import Helpers
 
