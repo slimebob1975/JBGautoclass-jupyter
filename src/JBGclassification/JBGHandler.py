@@ -1152,6 +1152,9 @@ class ModelHandler:
         best_reduction = None
         best_num_components = dh.X_train.shape[1]
         
+        # Store evaluation results in a list of lists
+        listOfResults = []
+        
         # Make evaluation of model
         try:
             #if k < 2: # What to do?
@@ -1160,7 +1163,8 @@ class ModelHandler:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"StratifiedKfold raised an exception with message: {e}")
         
-        self.handler.logger.print_table_row(items=["Pre.","Red.","Alg.","Comp","Train","Stdev","Test","Time","Except"], divisor="=")
+        #self.handler.logger.print_table_row(items=["Pre.","Red.","Alg.","Comp","Train","Stdev","Test","Time","Except"], divisor="=")
+        first_printed_line = True
 
         numMinorTasks = len(reductions) * len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
@@ -1292,6 +1296,10 @@ class ModelHandler:
                                 success = True
 
                             # Print results to screen
+                            if not first_printed_line:
+                                self.handler.logger.clear_last_printed_result_line()
+                            else:
+                                first_printed_line = False
                             self.handler.logger.print_result_line(
                                 preprocessor.name,
                                 reduction.name,
@@ -1301,8 +1309,20 @@ class ModelHandler:
                                 temp_stdev,
                                 test_score,
                                 t,
-                                failure
+                                failure,
+                                ending = '\r'
                             )
+                            tempResult = [ 
+                                preprocessor.name,
+                                reduction.name,
+                                algorithm.name,
+                                min(num_components, num_features),
+                                temp_score,
+                                temp_stdev,
+                                test_score,
+                                t,
+                                failure]
+                            listOfResults.append(tempResult)
                     
         updates = {"feature_selection": reduction, "algorithm": best_algorithm, \
             "preprocessor" : best_preprocessor, "num_selected_features": best_rfe_feature_selection}
@@ -1314,6 +1334,18 @@ class ModelHandler:
         best_model.algorithm = best_algorithm
         best_model.pipeline = trained_pipeline
         best_model.num_feaures_out = best_num_components
+        
+        # Prepare and print a pandas Dataframe for storing test evaluation results
+        self.handler.logger.clear_last_printed_result_line()
+        resultsMatrix = pandas.DataFrame(listOfResults,
+            columns=["Preprocessor","Feature Reduction","Algorithm","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
+        self.handler.logger.display_matrix(f"Result of spot check of algorithms", resultsMatrix)
+        
+        # Save cross validation results to csv file
+        resultsMatrix.to_csv(path_or_buf = cross_validation_filepath, sep = ';', na_rep='N/A', \
+            float_format=None, columns=None, header=True, index=True, index_label=None, mode='w', \
+            encoding='utf-8', compression='infer', quoting=None, quotechar='"', line_terminator=None, \
+            chunksize=None, date_format=None, doublequote=True, decimal=',', errors='strict')
         
         # Return best model for start making predictions
         return best_model
@@ -1355,7 +1387,7 @@ class ModelHandler:
                     
             # Build pipeline of model and preprocessor.
             pipe = self.get_pipeline(reduction, feature_reducer, algorithm, estimator, preprocessor, scaler, \
-                dh.X_train.shape[1], num_features, min(Config.SMOTE_K_NEIGHBORS_DEFAULT, kfold.get_n_splits()))
+                dh.X_train.shape[1], num_features, min(5, kfold.get_n_splits()))
             
             # Use parallel processing for k-folded cross evaluation
             cv_results = self.get_cross_val_score(pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm)
