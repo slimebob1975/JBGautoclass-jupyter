@@ -101,6 +101,10 @@ class AutomaticClassifier:
             "misplaced": {
                 "suffix": "csv",
                 "prefix": "misplaced_"
+            },
+            "cross_validation": {
+                "suffix": "csv",
+                "prefix": "crossval_"
             }
         }
 

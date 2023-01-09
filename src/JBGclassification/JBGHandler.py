@@ -948,16 +948,16 @@ class ModelHandler:
     def load_empty_model(self) -> Model:
         return Model()
 
-    def train_model(self, dh: DatasetHandler) -> None:
+    def train_model(self, dh: DatasetHandler, cross_validation_filepath: str) -> None:
         try:
-            self.model = self.get_model_from(dh)
+            self.model = self.get_model_from(dh, cross_validation_filepath)
         except ModelException as ex:
             raise ModelException(f"Model could not be trained. Check your training data or your choice of models: {str(ex)}")
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something unknown went wrong on training model: {str(e)}")
 
-    def get_model_from(self, dh) -> Model:
+    def get_model_from(self, dh, cross_validation_filepath: str) -> Model:
         
         # Prepare for k-folded cross evaluation
         # Calculate the number of possible folds of the training data. The k-value is chosen such that
@@ -978,7 +978,7 @@ class ModelHandler:
         
         try:
             # Find the best model
-            model = self.spot_check_machine_learning_models(dh, k)
+            model = self.spot_check_machine_learning_models(dh, k, cross_validation_filepath)
             if model is None:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
@@ -1123,7 +1123,7 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10) -> Model:
+    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10, cross_validation_filepath: str = ".\spot-checks") -> Model:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
