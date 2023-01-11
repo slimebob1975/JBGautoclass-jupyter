@@ -63,7 +63,7 @@ class AutomaticClassifier:
         self.progression = {
             "majorTasks": 7,
             "progress": 0.0,
-            "percentPerMajorTask": 0.07
+            "percentPerMajorTask": 0.05
         }
 
         self.logger.print_progress(message="Starting up ...", percent=self.progression["progress"])

@@ -1341,7 +1341,7 @@ class ModelHandler:
             columns=["Preprocessor","Feature Reduction","Algorithm","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
         resultsMatrix.sort_values(by = ["Test data","Mean cv","Stdev."], axis = 0, ascending = [False, False, True], \
             inplace = True, ignore_index = True)
-        self.handler.logger.display_matrix(f"Modell performance in descending order", resultsMatrix)
+        self.handler.logger.display_matrix(f"Modell test performance in descending order:", resultsMatrix)
         
         # Save cross validation results to csv file
         resultsMatrix.to_csv(path_or_buf = cross_validation_filepath, sep = ';', na_rep='N/A', \

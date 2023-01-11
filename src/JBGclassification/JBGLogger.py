@@ -246,7 +246,7 @@ class JBGLogger(terminal.Logger):
         self.print_info("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
     
     def display_matrix(self, title: str, matrix: pd.DataFrame) -> None:
-        self.print_unformatted(title)
+        self.print_always(title)
         pd.set_option('display.max_rows', None)
         pd.set_option('display.max_columns', None)
         pd.set_option('display.width', 1000)

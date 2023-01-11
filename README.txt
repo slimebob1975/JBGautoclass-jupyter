@@ -20,7 +20,7 @@ To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 4. Start Anaconda Navigator and launch Jupyter-lab from within
 
 5. In the file explorer window to the left in Jupyter-lab, browse your way to the file
-    Autoclass_GUI.ipynb
+    JBGclassification_GUI.ipynb
 6. If you see the JBG logo and some webb-like widgets in the right hand side, then all is ok!
     
 Notice:
