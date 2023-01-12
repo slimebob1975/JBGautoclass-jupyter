@@ -823,9 +823,6 @@ class DatasetHandler:
         
         # Quick return if no training
         if not self.handler.config.should_train():
-            self.X_prediction = self.X
-            self.Y_prediction = self.Y
-            
             return False
         else:
         
