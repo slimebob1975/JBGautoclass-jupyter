@@ -343,9 +343,10 @@ class Widgets:
         # Disabled items:
         self.disable_items(["class_column", "id_column", "data_columns", "text_columns", "categorize_columns"])
         
-        # Enabled items:
+        # Enable and disable buttons
         self.enable_button("continuation_button")
-    
+        self.disable_button("start_button")
+        
     def activate_section(self, name: str) -> None:
         """ This should probably be a toggle, but for the moment we'll do it this way"""
 
