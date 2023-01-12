@@ -204,15 +204,19 @@ class JBGLogger(terminal.Logger):
         self.print_warning(message)
     
     def print_result_line(self, reduction_name: str, algorithm_name: str, preprocessor_name: str, num_features: float, \
-        temp_score, temp_stdev, test_score, t, failure:str) -> None:
+        temp_score, temp_stdev, test_score, t, failure: str, ending: str = '\n') -> None:
         """ Prints information about a specific result line """
         if self._enable_quiet:
             return self
 
         print(
             "{0:>4s}-{1:>4s}-{2:<6s}{3:6d}{4:8.3f}{5:8.3f}{6:8.3f}{7:11.3f} {8:<30s}".
-                format(reduction_name,algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure)
+                format(reduction_name,algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure),
+                end=ending
         )
+        
+    def clear_last_printed_result_line(self):
+        print(" "*200, end='\r')
 
     # This is to avoid the annoying "info:" in front of all lines. Debug/warning/Error should still use the normal
     def print_unformatted(self, *args) -> None:
@@ -242,7 +246,7 @@ class JBGLogger(terminal.Logger):
         self.print_info("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
     
     def display_matrix(self, title: str, matrix: pd.DataFrame) -> None:
-        self.print_unformatted(title)
+        self.print_always(title)
         pd.set_option('display.max_rows', None)
         pd.set_option('display.max_columns', None)
         pd.set_option('display.width', 1000)

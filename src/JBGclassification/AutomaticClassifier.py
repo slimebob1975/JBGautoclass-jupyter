@@ -62,9 +62,9 @@ class AutomaticClassifier:
         self.logger = logger
 
         self.progression = {
-            "majorTasks": 5,
+            "majorTasks": 7,
             "progress": 0.0,
-            "percentPerMajorTask": 0.10
+            "percentPerMajorTask": 0.05
         }
 
         self.logger.print_progress(message="Starting up ...", percent=self.progression["progress"])
@@ -102,6 +102,10 @@ class AutomaticClassifier:
             "misplaced": {
                 "suffix": "csv",
                 "prefix": "misplaced_"
+            },
+            "cross_validation": {
+                "suffix": "csv",
+                "prefix": "crossval_"
             }
         }
 
@@ -203,7 +207,8 @@ class AutomaticClassifier:
         if self.config.should_train():
             try:
                 self.logger.print_progress(message="Check and train algorithms for best model")
-                mh.train_model(dh)
+                print("Cross validation filepath:",self.get_output_filename("cross_validation"))
+                mh.train_model(dh, self.get_output_filename("cross_validation"))
                 mh.save_model_to_file(mh.handler.config.get_model_filename())
             except Exception as ex:
                 self.logger.abort_cleanly(f"Training or saving model failed: {ex}")

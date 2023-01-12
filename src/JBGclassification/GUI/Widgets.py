@@ -328,7 +328,7 @@ class Widgets:
             "text_columns": config.get_text_column_names(),
             "algorithm_dropdown": tuple([str(config.get_algorithm().name)]),
             "preprocess_dropdown": tuple([str(config.get_preprocessor().name)]), 
-            "reduction_dropdown": config.get_feature_selection().name,
+            "reduction_dropdown": tuple([str(config.get_feature_selection().name)]),
             "num_variables": config.get_num_selected_features(),
             "filter_checkbox": config.use_stop_words(),
             "filter_slider": config.get_stop_words_threshold_percentage(),
@@ -343,9 +343,10 @@ class Widgets:
         # Disabled items:
         self.disable_items(["class_column", "id_column", "data_columns", "text_columns", "categorize_columns"])
         
-        # Enabled items:
+        # Enable and disable buttons
         self.enable_button("continuation_button")
-    
+        self.disable_button("start_button")
+        
     def activate_section(self, name: str) -> None:
         """ This should probably be a toggle, but for the moment we'll do it this way"""
 

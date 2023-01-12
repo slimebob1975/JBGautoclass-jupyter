@@ -823,9 +823,6 @@ class DatasetHandler:
         
         # Quick return if no training
         if not self.handler.config.should_train():
-            self.X_prediction = self.X
-            self.Y_prediction = self.Y
-            
             return False
         else:
         
@@ -948,16 +945,16 @@ class ModelHandler:
     def load_empty_model(self) -> Model:
         return Model()
 
-    def train_model(self, dh: DatasetHandler) -> None:
+    def train_model(self, dh: DatasetHandler, cross_validation_filepath: str) -> None:
         try:
-            self.model = self.get_model_from(dh)
+            self.model = self.get_model_from(dh, cross_validation_filepath)
         except ModelException as ex:
             raise ModelException(f"Model could not be trained. Check your training data or your choice of models: {str(ex)}")
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something unknown went wrong on training model: {str(e)}")
 
-    def get_model_from(self, dh) -> Model:
+    def get_model_from(self, dh, cross_validation_filepath: str) -> Model:
         
         # Prepare for k-folded cross evaluation
         # Calculate the number of possible folds of the training data. The k-value is chosen such that
@@ -978,7 +975,7 @@ class ModelHandler:
         
         try:
             # Find the best model
-            model = self.spot_check_machine_learning_models(dh, k)
+            model = self.spot_check_machine_learning_models(dh, k, cross_validation_filepath)
             if model is None:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
@@ -1123,7 +1120,7 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10) -> Model:
+    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10, cross_validation_filepath: str = ".\spot-checks") -> Model:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
@@ -1152,6 +1149,9 @@ class ModelHandler:
         best_reduction = None
         best_num_components = dh.X_train.shape[1]
         
+        # Store evaluation results in a list of lists
+        listOfResults = []
+        
         # Make evaluation of model
         try:
             #if k < 2: # What to do?
@@ -1160,7 +1160,8 @@ class ModelHandler:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"StratifiedKfold raised an exception with message: {e}")
         
-        self.handler.logger.print_table_row(items=["Pre.","Red.","Alg.","Comp","Train","Stdev","Test","Time","Except"], divisor="=")
+        #self.handler.logger.print_table_row(items=["Pre.","Red.","Alg.","Comp","Train","Stdev","Test","Time","Except"], divisor="=")
+        first_printed_line = True
 
         numMinorTasks = len(reductions) * len(algorithms) * len(preprocessors)
         percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
@@ -1292,6 +1293,10 @@ class ModelHandler:
                                 success = True
 
                             # Print results to screen
+                            if not first_printed_line:
+                                self.handler.logger.clear_last_printed_result_line()
+                            else:
+                                first_printed_line = False
                             self.handler.logger.print_result_line(
                                 preprocessor.name,
                                 reduction.name,
@@ -1301,8 +1306,20 @@ class ModelHandler:
                                 temp_stdev,
                                 test_score,
                                 t,
-                                failure
+                                failure,
+                                ending = '\r'
                             )
+                            tempResult = [ 
+                                preprocessor.name,
+                                reduction.name,
+                                algorithm.name,
+                                min(num_components, num_features),
+                                temp_score,
+                                temp_stdev,
+                                test_score,
+                                t,
+                                failure]
+                            listOfResults.append(tempResult)
                     
         updates = {"feature_selection": reduction, "algorithm": best_algorithm, \
             "preprocessor" : best_preprocessor, "num_selected_features": best_rfe_feature_selection}
@@ -1314,6 +1331,20 @@ class ModelHandler:
         best_model.algorithm = best_algorithm
         best_model.pipeline = trained_pipeline
         best_model.num_feaures_out = best_num_components
+        
+        # Prepare and print a pandas Dataframe for storing test evaluation results
+        self.handler.logger.clear_last_printed_result_line()
+        resultsMatrix = pandas.DataFrame(listOfResults,
+            columns=["Preprocessor","Feature Reduction","Algorithm","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
+        resultsMatrix.sort_values(by = ["Test data","Mean cv","Stdev."], axis = 0, ascending = [False, False, True], \
+            inplace = True, ignore_index = True)
+        self.handler.logger.display_matrix(f"Modell test performance in descending order:", resultsMatrix)
+        
+        # Save cross validation results to csv file
+        resultsMatrix.to_csv(path_or_buf = cross_validation_filepath, sep = ';', na_rep='N/A', \
+            float_format=None, columns=None, header=True, index=True, index_label=None, mode='w', \
+            encoding='utf-8', compression='infer', quoting=None, quotechar='"', line_terminator=None, \
+            chunksize=None, date_format=None, doublequote=True, decimal=',', errors='strict')
         
         # Return best model for start making predictions
         return best_model
@@ -1355,7 +1386,7 @@ class ModelHandler:
                     
             # Build pipeline of model and preprocessor.
             pipe = self.get_pipeline(reduction, feature_reducer, algorithm, estimator, preprocessor, scaler, \
-                dh.X_train.shape[1], num_features, min(Config.SMOTE_K_NEIGHBORS_DEFAULT, kfold.get_n_splits()))
+                dh.X_train.shape[1], num_features, min(5, kfold.get_n_splits()))
             
             # Use parallel processing for k-folded cross evaluation
             cv_results = self.get_cross_val_score(pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm)
