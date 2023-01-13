@@ -26,7 +26,7 @@ from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
 from Config import Config
-from JBGMeta import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
+from JBGMeta import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform, ReductionTuple
 from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
 from JBGTextHandling import TextDataToNumbersConverter
@@ -81,20 +81,20 @@ class Logger(Protocol):
     def print_classification_report(self, report: dict, model: Model, num_features: int):
         """ Should only be printed if verbose """
 
+    def update_progress(self, percent: float, message: str = None) -> float:
+        """ Tracks the progress through the run """
+
 class DataLayer(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
 
-    def get_dataset(self, num_rows: int, train: bool, predict: bool):
-        """ Get the dataset, query and number of rows"""
-
-    def save_data(self, results: list, class_rate_type: RateType, model: Model)-> int:
-        """ Saves classification for X_unknown in classification database """
-
-    def get_sql_command_for_recently_classified_data(self, num_rows: int) -> str:
-        """ What name says """
+    def get_dataset(self, num_rows: int = None) -> list:
+        """ Gets the needed data from the database """
 
     def save_prediction_data(self, results: list, class_rate_type: RateType, model_name: str, class_labels, create_tables: bool = True, test_run: int = 0) -> dict:
         """ Saves prediction data, with the side-effect of creating the tables if necessary """
+
+    def get_data_query(self, num_rows: int) -> str:
+        """ Prepares the query for getting data from the database """
 
 class Config(Protocol):
     # Methods to hide implementation of Config
@@ -125,7 +125,7 @@ class Config(Protocol):
     def feature_selection_in(self, selection: list[Reduction]) -> bool:
         """ Checks if the selection is one of the given Reductions"""
 
-    def get_feature_selection(self) -> Reduction:
+    def get_feature_selection(self) -> ReductionTuple:
         """ Returns the chosen feature selection """
 
     def get_num_selected_features(self) -> int:
@@ -209,8 +209,7 @@ class JBGHandler:
     datalayer: DataLayer
     config: Config
     logger: Logger
-    progression: dict = field(default_factory=dict)
-
+    
     handlers: dict = field(default_factory=dict, init=False)
     
     # This is defined this way so that VS code can find the different methods
@@ -297,17 +296,9 @@ class JBGHandler:
 
         return ph.save_predictions(dh, mh)
     
-    # Updates the progress and notifies the logger
-    # Currently duplicated over Classifier and JBGHandler, but that's for later
     def update_progress(self, percent: float, message: str = None) -> float:
-        self.progression["progress"] += percent
-
-        if message is None:
-            self.logger.print_progress(percent = self.progression["progress"])
-        else:
-            self.logger.print_progress(message=message, percent = self.progression["progress"])
-
-        return self.progression["progress"]
+        """ Wrapper for the logger update_progress """
+        self.logger.update_progress(percent, message)
 
 @dataclass
 class DatasetHandler:
@@ -337,26 +328,16 @@ class DatasetHandler:
     def set_unpredicted_keys(self, keys: pandas.Series) -> None:
         self.unpredicted_keys = keys
 
-    # Function for reading in data to classify from database
-    def read_in_data(self) -> bool:
-        
-        try:
-            data = self.handler.get_dataset()
-        except Exception as e:
-            self.handler.logger.print_dragon(exception=e)
-            raise DatasetException(e)
-
-        if data is None:
-            return False
-        
+    def load_data(self, data: list):
+        """" Validates and processes the dataset loaded into the handler """
         # Set the column names of the data array
         column_names = self.handler.config.get_column_names()
         class_column = self.handler.config.get_class_column_name()
         id_column = self.handler.config.get_id_column_name()
         
         # TODO: validate_dataset should probably do a report of potentional issues, or lead into the function that does
-        #dataset = self.validate_dataset(data, column_names, class_column)
-        dataset = self.validate_dataset_modified(data, column_names, class_column)
+        # Warning, not error
+        dataset = self.validate_dataset(data, column_names, class_column)
         
         dataset = self.shuffle_dataset(dataset)
         
@@ -369,49 +350,8 @@ class DatasetHandler:
         if self.handler.config.should_train():
             self.handler.logger.investigate_dataset(self.dataset, class_column) # Returns True if the investigation/printing was not suppressed
         
-        return True
-
-    def validate_dataset(self, data: list, column_names: list, class_column: str) -> pandas.DataFrame:
-        dataset = pandas.DataFrame(data, columns = column_names)
-        
-        # Make sure the class column is a categorical variable by setting it as string
-        try:
-            dataset.astype({class_column: 'str'}, copy=False)
-        except Exception as e:
-            self.handler.logger.print_dragon(exception=e)
-            raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
-            
-        # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
-        # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
-        # or similar from a certain starting point, if any are left after the conversion above.
-        #self.handler.logger.print_formatted_info(message="Consistency check")
-        percent_checked = 0
-        index_length = float(len(dataset.index))
-        try:
-            for index in dataset.index:
-                old_percent_checked = percent_checked
-                percent_checked = round(100.0*float(index)/index_length)
-                self.handler.logger.print_percentage("Data checked of fetched", percent_checked, old_percent_checked)
-                
-                for key in dataset.columns:
-                    item = dataset.at[index,key]
-                    column_is_text = self.handler.config.column_is_text(key)
-                    column_is_numeric = self.handler.config.column_is_numeric(key)
-                    
-                    if column_is_text or column_is_numeric:
-                        checked_item = self.sanitize_value(item, column_is_text)
-                    
-                        # Save new value
-                        if checked_item != item:
-                            dataset.at[index,key] = checked_item
-        except Exception as e:
-            self.handler.logger.print_dragon(exception=e)
-            raise DatasetException(f"Something went wrong in inconsistency check at {key}: {item} ({e})")
-
-        self.handler.logger.print_linebreak()
-        return dataset
     
-    def validate_dataset_modified(self, data: list, column_names: list, class_column: str) -> pandas.DataFrame:
+    def validate_dataset(self, data: list, column_names: list, class_column: str) -> pandas.DataFrame:
         dataset = pandas.DataFrame(data, columns = column_names)
         
         # Make sure the class column is a categorical variable by setting it as string
@@ -861,7 +801,7 @@ class Model:
     n_features_out: int = field(default=None)
 
     def update_fields(self, fields: list[str], update_function: Callable) -> bool:
-        """ Updates fields, getting the values from a Callable (ex dh.convert_textdata_to_numbers) """
+        """ Updates fields, getting the values from a Cal lable (ex dh.convert_textdata_to_numbers) """
         values = update_function(self)
 
         try:
@@ -892,6 +832,11 @@ class Model:
 
         return self.n_features_out
 
+    @property
+    def class_labels(self) -> list:
+        return self.pipeline.classes_
+        
+
 @dataclass
 class ModelHandler:
     handler: JBGHandler
@@ -905,6 +850,16 @@ class ModelHandler:
     def __post_init__(self) -> None:
         """ Empty for now """
     
+    def get_class_labels(self, Y: pandas.Series) -> list:
+        """ Wrapper function go get class labels from the Model, with backup """
+        try:
+            class_labels = self.model.class_labels
+        except AttributeError as e:
+            self.handler.logger.print_info(f"No classes_ attribute in Model.Pipeline, using original classes as fallback: {e}")
+            class_labels = [y for y in set(Y) if y is not None]
+
+        return class_labels
+
     def load_model(self, filename: str = None) -> None:
         """ Called explicitly in run() """
         if filename is None:
@@ -1127,7 +1082,7 @@ class ModelHandler:
         self.handler.logger.print_info("Spot check ml algorithms...\n")
         
         # Prepare a list of feature reduction transforms to loop over
-        reductions = self.handler.config.get_feature_selection().list_callable_reductions(*dh.X.shape)
+        reductions = self.handler.config.mode.feature_selection.list_callable_reductions(*dh.X.shape)
         
         # Prepare list of algorithms to loop over
         algorithms = self.handler.config.mode.algorithm.list_callable_algorithms(
@@ -1136,9 +1091,7 @@ class ModelHandler:
         )
 
         # Prepare list of preprocessors
-        preprocessors = self.handler.config.mode.preprocessor.list_callable_preprocessors(
-            is_text_data=self.handler.config.is_text_data()
-        )
+        preprocessors = self.handler.config.mode.preprocessor.list_callable_preprocessors()
         
         # Evaluate each model in turn in combination with all reduction and preprocessing methods
         best_mean = 0.0
@@ -1164,12 +1117,7 @@ class ModelHandler:
         first_printed_line = True
 
         numMinorTasks = len(reductions) * len(algorithms) * len(preprocessors)
-        percentAddPerMinorTask = (1.0-self.handler.progression["percentPerMajorTask"]*self.handler.progression["majorTasks"]) / float(numMinorTasks)
-
-        # Keep a copy of the unreduced matrix not subject to any transforms
-        # (dh.X_original won't do it since it could include text variables not yet converted to numbers via word-in-a-bag)
-        #dh.X_unreduced = dh.X.copy(deep=True)
-        #data_changed = False
+        percentAddPerMinorTask = self.handler.logger.get_minor_percentage(numMinorTasks)
         
         # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
         success = False
@@ -1207,7 +1155,7 @@ class ModelHandler:
                         # Update progressbar percent and label
                         self.handler.logger.print_progress(message=f"{standardProgressText} ({preprocessor.name}-{reduction.name}-{algorithm.name})")
                         if not first_rfe_round: 
-                            self.handler.update_progress(percent=percentAddPerMinorTask)
+                            self.handler.logger.update_progress(percent=percentAddPerMinorTask)
                         else:
                             first_rfe_round = False
 
@@ -1550,18 +1498,14 @@ class PredictionsHandler:
         
         return return_list
 
-    def save_predictions(self, dh, mh) -> dict:
+    def save_predictions(self, dh: DatasetHandler, mh: ModelHandler) -> dict:
         """ Saves the predictions in the database, to be fetched later """
         try:
             results = self.get_prediction_results(dh.unpredicted_keys)
         except AttributeError as e: 
             raise HandlerException(e)
 
-        try:
-            class_labels = mh.model.classes_
-        except AttributeError as e:
-            self.handler.logger.print_info(f"No classes_ attribute in model, using original classes as fallback: {e}")
-            class_labels = [y for y in set(dh.Y) if y is not None]
+        class_labels = mh.get_class_labels(Y=dh.Y)
 
         try:
             return self.handler.datalayer.save_prediction_data(

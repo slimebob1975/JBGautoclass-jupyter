@@ -29,8 +29,32 @@ class JBGLogger(terminal.Logger):
 
         self.in_terminal = in_terminal
         terminal.Logger.__init__(self, quiet=quiet)
-        
+    
+    def initiate_progress(self, number_of_tasks: int):
+        """ Initiate the progress counter """
+        self.progress = 0
+        self.number_of_tasks = number_of_tasks
+        self.percentage = 1/number_of_tasks
 
+    def update_progress(self, percent: float = None, message: str = None) -> float:
+        """ Tracks the progress through the run """
+        if percent is None:
+            self.progress += self.percentage
+        else:
+            self.progress += percent
+
+        if message is None:
+            self.print_progress(percent = self.progress)
+        else:
+            self.print_progress(message=message, percent = self.progress)
+
+        return self.progress
+    
+    def get_minor_percentage(self, minor_tasks: int) -> float:
+        """ Given a number of minor tasks, returns what percentage each is worth """
+        return self.percentage/float(minor_tasks)
+
+    
     def set_enable_quiet(self, enable_quiet: bool) -> None:
         """ Sets quiet after init """
         self._enable_quiet = enable_quiet

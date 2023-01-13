@@ -540,6 +540,28 @@ class Config:
         """ Wrapper function to not show inner workings """
         return self.connection.update_columns(updated_columns)
 
+    def get_output_filename(self, type: str, pwd: Path = None) -> str:
+        """ Simplifies the path/names of output files """
+        if pwd is None:
+            pwd = self.script_path
+        types = {
+            "misplaced": {
+                "suffix": "csv",
+                "prefix": "misplaced_"
+            },
+            "cross_validation": {
+                "suffix": "csv",
+                "prefix": "crossval_"
+            }
+        }
+
+        type_dict = types[type]
+
+        output_path = pwd / Path("output")
+        output_name = f"{type_dict['prefix']}{self.name}_{self.connection.data_username}.{type_dict['suffix']}"
+        
+        return output_path / Path(output_name)
+
     def get_model_filename(self, pwd: Path = None) -> str:
         """ Set the name and path of the model file
             The second parameter allows for injecting the path for reliable testing
@@ -1039,14 +1061,9 @@ def main():
     else:
        config = Config()
 
-    updates = {
-        "debug": Config.Debug(
-                on=True,
-                data_limit=125
-            ),
-    }
-    print(config.debug)
-    config.update_configuration(updates)
+    
+    print(config.get_output_filename("cross_validation"))
+    print(config.get_output_filename("misplaced"))
     
 if __name__ == "__main__":
     main()
