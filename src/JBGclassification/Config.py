@@ -15,7 +15,7 @@ from imblearn.under_sampling import RandomUnderSampler
 import Helpers
 from JBGExceptions import ConfigException
 from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
-                     Reduction, ReductionTuple, ScoreMetric)
+                     Reduction, ReductionTuple, ScoreMetric, MetaTuple, MetaEnum)
 
 
 class Logger(Protocol):
@@ -479,9 +479,54 @@ class Config:
     @property
     def filename(self) -> str:
         if self._filename is None:
-            return f"{self.CONFIG_FILENAME_START}{self.name}_{self.connection.data_username}.py"
+            return self.get_filename("config")
 
         return self._filename
+
+    @property
+    def mode_suffix(self) -> str:
+        """ Sets a suffix based on the predict/train mode(s) """
+        suffixes = []
+        if self.should_train():
+            suffixes.append("train")
+        if self.should_predict():
+            suffixes.append("predict")
+
+        return "_".join(suffixes)
+
+    def get_filename(self, type: str) -> str:
+        """ Simplifies the names of config and output files"""
+
+        types = {
+            "misplaced": {
+                "suffix": "csv",
+                "prefix": "misplaced_"
+            },
+            "cross_validation": {
+                "suffix": "csv",
+                "prefix": "crossval_"
+            },
+            "config": {
+                "suffix": "py",
+                "prefix": self.CONFIG_FILENAME_START
+            }
+        }
+
+        type_dict = types[type]
+
+        shared_parts = f"{self.name}_{self.connection.data_username}_{self.mode_suffix}"
+
+        return f"{type_dict['prefix']}{shared_parts}.{type_dict['suffix']}"
+
+    def get_output_filepath(self, type: str, pwd: Path = None) -> str:
+        """ Simplifies the path/names of output files """
+        if pwd is None:
+            pwd = self.script_path
+        
+
+        output_path = pwd / Path("output")
+        
+        return output_path / Path(self.get_filename(type))
     
     @property
     def filepath(self) -> Path:
@@ -515,7 +560,7 @@ class Config:
         # 5: Debug
         self.debug.validate()
 
-        # This is True if training in GUI, always False if not
+        # This is True if running from GUI
         if self.save:
             self.save_to_file()
 
@@ -539,28 +584,6 @@ class Config:
     def update_connection_columns(self, updated_columns = dict) -> dict:
         """ Wrapper function to not show inner workings """
         return self.connection.update_columns(updated_columns)
-
-    def get_output_filename(self, type: str, pwd: Path = None) -> str:
-        """ Simplifies the path/names of output files """
-        if pwd is None:
-            pwd = self.script_path
-        types = {
-            "misplaced": {
-                "suffix": "csv",
-                "prefix": "misplaced_"
-            },
-            "cross_validation": {
-                "suffix": "csv",
-                "prefix": "crossval_"
-            }
-        }
-
-        type_dict = types[type]
-
-        output_path = pwd / Path("output")
-        output_name = f"{type_dict['prefix']}{self.name}_{self.connection.data_username}.{type_dict['suffix']}"
-        
-        return output_path / Path(output_name)
 
     def get_model_filename(self, pwd: Path = None) -> str:
         """ Set the name and path of the model file
@@ -624,10 +647,6 @@ class Config:
             for i in range(len(lines)):
                 lines[i] = lines[i].replace(template, str(replace))
 
-        # This fixes the issue with debug/num_rows
-        if hasattr(self.debug, "num_rows"):
-            print("woo?")
-       
         filepath = filepath if filepath else self.filepath
         
         with open(filepath, "w", encoding="utf-8") as fout:
@@ -1009,6 +1028,31 @@ class Config:
         """ While the actual function is in the mechanism, this allows us to hide where Scoring is """
         return self.mode.scoring.get_mechanism()
 
+    def get_algorithm_abbreviations(self) -> list[str]:
+        """ Get algorithm names """
+        item = self.mode.algorithm
+        if isinstance(item, MetaTuple):
+            return item.get_abbreviations()
+
+        return [item.name]
+        
+
+    def get_preprocessor_abbreviations(self) -> list[str]:
+        """ get preprocessor names """
+        item = self.mode.preprocessor
+        if isinstance(item, MetaTuple):
+            return item.get_abbreviations()
+
+        return [item.name]
+    
+    def get_feature_selection_abbreviations(self) -> list[str]:
+        """ Gets the given feature selection names """
+        item = self.mode.feature_selection
+        if isinstance(item, MetaTuple):
+            return item.get_abbreviations()
+
+        return [item.name]
+
     def get_class_catalog(self) -> str:
         """ Gets the class catalog """
         return self.connection.get_formatted_class_catalog()
@@ -1062,8 +1106,8 @@ def main():
        config = Config()
 
     
-    print(config.get_output_filename("cross_validation"))
-    print(config.get_output_filename("misplaced"))
+    print(config.get_output_filepath("cross_validation"))
+    print(config.get_output_filepath("misplaced"))
     
 if __name__ == "__main__":
     main()

@@ -101,7 +101,7 @@ class AutomaticClassifier:
 
         if early_exit:
             self.logger.print_progress(message="Process finished", percent=1.0)
-            return
+            return False
 
         return self.post_run()
         
@@ -117,19 +117,17 @@ class AutomaticClassifier:
         date_again = datetime.now()
         message = f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again:%Y-%m-%d %H:%M}"
         self.logger.print_progress(message, 1.0)
-        # Return positive signal
-        return 0
-
-    def get_mispredicted_dataframe(self) -> DataFrame:
-        ph = self.handler.get_handler("predictions")
-
-        return ph.get_mispredicted_dataframe()
-
-    def get_unique_classes(self) -> list[str]:
-        dh = self.handler.get_handler("dataset")
-
-        return dh.classes
-
+        
+        if self.config.should_display_mispredicted():
+            return {
+                "mispredicted": self.ph.get_mispredicted_dataframe(),
+                "unique_classes": self.dh.classes
+            }
+        
+        return {
+            "mispredicted": None
+        }
+        
 
 # Main program
 def main(argv):

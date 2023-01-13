@@ -36,9 +36,6 @@ class GUIHandler:
 
         self.widgets = Widgets(src_path=Path(src_dir), GUIhandler=self, settings=settings)
         
-        # The classifier object is a data element in our GUI
-        self.the_classifier = None
-        
         # This datalayer object is the one working with the classifier data
         self.classifier_datalayer = None
 
@@ -129,13 +126,13 @@ class GUIHandler:
         self.get_classifier_datalayer(config_params = config_params)
 
         self.logger.set_enable_quiet(not config_params["io"].verbose)
-        self.the_classifier = autoclass(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
+        the_classifier = autoclass(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
         with output:
-            worked = self.the_classifier.run()
-            if worked == -1:
+            result = the_classifier.run()
+            if not result:
                 self.logger.print_info("No data was fetched from database!")
-            else:
-                self.widgets.handle_mispredicted(self.the_classifier)
+            elif result["mispredicted"] is not None:
+                self.widgets.handle_mispredicted(**result)    
         
         self.widgets.set_rerun()
 

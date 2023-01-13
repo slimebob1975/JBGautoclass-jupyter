@@ -4,7 +4,6 @@ import pandas
 import pytest
 from conftest import get_fixture_path
 
-from JBGMeta import Algorithm, Preprocess
 from JBGExceptions import DatasetException, HandlerException
 
 from JBGHandler import JBGHandler, DatasetHandler, Model
@@ -66,25 +65,24 @@ class TestHandler():
         
         
 
-    def test_update_progress(self, default_handler):
-        """ Two cases, percentage or percentage + message """
-        assert default_handler.update_progress(10) == 10.0
-
-        assert default_handler.update_progress(10, "a message is printed") == 20.0
-
 class TestDatasetHandler():
     """ Tests the dataset handler """
     # This has a lot of complex calculations so will postpone most of it
 
-    def test_read_in_data(self, default_dataset_handler):
+    def test_load_data(self, default_dataset_handler):
         """ This doesn't test the content of the items, but tests that they're generally proper """
 
         # Before anything runs, dataset, keys and classes should not be set
         assert not hasattr(default_dataset_handler, "dataset")
         assert not hasattr(default_dataset_handler, "keys")
         assert not hasattr(default_dataset_handler, "classes")
-        
-        default_dataset_handler.read_in_data()
+        data = [
+            ["Karan",23, "odd", 1],
+            ["Rohit",22, "even", 2],
+            ["Sahil",21, "odd", 3],
+            ["Aryan",24, "even", 4]
+        ]
+        default_dataset_handler.load_data(data)
 
         
         # After it runs, dataset, keys and classes should be set
@@ -176,12 +174,12 @@ class TestDatasetHandler():
         # This is the absolutely simplest case, with no changes to the data needed
         column_names = default_dataset_handler.handler.config.get_column_names()
         class_column = default_dataset_handler.handler.config.get_class_column_name()
-        # ["name", "age", "test_class", "test_id"]
+        #column_names =  ["name", "age", "test_class", "test_id"]
         data = [
-            ["Karan",23, "odd", 1],
-            ["Rohit",22, "even", 2],
-            ["Sahil",21, "odd", 3],
-            ["Aryan",24, "even", 4]
+            ["Karan",23.0, "odd", 1.0],
+            ["Rohit",22.0, "even", 2.0],
+            ["Sahil",21.0, "odd", 3.0],
+            ["Aryan",24.0, "even", 4.0]
         ]
         expected_dataset = pandas.DataFrame(data, columns = column_names)
         dataset = default_dataset_handler.validate_dataset(data, column_names, class_column)
@@ -198,15 +196,14 @@ class TestDatasetHandler():
         ]
 
         cleaned_data = [
-            ["Karan",23, "odd", 1],
-            [True, 22, "even", 2],
-            ["Sahil",21, "odd", 3],
-            ["Aryan",24, "even", 4]
+            ["Karan",23.0, "odd", 1.0],
+            ["", 22.0, "even", 2.0],
+            ["Sahil",21.0, "odd", 3.0],
+            ["Aryan",24.0, "even", 4.0]
         ]
         expected_dataset = pandas.DataFrame(cleaned_data, columns = column_names)
 
         dataset = default_dataset_handler.validate_dataset(data, column_names, class_column)
-
         assert isinstance(dataset, pandas.DataFrame)
         pandas.testing.assert_frame_equal(dataset, expected_dataset)
 

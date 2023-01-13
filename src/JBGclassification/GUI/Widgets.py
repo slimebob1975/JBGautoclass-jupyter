@@ -8,6 +8,7 @@ import json
 
 from typing import Callable, Protocol
 import ipywidgets as widgets
+from pandas import DataFrame
 from sklearn.utils import Bunch
 
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
@@ -326,9 +327,9 @@ class Widgets:
             "id_column": config.get_id_column_name(),
             "data_columns": config.get_data_column_names(),
             "text_columns": config.get_text_column_names(),
-            "algorithm_dropdown": tuple([str(config.get_algorithm().name)]),
-            "preprocess_dropdown": tuple([str(config.get_preprocessor().name)]), 
-            "reduction_dropdown": tuple([str(config.get_feature_selection().name)]),
+            "algorithm_dropdown": tuple(config.get_algorithm_abbreviations()),
+            "preprocess_dropdown": tuple(config.get_preprocessor_abbreviations()), 
+            "reduction_dropdown": tuple(config.get_feature_selection_abbreviations()),
             "num_variables": config.get_num_selected_features(),
             "filter_checkbox": config.use_stop_words(),
             "filter_slider": config.get_stop_words_threshold_percentage(),
@@ -449,10 +450,7 @@ class Widgets:
         self.start_button.description = "Rerun"
         self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
         
-    def handle_mispredicted(self, classifier: AutomaticClassifier) -> None:
-        mispredicted = classifier.get_mispredicted_dataframe()
-        if mispredicted is None:
-            return
+    def handle_mispredicted(self, mispredicted: DataFrame, unique_classes: list[str]) -> None:
         items = [widgets.Label(mispredicted.index.name)] + \
             [widgets.Label(item) for item in mispredicted.columns] + \
             [widgets.Label("Reclassify as")]
@@ -463,7 +461,7 @@ class Widgets:
             for item in row.index: 
                 row_items.append(self.get_text_widget(row[item]))
             dropdown_options = [('Keep', 0)]
-            for label in classifier.get_unique_classes():
+            for label in unique_classes:
                 dropdown_options.append((label, (label, row.name)))
             reclassify_dropdown = widgets.Dropdown(options = dropdown_options, value = 0, description = '', disabled = False)
             reclassify_dropdown.observe(self.eventhandler.reclassify_dropdown__value,'value')
@@ -474,6 +472,7 @@ class Widgets:
         self.widgets["mispredicted_gridbox"] = widgets.GridBox(items, layout=gridbox_layout)
         display(self.mispredicted_gridbox)
 
+    
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
         """ From the reclassify dropdown change"""
         self.guihandler.classifier_datalayer.correct_mispredicted_data(new_class, index)
@@ -547,7 +546,7 @@ class Widgets:
                 data_limit=self.data_limit.value
             ),
             "name": self.project.value,
-            "save": self.new_model
+            "save": True
         }
 
         return params

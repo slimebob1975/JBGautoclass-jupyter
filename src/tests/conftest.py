@@ -61,6 +61,9 @@ class MockLogger():
 
     def print_linebreak(self) -> None:
         """ Important after using \r for updates """
+
+    def update_progress(self, percent: float = None, message: str = None) -> float:
+        """ Tracks the progress through the run """
         
 
 class MockConfig():
@@ -85,6 +88,10 @@ class MockConfig():
         
     def column_is_text(self, column: str) -> bool:
         """ Checks if the column is text based """
+        if column == "name":
+            return True
+
+        return False
 
     def use_feature_selection(self) -> bool:
         """True or False"""
@@ -391,7 +398,7 @@ def default_sqldatalayer(valid_iris_config) -> SQLDataLayer.DataLayer:
 
 @pytest.fixture
 def default_handler() -> JBGHandler:
-    handler = JBGHandler(datalayer=MockDataLayer(), config=MockConfig(), logger=MockLogger(), progression={"progress": 0.0})
+    handler = JBGHandler(datalayer=MockDataLayer(), config=MockConfig(), logger=MockLogger())
 
     return handler
 
@@ -402,7 +409,8 @@ def default_dataset_handler(default_handler) -> DatasetHandler:
 @pytest.fixture
 def filled_dataset_handler(default_handler) -> DatasetHandler:
     dh = DatasetHandler(handler=default_handler)
-    dh.read_in_data()
+    data = default_handler.datalayer.get_dataset()
+    dh.load_data(data)
 
     return dh
 

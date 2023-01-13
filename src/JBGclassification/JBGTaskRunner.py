@@ -61,7 +61,7 @@ class Config(Protocol):
     def get_model_filename(self, pwd: Path = None) -> str:
         """ Set the filename based on prediction or training """
 
-    def get_output_filename(self, type: str, pwd: Path = None) -> str:
+    def get_output_filepath(self, type: str, pwd: Path = None) -> str:
         """ Simplifies the path/names of output files """
 
 @dataclass
@@ -188,7 +188,7 @@ class TaskRunner:
         # NOTICE: This major task uses another progressbar share inside DatasetHandler.spot_check_machine_learning_models,
         # so the number of progress bar shares will be the total number of "Major task":s + 1.
         try:
-            output_filename = self.config.get_output_filename("cross_validation")
+            output_filename = self.config.get_output_filepath("cross_validation")
             self.logger.print_progress(message="Check and train algorithms for best model")
             self.logger.print_unformatted("Cross validation filepath:", output_filename)
             self.mh.train_model(self.dh, output_filename)
@@ -232,7 +232,7 @@ class TaskRunner:
             
         self.ph.most_mispredicted(self.dh.X_original, trained_model, cross_trained_model, self.dh.X, self.dh.Y)
 
-        self.ph.evaluate_mispredictions(self.config.get_output_filename("misplaced"))
+        self.ph.evaluate_mispredictions(self.config.get_output_filepath("misplaced"))
         
         return {}
 

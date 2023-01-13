@@ -256,7 +256,13 @@ class MetaTuple:
         """
         return sorted(self.metaEnums) == sorted(other.metaEnums)
         
-
+    def get_abbreviations(self) -> list[str]:
+        """ 
+        Returns a tuple of the abbreviations
+        The list is the same order as the values were initiated in
+        """
+        return [x.name for x in self.metaEnums]
+    
     def __str__(self) -> str:
         """ 
         Returns a comma-separated list of the abbreviations
