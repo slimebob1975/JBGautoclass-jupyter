@@ -1472,6 +1472,7 @@ class PredictionsHandler:
     predictions: np.ndarray = field(init=False)
     rates: np.ndarray = field(init=False)
     num_mispredicted: int = field(init=False)
+    X_mispredicted: pandas.DataFrame = field(init=False)
     X_most_mispredicted: pandas.DataFrame = field(init=False)
     model: str = field(init=False)
     class_report: dict = field(init=False)
@@ -1572,9 +1573,9 @@ class PredictionsHandler:
         
         #self.handler.logger.display_matrix(f"Most mispredicted during training (using {self.model})", self.X_most_mispredicted)
         self.handler.logger.print_info(f"Get the most misplaced data by SQL query:\n {most_mispredicted_query}")
-        self.handler.logger.print_info(f"Or open the following csv-data file: \n\t {misplaced_filepath}")
+        self.handler.logger.print_info(f"Or open the following csv-data file to get the full list: \n\t {misplaced_filepath}")
         
-        self.X_most_mispredicted.to_csv(path_or_buf = misplaced_filepath, sep = ';', na_rep='N/A', \
+        self.X_mispredicted.to_csv(path_or_buf = misplaced_filepath, sep = ';', na_rep='N/A', \
                                 float_format=None, columns=None, header=True, index=True, \
                                 index_label=self.handler.config.get_id_column_name(), mode='w', encoding='utf-8', \
                                 compression='infer', quoting=None, quotechar='"', line_terminator=None, \
@@ -1697,6 +1698,7 @@ class PredictionsHandler:
             
         # Quick return if possible
         if num_mispredicted == 0:
+            self.X_most_mispredicted = pandas.DataFrame()
             self.X_mispredicted = pandas.DataFrame()
             self.model = "no model produced mispredictions"
             return
@@ -1704,25 +1706,25 @@ class PredictionsHandler:
         self.handler.logger.print_always(f"Accuracy score for {what_model}: {accuracy_score(Y, Y_pred)}")
 
         # Select the found mispredicted data
-        X_mispredicted = X.loc[X_not]
+        self.X_mispredicted = X.loc[X_not]
 
         # Predict probabilites
         try:
             try:
-                Y_prob = the_model.predict_proba(X_mispredicted)
+                Y_prob = the_model.predict_proba(self.X_mispredicted)
             except TypeError:
-                Y_prob = the_model.predict_proba(X_mispredicted.to_numpy())
+                Y_prob = the_model.predict_proba(self.X_mispredicted.to_numpy())
             could_predict_proba = True
         except Exception as e:
             self.handler.logger.print_info(f"Could not predict probabilities: {e}")
             could_predict_proba = False
 
         #  Re-insert original data columns but drop the class column
-        X_mispredicted = X_original.loc[X_not]
+        self.X_mispredicted = X_original.loc[X_not]
         
         # Add other columns to mispredicted data
-        X_mispredicted.insert(0, "Actual", Y.loc[X_not].to_numpy())
-        X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].to_numpy())
+        self.X_mispredicted.insert(0, "Actual", Y.loc[X_not].to_numpy())
+        self.X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].to_numpy())
         
         # Add probabilities and sort only if they could be calculated above, otherwise
         # return a random sample of mispredicted
@@ -1734,23 +1736,23 @@ class PredictionsHandler:
 
         if not could_predict_proba:
             for item in the_classes:
-                X_mispredicted.insert(0, f"P({item})", "N/A")
-            n_limit = min(self.LIMIT_MISPREDICTED, X_mispredicted.shape[0])
+                self.X_mispredicted.insert(0, f"P({item})", "N/A")
+            n_limit = min(self.LIMIT_MISPREDICTED, self.X_mispredicted.shape[0])
 
-            self.X_most_mispredicted = X_mispredicted.sample(n=n_limit)
+            self.X_most_mispredicted = self.X_mispredicted.sample(n=n_limit)
             return
         
         Y_prob_max = np.amax(Y_prob, axis = 1)
         for i in reversed(range(Y_prob.shape[1])):
-            X_mispredicted.insert(0, f"P({the_classes[i]})", Y_prob[:,i])
-        X_mispredicted.insert(0, "__Sort__", Y_prob_max)
+            self.X_mispredicted.insert(0, f"P({the_classes[i]})", Y_prob[:,i])
+        self.X_mispredicted.insert(0, "__Sort__", Y_prob_max)
 
         # Sort the dataframe on the first column and remove it
-        X_mispredicted = X_mispredicted.sort_values("__Sort__", ascending = False)
-        X_mispredicted = X_mispredicted.drop("__Sort__", axis = 1)
+        self.X_mispredicted = self.X_mispredicted.sort_values("__Sort__", ascending = False)
+        self.X_mispredicted = self.X_mispredicted.drop("__Sort__", axis = 1)
 
         # Keep only the top n_limit rows and return
-        self.X_most_mispredicted = X_mispredicted.head(self.LIMIT_MISPREDICTED)
+        self.X_most_mispredicted = self.X_mispredicted.head(self.LIMIT_MISPREDICTED)
         
         return
 
