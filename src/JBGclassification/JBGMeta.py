@@ -46,6 +46,7 @@ from imblearn.ensemble import (EasyEnsembleClassifier, RUSBoostClassifier,
 from JBGExperimental import (JBGRobustLogisticRegression, JBGRobustCentroid, 
                             JBGPartitioningDetector, JBGMCS, JBGInstanceHardness,
                             JBGRandomForestDetector)
+import Config as Config
 
 """ For a Pipeline the steps are n+1 objects which show the sequential changes done to X """
 class Transform(Protocol):
@@ -896,7 +897,7 @@ class Reduction(MetaEnum):
         elif num_samples >= num_features:
             components = 'mle'
         else:
-            components = Config.PCA_VARIANCE_EXPLAINED
+            components = Config.Config.PCA_VARIANCE_EXPLAINED
         return PCA(n_components=None)
     
     def do_PCA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -908,7 +909,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+            components = max(Config.Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
         return Nystroem(n_components=components)
     
     def do_NYS(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -919,7 +920,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+            components = max(Config.Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
 
         return TruncatedSVD(n_components=components)
     
@@ -931,7 +932,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+            components = max(Config.Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
         return FastICA(n_components=components)
     
     def do_FICA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -942,7 +943,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+            components = max(Config.Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
         return NMF(n_components=components)
     
     def do_NMF(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -986,7 +987,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = Config.NON_LINEAR_REDUCTION_COMPONENTS
+            components = Config.Config.NON_LINEAR_REDUCTION_COMPONENTS
         return Isomap(n_components=components)
 
     def do_ISO(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -997,7 +998,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = Config.NON_LINEAR_REDUCTION_COMPONENTS
+            components = Config.Config.NON_LINEAR_REDUCTION_COMPONENTS
         return LocallyLinearEmbedding(n_components=components)
     
     def do_LLE(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
