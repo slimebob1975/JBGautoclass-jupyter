@@ -897,8 +897,9 @@ class Reduction(MetaEnum):
         elif num_samples >= num_features:
             components = 'mle'
         else:
-            components = Config.Config.PCA_VARIANCE_EXPLAINED
-        return PCA(n_components=None)
+            components = None
+            #components = Config.Config.PCA_VARIANCE_EXPLAINED
+        return PCA(n_components=components)
     
     def do_PCA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
 
