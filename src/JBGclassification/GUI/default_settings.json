@@ -351,8 +351,9 @@
             "params": {
                 "layout": {
                     "border": "2px solid grey",
-                    "overflow": "scroll",
-                    "white-space": "nowrap" 
+                    "overflow": "auto",
+                    "height": "500px",
+                    "max_width": "100%"
                 }
             }
             

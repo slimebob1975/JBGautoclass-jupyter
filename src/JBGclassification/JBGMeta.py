@@ -1,6 +1,6 @@
 from __future__ import annotations
 import enum
-from typing import Callable, Iterable, Protocol, Union
+from typing import Callable, Iterable, Protocol, Union, Type, TypeVar
 
 import pandas
 import numpy as np
@@ -46,7 +46,21 @@ from imblearn.ensemble import (EasyEnsembleClassifier, RUSBoostClassifier,
 from JBGExperimental import (JBGRobustLogisticRegression, JBGRobustCentroid, 
                             JBGPartitioningDetector, JBGMCS, JBGInstanceHardness,
                             JBGRandomForestDetector)
-import Config as Config
+
+PCA_VARIANCE_EXPLAINED = 0.999
+LOWER_LIMIT_REDUCTION = 100
+NON_LINEAR_REDUCTION_COMPONENTS = 2
+
+class Logger(Protocol):
+    """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
+    def print_info(self, *args) -> None:
+        """printing info"""
+
+    def print_progress(self, message: str = None, percent: float = None) -> None:
+        """Printing progress"""
+
+    def print_components(self, component, components, exception = None) -> None:
+        """ Printing Reduction components"""
 
 """ For a Pipeline the steps are n+1 objects which show the sequential changes done to X """
 class Transform(Protocol):
@@ -220,6 +234,8 @@ class MetaEnum(enum.Enum):
         """
         return self.name >= other.name
 
+T = TypeVar('T', bound='MetaTuple')
+
 class MetaTuple:
     """ Takes a list of MetaEnums and turns it into a Tuple"""
 
@@ -234,9 +250,15 @@ class MetaTuple:
     def full_name(self):
         return self.get_full_names()
 
-
+    @classmethod
+    def from_string(cls: Type[T], commaseparated_list_as_string: str) -> T:
+        """
+        Creates a MetaEnum based on a (comma-separated) list in string format
+        Strips spaces around each string value
+        """
+        return cls([x.strip() for x in commaseparated_list_as_string.split(",")])
+    
     def __init__(self, initiating_values: Iterable) -> None:
-        
         if isinstance(initiating_values, Iterable):
             metaEnums = []
             for metaEnum in initiating_values:
@@ -881,7 +903,7 @@ class Reduction(MetaEnum):
     def NonReduction(self):
         return FunctionTransformer(lambda X: X)
     
-    # For now, use temporary fixed argument for estimator. Can be changed later!
+    # TODO: For now, use temporary fixed argument for estimator. Can be changed later!
     def do_RFE(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
 
         tf = self.get_RFE(*X.shape, num_selected_features)
@@ -898,7 +920,8 @@ class Reduction(MetaEnum):
             components = 'mle'
         else:
             components = None
-            #components = Config.Config.PCA_VARIANCE_EXPLAINED
+            #components = PCA_VARIANCE_EXPLAINED
+        
         return PCA(n_components=components)
     
     def do_PCA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -910,7 +933,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+            components = max(LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
         return Nystroem(n_components=components)
     
     def do_NYS(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -921,7 +944,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+            components = max(LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
 
         return TruncatedSVD(n_components=components)
     
@@ -933,7 +956,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+            components = max(LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
         return FastICA(n_components=components)
     
     def do_FICA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -944,7 +967,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = max(Config.Config.LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
+            components = max(LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
         return NMF(n_components=components)
     
     def do_NMF(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -988,7 +1011,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = Config.Config.NON_LINEAR_REDUCTION_COMPONENTS
+            components = NON_LINEAR_REDUCTION_COMPONENTS
         return Isomap(n_components=components)
 
     def do_ISO(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -999,7 +1022,7 @@ class Reduction(MetaEnum):
         if num_selected_features is not None:
             components = num_selected_features
         else:
-            components = Config.Config.NON_LINEAR_REDUCTION_COMPONENTS
+            components = NON_LINEAR_REDUCTION_COMPONENTS
         return LocallyLinearEmbedding(n_components=components)
     
     def do_LLE(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):

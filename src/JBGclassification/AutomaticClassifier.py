@@ -132,6 +132,7 @@ class AutomaticClassifier:
 # Main program
 def main(argv):
     # python AutomaticClassifier.py -f .\config\test_iris.py
+    # python AutomaticClassifier.py -f .\config\test_hpl.py
     if len(argv) > 1:
         config = Config.Config.load_config_from_module(argv)
     else:

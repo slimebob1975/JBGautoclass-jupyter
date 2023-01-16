@@ -98,6 +98,9 @@ class DataLayer(Protocol):
 
 class Config(Protocol):
     # Methods to hide implementation of Config
+    def get_categorical_text_column_names(self) -> list[str]:
+        """ Gets the specified categorical text columns"""
+
     def set_num_selected_features(self, num_features: int) -> None:
         """ Updates the config with the number """
 
@@ -481,8 +484,10 @@ class DatasetHandler:
                     df=self.handler.config.get_stop_words_threshold(), \
                     use_encryption=self.handler.config.should_hex_encode() \
                 )
+            
             except Exception as ex:
-                raise Exception(f"Could not initiate text converter object: {str(ex)}") from ex 
+                self.handler.logger.print_dragon(ex)
+                raise Exception(f"Could not initiate text converter object: {str(ex)}")# from ex 
             
             # Fit converter to training data only, which is important for not getting to optimistic results
             ttnc.fit_transform(self.X_train)
@@ -496,7 +501,11 @@ class DatasetHandler:
             
         # If we should predict, apply converter even to X_prediction part of data
         if self.handler.config.should_predict():
-            self.X_prediction = ttnc.transform(self.X_prediction)
+            if self.X_prediction is None:
+                self.handler.logger.print_warning("X_prediction is not set and cannot be text-converted")
+            else:
+                self.X_prediction = ttnc.transform(self.X_prediction)
+            
 
         return ttnc
     
@@ -930,7 +939,7 @@ class ModelHandler:
         
         try:
             # Find the best model
-            model = self.spot_check_machine_learning_models(dh, k, cross_validation_filepath)
+            model = self.spot_check_machine_learning_models(dh, cross_validation_filepath, k=k)
             if model is None:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
@@ -1075,7 +1084,7 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_machine_learning_models(self, dh: DatasetHandler,  k: int=10, cross_validation_filepath: str = ".\spot-checks") -> Model:
+    def spot_check_machine_learning_models(self, dh: DatasetHandler,  cross_validation_filepath: str, k: int=10) -> Model:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"

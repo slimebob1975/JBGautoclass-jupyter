@@ -7,7 +7,7 @@ import pickle
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Protocol, Type, TypeVar, Union
+from typing import Callable, Type, TypeVar, Union
 
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -15,19 +15,8 @@ from imblearn.under_sampling import RandomUnderSampler
 import Helpers
 from JBGExceptions import ConfigException
 from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
-                     Reduction, ReductionTuple, ScoreMetric, MetaTuple, MetaEnum)
+                     Reduction, ReductionTuple, ScoreMetric, MetaTuple)
 
-
-class Logger(Protocol):
-    """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
-    def print_info(self, *args) -> None:
-        """printing info"""
-
-    def print_progress(self, message: str = None, percent: float = None) -> None:
-        """Printing progress"""
-
-    def print_components(self, component, components, exception = None) -> None:
-        """ Printing Reduction components"""
 
 T = TypeVar('T', bound='Config')
 
@@ -38,9 +27,6 @@ class Config:
     MAX_ITERATIONS = 20000
     CONFIG_FILENAME_START = "autoclassconfig_"
     CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py.txt"
-    PCA_VARIANCE_EXPLAINED = 0.999
-    LOWER_LIMIT_REDUCTION = 100
-    NON_LINEAR_REDUCTION_COMPONENTS = 2
 
     DEFAULT_MODELS_PATH =  ".\\model\\"
     DEFAULT_MODEL_EXTENSION = ".sav"
@@ -734,9 +720,9 @@ class Config:
                 test_size=float(module.mode["test_size"]),
                 smote=module.mode["smote"],
                 undersample=module.mode["undersample"],
-                algorithm=AlgorithmTuple(module.mode["algorithm"].split(",")),
-                preprocessor=PreprocessTuple(module.mode["preprocessor"].split(",")),
-                feature_selection=ReductionTuple(module.mode["feature_selection"].split(",")),
+                algorithm=AlgorithmTuple.from_string(module.mode["algorithm"]),
+                preprocessor=PreprocessTuple.from_string(module.mode["preprocessor"]),
+                feature_selection=ReductionTuple.from_string(module.mode["feature_selection"]),
                 num_selected_features=num_selected_features,
                 scoring=ScoreMetric[module.mode["scoring"]],
                 max_iterations=max_iterations
@@ -1106,8 +1092,9 @@ def main():
        config = Config()
 
     
-    print(config.get_output_filepath("cross_validation"))
-    print(config.get_output_filepath("misplaced"))
+    print(type(config.mode.algorithm))
+    print(type(config.mode.preprocessor))
+    print(type(config.mode.feature_selection))
     
 if __name__ == "__main__":
     main()

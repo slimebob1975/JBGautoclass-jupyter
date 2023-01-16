@@ -1,5 +1,4 @@
 from __future__ import annotations
-import dis
 from enum import Enum
 import os
 from pathlib import Path
@@ -14,7 +13,6 @@ from sklearn.utils import Bunch
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
     AlgorithmTuple, Preprocess, PreprocessTuple, ScoreMetric)
 from JBGExceptions import GuiWidgetsException
-from AutomaticClassifier import AutomaticClassifier
 import Helpers
 
 class WidgetConstant(Enum):
@@ -1103,11 +1101,6 @@ class Widgets:
     
     @property
     def output(self) -> widgets.Output:
-        # TODO: Should be scrollable
-        """ Jag har lagt till en scrollable-option på Output-widgeten. 
-        Men den verkar inte fungera. Skulle vilja se att man verkligen 
-        kan scrolla horisontellt när det är stora utskrifter som görs.
-        """
         name = sys._getframe().f_code.co_name # Current function name
         return self._load_widget(name)
     
