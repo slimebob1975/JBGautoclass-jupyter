@@ -373,11 +373,7 @@ def widget_parameters() -> dict:
         },
         "output": {
         },
-        "mispredicted_gridbox": {
-            "pre__load": {
-                "value": "<p>No mispredicted training data was detected yet</p>"
-            }
-        },
+        "mispredicted_gridbox": {},
     }
 
 class TestWidgets:
@@ -714,11 +710,11 @@ class TestWidgets:
         output = widgets.output
         assert isinstance(output, ipywidgets.Output)
 
-        # Mispredicted Gridbox, HTML
-        mispredicted_gridbox = widgets.mispredicted_gridbox
-        assert isinstance(mispredicted_gridbox, ipywidgets.HTML)
-        assert mispredicted_gridbox.value == widget_parameters["mispredicted_gridbox"]["pre__load"]["value"]
+        # Mispredicted Output
+        output = widgets.mispredicted_output
+        assert isinstance(output, ipywidgets.Output)
 
+        
     def test_properties(self, widgets, widget_parameters) -> None:
         """ Tests properties that are not widgets """
 

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import sys
 import json
+from IPython.display import display, update_display
 
 from typing import Callable, Protocol
 import ipywidgets as widgets
@@ -438,7 +439,6 @@ class Widgets:
             self.rerun_state = True
         
         self.output.clear_output(wait=True)
-        
         self.guihandler.run_classifier(config_params=self.get_config_params(), output=self.output)
 
     def set_rerun(self) -> None:
@@ -466,9 +466,15 @@ class Widgets:
             row_items += [reclassify_dropdown]
             items += row_items 
         
+        # HERE
         gridbox_layout = widgets.Layout(grid_template_columns="repeat("+ str(cols) +", auto)", border="4px solid grey")
         self.widgets["mispredicted_gridbox"] = widgets.GridBox(items, layout=gridbox_layout)
-        display(self.mispredicted_gridbox)
+        header = widgets.HTML("<h3>Reclassification table for most mispredicted</h3>")
+        with self.mispredicted_output:
+            display(header)
+            display(self.mispredicted_gridbox)
+        
+        
 
     
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
@@ -718,15 +724,12 @@ class Widgets:
         self.id_column.options = \
             [var for var in list(self.datatype_dict.keys()) if var != self.class_column.value and self.datatype_dict[var] in Config.INT_DATATYPES]
        
-        #self.update_item("id_column", { "options": self.options_excluding_selected(self.class_column) })
-
+    
     def update_data_columns(self) -> None:
         """ Removes id column from data columns """
 
         self.data_columns.options = \
             [var for var in list(self.datatype_dict.keys()) if var not in (self.class_column.value, self.id_column.value)]
-
-        #self.update_item("data_columns", { "options": self.options_excluding_selected(self.id_column) })
 
 
     def options_excluding_selected(self, source: widgets.Select) -> list:
@@ -753,7 +756,6 @@ class Widgets:
             self.enable_button("continuation_button")
         else:
             self.disable_button("continuation_button")
-        
 
 
     def get_item_or_error(self, name: str) -> widgets.Widget:
@@ -1105,7 +1107,12 @@ class Widgets:
         return self._load_widget(name)
     
     @property
-    def mispredicted_gridbox(self) -> widgets.Label:
+    def mispredicted_gridbox(self) -> widgets.GridBox:
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name)
+
+    @property
+    def mispredicted_output(self) -> widgets.Output:
         name = sys._getframe().f_code.co_name # Current function name
         return self._load_widget(name)
         
@@ -1124,4 +1131,6 @@ class Widgets:
                     """ Empty for now """
                     #print(item)
                 else:
-                    display(widget)
+                    display(widget, display_id=item)
+
+        

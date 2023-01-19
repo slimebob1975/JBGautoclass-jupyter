@@ -22,7 +22,6 @@ def bare_iris_config() -> Config:
             trusted_connection=True,
             class_catalog="DatabaseOne",
             class_table="ResultTable",
-            class_table_script="createtable.sql.txt",
             class_username="some_fake_name",
             class_password="",
             data_catalog="DatabaseTwo",

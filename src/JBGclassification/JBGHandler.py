@@ -63,9 +63,6 @@ class Logger(Protocol):
     def print_warning(self, *args) -> None:
         """ print warning """
 
-    def print_table_row(self, items: list[str], divisor: str = None) -> None:
-        """ Prints row of items, with optional divisor"""
-
     def print_result_line(self, algorithm_name: str, preprocessor_name: str, num_features: float, temp_score, temp_stdev, test_score, t, failure:str) -> None:
         """ Prints information about a specific result line """
 
@@ -1088,7 +1085,7 @@ class ModelHandler:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
-        self.handler.logger.print_info("Spot check ml algorithms...\n")
+        self.handler.logger.print_info("Spot checking ML algorithms")
         
         # Prepare a list of feature reduction transforms to loop over
         reductions = self.handler.config.mode.feature_selection.list_callable_reductions(*dh.X.shape)
@@ -1295,7 +1292,7 @@ class ModelHandler:
             columns=["Preprocessor","Feature Reduction","Algorithm","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
         resultsMatrix.sort_values(by = ["Test data","Mean cv","Stdev."], axis = 0, ascending = [False, False, True], \
             inplace = True, ignore_index = True)
-        self.handler.logger.display_matrix(f"Modell test performance in descending order:", resultsMatrix)
+        self.handler.logger.display_matrix(f"Model test performance in descending order", resultsMatrix)
         
         # Save cross validation results to csv file
         resultsMatrix.to_csv(path_or_buf = cross_validation_filepath, sep = ';', na_rep='N/A', \

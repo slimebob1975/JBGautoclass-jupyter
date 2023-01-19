@@ -9,6 +9,34 @@ from typing import Iterable
 
 import numpy as np
 import pandas
+import IPython.display
+
+def config_dict_to_list(order: int, config_dict: dict[str, str]) -> list[str]:
+    """ Helps simplify the __str__ of the Config.* classes """
+    title = config_dict.pop("title") # As all the places it's using right now has a title, it's a breaking error if not
+    str_list = [f"{order}. {title}"] + [f" * {key}: {value}" for key, value in config_dict.items()]
+    
+    return "\n".join(str_list)
+
+
+def html_wrapper(element: str, text: str) -> str:
+    """ Wraps the text in HTML tags """
+    return f"<{element}>{text}</{element}>"
+
+def print_html(*args, **kwargs) -> None:
+        """ Uses Display and HTML to display a text, possibly wrapped in HTML-tags """
+        
+        if kwargs.get("terminal_only"):
+            return # This is an element that is only written in the terminal
+        
+        html_function = kwargs.get("html_function")
+        text = " ".join([str(arg) for arg in args])
+        if callable(html_function):
+            text = html_function(text)
+        else:
+            text = html_wrapper("p", text)
+        
+        IPython.display.display(IPython.display.HTML(text))
 
 def positive_int_or_none(value: int) -> bool:
     if value is None:

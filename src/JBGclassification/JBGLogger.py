@@ -1,17 +1,19 @@
 from datetime import datetime
+from functools import partial
 import sys
 from numpy import ndarray
 import pandas as pd
 import terminal
-from typing import Protocol
+from typing import Protocol, Union
 import IPython.display
 
 from JBGHandler import Model, PredictionsHandler
+from Helpers import html_wrapper, print_html
 
 # Using Protocol to simplify imports
 class Config(Protocol):
-    def __str__(self) -> str:
-        print("Config Protocol")
+    def to_dict(self) -> dict[str, Union[str, dict[str, str]]]:
+        """ Gets all subdicts as dicts """
 
 class JBGLogger(terminal.Logger):
 
@@ -62,49 +64,69 @@ class JBGLogger(terminal.Logger):
     def print_welcoming_message(self, config: Config, date_now: datetime) -> None:
         
         # Print welcoming message
-        self.print_unformatted("\n *** WELCOME TO JBG AUTOMATIC CLASSIFICATION SCRIPT ***\n")
+        if self.in_terminal:
+            title = "\n *** WELCOME TO JBG AUTOMATIC CLASSIFICATION SCRIPT ***\n"
+        else:
+            title = "Welcome to JBG Automatic Classification Script"
+        h1 = partial(html_wrapper, "h1")
+        self.print_unformatted(title, html_function=h1)
         self.print_unformatted("Execution started at: {0:>30s} \n".format(str(date_now)))
 
-        # Print configuration settings
-        self.print_unformatted(config)
+        self.print_config_settings(config)
 
-    def get_table_format(self) -> str:
-        return "{0:>4s}{1:>4s}{2:<6s}{3:>6s}{4:>8s}{5:>8s}{6:>8s}{7:>11s} {8:<30s}"
 
-    def print_table_row(self, items: list[str], divisor: str = None) -> None:
-        """ Prints a row with optional divisor"""
-        self.print_unformatted(self.get_table_format().format(*items))
+    def print_config_settings(self, config: Config) -> None:
+        """ Prints out the dicts with various information as matrixes """
+        #self.print_unformatted(config, terminal_only = True)
+        config_dict = config.to_dict()
 
-        if divisor is not None:
-            self.print_unformatted(divisor*65)
+        h2 = partial(html_wrapper, "h2")
+        config_title = config_dict.pop("title")
+        self.print_unformatted(config_title, html_function=h2)
+        self.print_unformatted("Headers marked with (*) are optional in the config")
+
+        # config_dict is now a dictionary of string keys and dict[str, str] containing the data of each subclass
+        for index, subclass_dict in enumerate(config_dict.values()):
+            subclass_title = f"{index + 1}. {subclass_dict.pop('title')}"
+            df = pd.DataFrame.from_dict(data=subclass_dict, orient="index", columns=[""])
+            self.display_matrix(subclass_title, df, print_always=False)
+
 
     def print_components(self, component, components, exception = None) -> None:
         if exception is None:
             self.print_unformatted(f"{component} n_components is set to {components}")
 
         else:
-            self.warn(f"{component} could not be used with n_components = {components}: {exception}")
+            self.print_warning(f"{component} could not be used with n_components = {components}: {exception}")
 
     def print_formatted_info(self, message: str) -> None:
-        self.print_unformatted(f" -- {message} --")
-
-    def print_info(self, *args) -> None:
-        self.print_unformatted(' '.join(args))
-
-    def print_always(self, *args) -> None:
-        """ This ignores the quiet flag and should always be printed out """
+        if self.in_terminal:
+            message = f" -- {message} --"
+        else:
+            message = f"<strong>{message}</strong"
         
-        return self.writeln("always", *args)
+        self.print_unformatted(message)
 
+    def print_info(self, *args, **kwargs) -> None:
+        self.print_unformatted(*args, **kwargs)
+
+    def print_always(self, *args, **kwargs) -> None:
+        """ This ignores the quiet flag and should always be printed out """
+        if self.in_terminal:
+            return self.writeln("always", *args)
+        
+        print_html(*args, **kwargs)
+
+        return self
+    
     def print_prediction_report(self, evaluation_data: str, accuracy_score: float, confusion_matrix: ndarray, class_labels: list, \
         classification_matrix: dict) -> None:
         """ Printing out info about the prediction"""
         self.print_progress(message="Evaluate predictions")
-
         self.print_always(f"Evaluation performed with evaluation data: " + evaluation_data)
         self.print_always(f"Accuracy score for evaluation data: {accuracy_score}")
-        self.display_matrix(f"Confusion matrix for evaluation data:", pd.DataFrame(confusion_matrix, columns=class_labels, index=class_labels))
-        self.display_matrix(f"Classification matrix for evaluation data:", pd.DataFrame.from_dict(classification_matrix).transpose())
+        self.display_matrix(f"Confusion matrix for evaluation data", pd.DataFrame(confusion_matrix, columns=class_labels, index=class_labels))
+        self.display_matrix(f"Classification matrix for evaluation data", pd.DataFrame.from_dict(classification_matrix).transpose())
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
         if message is not None:
@@ -117,14 +139,25 @@ class JBGLogger(terminal.Logger):
                 self.print_unformatted(f"{percent*100:.0f}% completed")
             self._set_widget_value("progress_bar", percent)
 
-    def print_error(self, *args) -> None:
-        self.error(' '.join(args))
+    def print_error(self, *args, **kwargs) -> None:
+        if self.in_terminal:
+            return self.error(*args)
 
-    def print_warning(self, *args) -> None:
-        self.warn(' '.join(args))
+        print_html(*args, **kwargs)
+
+        return self
+        
+
+    def print_warning(self, *args, **kwargs) -> None:
+        if self.in_terminal:
+            return self.warn(*args)
+
+        print_html(*args, **kwargs)
+
+        return self
 
     def print_exit_error(self, *args) -> None:
-        self.print_error(' '.join(args))
+        self.print_error(*args)
         self._set_widget_value("progress_bar", 1.0)
 
     def _set_widget_value(self, widget: str, value) -> None:
@@ -148,28 +181,23 @@ class JBGLogger(terminal.Logger):
     def print_dataset_investigation(self, dataset, class_column: str, show_class_distribution: bool = True):
 
         try: 
-            self.start("Looking at dataset:")
+            h2 = partial(html_wrapper, "h2")
+            self.print_unformatted("Looking at dataset", html_function=h2)
             # 1. shape
-            self.print_unformatted("Shape:", dataset.shape)
+            self.print_unformatted("Shape", dataset.shape)
             
             # 2. head
-            #self.print_unformatted("Head:",dataset.head(20))
-            self.display_matrix("Head:", dataset.head(20))
+            self.display_matrix("Head", dataset.head(20))
             
             # 3. Data types
-            #self.print_unformatted("Datatypes:",dataset.dtypes)
-            self.display_matrix("Datatypes:", pd.DataFrame(dataset.dtypes, columns=["Datatype"]))
+            self.display_matrix("Datatypes", pd.DataFrame(dataset.dtypes, columns=["Datatype"]))
             
             if show_class_distribution:
                 # 4. Class distribution
-                #self.print_unformatted("Class distribution: ")
-                #self.print_unformatted(dataset.groupby(dataset[class_column]).size()) 
-                self.display_matrix("Class distribution: ", pd.DataFrame(dataset.groupby(dataset[class_column]).size(), \
+                self.display_matrix("Class distribution", pd.DataFrame(dataset.groupby(dataset[class_column]).size(), \
                     columns=["Support"]))
         except Exception as e:
             self.print_warning(f"An error occured in investigate_dataset: {str(e)}")
-
-        self.end()
 
     
     # Show statistics in standard output
@@ -179,29 +207,23 @@ class JBGLogger(terminal.Logger):
         pd.set_option('display.width', 100)
         pd.set_option('display.precision', 3)
         description = dataset.describe(datetime_is_numeric = True)
-        #self.print_unformatted("Description:")
-        #self.print_unformatted(description)
-        self.display_matrix("Description:", pd.DataFrame(description))
+        self.display_matrix("Description", pd.DataFrame(description))
         
         # 2. Correlations
         pd.set_option('display.width', 100)
         pd.set_option('display.precision', 3)
         try:
             correlations = dataset.corr('pearson', numeric_only=False)
-        except Exception as ex:
+        except Exception:
             correlations = dataset.corr('pearson')
-        #self.print_unformatted("Correlation between attributes:")
-        #self.print_unformatted(description)
-        self.display_matrix("Correlation between attributes:", pd.DataFrame(correlations))
+        self.display_matrix("Correlation between attributes", pd.DataFrame(correlations))
 
         # 3. Skew
         try:
             skew = dataset.skew(numeric_only=False)
         except Exception as ex:
             skew = dataset.skew()
-        #self.print_unformatted("Skew of Univariate descriptions")
-        #self.print_unformatted(skew, "\n")
-        self.display_matrix("Skew of Univariate descriptions:", pd.DataFrame(skew, columns=["Skew"]))
+        self.display_matrix("Skew of Univariate descriptions", pd.DataFrame(skew, columns=["Skew"]))
 
 
     def print_classification_report(self, report: dict, model: Model, num_features: int):
@@ -209,18 +231,35 @@ class JBGLogger(terminal.Logger):
         if self._enable_quiet:
             return self
 
-        self.start(f"Classification report for {model.preprocess.name}-{model.reduction.name}-{model.algorithm.name} with #features: {num_features}")
-        for key, value in report.items():
-            self.print_unformatted(f"{key}: {value}")
+        title = f"Classification report for {model.preprocess.name}-{model.reduction.name}-{model.algorithm.name} with #features: {num_features}"
+        if self.in_terminal:
+            self.start(title)
+            for key, value in report.items():
+                self.print_unformatted(f"{key}: {value}", terminal_only = True)
 
-        self.end()
+            self.end()
+
+        else:
+            h3 = partial(html_wrapper, "h3")
+            self.print_unformatted(title, html_function = h3)
+            item_list = [html_wrapper("li", f"{key}: {value}") for key, value in report.items()]
+            ul = partial(html_wrapper, "ul")
+            
+            self.print_unformatted(*item_list, html_function = ul)
+        
 
     def is_quiet(self) -> bool:
         return self._enable_quiet
 
     def print_query(self, type: str, query: str) -> None:
-        message = f"Query for {type}: {query}"
-        self.debug(message)
+        if self.in_terminal:
+            message = f"Query for {type}: {query}"
+            self.debug(message)
+        else:
+            message = f"Query for <em>{type}</em>: {query}"
+            self.print_unformatted(message)
+        
+
 
     def print_dragon(self, exception: Exception) -> None:
         """ Type of Unhandled Exceptions, to handle them for the future """
@@ -243,12 +282,18 @@ class JBGLogger(terminal.Logger):
         print(" "*200, end='\r')
 
     # This is to avoid the annoying "info:" in front of all lines. Debug/warning/Error should still use the normal
-    def print_unformatted(self, *args) -> None:
+    def print_unformatted(self, *args, **kwargs) -> None:
         if self._enable_quiet:
             return self
         
-        return self.writeln('unformatted', *args)
+        if self.in_terminal:
+            return self.writeln('unformatted', *args)
 
+        print_html(*args, **kwargs)
+
+        return self
+
+    # print_percentage and print_linebreak are in validate_dataset in DatasetHandler and parse_dataset in SQLDataLayer
     def print_percentage(self, text: str, percent: float, old_percent: float = 0) -> None:
         if self._enable_quiet or (old_percent > 0 and old_percent >= percent):
             return
@@ -269,14 +314,24 @@ class JBGLogger(terminal.Logger):
         mean, std = ph.get_rates(as_string = False)
         self.print_info("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
     
-    def display_matrix(self, title: str, matrix: pd.DataFrame) -> None:
-        self.print_always(title)
+    def display_matrix(self, title: str, matrix: pd.DataFrame, print_always: bool = True) -> None:
+        """ Prints out a matrix, but only if it's verbose, or print_always is True """
+        if self._enable_quiet and not print_always:
+            return self
+        
+        h3 = partial(html_wrapper, "h3")
+        
+        self.print_always(title, html_function=h3)
         pd.set_option('display.max_rows', None)
         pd.set_option('display.max_columns', None)
         pd.set_option('display.width', 1000)
+        pd.set_option('display.max_colwidth', None) # This makes sure no column info gets cut off due to long content
         pd.set_option('display.colheader_justify', 'center')
         pd.set_option('display.precision', 2)
         IPython.display.display(matrix)
+
+        if (self.in_terminal):
+            print("\n")
 
     # Makes sure the GUI isn't left hanging if exceptions crash the program
     def abort_cleanly(self, message: str) -> None:

@@ -127,12 +127,14 @@ class GUIHandler:
 
         self.logger.set_enable_quiet(not config_params["io"].verbose)
         the_classifier = autoclass(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
+        
         with output:
             result = the_classifier.run()
             if not result:
                 self.logger.print_info("No data was fetched from database!")
-            elif result["mispredicted"] is not None:
-                self.widgets.handle_mispredicted(**result)    
+        
+        if result["mispredicted"] is not None:
+            self.widgets.handle_mispredicted(**result)    
         
         self.widgets.set_rerun()
 

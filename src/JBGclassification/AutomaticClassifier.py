@@ -26,7 +26,6 @@ import time
 from datetime import datetime, timedelta
 
 import pandas
-from pandas import DataFrame
 
 # Imports of local help class for communication with SQL Server
 import Config
@@ -87,13 +86,13 @@ class AutomaticClassifier:
 
         return dh, mh, ph
 
-    def run(self):
+    def run(self) -> dict:
         """ The classification function """
         self.logger.print_progress(message="Starting up ...", percent=0.0)
         
         # Print a welcoming message for the audience
         self.logger.print_welcoming_message(config=self.config, date_now=self.date_now)
-
+        
         # Do some things prior to running the classification itself
         self.pre_run()
         tr = JBGTaskRunner.TaskRunner( self.datalayer, self.config, self.logger, self.handler)
@@ -112,7 +111,7 @@ class AutomaticClassifier:
         # However, pre_run is a good place to put things that needs to be run in the first stages
         # of the classifier
 
-    def post_run(self) -> int:
+    def post_run(self) -> dict:
         elapsed_time = time.time() - self.clock1
         date_again = datetime.now()
         message = f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again:%Y-%m-%d %H:%M}"

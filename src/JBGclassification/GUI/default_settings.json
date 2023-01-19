@@ -358,12 +358,14 @@
             }
             
         },
+        "mispredicted_output": {
+            "type": "Output",
+            "params": {}
+        },
         "mispredicted_gridbox": {
-            "type": "HTML",
+            "type": "Gridbox",
             "params": {
-                "description": "Label changer table:",
-                "value": "<p>No mispredicted training data was detected yet</p>",
-                "description_tooltip": "The computational process is shown here"
+                "description_tooltip": "Mispredicted elements will be editable here if there are any"
 
             }
         }
@@ -385,7 +387,8 @@
         "debug_form",
         "start_button",
         "progress_form",
-        "output"
+        "output",
+        "mispredicted_output"
     ],
     "sections": {
         "data": [

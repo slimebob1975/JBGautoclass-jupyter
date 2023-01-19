@@ -24,9 +24,6 @@ connection = {
     # Database table for results for classification
     "class_table": "ResultTable",
 
-    # Creation script for classification table results
-    "class_table_script": "createtable.sql.txt",
-
     # User information for classification
     # Notice: ignored if trusted_connection = "true".
     "class_username": "some_fake_name",

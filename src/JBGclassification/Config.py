@@ -28,6 +28,8 @@ class Config:
     CONFIG_FILENAME_START = "autoclassconfig_"
     CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py.txt"
 
+    CLASS_TABLE_SCRIPT = "./sql/CreatePredictionTables.sql.txt"
+
     DEFAULT_MODELS_PATH =  ".\\model\\"
     DEFAULT_MODEL_EXTENSION = ".sav"
     DEFAULT_TRAIN_OPTION = "Train a new model"
@@ -42,7 +44,6 @@ class Config:
         "connection.trusted_connection": "<trusted_connection>",
         "connection.class_catalog": "<class_catalog>", 
         "connection.class_table": "<class_table>",
-        "connection.class_table_script": "<class_table_script>",
         "connection.class_username": "<class_username>",
         "connection.class_password": "<class_password>",
         "connection.data_catalog": "<data_catalog>",
@@ -85,7 +86,6 @@ class Config:
         trusted_connection: bool = True
         class_catalog: str = ""
         class_table: str = ""
-        class_table_script: str = "./sql/CreatePredictionTables.sql.txt"
         class_username: str = ""
         class_password: str = ""
         data_catalog: str = ""
@@ -104,7 +104,6 @@ class Config:
                 isinstance(self.host, str),
                 isinstance(self.class_catalog, str),
                 isinstance(self.class_table, str),
-                isinstance(self.class_table_script, str),
                 isinstance(self.class_username, str),
                 isinstance(self.class_password, str),
                 isinstance(self.data_catalog, str),
@@ -263,27 +262,38 @@ class Config:
             return params
 
         def __str__(self) -> str:
-            str_list = [
-                " 1. Database settings ",
-                f" * ODBC driver (when applicable):           {self.odbc_driver}",
-                f" * Classification Host:                     {self.host}",
-                f" * Trusted connection:                      {self.trusted_connection}",
-                f" * Classification Table:                    {self.class_catalog}",
-                f" * Classification Table:                    {self.class_table}",
-                f" * Classification Table creation script:    {self.class_table_script}",
-                f" * Classification Db username (optional):   {self.class_username}",
-                f" * Classification Db password (optional)    {self.class_password}\n",
-                f" * Data Catalog:                            {self.data_catalog}",
-                f" * Data Table:                              {self.data_table}",
-                f" * Classification column:                   {self.class_column}",
-                f" * Text Data columns (CSV):                 {', '.join(self.data_text_columns)}",
-                f" * Numerical Data columns (CSV):            {', '.join(self.data_numerical_columns)}",
-                f" * Unique data id column:                   {self.id_column}",
-                f" * Data username (optional):                {self.data_username}",
-                f" * Data password (optional):                {self.data_password}",
-            ]
+            order = 1
+
+            return Helpers.config_dict_to_list(order, self.to_dict())
             
-            return "\n".join(str_list)
+
+        def to_dict(self) -> dict[str, str]:
+            """ A dict with the headers for each value """
+            class_username = self.class_username if self.class_username else None
+            class_password= self.class_password if self.class_password else None
+            data_username = self.data_username if self.data_username else None
+            data_password = self.data_password if self.data_password else None
+
+            str_dict = {
+                "title": "Database settings", # 1
+                "ODBC driver (when applicable)":         self.odbc_driver,
+                "Classification Host":                   self.host,
+                "Trusted connection":                    self.trusted_connection,
+                "Classification Table":                  self.class_catalog,
+                "Classification Table":                  self.class_table,
+                "Classification Db username (*)": class_username,
+                "Classification Db password (*)": class_password,
+                "Data Catalog":                          self.data_catalog,
+                "Data Table":                            self.data_table,
+                "Classification column":                 self.class_column,
+                "Text Data columns (CSV)":               ', '.join(self.data_text_columns),
+                "Numerical Data columns (CSV)":          ', '.join(self.data_numerical_columns),
+                "Unique data id column":                 self.id_column,
+                "Data username (*)":              data_username,
+                "Data password (*)":              data_password,
+            }
+
+            return str_dict
 
     @dataclass
     class IO:
@@ -302,14 +312,21 @@ class Config:
 
         
         def __str__(self) -> str:
-            str_list = [
-                " 3. I/O specifications ",
-                f" * Verbosity:                               {self.verbose}",
-                f" * Path where to save generated model:      {self.model_path}",
-                f" * Name of generated or loaded model:       {self.model_name}"
-            ]
+            order = 3
 
-            return "\n".join(str_list)        
+            return Helpers.config_dict_to_list(order, self.to_dict())
+            
+
+        def to_dict(self) -> dict[str, str]:
+            """ A dict with the headers for each value """
+            str_dict = {
+                "title": "I/O specifications", #3
+                "Show full info":                             self.verbose,
+                "Path where to save generated model":    self.model_path,
+                "Name of generated or loaded model":     self.model_name
+            }
+
+            return str_dict    
 
     @dataclass
     class Mode:
@@ -405,29 +422,38 @@ class Config:
                     raise TypeError(f"Argument {item} must be True or False")
 
         def __str__(self) -> str:
-            str_list = [
-                " 2. Classification mode settings ",
-                f" * Train new model:                         {self.train}",
-                f" * Make predictions with model:             {self.predict}",
-                f" * Display mispredicted training data:      {self.mispredicted}",
-                f" * Pass on meta data for predictions:       {self.mispredicted}",
-                f" * Use stop words:                          {self.use_stop_words}",
-                f" * Material specific stop words threshold:  {self.specific_stop_words_threshold}",
-                f" * Hex encode text data:                    {self.hex_encode}",
-                f" * Categorize text data where applicable:   {self.use_categorization}",
-                f" * Force categorization to these columns:   {', '.join(self.category_text_columns)}",
-                f" * Test size for trainings:                 {self.test_size}",
-                f" * Use SMOTE:                               {self.smote}",
-                f" * Use undersampling of majority class:     {self.undersample}",
-                f" * Algorithms of choice:                    {self.algorithm.full_name}",
-                f" * Preprocessing method of choice:          {self.preprocessor.full_name}",
-                f" * Scoring method:                          {self.scoring.full_name}",
-                f" * Feature selection:                       {self.feature_selection.full_name}",
-                f" * Number of selected features:             {self.num_selected_features}",
-                f" * Maximum iterations (where applicable):   {self.max_iterations}"
-            ]
+            order = 2
 
-            return "\n".join(str_list)
+            return Helpers.config_dict_to_list(order, self.to_dict())
+            
+
+        def to_dict(self) -> dict[str, str]:
+            """ A dict with the headers for each value """
+            forced_columns = ', '.join(self.category_text_columns) if len(self.category_text_columns) > 0 else None
+
+            str_dict = {
+                "title": "Classification mode settings", #2
+                "Train new model":                       self.train,
+                "Make predictions with model":           self.predict,
+                "Display mispredicted training data":    self.mispredicted,
+                "Pass on meta data for predictions":     self.mispredicted,
+                "Use stop words":                        self.use_stop_words,
+                "Material specific stop words threshold":self.specific_stop_words_threshold,
+                "Hex encode text data":                  self.hex_encode,
+                "Categorize text data where applicable": self.use_categorization,
+                "Force categorization to these columns": forced_columns,
+                "Test size for trainings":               self.test_size,
+                "Use SMOTE":                             self.smote,
+                "Use undersampling of majority class":   self.undersample,
+                "Algorithms of choice":                  self.algorithm.full_name,
+                "Preprocessing method of choice":        self.preprocessor.full_name,
+                "Scoring method":                        self.scoring.full_name,
+                "Feature selection":                     self.feature_selection.full_name,
+                "Number of selected features":           self.num_selected_features,
+                "Maximum iterations (where applicable)": self.max_iterations
+            }
+
+            return str_dict
 
     @dataclass
     class Debug:
@@ -444,13 +470,21 @@ class Config:
                     "Argument data_limit must be a positive integer")
 
         def __str__(self) -> str:
-            str_list = [
-                " 4. Debug settings  ",
-                f" * Debugging on:                            {self.on}",
-                f" * How many data rows to consider:          {self.data_limit}"
-            ]
+            order = 4
 
-            return "\n".join(str_list)   
+            return Helpers.config_dict_to_list(order, self.to_dict())
+            
+
+        def to_dict(self) -> dict[str, str]:
+            """ A dict with the headers for each value """
+            str_dict = {
+                "title": "Debug settings", #4
+                "Debugging on":                          self.on,
+                "How many data rows to consider":        self.data_limit
+            }
+
+            return str_dict
+
     
     connection: Connection = field(default_factory=Connection)
     mode: Mode  = field(default_factory=Mode)
@@ -559,6 +593,18 @@ class Config:
             str(self.debug)
         ]
         return  "\n".join(str_list)
+
+    def to_dict(self) -> dict[str, Union[str, dict[str, str]]]:
+        """ Gets all subdicts as dicts """
+        str_dict = {
+            "title": "Configuration settings",
+            "connection": self.connection.to_dict(),
+            "mode": self.mode.to_dict(),
+            "io": self.io.to_dict(),
+            "debug": self.debug.to_dict()
+        }
+
+        return str_dict
 
     @classmethod
     def get_username(self) -> str:
@@ -694,7 +740,6 @@ class Config:
                 trusted_connection=module.connection["trusted_connection"],
                 class_catalog=module.connection["class_catalog"],
                 class_table=module.connection["class_table"],
-                class_table_script=module.connection["class_table_script"],
                 class_username=module.connection["class_username"],
                 class_password=module.connection["class_password"],
                 data_catalog=module.connection["data_catalog"],
@@ -779,7 +824,7 @@ class Config:
     def get_classification_script_path(self) -> Path:
         """ Gives a calculated path based on config"""
         
-        return self.script_path / self.connection.class_table_script
+        return self.script_path / Config.CLASS_TABLE_SCRIPT
     
     def get_none_or_positive_value(self, attribute: str) -> int:
         value = self.get_attribute(attribute)
@@ -1086,15 +1131,14 @@ def period_to_brackets(string: str) -> str:
 
 
 def main():
+    # python Config.py -f .\config\test_iris.py
     if len(sys.argv) > 1:
         config = Config.load_config_from_module(sys.argv)
     else:
        config = Config()
 
     
-    print(type(config.mode.algorithm))
-    print(type(config.mode.preprocessor))
-    print(type(config.mode.feature_selection))
+    print(config)
     
 if __name__ == "__main__":
     main()
