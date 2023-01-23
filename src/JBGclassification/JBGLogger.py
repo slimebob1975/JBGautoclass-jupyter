@@ -103,11 +103,12 @@ class JBGLogger(terminal.Logger):
         if self.in_terminal:
             message = f" -- {message} --"
         else:
-            message = f"<strong>{message}</strong"
+            message = f"<b>{message}</b"
         
         self.print_unformatted(message)
 
     def print_info(self, *args, **kwargs) -> None:
+        # TODO: some of these should have a bit more HTML
         self.print_unformatted(*args, **kwargs)
 
     def print_always(self, *args, **kwargs) -> None:
@@ -256,7 +257,7 @@ class JBGLogger(terminal.Logger):
             message = f"Query for {type}: {query}"
             self.debug(message)
         else:
-            message = f"Query for <em>{type}</em>: {query}"
+            message = f"Query for <em>{type}</em>: <pre>{query}</pre>"
             self.print_unformatted(message)
         
 
@@ -293,7 +294,13 @@ class JBGLogger(terminal.Logger):
 
         return self
 
+    def anaconda_debug(self, message: str):
+        """ This is specifically for calls that will not get redirected to an Output """
+        return self.debug(message)
+
+
     # print_percentage and print_linebreak are in validate_dataset in DatasetHandler and parse_dataset in SQLDataLayer
+    # TODO: change to progress bar for output
     def print_percentage(self, text: str, percent: float, old_percent: float = 0) -> None:
         if self._enable_quiet or (old_percent > 0 and old_percent >= percent):
             return

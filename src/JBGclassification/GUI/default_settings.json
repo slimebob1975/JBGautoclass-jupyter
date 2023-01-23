@@ -426,5 +426,20 @@
             "num_variables",
             "start_button"
         ]
+    },
+    "styles": {
+        "mispredicted": {
+            ".widget-dropdown": [
+                "width: fit-content"
+            ],
+            ".widget-label": [
+                "border-bottom: 2px dashed grey"
+            ],
+            ".header": [
+                "padding-right: 10px",
+                "text-align: center",
+                "font-weight: bold"
+            ]
+        }
     }
 }

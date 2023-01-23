@@ -4,15 +4,17 @@ import os
 from pathlib import Path
 import sys
 import json
-from IPython.display import display, update_display
+from IPython.display import display
 
 from typing import Callable, Protocol
 import ipywidgets as widgets
-from pandas import DataFrame
+from pandas import DataFrame, Series
 from sklearn.utils import Bunch
 
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
     AlgorithmTuple, Preprocess, PreprocessTuple, ScoreMetric)
+from JBGTextHandling import TextDataToNumbersConverter
+        
 from JBGExceptions import GuiWidgetsException
 import Helpers
 
@@ -86,6 +88,7 @@ class EventHandler:
         if not self.lock_observe_1:
             self.widgets.update_class_id_data_columns()
         
+        self.widgets.disable_post_model_dropdowns() # Locks all except project name
         if change.new == 1: # This is the default train option
             self.widgets.disable_button("continuation_button")
             return
@@ -104,8 +107,7 @@ class EventHandler:
             # This is still disabled
             return
 
-        if change.name == "index" and change.old != change.new: # This is not done automatically
-            self.widgets.summarise_state = True
+        self.widgets.summarise_state = True # NB: It will not update the summary if summarise_state = False
  
         """ update_id_and_data_columns
         """
@@ -221,7 +223,7 @@ class DataLayer(Protocol):
         """ Used in the GUI, gets name and type for columns """
         
 class GUIhandler(Protocol):
-    def get_class_distribution(self, data_settings: dict) -> dict:
+    def get_class_distribution(self, data_settings: dict, current_class: str) -> dict:
         """ Help function to avoid Widgets knowing about classifier DataLayer """
 
     def run_classifier(self) -> None:
@@ -229,10 +231,6 @@ class GUIhandler(Protocol):
 
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
         """ Changes the original dataset """
-
-    @property
-    def logger(self):
-        """ Signifies the logger property """
 
     @property
     def datalayer(self) -> DataLayer:
@@ -449,37 +447,71 @@ class Widgets:
         self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
         
     def handle_mispredicted(self, mispredicted: DataFrame, unique_classes: list[str]) -> None:
-        items = [widgets.Label(mispredicted.index.name)] + \
-            [widgets.Label(item) for item in mispredicted.columns] + \
-            [widgets.Label("Reclassify as")]
+        """ Creates a gridbox with one row for each item and a dropdown to select whether to change the value in the database """
+        items = [widgets.Label(x).add_class("header") for x in [mispredicted.index.name] + mispredicted.columns.tolist() + ["Reclassify as"]]
+        
         cols = len(items)
         for i in mispredicted.index:
             row = mispredicted.loc[i]
-            row_items = [widgets.Label(str(row.name))]
+            row_name = str(row.name)
+            row_items = [widgets.Label(row_name)]
             for item in row.index: 
                 row_items.append(self.get_text_widget(row[item]))
-            dropdown_options = [('Keep', 0)]
-            for label in unique_classes:
-                dropdown_options.append((label, (label, row.name)))
-            reclassify_dropdown = widgets.Dropdown(options = dropdown_options, value = 0, description = '', disabled = False)
-            reclassify_dropdown.observe(self.eventhandler.reclassify_dropdown__value,'value')
-            row_items += [reclassify_dropdown]
+            row_items.append(self.reclassify_dropdown(unique_classes, row_name))
             items += row_items 
         
-        # HERE
-        gridbox_layout = widgets.Layout(grid_template_columns="repeat("+ str(cols) +", auto)", border="4px solid grey")
+        
+        gridbox_layout = widgets.Layout(
+            grid_template_columns=f"repeat({cols}, max-content)",
+            border="4px solid grey",
+            row_gap="5px"
+        )
         self.widgets["mispredicted_gridbox"] = widgets.GridBox(items, layout=gridbox_layout)
         header = widgets.HTML("<h3>Reclassification table for most mispredicted</h3>")
+        styles = self.create_inpage_styles("mispredicted",  self.mispredicted_gridbox)
         with self.mispredicted_output:
+            display(styles)
             display(header)
             display(self.mispredicted_gridbox)
-        
-        
+
+    def create_inpage_styles(self, section: str, widget: widgets.Widget) -> widgets.HTML:
+        """ 
+            Defined in default_settings.json it uses the section to get a dict
+            Section (as a class) scopes the selectors
+        """
+        widget.add_class(section)
+        styles_dict = self.settings.get("styles")
+        section_styles = styles_dict.get(section)
+        if not section_styles:
+            print(f"Section {section} does not exist in settings.styles")
+            return
+
+        styles = []
+        for selector, properties in section_styles.items():
+            scoped_selector = f".{section} {selector}" #ex .mispredicted .widget-dropdown
+            
+            scoped_styles = "; ".join(properties) # ex: width: fit-content; border: blue
+            
+            styles.append(f"{scoped_selector} {{ {scoped_styles} }}")
+
+        html_string = Helpers.html_wrapper("style", " ".join(styles))
+        return widgets.HTML(html_string)
+
+
+    def reclassify_dropdown(self, unique_classes: list[str], row_name: str) -> widgets.Dropdown:
+        dropdown_options = [('Keep', 0)] + [(label, (label, row_name)) for label in unique_classes]
+        reclassify_dropdown = widgets.Dropdown(options = dropdown_options, value = 0, description = '', disabled = False)
+        reclassify_dropdown.observe(self.eventhandler.reclassify_dropdown__value,'value')
+
+        return reclassify_dropdown
 
     
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
-        """ From the reclassify dropdown change"""
-        self.guihandler.classifier_datalayer.correct_mispredicted_data(new_class, index)
+        """ 
+            From the reclassify dropdown change 
+            Wrapper function since EventHandler does not have access to GUIhandler
+        """
+        self.guihandler.correct_mispredicted_data(new_class, index)
 
 
     def get_text_widget(self, element):
@@ -622,6 +654,13 @@ class Widgets:
         }
         self.update_item("data_tables_dropdown", updates)
 
+    def disable_post_model_dropdowns(self) -> None:
+        """ Disables the Catalogs, Tables and Models dropdowns once model is set """
+        self.disable_items([
+                "data_catalogs_dropdown",
+                "data_tables_dropdown"
+            ])
+
     def update_models_dropdown_options(self) -> None:
         preface = ["", Config.DEFAULT_TRAIN_OPTION]
         
@@ -704,18 +743,24 @@ class Widgets:
         
         current_class = self.class_column.value
         
-        try:
-            distribution = self.guihandler.get_class_distribution(self.data_settings)
-        except Exception as e:
-            message = f"Could not update summary for class: {current_class} because {e}"
-            self.guihandler.logger.print_info(message)
-        else: # No exception
-            dist_items = '; '.join(f'{key} ({value})' for key, value in distribution.items())
-            new_text = f"<em>Class column</em>: {current_class}<br>"
-            new_text += f"<em>Distribution</em>: {dist_items}<br>"
-            new_text += f"<em>Total rows</em>: {sum(distribution.values())}" 
-            
-            self.class_summary.value = new_text
+        distribution = self.guihandler.get_class_distribution(self.data_settings, current_class)
+        number_of_categories = len(distribution)
+        
+        dist_items = '; '.join(f'{key} ({value})' for key, value in distribution.items())
+        texts = [
+
+        ]
+        texts.append(f"<em>Class column</em>: {current_class}")
+        distro_title = "<em>Distribution</em>"
+        distro_text = dist_items
+        if number_of_categories > TextDataToNumbersConverter.LIMIT_IS_CATEGORICAL:
+            distro_text = f"<b>Invalid class column</b> (category count {number_of_categories} higher than limit of {TextDataToNumbersConverter.LIMIT_IS_CATEGORICAL})"
+        
+        texts.append(f"{distro_title}: {distro_text}")
+        texts.append(f"<em>Total rows</em>: {sum(distribution.values())}" )
+        
+    
+        self.class_summary.value = "<br>".join(texts)
         
 
     def update_id_column(self) -> None:

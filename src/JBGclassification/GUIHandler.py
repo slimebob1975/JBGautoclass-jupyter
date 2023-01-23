@@ -73,15 +73,22 @@ class GUIHandler:
             
         })
 
-    def get_class_distribution(self, data_settings: dict) -> dict:
+    def get_class_distribution(self, data_settings: dict, current_class: str) -> dict:
         """ Widgets does not need to know about Classifier Datalayer """
         datalayer = self.get_classifier_datalayer(data_settings=data_settings)
         try:
             distribution = datalayer.count_class_distribution()
         except DataLayerException as e:
             self.logger.abort_cleanly(str(e))
+        except Exception as e:
+            message = f"Could not update summary for class: {current_class} because {e}"
+            self.logger.anaconda_debug(message)
 
         return distribution
+
+    def correct_mispredicted_data(self, new_class: str, index: int) -> None:
+        """ Changes the original dataset """
+        self.classifier_datalayer.correct_mispredicted_data(new_class, index)
 
     def get_classifier_datalayer(self, data_settings: dict = None, config_params: dict = None) -> DataLayer:
         """ This will create or update the layer, and should probably also include the start_classifier() stuff
@@ -132,11 +139,13 @@ class GUIHandler:
             result = the_classifier.run()
             if not result:
                 self.logger.print_info("No data was fetched from database!")
+            
         
         if result["mispredicted"] is not None:
             self.widgets.handle_mispredicted(**result)    
         
         self.widgets.set_rerun()
+        
 
     def display_gui(self) -> None:
         self.widgets.display_gui()

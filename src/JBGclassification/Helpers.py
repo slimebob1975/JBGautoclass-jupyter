@@ -19,9 +19,16 @@ def config_dict_to_list(order: int, config_dict: dict[str, str]) -> list[str]:
     return "\n".join(str_list)
 
 
-def html_wrapper(element: str, text: str) -> str:
+def html_wrapper(element: str, text: str, attributes: dict[str, str] = None) -> str:
     """ Wraps the text in HTML tags """
-    return f"<{element}>{text}</{element}>"
+    opening_tag = f"<{element}"
+    if attributes:
+        for attribute, value in attributes.items():
+            if value:
+                opening_tag += f' {attribute}="{value}"'
+    opening_tag += ">"
+    
+    return f"{opening_tag}{text}</{element}>"
 
 def print_html(*args, **kwargs) -> None:
         """ Uses Display and HTML to display a text, possibly wrapped in HTML-tags """
