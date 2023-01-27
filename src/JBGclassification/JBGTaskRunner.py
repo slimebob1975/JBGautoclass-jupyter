@@ -73,6 +73,11 @@ class Config(Protocol):
     def get_output_filepath(self, type: str, pwd: Path = None) -> str:
         """ Simplifies the path/names of output files """
 
+    def get_model_filename(self, pwd: Path = None) -> str:
+        """ Set the name and path of the model file
+            The second parameter allows for injecting the path for reliable testing
+        """
+
 @dataclass
 class TaskRunner:
     """ Runs the tasks of the classification"""

@@ -11,6 +11,30 @@ import numpy as np
 import pandas
 import IPython.display
 
+def save_matrix_as_csv(matrix: pandas.DataFrame, filepath: str, index_label: str = None) -> None:
+    """ Unifies any matrices saved to CSV """
+    matrix.to_csv(
+        path_or_buf = filepath,
+        sep = ';',
+        na_rep='N/A',
+        float_format=None,
+        columns=None,
+        header=True,
+        index=True,
+        index_label=index_label,
+        mode='w',
+        encoding='utf-8',
+        compression='infer',
+        quoting=None,
+        quotechar='"',
+        line_terminator=None,
+        chunksize=None,
+        date_format=None,
+        doublequote=True,
+        decimal=',',
+        errors='strict')
+
+
 def config_dict_to_list(order: int, config_dict: dict[str, str]) -> list[str]:
     """ Helps simplify the __str__ of the Config.* classes """
     title = config_dict.pop("title") # As all the places it's using right now has a title, it's a breaking error if not

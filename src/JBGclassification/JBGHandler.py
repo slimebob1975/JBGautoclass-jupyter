@@ -25,7 +25,7 @@ from sklearn.pipeline import Pipeline
 from stop_words import get_stop_words
 
 from Config import Config
-from JBGMeta import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform, ReductionTuple
+from JBGMeta import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
 from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
 from JBGTextHandling import TextDataToNumbersConverter
@@ -838,7 +838,7 @@ class ModelHandler:
                         k,
                         dh.X_train,
                         dh.Y_train)
-                    self.handler.logger.print_key_value_pair("Optimized parameters after grid search", model.pipeline.get_params(deep=False))
+                    self.handler.logger.print_code("Optimized parameters after grid search", model.pipeline.get_params(deep=False))
                 except ModelException as ex:
                     # In case all estimators failed to fit, use ordinary fit as fallback
                     self.handler.logger.print_info(f"Grid search failed: {str(ex)}. Using ordinary fit as fallback for: {model_name}. " + \
@@ -1425,7 +1425,6 @@ class PredictionsHandler:
 
     # Evaluates mispredictions
     def evaluate_mispredictions(self, misplaced_filepath: str) -> None:
-        read_data_query = self.handler.read_data_query
         try:
             if self.X_most_mispredicted.empty or not self.handler.config.should_display_mispredicted():
                 return 
@@ -1434,20 +1433,16 @@ class PredictionsHandler:
         
         self.handler.logger.print_key_value_pair(f"Total number of mispredicted elements", self.num_mispredicted, print_always=True)
         
-        # HERE: Should be in DataLayer ... right? Also, use "id in []" form
-        joiner = self.handler.config.get_id_column_name() + " = \'"
-        most_mispredicted_query = read_data_query + " WHERE " +  joiner \
-            + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
+        ids = ', '.join([str(id) for id in self.X_most_mispredicted.index.tolist()])
+        most_mispredicted_query = f"{self.handler.read_data_query} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
         
         self.handler.logger.print_code("Get the most misplaced data by SQL query", most_mispredicted_query)
         self.handler.logger.print_code("Open the following csv-data file to get the full list", misplaced_filepath)
-        
-        self.X_mispredicted.to_csv(path_or_buf = misplaced_filepath, sep = ';', na_rep='N/A', \
-                                float_format=None, columns=None, header=True, index=True, \
-                                index_label=self.handler.config.get_id_column_name(), mode='w', encoding='utf-8', \
-                                compression='infer', quoting=None, quotechar='"', line_terminator=None, \
-                                chunksize=None, date_format=None, doublequote=True, decimal=',', \
-                                errors='strict')
+        Helpers.save_matrix_as_csv(
+            self.X_mispredicted,
+            misplaced_filepath,
+            self.handler.config.get_id_column_name()
+        )
     
     # Make predictions on dataset
     def make_predictions(self, model: Pipeline, X: pandas.DataFrame, classes: pandas.Series, Y: pandas.DataFrame = None) -> bool:

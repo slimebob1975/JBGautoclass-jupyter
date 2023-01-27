@@ -7,8 +7,7 @@ import terminal
 from typing import Protocol, Union
 import IPython.display
 
-from JBGHandler import Model
-from Helpers import html_wrapper, print_html
+from Helpers import html_wrapper, print_html, save_matrix_as_csv
 
 # Using Protocol to simplify imports
 class Config(Protocol):
@@ -377,10 +376,7 @@ class JBGLogger(terminal.Logger):
             inplace = True, ignore_index = True)
 
         # Save cross validation results to csv file
-        resultsMatrix.to_csv(path_or_buf = cross_validation_filepath, sep = ';', na_rep='N/A', \
-            float_format=None, columns=None, header=True, index=True, index_label=None, mode='w', \
-            encoding='utf-8', compression='infer', quoting=None, quotechar='"', line_terminator=None, \
-            chunksize=None, date_format=None, doublequote=True, decimal=',', errors='strict')
+        save_matrix_as_csv(resultsMatrix, cross_validation_filepath)
         self.display_matrix(f"Model test performance in descending order", resultsMatrix)
 
     def display_matrix(self, title: str, matrix: pd.DataFrame, print_always: bool = True) -> None:
