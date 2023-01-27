@@ -507,6 +507,8 @@ class DatasetHandler:
             self.Y_prediction = None
             self.X_prediction = None
         
+        self.handler.logger.print_key_value_pair("Data rows with known class label", self.X.shape[0])
+        self.handler.logger.print_key_value_pair("Data rows with unknown class label", num_un_pred)
         # Original training+validation data are stored for later reference
         self.X_original = self.X.copy(deep=True)
         self.Y_original = self.Y.copy(deep=True)

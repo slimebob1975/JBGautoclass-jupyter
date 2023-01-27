@@ -441,6 +441,7 @@ class Widgets:
             self.rerun_state = True
         
         self.output.clear_output(wait=True)
+        self.mispredicted_output.clear_output()
         self.guihandler.run_classifier(config_params=self.get_config_params(), output=self.output)
 
     def set_rerun(self) -> None:

@@ -1,5 +1,5 @@
 import os
-import pickle
+import dill
 from Config import Config
 from JBGMeta import Algorithm, Preprocess, Reduction, ScoreMetric, AlgorithmTuple, PreprocessTuple, ReductionTuple
 
@@ -89,7 +89,7 @@ def save_model_to_file(filename, config, model = None):
             None
         ]
         
-        pickle.dump(data, open(filename,'wb'))
+        dill.dump(data, open(filename,'wb'))
     except Exception as e:
         print(f"Something went wrong on saving model to file: {e}")
 

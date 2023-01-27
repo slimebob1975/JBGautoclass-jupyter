@@ -1,3 +1,6 @@
+.result-display {
+    padding: 5px
+}
 .result-display .dataframe tbody td,
 .result-display .dataframe tbody th {
     text-align: left
