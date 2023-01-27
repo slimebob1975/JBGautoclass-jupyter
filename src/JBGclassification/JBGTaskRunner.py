@@ -35,8 +35,17 @@ class Logger(Protocol):
     def print_error(self, *args) -> None:
         """ Printing error """
     
-    def print_training_rates(self, ph) -> None:
-        """ Prints a report on the training rates """
+    def print_code(self, title: str, code: str) -> None:
+        """ Prints out a text with a (in output) code-tagged end """
+
+    def print_prediction_results(self, results: dict) -> None:
+        """ Prints a nicely formatted query and the number of rows """
+    
+    def print_prediction_info(self, predictions: dict, rates: tuple = None) -> None:
+        """ Info before trying to save predictions """
+    
+    def print_task_header(self, title: str) -> None:
+        """ Prints an h2 for each task"""
 
 
 class DataLayer(Protocol):
@@ -115,6 +124,7 @@ class TaskRunner:
 
     def load_model__task(self) -> dict:
         """ Load the appropriate model """
+        self.logger.print_task_header(title="Loading model")
         # Print out what mode we use: training a new model or not
         if self.config.should_train():
             self.mh.load_model()
@@ -135,6 +145,7 @@ class TaskRunner:
         """ 
         Fetches the dataset from the database, and if there is none calls for an early exit
         """
+        self.logger.print_task_header(title="Fetching data")
         data =  self.datalayer.get_dataset()
 
         if data is None:
@@ -145,6 +156,7 @@ class TaskRunner:
 
     def load_dataset__task(self, data: list) -> dict:
         """ Validates the data and loads it into the datset handler """
+        self.logger.print_task_header(title="Loading dataset")
         try:
             self.dh.load_data(data)
         except Exception as e:
@@ -157,6 +169,7 @@ class TaskRunner:
         """ 
             Separates the known from unknown data, and splits into training/test sets
         """
+        self.logger.print_task_header(title="Separate dataset into known and unknown")
         # Separate data with know classifications from data with unknown class
         self.dh.separate_dataset()
         
@@ -168,7 +181,8 @@ class TaskRunner:
     
     def convert_to_numbers__task(self) -> dict:
         """ Text and categorical variables must be converted to numbers """
-
+        self.logger.print_task_header(title="Convert text to numbers")
+        
         self.logger.print_progress(message="Convert dataset to numbers only")
         
         self.mh.model.update_field(
@@ -185,12 +199,14 @@ class TaskRunner:
             K-value should be 10 or below.
             Or just use the model previously trained.
         """
+        self.logger.print_task_header(title="Train model")
+        
         # NOTICE: This major task uses another progressbar share inside DatasetHandler.spot_check_machine_learning_models,
         # so the number of progress bar shares will be the total number of "Major task":s + 1.
         try:
             output_filename = self.config.get_output_filepath("cross_validation")
             self.logger.print_progress(message="Check and train algorithms for best model")
-            self.logger.print_unformatted("Cross validation filepath:", output_filename)
+            self.logger.print_code("Cross validation filepath", output_filename)
             self.mh.train_model(self.dh, output_filename)
             self.mh.save_model_to_file(self.mh.handler.config.get_model_filename())
         except Exception as e:
@@ -201,12 +217,13 @@ class TaskRunner:
 
     def evaluate_model__task(self) -> dict:
         """ Evaluate trained model on know testdata """
+        self.logger.print_task_header(title="Evaluate trained model")
         if self.dh.X_validation.shape[0] > 0:
             self.logger.print_progress(message="Make predictions on known testdata")
             
             self.ph.make_predictions(self.mh.model.pipeline, self.dh.X_validation, self.dh.classes, self.dh.Y_validation)
             
-            self.ph.report_results(self.dh.Y_validation, self.mh.model)
+            self.ph.report_results(self.dh.Y_validation)
             
             return {}
         else:
@@ -215,6 +232,7 @@ class TaskRunner:
 
     def retrain_model__task(self) -> dict:
         """ RETRAIN the best model on whole dataset with known classification """
+        self.logger.print_task_header(title="Retraining model")
         self.logger.print_progress(message="Retrain model on whole dataset")
         
         cross_trained_model = self.mh.load_pipeline_from_file(self.config.get_model_filename())
@@ -226,9 +244,11 @@ class TaskRunner:
 
     
     def display_mispredicted__task(self, cross_trained_model: Pipeline, trained_model: Pipeline) -> dict:
-        """ Compute and display mot mispredicted data samples for possible manual correction """
+        """ Compute and display most mispredicted data samples for possible manual correction """
         if not self.config.should_display_mispredicted():    
             return {}
+
+        self.logger.print_task_header(title="Calculating mispredictions")
             
         self.ph.most_mispredicted(self.dh.X_original, trained_model, cross_trained_model, self.dh.X, self.dh.Y)
 
@@ -239,22 +259,23 @@ class TaskRunner:
 
     def make_predictions__task(self) -> dict:
         """ Make predictions on non-classified dataset: X_unknown -> Y_unknown """
+        self.logger.print_task_header(title="Make predictions")
+        
+        if self.dh.X_prediction is None:
+            raise PredictionsException("No data to predict on")
+        
         if self.dh.X_prediction.shape[0] > 0:
             self.ph.make_predictions(self.mh.model.pipeline, self.dh.X_prediction, self.dh.classes)
             
-            self.logger.print_formatted_info("Predictions for the unknown data")
-            self.logger.print_info("Predictions:", str(Helpers.count_value_distr_as_dict(self.ph.predictions.tolist())))
-            
-            self.logger.print_training_rates(self.ph)
-            
+            rates = self.ph.get_rates(as_string = False) if self.ph.could_predict_proba else None
+            predictions = Helpers.count_value_distr_as_dict(self.ph.predictions.tolist())
+            self.logger.print_prediction_info(predictions, rates)
             saved_results = self.handler.save_predictions()
             if (saved_results["error"] is not None):
                 self.logger.print_error(f"Saving predictions failed: {saved_results['error']}")
 
             else:
-                results = saved_results["results"]
-                line =  f"Added {results['row_count']} rows to prediction table. Get them with SQL query:\n\n{results['query']}"
-                self.logger.print_info(line)
+                self.logger.print_prediction_results(saved_results["results"])
         else:
             raise PredictionsException("No data to predict on")
 

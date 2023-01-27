@@ -6,7 +6,7 @@ import sys
 import json
 from IPython.display import display
 
-from typing import Callable, Protocol
+from typing import Callable, Iterable, Protocol
 import ipywidgets as widgets
 from pandas import DataFrame, Series
 from sklearn.utils import Bunch
@@ -249,7 +249,7 @@ class Widgets:
         if settings:
             self.settings = settings
         else:
-            with open(Path(__file__).parent / "default_settings.json") as f: # The default_settings.json is sibling
+            with open(self.get_sibling_file_path("default_settings.json")) as f: # The default_settings.json is sibling
                 self.settings = json.load(f)
         
         self.eventhandler = EventHandler(self)
@@ -258,8 +258,8 @@ class Widgets:
         
         self.default_widgets = self.settings.get("widgets")
         self.sections = self.settings.get("sections")
-        self.logo_image = src_path / self.settings.get("logo")
-
+        self.logo_image =  self.get_sibling_file_path(self.settings.get("logo"))
+        
         self.states = {
             "rerun": False,
             "summarise": False,
@@ -280,6 +280,10 @@ class Widgets:
         # We need a dictionary to keep track of datatypes
         self.datatype_dict = None
     
+    def get_sibling_file_path(self, file: str) -> Path:
+        """ Gets a file in the same directory as the GUI module """
+        return Path(__file__).parent / file
+
     @property
     def datalayer(self) -> DataLayer:
         """ This returns the datalayer from the gui handler """
@@ -461,25 +465,21 @@ class Widgets:
             items += row_items 
         
         
-        gridbox_layout = widgets.Layout(
-            grid_template_columns=f"repeat({cols}, max-content)",
-            border="4px solid grey",
-            row_gap="5px"
-        )
-        self.widgets["mispredicted_gridbox"] = widgets.GridBox(items, layout=gridbox_layout)
+        self.mispredicted_gridbox.children = items
+        self.mispredicted_gridbox.layout.grid_template_columns = f"repeat({cols}, max-content)"
+        
         header = widgets.HTML("<h3>Reclassification table for most mispredicted</h3>")
-        styles = self.create_inpage_styles("mispredicted",  self.mispredicted_gridbox)
+        
         with self.mispredicted_output:
-            display(styles)
+            display(self.create_inpage_styles("mispredicted"))
             display(header)
             display(self.mispredicted_gridbox)
 
-    def create_inpage_styles(self, section: str, widget: widgets.Widget) -> widgets.HTML:
+    def create_inpage_styles(self, section: str) -> widgets.HTML:
         """ 
             Defined in default_settings.json it uses the section to get a dict
             Section (as a class) scopes the selectors
         """
-        widget.add_class(section)
         styles_dict = self.settings.get("styles")
         section_styles = styles_dict.get(section)
         if not section_styles:
@@ -890,6 +890,9 @@ class Widgets:
 
                 if handler:
                     self.widgets[name].observe(handler=handler)
+
+                if css_class := config.get("class"):
+                    self.widgets[name].add_class(css_class)
         
         return self.widgets[name]
         
@@ -1150,6 +1153,11 @@ class Widgets:
     def output(self) -> widgets.Output:
         name = sys._getframe().f_code.co_name # Current function name
         return self._load_widget(name)
+
+    @property
+    def output_title(self) -> widgets.HTML:
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name)
     
     @property
     def mispredicted_gridbox(self) -> widgets.GridBox:
@@ -1160,10 +1168,27 @@ class Widgets:
     def mispredicted_output(self) -> widgets.Output:
         name = sys._getframe().f_code.co_name # Current function name
         return self._load_widget(name)
+
+    def _set_css_styles(self, css_file_paths: Iterable = None) -> widgets.HTML:
+        """
+        Read the custom CSS files and load them into Jupyter.
+        Pass the file path to the CSS file.
+        """
+        if not css_file_paths:
+            css_file_paths = self.settings.get("stylesheets")
+        
+        styles = []
+        for path in css_file_paths:
+            styles.append(open(self.get_sibling_file_path(path), "r").read())
+
+        s = '<style>%s</style>' % " ".join(styles)     
+        return widgets.HTML(s)
         
     def display_gui(self) -> None:
         """ Displays the elements in the given order """
         
+        display(self._set_css_styles())
+
         for item in self.settings.get("display"):
             if hasattr(self, item):
                 widget = getattr(self, item)

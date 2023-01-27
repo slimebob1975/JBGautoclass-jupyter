@@ -40,7 +40,7 @@ def get_model_path() -> Path:
     return this_file.parent / "fixtures/"
 
 def get_logo_path() -> Path:
-    return get_src_path() / "images/logo.png"
+    return get_src_path() / "GUI/assets/logo.png"
 
 @pytest.fixture
 def widgets() -> Widgets:
@@ -372,8 +372,20 @@ def widget_parameters() -> dict:
             }
         },
         "output": {
+            "class": "result-display"
         },
-        "mispredicted_gridbox": {},
+        "mispredicted_gridbox": {
+            "type": "GridBox",
+            "params": {
+                "description_tooltip": "Mispredicted elements will be editable here if there are any"
+
+            },
+            "layout": {
+                "border": "2px solid grey",
+                "row_gap": "5px"
+            },
+            "class": "mispredicted"
+        }
     }
 
 class TestWidgets:
@@ -713,6 +725,10 @@ class TestWidgets:
         # Mispredicted Output
         output = widgets.mispredicted_output
         assert isinstance(output, ipywidgets.Output)
+        
+        # Mispredicted gridbox
+        gridbox = widgets.mispredicted_gridbox
+        assert isinstance(gridbox, ipywidgets.GridBox)
 
         
     def test_properties(self, widgets, widget_parameters) -> None:

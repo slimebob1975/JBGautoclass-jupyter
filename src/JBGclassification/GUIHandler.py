@@ -135,6 +135,7 @@ class GUIHandler:
         self.logger.set_enable_quiet(not config_params["io"].verbose)
         the_classifier = autoclass(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
         
+        result = {"mispredicted": None} # Fullösning för nu
         with output:
             result = the_classifier.run()
             if not result:

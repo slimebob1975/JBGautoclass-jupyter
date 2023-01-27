@@ -7,7 +7,7 @@ import terminal
 from typing import Protocol, Union
 import IPython.display
 
-from JBGHandler import Model, PredictionsHandler
+from JBGHandler import Model
 from Helpers import html_wrapper, print_html
 
 # Using Protocol to simplify imports
@@ -62,18 +62,40 @@ class JBGLogger(terminal.Logger):
         self._enable_quiet = enable_quiet
     
     def print_welcoming_message(self, config: Config, date_now: datetime) -> None:
-        
+        """ Only when show info is True, this prints out information about the config and run """
         # Print welcoming message
         if self.in_terminal:
             title = "\n *** WELCOME TO JBG AUTOMATIC CLASSIFICATION SCRIPT ***\n"
-        else:
-            title = "Welcome to JBG Automatic Classification Script"
-        h1 = partial(html_wrapper, "h1")
-        self.print_unformatted(title, html_function=h1)
+            self.print_unformatted(title)
+        
         self.print_unformatted("Execution started at: {0:>30s} \n".format(str(date_now)))
 
         self.print_config_settings(config)
 
+    def print_code(self, key: str, code: str) -> None:
+        """ Prints out a text with a (in output) code-tagged end """
+
+        if not self.in_terminal:
+            key = f"<em>{key}</em>"
+            code = f"<code>{code}</code>"
+
+        else:
+            code = f"\n\t{code}"
+        
+        self.print_unformatted(f"{key}: {code}")
+
+    def print_key_value_pair(self, key: str, value, print_always: bool = False) -> None:
+        """ Prints out '<key>: <value>'"""
+
+        if not self.in_terminal:
+            key = f"<em>{key}</em>"
+        
+        printed = f"{key}: {value}"
+
+        if print_always:
+            self.print_always(printed)
+        else:
+            self.print_unformatted(printed)
 
     def print_config_settings(self, config: Config) -> None:
         """ Prints out the dicts with various information as matrixes """
@@ -108,8 +130,47 @@ class JBGLogger(terminal.Logger):
         self.print_unformatted(message)
 
     def print_info(self, *args, **kwargs) -> None:
-        # TODO: some of these should have a bit more HTML
-        self.print_unformatted(*args, **kwargs)
+        """ Wrapper that either uses print_unformatted or print_always, depending on the kwarg print_always"""
+        print_always = kwargs.pop("print_always", False)
+        if print_always:
+            self.print_always(*args, **kwargs)
+        else:
+            self.print_unformatted(*args, **kwargs)
+
+    
+    def print_prediction_results(self, results: dict) -> None:
+        """ Prints a nicely formatted query and the number of rows """
+        if self._enable_quiet:
+            return self
+
+        if self.in_terminal:
+            query = f"\n\n{results['query']}"
+        else:
+            query = f"<pre>{results['query']}</pre>"
+            
+        line = f"Added {results['row_count']} rows to prediction table. Get them with SQL query: {query}"
+        self.print_unformatted(line)
+
+
+    def print_prediction_info(self, predictions: dict, rates: tuple = None) -> None:
+        """ Info before trying to save predictions """
+        if self._enable_quiet:
+            return self
+
+        h3 = partial(html_wrapper, "h3")
+        self.print_unformatted("Predictions for the unknown data", html_function=h3)
+        self.print_unformatted(f"Predictions: {predictions}")
+        
+        if rates:
+            mean, std = rates
+            self.print_unformatted("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
+        
+    def print_task_header(self, title: str) -> None:
+        """ Prints an h2 for each task"""
+        if self._enable_quiet:
+            return self    
+        h2 = partial(html_wrapper, "h2")
+        self.print_unformatted(title, html_function=h2)
 
     def print_always(self, *args, **kwargs) -> None:
         """ This ignores the quiet flag and should always be printed out """
@@ -119,13 +180,23 @@ class JBGLogger(terminal.Logger):
         print_html(*args, **kwargs)
 
         return self
-    
-    def print_prediction_report(self, evaluation_data: str, accuracy_score: float, confusion_matrix: ndarray, class_labels: list, \
-        classification_matrix: dict) -> None:
+
+
+    def print_prediction_report(self, 
+        accuracy_score: float, 
+        confusion_matrix: ndarray, 
+        class_labels: list,
+        classification_matrix: dict, 
+        sample_rates: tuple[str, str] = None) -> None:
         """ Printing out info about the prediction"""
         self.print_progress(message="Evaluate predictions")
-        self.print_always(f"Evaluation performed with evaluation data: " + evaluation_data)
-        self.print_always(f"Accuracy score for evaluation data: {accuracy_score}")
+        evaluation_dict = {}
+        if sample_rates and not self._enable_quiet:
+            rate_string = "Mean: {0:5.3f}, std.dev: {1:5.3f}".format(*sample_rates)
+            evaluation_dict["Sample prediction probability rate"] = rate_string
+        evaluation_dict["Accuracy score for evaluation data"] = str(accuracy_score)
+    
+        self.display_matrix("Evaluation information", pd.DataFrame.from_dict(data=evaluation_dict, orient="index", columns=[""]))
         self.display_matrix(f"Confusion matrix for evaluation data", pd.DataFrame(confusion_matrix, columns=class_labels, index=class_labels))
         self.display_matrix(f"Classification matrix for evaluation data", pd.DataFrame.from_dict(classification_matrix).transpose())
 
@@ -133,6 +204,7 @@ class JBGLogger(terminal.Logger):
         if message is not None:
             if self.in_terminal:
                 self.print_unformatted(message)
+
             self._set_widget_value("progress_label", message)
 
         if percent is not None:
@@ -222,32 +294,10 @@ class JBGLogger(terminal.Logger):
         # 3. Skew
         try:
             skew = dataset.skew(numeric_only=False)
-        except Exception as ex:
+        except Exception:
             skew = dataset.skew()
         self.display_matrix("Skew of Univariate descriptions", pd.DataFrame(skew, columns=["Skew"]))
 
-
-    def print_classification_report(self, report: dict, model: Model, num_features: int):
-        """ Should only be printed if verbose """
-        if self._enable_quiet:
-            return self
-
-        title = f"Classification report for {model.preprocess.name}-{model.reduction.name}-{model.algorithm.name} with #features: {num_features}"
-        if self.in_terminal:
-            self.start(title)
-            for key, value in report.items():
-                self.print_unformatted(f"{key}: {value}", terminal_only = True)
-
-            self.end()
-
-        else:
-            h3 = partial(html_wrapper, "h3")
-            self.print_unformatted(title, html_function = h3)
-            item_list = [html_wrapper("li", f"{key}: {value}") for key, value in report.items()]
-            ul = partial(html_wrapper, "ul")
-            
-            self.print_unformatted(*item_list, html_function = ul)
-        
 
     def is_quiet(self) -> bool:
         return self._enable_quiet
@@ -267,12 +317,14 @@ class JBGLogger(terminal.Logger):
         message = f"Here be dragons: {type(exception)}"
         self.print_warning(message)
     
-    def print_result_line(self, reduction_name: str, algorithm_name: str, preprocessor_name: str, num_features: float, \
-        temp_score, temp_stdev, test_score, t, failure: str, ending: str = '\n') -> None:
+    def print_result_line(self, result: list, ending: str = "\r") -> None:
+        #def print_result_line(self, reduction_name: str, algorithm_name: str, preprocessor_name: str, num_features: float, \
+        #temp_score, temp_stdev, test_score, t, failure: str, ending: str = '\n') -> None:
         """ Prints information about a specific result line """
         if self._enable_quiet:
             return self
 
+        preprocessor_name,reduction_name,algorithm_name,num_features,temp_score,temp_stdev,test_score,t,failure = result
         print(
             "{0:>4s}-{1:>4s}-{2:<6s}{3:6d}{4:8.3f}{5:8.3f}{6:8.3f}{7:11.3f} {8:<30s}".
                 format(reduction_name,algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure),
@@ -313,14 +365,24 @@ class JBGLogger(terminal.Logger):
             return self
 
         print("\n")
-    #
-    def print_training_rates(self, ph: PredictionsHandler) -> None:
-        if not ph.could_predict_proba:
-            return
-        
-        mean, std = ph.get_rates(as_string = False)
-        self.print_info("Sample prediction probability rate, mean: {0:5.3f}, std.dev: {1:5.3f}".format(mean, std))
     
+    def print_test_performance(self, listOfResults: list, cross_validation_filepath: str) -> None:
+        """ 
+            Prints out the matrix of model test performance, given a list of results
+            Both to screen and CSV
+        """
+        resultsMatrix = pd.DataFrame(listOfResults,
+            columns=["Preprocessor","Feature Reduction","Algorithm","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
+        resultsMatrix.sort_values(by = ["Test data","Mean cv","Stdev."], axis = 0, ascending = [False, False, True], \
+            inplace = True, ignore_index = True)
+
+        # Save cross validation results to csv file
+        resultsMatrix.to_csv(path_or_buf = cross_validation_filepath, sep = ';', na_rep='N/A', \
+            float_format=None, columns=None, header=True, index=True, index_label=None, mode='w', \
+            encoding='utf-8', compression='infer', quoting=None, quotechar='"', line_terminator=None, \
+            chunksize=None, date_format=None, doublequote=True, decimal=',', errors='strict')
+        self.display_matrix(f"Model test performance in descending order", resultsMatrix)
+
     def display_matrix(self, title: str, matrix: pd.DataFrame, print_always: bool = True) -> None:
         """ Prints out a matrix, but only if it's verbose, or print_always is True """
         if self._enable_quiet and not print_always:

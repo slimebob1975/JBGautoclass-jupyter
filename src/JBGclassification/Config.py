@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import enum
 import os
-import pickle
+import dill
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -276,19 +276,19 @@ class Config:
 
             str_dict = {
                 "title": "Database settings", # 1
-                "ODBC driver (when applicable)":         self.odbc_driver,
-                "Classification Host":                   self.host,
-                "Trusted connection":                    self.trusted_connection,
-                "Classification Table":                  self.class_catalog,
-                "Classification Table":                  self.class_table,
+                "Driver":                         self.odbc_driver,
+                "Classification Host":            self.host,
+                "Trusted connection":             self.trusted_connection,
+                "Classification Table":           self.class_catalog,
+                "Classification Table":           self.class_table,
                 "Classification Db username (*)": class_username,
                 "Classification Db password (*)": class_password,
-                "Data Catalog":                          self.data_catalog,
-                "Data Table":                            self.data_table,
-                "Classification column":                 self.class_column,
-                "Text Data columns (CSV)":               ', '.join(self.data_text_columns),
-                "Numerical Data columns (CSV)":          ', '.join(self.data_numerical_columns),
-                "Unique data id column":                 self.id_column,
+                "Data Catalog":                   self.data_catalog,
+                "Data Table":                     self.data_table,
+                "Classification column":          self.class_column,
+                "Text Data columns (CSV)":        ', '.join(self.data_text_columns),
+                "Numerical Data columns (CSV)":   ', '.join(self.data_numerical_columns),
+                "Unique data id column":          self.id_column,
                 "Data username (*)":              data_username,
                 "Data password (*)":              data_password,
             }
@@ -628,8 +628,8 @@ class Config:
         
         return model_path / (self.io.model_name + Config.DEFAULT_MODEL_EXTENSION)
 
-    # Extracts the config information to save with a model
     def get_clean_config(self):
+        """ Extracts the config information to save with a model """
         configuration = Config()
         configuration.connection = copy.deepcopy(self.connection)
         configuration.connection.data_catalog = ""
@@ -687,7 +687,7 @@ class Config:
     @classmethod
     def load_config_from_model_file(cls: Type[T], filename: str, config: T = None) -> T:
         try:
-            file_values = pickle.load(open(filename, 'rb'))
+            file_values = dill.load(open(filename, 'rb'))
             saved_config = file_values[0]
         except Exception as e:
             raise ConfigException(f"Something went wrong on loading model from file: {e}")
@@ -986,6 +986,11 @@ class Config:
     def use_smote(self) -> bool:
         """ Simple check if it's used or note """
         return self.mode.smote
+
+    def set_smote(self, smote: bool) -> None:
+        """ Sets smote """
+
+        self.mode.smote = smote
     
     def get_undersampler(self) -> Union[RandomUnderSampler, None]:
         """ Gets the UnderSampler, or None if there should be none"""
@@ -1002,7 +1007,22 @@ class Config:
     def set_num_selected_features(self, num_features: int) -> None:
         """ Updates the config with the number """
         self.mode.num_selected_features = num_features
+
     
+    def get_callable_reductions(self, *args) -> list:
+        """ Returns callable reductions from mode.feature_selection """
+
+        return self.mode.feature_selection.list_callable_reductions(*args)
+
+    def get_callable_algorithms(self, *args) -> list:
+        """ Returns callable algorithms from mode.algorithm """
+
+        return self.mode.algorithm.list_callable_algorithms(*args)
+
+    def get_callable_preprocessors(self, *args) -> list:
+        """ Returns callable preprocessors from mode.algorithm """
+
+        return self.mode.preprocessor.list_callable_preprocessors(*args)
 
     def update_attribute(self, attribute: Union[str, dict], new_value) -> None:
         """ attribute is either a string on the form 'name.subname' 

@@ -43,25 +43,6 @@ class TestHandler():
         
         assert isinstance(default_handler.get_handler("dAtasEt"), DatasetHandler)
 
-    def test_save_classification_data(self, default_handler):
-        """ Tests that the classification data gets saved properly """
-
-        # 1. One (or more) of the handlers are not set, HandlerException
-        with pytest.raises(HandlerException):
-            default_handler.save_classification_data()
-
-        # 2. Upredicted keys are not set in datasethandler
-        self.add_handlers(default_handler)
-        with pytest.raises(HandlerException):
-            default_handler.save_classification_data()
-
-        # 3. Should hopefully work
-        dh = default_handler.get_handler("Dataset")
-        mh = default_handler.get_handler("Model")
-        mh.load_model()
-        keys = pandas.Series(dtype="float64") # This is to silence a warning about deprecation--the actual type is irrelevant
-        dh.set_unpredicted_keys(keys)
-        default_handler.save_classification_data()
         
         
 

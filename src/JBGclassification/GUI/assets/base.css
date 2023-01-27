@@ -1,0 +1,19 @@
+.result-display .dataframe tbody td,
+.result-display .dataframe tbody th {
+    text-align: left
+}
+.result-display .dataframe thead th {
+    text-align: center
+}
+
+.result-display h1 {
+    font-size: 1.728em
+}
+
+.result-display h2 {
+    font-size: 1.44em
+}
+
+.result-display h3 {
+    font-size: 1.2em
+}

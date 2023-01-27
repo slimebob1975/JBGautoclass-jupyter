@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import dill as pickle   # Ordinary pickle cant handle lamdba functions
+import dill
 import time
 import psutil
 import traceback
@@ -22,7 +22,6 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split, GridSearchCV)
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import LabelBinarizer
 from stop_words import get_stop_words
 
 from Config import Config
@@ -36,20 +35,19 @@ GIVE_EXCEPTION_TRACEBACK = False
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
-    def print_info(self, *args) -> None:
+    def print_info(self, *args, print_always: bool = False) -> None:
         """printing info"""
 
-    def print_always(self, *args) -> None:
-        """ This ignores the quiet flag and should always be printed out """
-
-    def print_prediction_report(self) -> None:
+    def print_prediction_report(self,  
+        accuracy_score: float, 
+        confusion_matrix: np.ndarray, 
+        class_labels: list,
+        classification_matrix: dict, 
+        sample_rates: tuple[str, str] = None) -> None:
         """ Printing out info about the prediction"""
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
         """Printing progress"""
-
-    def print_components(self, component, components, exception = None) -> None:
-        """ Printing Reduction components"""
 
     def print_formatted_info(self, message: str) -> None:
         """ Printing info with """
@@ -63,8 +61,20 @@ class Logger(Protocol):
     def print_warning(self, *args) -> None:
         """ print warning """
 
-    def print_result_line(self, algorithm_name: str, preprocessor_name: str, num_features: float, temp_score, temp_stdev, test_score, t, failure:str) -> None:
+    def print_test_performance(self, listOfResults: list, cross_validation_filepath: str) -> None:
+        """ 
+            Prints out the matrix of model test performance, given a list of results
+            Both to screen and CSV
+        """
+        
+    def print_result_line(self, result: list, ending: str = '\r') -> None:
         """ Prints information about a specific result line """
+
+    def clear_last_printed_result_line(self):
+        """ Clears a line that's printed using \r """
+
+    def print_linebreak(self) -> None:
+        """ Important after using \r for updates """
 
     def abort_cleanly(self, message: str) -> None:
         """ Exits the process """
@@ -72,14 +82,18 @@ class Logger(Protocol):
     def print_dragon(self, exception: Exception) -> None:
         """ Type of Unhandled Exceptions, to handle them for the future """
 
-    def print_training_rates(self, ph) -> None:
-        """ Prints a report on the training rates """
-
-    def print_classification_report(self, report: dict, model: Model, num_features: int):
-        """ Should only be printed if verbose """
-
     def update_progress(self, percent: float, message: str = None) -> float:
         """ Tracks the progress through the run """
+
+    def get_minor_percentage(self, minor_tasks: int) -> float:
+        """ Given a number of minor tasks, returns what percentage each is worth """
+
+    def print_key_value_pair(self, key: str, value, print_always: bool = False) -> None:
+        """ Prints out '<key>: <value>'"""
+
+    def print_code(self, key: str, code: str) -> None:
+        """ Prints out a text with a (in output) code-tagged end """
+   
 
 class DataLayer(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -101,21 +115,6 @@ class Config(Protocol):
     def set_num_selected_features(self, num_features: int) -> None:
         """ Updates the config with the number """
 
-    def get_model_filename(self, pwd: str = None) -> str:
-        """ Set the filename based on prediction or training """
-
-    def is_text_data(self) -> bool:
-        """True or False"""
-    
-    def is_numerical_data(self) -> bool:
-        """True or False"""
-
-    def force_categorization(self) -> bool:
-        """True or False"""
-
-    def column_is_numeric(self, column: str) -> bool:
-        """ Checks if the column is numerical """
-        
     def column_is_text(self, column: str) -> bool:
         """ Checks if the column is text based """
 
@@ -124,9 +123,6 @@ class Config(Protocol):
 
     def feature_selection_in(self, selection: list[Reduction]) -> bool:
         """ Checks if the selection is one of the given Reductions"""
-
-    def get_feature_selection(self) -> ReductionTuple:
-        """ Returns the chosen feature selection """
 
     def get_num_selected_features(self) -> int:
         """ Gets the number of selected features--0 if None"""
@@ -140,17 +136,11 @@ class Config(Protocol):
     def get_max_iterations(self) -> int:
         """ Get max iterations """
 
-    def is_verbose(self) -> bool:
-        """ Returns what the io.verbose is set to"""
-
     def get_column_names(self) -> list[str]:
         """ Gets the column names based on connection columns """
 
     def get_text_column_names(self) -> list[str]:
         """ Gets the specified text columns"""
-
-    def get_numerical_column_names(self) -> list[str]:
-        """ Gets the specified numerical columns"""
 
     def get_class_column_name(self) -> str:
         """ Gets the name of the column"""
@@ -187,6 +177,12 @@ class Config(Protocol):
 
     def get_smote(self) -> Union[SMOTE, None]:
         """ Gets the SMOTE for the model, or None if it shouldn't be """
+
+    def use_smote(self) -> bool:
+        """ Simple check if it's used or note """
+
+    def set_smote(self, smote: bool) -> None:
+        """ Sets smote """
         
     def get_undersampler(self) -> Union[RandomUnderSampler, None]:
         """ Gets the UnderSampler, or None if there should be none"""
@@ -197,12 +193,8 @@ class Config(Protocol):
     def get_scoring_mechanism(self) -> Union[str, Callable]:
         """ While the actual function is in the mechanism, this allows us to hide where Scoring is """
 
-    def get_algorithm(self) -> Algorithm:
-        """ Get algorithm from Config"""
-
-
-    def get_preprocessor(self) -> Preprocess:
-        """ get preprocessor from Config """
+    def get_clean_config(self):
+        """ Extracts the config information to save with a model """
         
 @dataclass
 class JBGHandler:
@@ -255,36 +247,6 @@ class JBGHandler:
         
         return data
    
-    def save_classification_data(self) -> None:
-        # Save new classifications for X_unknown in classification database
-        self.logger.print_progress(message="Save new classifications in database")
-
-        try:
-            dh = self.get_handler("dataset")
-            ph = self.get_handler("predictions")
-            mh = self.get_handler("model")
-        except HandlerException as e:
-            raise e
-        
-        try:
-            results = ph.get_prediction_results(dh.unpredicted_keys)
-        except AttributeError as e: 
-            raise HandlerException(e)
-
-        try:
-            results_saved = self.datalayer.save_data(
-                results,
-                class_rate_type=ph.get_rate_type(),
-                model=mh.model
-            )
-            
-        except Exception as e:
-            self.logger.print_dragon(exception=e)
-            raise HandlerException(e)
-        
-        saved_query = self.datalayer.get_sql_command_for_recently_classified_data(results_saved)
-        self.logger.print_info(f"Added {results_saved} rows to classification table. Get them with SQL query:\n\n{saved_query}")
-
     def save_predictions(self) -> dict:
         """ Save new predictions for X_unknown in prediction tables """
         try:
@@ -364,7 +326,6 @@ class DatasetHandler:
         # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
         # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
         # or similar from a certain starting point, if any are left after the conversion above.
-        #self.handler.logger.print_formatted_info(message="Consistency check")
         percent_checked = 0
         number_data_columns = len(dataset.columns) - 1
         column_number = 0
@@ -402,7 +363,7 @@ class DatasetHandler:
         # 50 iris-virginica, etc. Utan man vill ha lite slumpmässig utspridning. 
         # Kommentera bort rnd-mojen och kolla med att köra dataset.head(20) eller något sånt, 
         # om du tycker att class-variablen är hyfsat jämt utspridd för iris före och efter bortkommenteringen, ta bort rnd
-        self.handler.logger.print_formatted_info("Shuffle data")
+        self.handler.logger.print_formatted_info("Shuffling data")
         num_un_pred = self.get_num_unpredicted_rows(dataset) 
         num_lines = len(dataset.index)
         dataset['rnd'] = np.concatenate([np.random.rand(num_lines - num_un_pred), [num_lines]*num_un_pred])
@@ -494,7 +455,7 @@ class DatasetHandler:
             self.X_train = ttnc.transform(self.X_train)
             self.X_validation = ttnc.transform(self.X_validation)
 
-            self.handler.logger.print_info(f"Number of features after text and category conversion: {self.X.shape[1]}")
+            self.handler.logger.print_key_value_pair("Number of features after text and category conversion", self.X.shape[1])
             
         # If we should predict, apply converter even to X_prediction part of data
         if self.handler.config.should_predict():
@@ -506,86 +467,6 @@ class DatasetHandler:
 
         return ttnc
     
-    # Collapse all data text columns into a new column, which is necessary
-    # for word-in-a-bag-technique
-    def convert_textdata_to_numbers(self, model: Model):
-        """ This divides the columns, recreating them as self.X (dataframe) in the end """
-        # Continue with "left hand side":
-        # Prepare empty DataFrames
-        text_dataset = pandas.DataFrame()
-        num_dataset = pandas.DataFrame()
-        categorical_dataset = pandas.DataFrame()
-        binarized_dataset = pandas.DataFrame()
-
-        text_data = self.handler.config.is_text_data()
-
-        # While we could use model.* directly, I prefer using local variable and then return to be updated
-        label_binarizers = model.label_binarizers
-        count_vectorizer = model.count_vectorizer
-        tfid_transformer = model.tfid_transformer
-
-        # Create the numerical dataset
-        for column in self.handler.config.get_numerical_column_names():
-            num_dataset = pandas.concat([num_dataset, self.dataset[column]], axis = 1)
-
-        if text_data:
-            # Make sure to find the categorical data automatically
-            for column in self.handler.config.get_text_column_names():
-                if self.is_categorical_data(self.dataset[column]) or column in label_binarizers.keys():
-                    categorical_dataset = pandas.concat([categorical_dataset, self.dataset[column]], axis = 1)
-                    picked = "picked"
-                else:
-                    text_dataset = pandas.concat([text_dataset, self.dataset[column]], axis = 1)
-                    picked = "not picked"
-                
-                self.handler.logger.print_info(f"Text data {picked} for categorization: ", column)
-
-             # For concatenation, we need to make sure all text data are 
-            # really treated as text, and categorical data as categories
-            self.handler.logger.print_info("Text Columns:", str(text_dataset.columns))
-            if len(text_dataset.columns) > 0:
-
-                text_dataset = text_dataset.applymap(str)
-                
-                # Concatenating text data such that the result is another DataFrame  
-                # with a single column
-                text_dataset = text_dataset.agg(' '.join, axis = 1)
-                
-                # Convert text data to numbers using word-in-a-bag technique
-                text_dataset, count_vectorizer, tfid_transformer = self.word_in_a_bag_conversion(text_dataset, model)
-
-            # Continue with handling the categorical data.
-            # Binarize the data, resulting in more columns.
-            if len(categorical_dataset.columns) > 0:
-                categorical_dataset = categorical_dataset.applymap(str)
-                generate_new_label_binarizers = (len(label_binarizers) == 0)
-                for column in categorical_dataset.columns:
-                    lb = None
-                    if generate_new_label_binarizers:
-                        lb = LabelBinarizer()
-                        lb.fit(categorical_dataset[column])
-                        label_binarizers[column] = lb
-                    else:
-                        lb = label_binarizers[column]
-                    lb_results = lb.transform(categorical_dataset[column])
-                    try:
-                        if lb_results.shape[1] > 1:
-                            lb_results_df = pandas.DataFrame(lb_results, columns=lb.classes_)
-                            self.handler.logger.print_info(f"Column {column} was categorized with categories: {lb.classes_}")
-                        else:
-                            lb_results_df = pandas.DataFrame(lb_results, columns=[column])
-                            self.handler.logger.print_info(f"Column {column} was binarized")
-                    except ValueError as e:
-                        self.handler.logger.print_warning(f"Column {column} could not be binarized: {e}")
-                    binarized_dataset = pandas.concat([binarized_dataset, lb_results_df], axis = 1 )
-
-        self.X = self.create_X([text_dataset, num_dataset, binarized_dataset])
-
-        if text_data:
-            self.handler.logger.print_formatted_info("After conversion of text data to numerical data")
-            self.handler.logger.investigate_dataset( self.X, None, False, False )
-
-        return label_binarizers, count_vectorizer, tfid_transformer
     
     def create_X(self, frames: list[pandas.DataFrame], index: pandas.Int64Index = None) -> pandas.DataFrame:
         """ Creates a dataframe from text and numerical data """
@@ -680,12 +561,12 @@ class DatasetHandler:
                 my_language = self.STANDARD_LANG
                 self.handler.logger.print_warning(f"Language could not be detected automatically: {e}. Fallback option, use: {my_language}.")
             else:
-                self.handler.logger.print_info(f"Detected language is: {my_language}")
+                self.handler.logger.print_key_value_pair("Detected language is", my_language)
 
         # Calculate the lexical richness
         try:
             lex = LexicalRichness(' '.join(dataset)) 
-            self.handler.logger.print_info("#Words, #Terms and TTR for original text is {0}, {1}, {2:5.2f} %".format(lex.words,lex.terms,100*float(lex.ttr)))
+            self.handler.logger.print_key_value_pair("#Words, #Terms and TTR for original text is", "{0}, {1}, {2:5.2f} %".format(lex.words,lex.terms,100*float(lex.ttr)))
         except Exception as e:
             self.handler.logger.print_warning(f"Could not calculate lexical richness: {e}")
 
@@ -700,7 +581,7 @@ class DatasetHandler:
 
             # Get the languange specific stop words and encrypt them if necessary
             my_stop_words = get_stop_words(my_language)
-            self.handler.logger.print_info("Using standard stop words: ", str(my_stop_words))
+            self.handler.logger.print_key_value_pair("Using standard stop words", my_stop_words)
             if (self.handler.config.should_hex_encode()):
                 for word in my_stop_words:
                     word = Helpers.cipher_encode_string(str(word))
@@ -713,12 +594,12 @@ class DatasetHandler:
                     stop_vectorizer = CountVectorizer(min_df = threshold)
                     stop_vectorizer.fit_transform(dataset)
                     text_specific_stop_words = stop_vectorizer.get_feature_names()
-                    self.handler.logger.print_info("Using specific stop words: ", text_specific_stop_words)
+                    self.handler.logger.print_key_value_pair("Using specific stop words", text_specific_stop_words)
                 except ValueError as e:
                     self.handler.logger.print_warning(f"Specified stop words threshold at {threshold} generated no stop words.")
                 
                 my_stop_words = sorted(set(my_stop_words + text_specific_stop_words))
-                self.handler.logger.print_info("Total list of stop words:", my_stop_words)
+                self.handler.logger.print_key_value_pair("Total list of stop words", my_stop_words)
 
         # Use the stop words and count the words in the matrix        
         count_vectorizer = CountVectorizer(stop_words = my_stop_words)
@@ -736,10 +617,7 @@ class DatasetHandler:
 
         # Use the saved transform associated with trained model
         if model.transform is not None:
-            t0 = time.time()
             self.X = model.transform.transform(self.X)
-            t = time.time() - t0
-            #self.handler.logger.print_info(f"Feature reduction took {str(round(t,2))}  sec.")
 
         # In the case of missing training, we issue a warning
         else:
@@ -753,12 +631,8 @@ class DatasetHandler:
         if reduction in [Reduction.NOR, Reduction.RFE]:
             return None
  
-        t0 = time.time()
         self.X, feature_selection_transform = reduction.call_transformation_theory(logger=self.handler.logger, X=self.X, num_selected_features=None) 
-            #num_selected_features=self.handler.config.get_num_selected_features())
-
-        t = time.time() - t0
-        #self.handler.logger.print_info(f"Feature reduction took {str(round(t,2))}  sec.")
+        
         
         return feature_selection_transform
         
@@ -807,7 +681,7 @@ class Model:
     n_features_out: int = field(default=None)
 
     def update_fields(self, fields: list[str], update_function: Callable) -> bool:
-        """ Updates fields, getting the values from a Cal lable (ex dh.convert_textdata_to_numbers) """
+        """ Updates fields, getting the values from a Callable (ex dh.convert_textdata_to_numbers) """
         values = update_function(self)
 
         try:
@@ -861,7 +735,7 @@ class ModelHandler:
         try:
             class_labels = self.model.class_labels
         except AttributeError as e:
-            self.handler.logger.print_info(f"No classes_ attribute in Model.Pipeline, using original classes as fallback: {e}")
+            self.handler.logger.print_key_value_pair("No classes_ attribute in Model.Pipeline, using original classes as fallback", e)
             class_labels = [y for y in set(Y) if y is not None]
 
         return class_labels
@@ -876,7 +750,7 @@ class ModelHandler:
     # Load ml model
     def load_model_from_file(self, filename: str) -> Model:
         try:
-            _config, text_converter, pipeline_names, pipeline, n_features = pickle.load(open(filename, 'rb'))
+            _config, text_converter, pipeline_names, pipeline, n_features = dill.load(open(filename, 'rb'))
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on loading model from file: {e}")
             return None
@@ -897,7 +771,7 @@ class ModelHandler:
 
     # load pipeline
     def load_pipeline_from_file(self, filename: str) -> Pipeline:
-        self.handler.logger.print_info(f"loading pipeline from {filename}")
+        self.handler.logger.print_code("Loading pipeline from", filename)
         model = self.load_model_from_file(filename)
 
         return model.pipeline
@@ -915,7 +789,7 @@ class ModelHandler:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something unknown went wrong on training model: {str(e)}")
 
-    def get_model_from(self, dh, cross_validation_filepath: str) -> Model:
+    def get_model_from(self, dh: DatasetHandler, cross_validation_filepath: str) -> Model:
         
         # Prepare for k-folded cross evaluation
         # Calculate the number of possible folds of the training data. The k-value is chosen such that
@@ -924,15 +798,15 @@ class ModelHandler:
         k = min(self.STANDARD_K_FOLDS, k_train)
         
         # If smote is turned on, we need to have at least two samples of the smallest class in each fold
-        if self.handler.config.mode.smote:
+        if self.handler.config.use_smote():
             k2 = int(float(k_train) / self.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE)
             if k2 < 2:
                 self.handler.logger.print_warning(f"The smallest class is of size {k}, which is to small for using smote in cross-validation. Turning SMOTE off!") 
-                self.handler.config.mode.smote = False
+                self.handler.config.set_smote(False)
             else:
                 k = min(k, k2)
         if k < self.STANDARD_K_FOLDS:
-            self.handler.logger.print_info(f"Using non-standard k-value for cross-validation of algorithms: {k}")
+            self.handler.logger.print_key_value_pair("Using non-standard k-value for cross-validation of algorithms", k)
         
         try:
             # Find the best model
@@ -940,32 +814,32 @@ class ModelHandler:
             if model is None:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
-            # Make sure data is restored from original
-            #dh.X = dh.X_unreduced.copy(deep=True)
-
             # Now train the picked model on training data, either with a grid search or ordinary fit.
             # We assume the algorithm is the last step in the pipeline.
             model_name = model.get_name()
             alg_name = model_name.split('-')[-1]
             t0 = time.time()
             if not model.algorithm.search_params.parameters:
-                self.handler.logger.print_info(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
-                self.handler.logger.print_progress(f"\nUsing ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
+                self.handler.logger.print_progress(f"Using ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
                 model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             else:
-                self.handler.logger.print_info(f"\nUsing grid search for final training of model {model_name}...")
-                self.handler.logger.print_progress(f"\nUsing grid search for final training of model {model_name}...")
+                self.handler.logger.print_progress(f"Using grid search for final training of model {model_name}...")
 
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
                 prefix = alg_name + "__"
                 search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
                 try:
-                    model.pipeline, grid_cv_info = \
-                            self.train_picked_model_parameter_grid_search(model.pipeline, search_params, k, dh.X_train, dh.Y_train)
-                    self.handler.logger.print_info(f"Optimized parameters after grid search: {str(model.pipeline.get_params(deep=False))}")
+                    # grid_cv_info is no used right now, but stays for debugging purposes
+                    model.pipeline, grid_cv_info = self.model_parameter_grid_search(
+                        model.pipeline,
+                        search_params,
+                        k,
+                        dh.X_train,
+                        dh.Y_train)
+                    self.handler.logger.print_key_value_pair("Optimized parameters after grid search", model.pipeline.get_params(deep=False))
                 except ModelException as ex:
                     # In case all estimators failed to fit, use ordinary fit as fallback
-                    self.handler.logger.print_info(f"\nGrid search failed: {str(ex)}. Using ordinary fit as fallback for: {model_name}. " + \
+                    self.handler.logger.print_info(f"Grid search failed: {str(ex)}. Using ordinary fit as fallback for: {model_name}. " + \
                         f"You might need to adjust grid search parameters for pipeline: {str(model.pipeline)}")
                     model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             t1 = time.time()
@@ -989,7 +863,7 @@ class ModelHandler:
         
     
     # For pipelines with a specified fit search parameters list, do like this instead
-    def train_picked_model_parameter_grid_search(self, model: Pipeline, search_params: dict, n_splits: int, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
+    def model_parameter_grid_search(self, model: Pipeline, search_params: dict, n_splits: int, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
 
         try:
             # Make a stratified kfold
@@ -1068,10 +942,7 @@ class ModelHandler:
             return result
     
     # While more code, this should (hopefully) be easier to read
-    def should_run_computation(self, current_reduction: Reduction, current_algorithm: Algorithm, current_preprocessor: Preprocess) -> bool:
-        #chosen_algorithm = self.handler.config.get_algorithm()
-        #chosen_preprocessor = self.handler.config.get_preprocessor()
-
+    def should_run_computation(self, current_reduction: Reduction, current_algorithm: Algorithm) -> bool:
         # Some algorithms and RFE do not get along
         if current_reduction == Reduction.RFE and not current_algorithm.rfe_compatible:
             return False
@@ -1085,8 +956,9 @@ class ModelHandler:
         
         # Save standard progress text
         standardProgressText = "Check and train algorithms for best model"
-        self.handler.logger.print_info("Spot checking ML algorithms")
+        self.handler.logger.print_info("Spot-checking ML algorithms")
         
+        # TODO: test this vs functions on row 1016+ of Config 
         # Prepare a list of feature reduction transforms to loop over
         reductions = self.handler.config.mode.feature_selection.list_callable_reductions(*dh.X.shape)
         
@@ -1119,7 +991,6 @@ class ModelHandler:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"StratifiedKfold raised an exception with message: {e}")
         
-        #self.handler.logger.print_table_row(items=["Pre.","Red.","Alg.","Comp","Train","Stdev","Test","Time","Except"], divisor="=")
         first_printed_line = True
 
         numMinorTasks = len(reductions) * len(algorithms) * len(preprocessors)
@@ -1144,17 +1015,10 @@ class ModelHandler:
                     # Loop over the algorithms
                     for algorithm, algorithm_callable in algorithms:
                         
-                        # Some combinations of reductions, algorithms and/or preprocessors are error prone
-                        # and should be skipped
-                        if not self.should_run_computation(reduction, algorithm, preprocessor):
+                        # Some combinations of REF and algorithms are error prone and should be skipped
+                        if not self.should_run_computation(reduction, algorithm):
                             continue
 
-                        # Keep track if X needs to be copied back from original data because of previous changes to data
-                        #if not data_changed:
-                        #    data_changed = True
-                        #else:
-                        #    dh.X = dh.X_unreduced.copy(deep=True)
-                    
                         # Divide data in training and test parts according to settings X -> X_train, X_validation etc...
                         dh.split_dataset_for_training_and_validation()
                         
@@ -1251,18 +1115,7 @@ class ModelHandler:
                                 self.handler.logger.clear_last_printed_result_line()
                             else:
                                 first_printed_line = False
-                            self.handler.logger.print_result_line(
-                                preprocessor.name,
-                                reduction.name,
-                                algorithm.name,
-                                min(num_components, num_features),
-                                temp_score,
-                                temp_stdev,
-                                test_score,
-                                t,
-                                failure,
-                                ending = '\r'
-                            )
+
                             tempResult = [ 
                                 preprocessor.name,
                                 reduction.name,
@@ -1274,6 +1127,22 @@ class ModelHandler:
                                 t,
                                 failure]
                             listOfResults.append(tempResult)
+                            """self.handler.logger.print_result_line(
+                                preprocessor.name,
+                                reduction.name,
+                                algorithm.name,
+                                min(num_components, num_features),
+                                temp_score,
+                                temp_stdev,
+                                test_score,
+                                t,
+                                failure,
+                                ending = '\r'
+                            )"""
+                            self.handler.logger.print_result_line(
+                                tempResult
+                            )
+                            
                     
         updates = {"feature_selection": reduction, "algorithm": best_algorithm, \
             "preprocessor" : best_preprocessor, "num_selected_features": best_rfe_feature_selection}
@@ -1284,21 +1153,11 @@ class ModelHandler:
         best_model.reduction = best_reduction
         best_model.algorithm = best_algorithm
         best_model.pipeline = trained_pipeline
-        best_model.num_feaures_out = best_num_components
+        best_model.n_features_out = best_num_components
         
         # Prepare and print a pandas Dataframe for storing test evaluation results
         self.handler.logger.clear_last_printed_result_line()
-        resultsMatrix = pandas.DataFrame(listOfResults,
-            columns=["Preprocessor","Feature Reduction","Algorithm","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
-        resultsMatrix.sort_values(by = ["Test data","Mean cv","Stdev."], axis = 0, ascending = [False, False, True], \
-            inplace = True, ignore_index = True)
-        self.handler.logger.display_matrix(f"Model test performance in descending order", resultsMatrix)
-        
-        # Save cross validation results to csv file
-        resultsMatrix.to_csv(path_or_buf = cross_validation_filepath, sep = ';', na_rep='N/A', \
-            float_format=None, columns=None, header=True, index=True, index_label=None, mode='w', \
-            encoding='utf-8', compression='infer', quoting=None, quotechar='"', line_terminator=None, \
-            chunksize=None, date_format=None, doublequote=True, decimal=',', errors='strict')
+        self.handler.logger.print_test_performance(listOfResults, cross_validation_filepath)
         
         # Return best model for start making predictions
         return best_model
@@ -1452,8 +1311,8 @@ class ModelHandler:
         
         return cv_results
     
-    # Save ml model and corresponding configuration
     def save_model_to_file(self, filename):
+        """ Save ml model and corresponding configuration """
         try:
             save_config = self.handler.config.get_clean_config()
             data = [
@@ -1463,7 +1322,7 @@ class ModelHandler:
                 self.model.pipeline,
                 self.model.n_features_out
             ]
-            pickle.dump(data, open(filename,'wb'))
+            dill.dump(data, open(filename,'wb'))
 
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on saving model to file: {e}")
@@ -1541,26 +1400,26 @@ class PredictionsHandler:
         except AttributeError:
             return None
 
-    def report_results(self, Y, model) -> None:
+    def report_results(self, Y) -> None:
         """ Prints the various informations """
-        self.handler.logger.print_training_rates(self)
+        rates = None
+        
+        if self.could_predict_proba:
+            rates = self.get_rates(as_string = False)
         
         # Evaluate predictions (optional)
-        evaluation_data = "ML algorithm: " + model.get_name()
         accuracy = accuracy_score(Y, self.predictions)
         con_matrix = confusion_matrix(Y, self.predictions)
         class_labels = sorted(set(Y.tolist() + self.predictions.tolist()))
         class_matrix = classification_report(Y, self.predictions, zero_division='warn', output_dict=True)
         self.handler.logger.print_prediction_report(
-            evaluation_data=evaluation_data,
             accuracy_score=accuracy,
             confusion_matrix=con_matrix,
             class_labels= class_labels,
-            classification_matrix=class_matrix
+            classification_matrix=class_matrix,
+            sample_rates= rates
         )
 
-        # Get accumulated classification score report for all predictions
-        #self.handler.logger.print_classification_report(*self.get_classification_report(Y, model))
 
     # Evaluates mispredictions
     def evaluate_mispredictions(self, misplaced_filepath: str) -> None:
@@ -1571,15 +1430,15 @@ class PredictionsHandler:
         except AttributeError: # In some cases X_most_mispredicted is not even defined
             return
         
-        self.handler.logger.print_always(f"\nTotal number of mispredicted elements: {self.num_mispredicted}")
+        self.handler.logger.print_key_value_pair(f"Total number of mispredicted elements", self.num_mispredicted, print_always=True)
         
+        # HERE: Should be in DataLayer ... right? Also, use "id in []" form
         joiner = self.handler.config.get_id_column_name() + " = \'"
         most_mispredicted_query = read_data_query + " WHERE " +  joiner \
             + ("\' OR " + joiner).join([str(number) for number in self.X_most_mispredicted.index.tolist()]) + "\'"
         
-        #self.handler.logger.display_matrix(f"Most mispredicted during training (using {self.model})", self.X_most_mispredicted)
-        self.handler.logger.print_info(f"Get the most misplaced data by SQL query:\n {most_mispredicted_query}")
-        self.handler.logger.print_info(f"Or open the following csv-data file to get the full list: \n\t {misplaced_filepath}")
+        self.handler.logger.print_code("Get the most misplaced data by SQL query", most_mispredicted_query)
+        self.handler.logger.print_code("Open the following csv-data file to get the full list", misplaced_filepath)
         
         self.X_mispredicted.to_csv(path_or_buf = misplaced_filepath, sep = ';', na_rep='N/A', \
                                 float_format=None, columns=None, header=True, index=True, \
@@ -1648,7 +1507,6 @@ class PredictionsHandler:
             except KeyError as e:
                 self.handler.logger.print_warning(f"probability collection failed for key {prediction} with error {e}")
     
-        #self.handler.logger.print_info("Probabilities:", str(prob))
         self.probabilites = prob
         
     
@@ -1666,11 +1524,6 @@ class PredictionsHandler:
         report = classification_report(Y, self.predictions, output_dict = True)
         self.class_report = report
 
-    # Create classification report
-    def get_classification_report(self, Y_validation: pandas.DataFrame, model: Model) -> list:
-        self.set_classification_report(Y_validation)
-
-        return [self.class_report, model, self.handler.config.get_num_selected_features()]
     
     # Function for finding the n most mispredicted data rows
     # TODO: Clean up a bit more
@@ -1709,7 +1562,7 @@ class PredictionsHandler:
             self.model = "no model produced mispredictions"
             return
         
-        self.handler.logger.print_always(f"Accuracy score for {what_model}: {accuracy_score(Y, Y_pred)}")
+        self.handler.logger.print_key_value_pair(f"Accuracy score for {what_model}", accuracy_score(Y, Y_pred), print_always=True)
 
         # Select the found mispredicted data
         self.X_mispredicted = X.loc[X_not]
@@ -1722,7 +1575,7 @@ class PredictionsHandler:
                 Y_prob = the_model.predict_proba(self.X_mispredicted.to_numpy())
             could_predict_proba = True
         except Exception as e:
-            self.handler.logger.print_info(f"Could not predict probabilities: {e}")
+            self.handler.logger.print_key_value_pair("Could not predict probabilities", e)
             could_predict_proba = False
 
         #  Re-insert original data columns but drop the class column
@@ -1737,7 +1590,7 @@ class PredictionsHandler:
         try:
             the_classes = the_model.classes_
         except AttributeError as e:
-            self.handler.logger.print_info(f"No classes_ attribute in model, using original classes as fallback: {e}")
+            self.handler.logger.print_key_value_pair("No classes_ attribute in model, using original classes as fallback", e)
             the_classes = [y for y in set(Y) if y is not None]
 
         if not could_predict_proba:

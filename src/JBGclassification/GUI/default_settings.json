@@ -1,4 +1,7 @@
-{   "logo": "images/logo.png",
+{   "logo": "assets/logo.png",
+    "stylesheets": [
+        "assets/base.css"
+    ],
     "widgets": {
         "logo": {
             "type": "Image",
@@ -346,6 +349,12 @@
                 "value": ""
             }
         },
+        "output_title": {
+            "type": "HTML",
+            "params": {
+                "value": "<h2>Script output</h2>"
+            }
+        },
         "output": {
             "type": "Output",
             "params": {
@@ -355,7 +364,9 @@
                     "height": "500px",
                     "max_width": "100%"
                 }
-            }
+            },
+            "class": "result-display"
+        
             
         },
         "mispredicted_output": {
@@ -363,11 +374,13 @@
             "params": {}
         },
         "mispredicted_gridbox": {
-            "type": "Gridbox",
+            "type": "GridBox",
             "params": {
-                "description_tooltip": "Mispredicted elements will be editable here if there are any"
-
-            }
+                "layout": {
+                    "grid_gap": "5px"
+                }
+            },
+            "class": "mispredicted"
         }
     },
     "display": [
@@ -387,6 +400,7 @@
         "debug_form",
         "start_button",
         "progress_form",
+        "output_title",
         "output",
         "mispredicted_output"
     ],
