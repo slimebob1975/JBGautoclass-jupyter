@@ -11,6 +11,18 @@ import numpy as np
 import pandas
 import IPython.display
 
+def clean_list(dirty_list: list) -> list[str]:
+    """ 
+        Given a list removes duplicates & empty objects.
+        Cleans superfluous whitespace, stringifies and sorts.
+    """
+    # Unique strings, but may still contain empty strings
+    cleaned_list = list(set([str(i).strip() for i in dirty_list if i]))
+    cleaned_list.sort()
+    
+    # Removes empty strings
+    return [c for c in cleaned_list if c]
+
 def save_matrix_as_csv(matrix: pandas.DataFrame, filepath: str, index_label: str = None) -> None:
     """ Unifies any matrices saved to CSV """
     matrix.to_csv(

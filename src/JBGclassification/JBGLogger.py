@@ -6,6 +6,7 @@ import pandas as pd
 import terminal
 from typing import Protocol, Union
 import IPython.display
+import ipywidgets as widgets
 
 from Helpers import html_wrapper, print_html, save_matrix_as_csv
 
@@ -30,6 +31,7 @@ class JBGLogger(terminal.Logger):
 
         self.in_terminal = in_terminal
         terminal.Logger.__init__(self, quiet=quiet)
+        self.inline_bars = {}
     
     def initiate_progress(self, number_of_tasks: int):
         """ Initiate the progress counter """
@@ -121,6 +123,7 @@ class JBGLogger(terminal.Logger):
             self.print_warning(f"{component} could not be used with n_components = {components}: {exception}")
 
     def print_formatted_info(self, message: str) -> None:
+        """ Prints information with a bit of markup """
         if self.in_terminal:
             message = f" -- {message} --"
         else:
@@ -200,6 +203,7 @@ class JBGLogger(terminal.Logger):
         self.display_matrix(f"Classification matrix for evaluation data", pd.DataFrame.from_dict(classification_matrix).transpose())
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
+        """ Updates the progress bar and prints out a value in the terminal of no bar"""
         if message is not None:
             if self.in_terminal:
                 self.print_unformatted(message)
@@ -310,6 +314,10 @@ class JBGLogger(terminal.Logger):
             self.print_unformatted(message)
         
 
+    def print_correcting_mispredicted(self, new_class: str, index: int, query: str) -> None:
+        """ Prints out notice about correcting mispredicted class in class_catalog """
+        self.print_unformatted(f"Changing data row {index} to {new_class}: ")
+        self.print_query("mispredicted", query)
 
     def print_dragon(self, exception: Exception) -> None:
         """ Type of Unhandled Exceptions, to handle them for the future """
@@ -348,22 +356,79 @@ class JBGLogger(terminal.Logger):
     def anaconda_debug(self, message: str):
         """ This is specifically for calls that will not get redirected to an Output """
         return self.debug(message)
+    
 
-
-    # print_percentage and print_linebreak are in validate_dataset in DatasetHandler and parse_dataset in SQLDataLayer
-    # TODO: change to progress bar for output
-    def print_percentage(self, text: str, percent: float, old_percent: float = 0) -> None:
-        if self._enable_quiet or (old_percent > 0 and old_percent >= percent):
+    def start_inline_progress(self, key: str, description: str, final_count: int, tooltip: str) -> None:
+        """ This will overwrite any prior bars with the same key """
+        if self._enable_quiet:
             return
 
-        print(f"{text}: {percent} %", end='\r')
+        self.inline_bars[key] = {
+            "final_count": float(final_count)
+        }
+        self.inline_bars[key]["bar"] = widgets.FloatProgress(
+            value= 0.0,
+            min= 0.0,
+            max= 1.0,
+            description= f"{description}:",
+            bar_style= "",
+            style={"bar_color": "#C0C0C0"},
+            orientation= "horizontal",
+            description_tooltip= tooltip
+        )
 
-    def print_linebreak(self) -> None:
-        """ Important after using \r for updates """
+        self.inline_bars[key]["percent_label"] = widgets.HTML("0%")
+        self.inline_bars[key]["percent_label"].add_class("inline_percent")
+    
+        if self.in_terminal:
+            self.print_formatted_info(description)
+            return
+
+        progress_box = widgets.HBox([self.inline_bars[key]["bar"], self.inline_bars[key]["percent_label"]])
+        IPython.display.display(progress_box)
+
+    
+    def update_inline_progress(self, key: str, current_count: int, terminal_text: str) -> None:
+        """ Updates progress bars within the script"""
+        
         if self._enable_quiet:
-            return self
+            return
+        
+        information = self.inline_bars[key]
+        old_percent = information["bar"].value
+        float_percent = float(current_count)/information["final_count"]
+        
+        if (old_percent > 0 and old_percent >= float_percent):
+            return
 
-        print("\n")
+        information["bar"].value = float_percent
+        percent = round(100.0*float_percent)
+            
+        if self.in_terminal:
+            print(f"{terminal_text}: {percent} %", end='\r')
+            return
+
+        self.inline_bars[key]["percent_label"].value = f"{percent}%"
+
+    
+    def end_inline_progress(self, key: str, set_100: bool = True) -> None:
+        """ Ensures that any loose ends are tied up after the progress is done """
+        if self._enable_quiet:
+            return
+        if self.in_terminal:
+            print("\n") # terminal progress uses \r, so this is important to end it
+            return
+
+        if set_100:
+            self.inline_bars[key]["bar"].value = 1 # Since it's completed
+            self.inline_bars[key]["percent_label"].value = "100%"
+            
+    def parse_dataset_progress(self, key: str, num_lines: int, num_rows: int) -> None:
+        """ Groups the start of the parse_dataset functions print-outs """
+        self.print_unformatted(f"Fetching {num_lines} rows of {num_rows} total due to config")
+        self.start_inline_progress(key, "Fetching data", num_rows, "Percent data fetched of available")
+        self.update_inline_progress(key, num_lines, "Data fetched of available")
+        
     
     def print_test_performance(self, listOfResults: list, cross_validation_filepath: str) -> None:
         """ 

@@ -50,21 +50,21 @@ class MockLogger():
     def abort_cleanly(self, message: str) -> None:
         """ Exits the process """
 
-    def print_percentage_checked(self, text: str, old_percent, percent_checked) -> None:
-        """ Prints using the normal print() """
-
-    def print_percentage(self, text: str, old_percent: float, percent_checked: float) -> None:
-        """ Prints using the normal print() """
-
     def print_dragon(self, exception: Exception) -> None:
         """ Type of Unhandled Exceptions, to handle them for the future """
 
-    def print_linebreak(self) -> None:
-        """ Important after using \r for updates """
-
     def update_progress(self, percent: float = None, message: str = None) -> float:
         """ Tracks the progress through the run """
-        
+    
+    def update_inline_progress(self, key: str, current_count: int, terminal_text: str) -> None:
+        """ Updates progress bars within the script"""
+
+    def start_inline_progress(self, key: str, description: str, final_count: int, tooltip: str) -> None:
+        """ This will overwrite any prior bars with the same key """
+    
+    def end_inline_progress(self, key: str, set_100: bool = True) -> None:
+        """ Ensures that any loose ends are tied up after the progress is done """
+   
 
 class MockConfig():
     # Methods to hide implementation of Config

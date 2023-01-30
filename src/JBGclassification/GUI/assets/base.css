@@ -20,3 +20,7 @@
 .result-display h3 {
     font-size: 1.2em
 }
+
+.result-display .widget-hprogress label {
+    width: fit-content
+}

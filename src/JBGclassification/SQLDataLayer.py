@@ -2,7 +2,7 @@
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 import hashlib
 
 import numpy as np
@@ -17,19 +17,50 @@ from JBGExceptions import DataLayerException
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
-    def print_info(self, *args) -> None:
-        """printing info"""
-
-    def print_warning(self, *args) -> None:
-        """ print warning """
-
     def print_query(self, type: str, query: str) -> None:
         """ Prints a query """
 
     def print_dragon(self, exception: Exception) -> None:
         """ Type of Unhandled Exceptions, to handle them for the future """
 
+    def start_inline_progress(self, key: str, description: str, final_count: int, tooltip: str) -> None:
+        """ This will overwrite any prior bars with the same key """
+
+    def update_inline_progress(self, key: str, current_count: int, terminal_text: str) -> None:
+        """ Updates progress bars within the script"""
+    
+    def end_inline_progress(self, key: str, set_100: bool = True) -> None:
+        """ Ensures that any loose ends are tied up after the progress is done """
+
+    def parse_dataset_progress(self, key: str, num_lines: int, num_rows: int) -> None:
+        """ Groups the start of the parse_dataset functions print-outs """
+
+    def print_progress(self, message: str = None, percent: float = None) -> None:
+        """ Updates the progress bar and prints out a value in the terminal of no bar"""
+
+    def print_formatted_info(self, message: str) -> None:
+        """ Prints information with a bit of markup """
+
+    def print_correcting_mispredicted(self, new_class: str, index: int, query: str) -> None:
+        """ Prints out notice about correcting mispredicted class in class_catalog """
+
+        
+    
+
+class Connection(Protocol):
+    def update_catalogs(self, type: str, catalogs: list, checking_func: Callable) -> list:
+        """ Updates the config to only contain accessible catalogs """
+
+    def get_formatted_data_table(self, include_database: bool = True) -> str:
+            """ Gets the data table as a formatted string for the correct driver
+                In the type of [schema].[catalog].[table]
+            """
+
+    
+
 class Config(Protocol):
+    script_path: Path
+    
     # Methods to hide implementation of Config
     def get_attribute(self, attribute: str):
         """ Gets an attribute from a attribute.subattribute string """
@@ -43,6 +74,44 @@ class Config(Protocol):
     def get_prediction_tables(self, include_database: bool = True) -> dict:
         """ Gets a dict with 'header' and 'row', based on class_table"""
 
+    def get_data_catalog_params(self) -> dict:
+        """ Gets params to connect to data database """
+
+    def get_class_column_name(self) -> str:
+        """ Gets the name of the column"""
+
+    def should_train(self) -> bool:
+        """ Returns if this is a training config """
+        
+    def should_predict(self) -> bool:
+        """ Returns if this is a prediction config """
+        
+    def get_column_names(self) -> list[str]:
+        """ Gets the column names based on connection columns """
+
+    def get_id_column_name(self) -> str:
+        """ Gets the name of the ID column"""
+
+    def get_max_limit(self) -> int:
+        """ Get the max limit"""
+
+    def get_connection(self)  -> Connection:
+        """ Returns the connection object """
+
+    def get_data_catalog(self) -> str:
+        """ Gets the data catalog """
+    
+    def get_data_table(self, include_database: bool = False) -> str:
+        """ Gets the data table """
+    
+    def get_data_username(self) -> str:
+        """ Gets the data user name """
+
+    def get_data_column_names(self) -> list[str]:
+        """ Gets data columns, so not Class or ID """
+
+    def should_use_metas(self) -> bool:
+        """ Returns if this is a use metas config """
     
 
 @dataclass
@@ -106,19 +175,9 @@ class DataLayer(DataLayerBase):
 
     def get_catalogs_as_options(self) -> list:
         """ Used in the GUI, to get the databases (only return those we can access without exceptions) """
-
         catalogs = self.get_gui_list("databases", "{}")
-        default_catalog = self.config.connection.data_catalog
-        for catalog in list(catalogs): 
-            if catalog != "":
-                self.config.connection.data_catalog = catalog
-                try:
-                    _ = self.get_gui_list("tables", "{}.{}")
-                except Exception:
-                    catalogs.remove(catalog)
-        self.config.connection.data_catalog = default_catalog
-        
-        return catalogs
+        return self.config.get_connection().update_catalogs("data", catalogs, checking_func = self.get_gui_list)
+    
 
     def get_tables_as_options(self) -> list:
         """ Used in the GUI, to get the tables """
@@ -170,7 +229,7 @@ class DataLayer(DataLayerBase):
         """ Builds the query for class=>rows """
         c_column = self.config.get_class_column_name()
         
-        select = f"SELECT [{c_column}], COUNT(*) FROM {self.config.connection.get_formatted_data_table()}"
+        select = f"SELECT [{c_column}], COUNT(*) FROM {self.config.get_connection().get_formatted_data_table()}"
 
         query = f"{select} GROUP BY [{c_column}] ORDER BY [{c_column}] DESC"
 
@@ -206,7 +265,7 @@ class DataLayer(DataLayerBase):
         
         outer_query = query
         
-        query += self.config.connection.get_formatted_data_table()
+        query += self.config.get_connection().get_formatted_data_table()
         
         cast_where = None
         # Take care of the special case of only training or only predictions
@@ -234,14 +293,13 @@ class DataLayer(DataLayerBase):
             parse and return a list
         """
         num_lines = 0
-        percent_fetched = 0
         data = []
         
         data_section = read_data_func[0](**read_data_func[1])
         data =  np.asarray(data_section)
         num_lines = len(data_section) if use_chunks else 1
-        percent_fetched = round(100.0 * float(num_lines) / float(num_rows))
-        self.logger.print_percentage("Data fetched of available", percent_fetched)
+        progress_key = "fetch_dataset"
+        self.logger.parse_dataset_progress(progress_key, num_lines, num_rows)
         
         while data_section:
             if num_lines >= num_rows:
@@ -251,17 +309,14 @@ class DataLayer(DataLayerBase):
             if data_section:
                 data = np.append(data, data_section, axis = 0)
                 num_lines += len(data_section) if use_chunks else 1
-                old_percent_fetched = percent_fetched
-                percent_fetched = round(100.0 * float(num_lines) / float(num_rows))
-                self.logger.print_percentage("Data fetched of available", percent_fetched, old_percent_fetched)
-
+                self.logger.update_inline_progress(progress_key, num_lines, "Data fetched of available")
         
         if not use_chunks:
             # Rearrange the long 1-dim array into a 2-dim numpy array which resembles the
             # database table in question
             data = np.asarray(data).reshape(num_lines,int(len(data)/num_lines)) 
 
-        self.logger.print_linebreak()
+        self.logger.end_inline_progress(progress_key, set_100 = False) # This can have a progress less than 100
         return data
 
     def get_dataset(self, num_rows: int = None) -> list:
@@ -302,7 +357,7 @@ class DataLayer(DataLayerBase):
                 data = self.parse_dataset(num_rows, use_chunks=self.SQL_USE_CHUNKS, read_data_func=read_data_function)
                 
                 num_lines = len(data)
-            self.logger.print_formatted_info(f"Totally fetched {num_lines} data rows")
+            self.logger.print_formatted_info(f"Fetched {num_lines} data rows in total")
             
             # Disconnect from database
             sqlHelper.disconnect()
@@ -331,9 +386,9 @@ class DataLayer(DataLayerBase):
         """ Corrects data in the original dataset """
         num_lines = 0
 
-        self.logger.print_info(f"Changing data row {index} to {new_class}: ")
         query = self.get_mispredicted_query(new_class, index)
-        self.logger.print_query("mispredicted", query)
+        self.logger.print_correcting_mispredicted(new_class, index, query)
+    
         
         try:
             # Get a sql handler and connect to data database

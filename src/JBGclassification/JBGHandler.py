@@ -52,9 +52,6 @@ class Logger(Protocol):
     def print_formatted_info(self, message: str) -> None:
         """ Printing info with """
 
-    def print_percentage(self, text: str, percent: float, old_percent: float = 0) -> None:
-        """ Uses print() to update the line rather than new line"""
-
     def investigate_dataset(self, dataset: pandas.DataFrame, class_name: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
         """ Print information about dataset """
     
@@ -73,9 +70,6 @@ class Logger(Protocol):
     def clear_last_printed_result_line(self):
         """ Clears a line that's printed using \r """
 
-    def print_linebreak(self) -> None:
-        """ Important after using \r for updates """
-
     def abort_cleanly(self, message: str) -> None:
         """ Exits the process """
 
@@ -93,6 +87,16 @@ class Logger(Protocol):
 
     def print_code(self, key: str, code: str) -> None:
         """ Prints out a text with a (in output) code-tagged end """
+
+    def update_inline_progress(self, key: str, current_count: int, terminal_text: str) -> None:
+        """ Updates progress bars within the script"""
+
+    def start_inline_progress(self, key: str, description: str, final_count: int, tooltip: str) -> None:
+        """ This will overwrite any prior bars with the same key """
+    
+    def end_inline_progress(self, key: str, set_100: bool = True) -> None:
+        """ Ensures that any loose ends are tied up after the progress is done """
+   
    
 
 class DataLayer(Protocol):
@@ -306,13 +310,12 @@ class DatasetHandler:
         self.dataset, self.keys = self.split_keys_from_dataset(dataset, id_column)
         
         # Extract unique class labels from dataset
-        self.classes = list(set(self.dataset[class_column].tolist()))
+        self.classes = Helpers.clean_list(self.dataset[class_column].tolist())
 
         # Investigare dataset
         if self.handler.config.should_train():
             self.handler.logger.investigate_dataset(self.dataset, class_column) # Returns True if the investigation/printing was not suppressed
         
-    
     def validate_dataset(self, data: list, column_names: list, class_column: str) -> pandas.DataFrame:
         dataset = pandas.DataFrame(data, columns = column_names)
         
@@ -326,9 +329,10 @@ class DatasetHandler:
         # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
         # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
         # or similar from a certain starting point, if any are left after the conversion above.
-        percent_checked = 0
         number_data_columns = len(dataset.columns) - 1
         column_number = 0
+        progress_key = "validate_dataset"
+        self.handler.logger.start_inline_progress(progress_key, "Validation progress", number_data_columns, "Percent data checked of fetched")
         try:
             for key, column in dataset.items():
                 if key != class_column:
@@ -337,14 +341,14 @@ class DatasetHandler:
                     dataset[key] = self.validate_column(key, column)
                     
                     column_number += 1
-                    old_percent_checked = percent_checked
-                    percent_checked = round(100.0*float(column_number)/float(number_data_columns))
-                    self.handler.logger.print_percentage("Data checked of fetched", percent_checked, old_percent_checked)
+                    self.handler.logger.update_inline_progress(progress_key, column_number, "Data checked of fetched")
+                    
         except Exception as ex:
             self.handler.logger.print_dragon(exception=ex)
+            print(ex)
             raise DatasetException(f"Something went wrong in inconsistency check at column {key}: {ex}")
-
-        self.handler.logger.print_linebreak()
+        
+        self.handler.logger.end_inline_progress(progress_key)
         return dataset
 
     def validate_column(self, key: str, column: pandas.Series) -> pandas.Series:

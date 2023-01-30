@@ -25,8 +25,6 @@ sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 import time
 from datetime import datetime, timedelta
 
-import pandas
-
 # Imports of local help class for communication with SQL Server
 import Config
 import SQLDataLayer
@@ -46,11 +44,6 @@ warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
 
 class AutomaticClassifier:
 
-    # Internal constants
-    LOWER_LIMIT_REDUCTION = 100
-    NON_LINEAR_REDUCTION_COMPONENTS = 2
-    MAX_HEAD_COLUMNS = 10
-    
     # Constructor with arguments
     def __init__(self, config: Config.Config, logger: JBGLogger.JBGLogger, datalayer: SQLDataLayer.DataLayer):
         self.config = config
@@ -65,16 +58,9 @@ class AutomaticClassifier:
 
         self.dh, self.mh, self.ph = self.create_handlers()
         
-        # Internal settings for panda
-        # TODO: This gives an error that it's not specific enough under 1.4.3, earlier 1.3.4 works
-        # pandas.set_option("max_columns", self.MAX_HEAD_COLUMNS) 
-        # Guessed display.max_columns, but could also be styler.render.max_columns
-        pandas.set_option("display.max_columns", self.MAX_HEAD_COLUMNS)
-        pandas.set_option("display.width", 80)
 
         # Get some timestamps
-        self.date_now = datetime.now()
-        self.clock1 = time.time()
+        self.start_time = time.time()
 
     def create_handlers(self):
         """ Creates the handler and returns a tuple with handlers """
@@ -91,7 +77,7 @@ class AutomaticClassifier:
         self.logger.print_progress(message="Starting up ...", percent=0.0)
         
         # Print a welcoming message for the audience
-        self.logger.print_welcoming_message(config=self.config, date_now=self.date_now)
+        self.logger.print_welcoming_message(config=self.config, date_now=datetime.now())
         
         # Do some things prior to running the classification itself
         self.pre_run()
@@ -112,7 +98,7 @@ class AutomaticClassifier:
         # of the classifier
 
     def post_run(self) -> dict:
-        elapsed_time = time.time() - self.clock1
+        elapsed_time = time.time() - self.start_time
         date_again = datetime.now()
         message = f"Ending program after {timedelta(seconds=round(elapsed_time))} at {date_again:%Y-%m-%d %H:%M}"
         self.logger.print_progress(message, 1.0)
@@ -149,10 +135,10 @@ def main(argv):
     datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
     # Use the loaded configuration module argument
     # or create a classifier object with only standard settings
-    myClassiphyer = AutomaticClassifier(config=config, logger=logger, datalayer=datalayer)
+    myClassifier = AutomaticClassifier(config=config, logger=logger, datalayer=datalayer)
 
     # Run the classifier
-    myClassiphyer.run()
+    myClassifier.run()
 
 # Start main
 if __name__ == "__main__":

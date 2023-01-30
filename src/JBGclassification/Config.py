@@ -261,6 +261,21 @@ class Config:
             
             return params
 
+        def update_catalogs(self, type: str, catalogs: list, checking_func: Callable) -> list:
+            """ Updates the config to only contain accessible catalogs """
+
+            default_catalog = self.data_catalog
+            for catalog in catalogs: 
+                if catalog != "":
+                    self.data_catalog = catalog
+                    try:
+                        _ = checking_func("tables", "{}.{}")
+                    except Exception:
+                        catalogs.remove(catalog)
+            self.data_catalog = default_catalog
+            
+            return catalogs
+
         def __str__(self) -> str:
             order = 1
 
@@ -858,6 +873,7 @@ class Config:
         return value    
     
     def get_connection(self) -> Connection:
+        """ Returns the connection object """
         return self.connection
 
     def get_quoted_attribute(self, attribute: str, quotes: str = "\'") -> str:
@@ -884,7 +900,7 @@ class Config:
         return int(self.mode.test_size * 100.0)
 
     def get_max_limit(self) -> int:
-        """ Get the max limit. Name might change depending on GUI names"""
+        """ Get the max limit"""
         return self.get_none_or_positive_value("debug.data_limit")
 
     def get_max_iterations(self) -> int:
