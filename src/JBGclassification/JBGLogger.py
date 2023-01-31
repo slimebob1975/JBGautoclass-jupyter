@@ -331,12 +331,8 @@ class JBGLogger(terminal.Logger):
         if self._enable_quiet:
             return self
 
-        preprocessor_name,reduction_name,algorithm_name,num_features,temp_score,temp_stdev,test_score,t,failure = result
-        print(
-            "{0:>4s}-{1:>4s}-{2:<6s}{3:6d}{4:8.3f}{5:8.3f}{6:8.3f}{7:11.3f} {8:<30s}".
-                format(reduction_name,algorithm_name,preprocessor_name,num_features,temp_score,temp_stdev,test_score,t,failure),
-                end=ending
-        )
+        result = '\t'.join([str(x) for x in result])
+        print(f"{result}", end=ending)
         
     def clear_last_printed_result_line(self):
         print(" "*200, end='\r')
