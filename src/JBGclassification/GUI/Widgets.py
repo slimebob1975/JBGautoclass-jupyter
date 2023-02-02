@@ -372,33 +372,53 @@ class Widgets:
                     if hasattr(widget, "disabled"):
                         setattr(widget, "disabled", True)
 
+    def source_can_be_predicted(self) -> bool:
+        """ Prediction is only available if the class-variable have empty values """
+        current_class = self.class_column.value
+        distribution = self.guihandler.get_class_distribution(self.data_settings, current_class)
+
+        if "NULL" in distribution:
+            return True
+
+        if "" in distribution:
+            return True
+
+        # It needs to have empty elements (None which is translated to "NULL" or "") to predict
+        return False
+
     def set_checkboxes(self, new_model: bool) -> None:
         """ Sets the values and enabled-state based on new vs trained model"""
         if new_model:
             self.enable_items([
                 "train_checkbox",
-                "predict_checkbox",
-                "mispredicted_checkbox",
-                #"metas_checkbox"
+                "mispredicted_checkbox"
             ])
+
+            if self.source_can_be_predicted():
+                self.enable_items([
+                    "predict_checkbox"
+                ])
+            else: 
+                self.disable_items([
+                    "predict_checkbox"
+                ])
+            
+
             self.update_values({
                 "train_checkbox": True,
                 "predict_checkbox": False,
-                "mispredicted_checkbox": True,
-                "metas_checkbox": False
+                "mispredicted_checkbox": True
             })
         else:
             self.disable_items([
                 "train_checkbox",
                 "predict_checkbox",
-                "mispredicted_checkbox",
-                "metas_checkbox"
+                "mispredicted_checkbox"
             ])
             self.update_values({
                 "train_checkbox": False,
                 "predict_checkbox": True,
-                "mispredicted_checkbox": False,
-                "metas_checkbox": True
+                "mispredicted_checkbox": False
             })
             
     def continuation_button_actions(self) -> None:
@@ -735,7 +755,6 @@ class Widgets:
 
         if type == WidgetConstant.DATA_TEXT:
             return text_columns
-
 
     def update_class_summary(self):
         """ Sets the class summary """
