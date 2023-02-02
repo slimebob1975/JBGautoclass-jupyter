@@ -46,7 +46,6 @@ class TestDataLayer():
 
     def test_data_query(self, default_sqldatalayer) -> None:
         """ This is a query in string format """
-        #self.config.get_max_limit(), self.config.should_train(), self.config.should_predict()
         num_rows = 15
 
         # Per default, this is ! train && predict

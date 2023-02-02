@@ -92,8 +92,8 @@ class Config(Protocol):
     def get_id_column_name(self) -> str:
         """ Gets the name of the ID column"""
 
-    def get_max_limit(self) -> int:
-        """ Get the max limit"""
+    def get_data_limit(self) -> int:
+        """ Get the data limit"""
 
     def get_connection(self)  -> Connection:
         """ Returns the connection object """
@@ -321,7 +321,7 @@ class DataLayer(DataLayerBase):
 
     def get_dataset(self, num_rows: int = None) -> list:
         """ Gets the needed data from the database """
-        num_rows = num_rows if num_rows else self.config.get_max_limit()
+        num_rows = num_rows if num_rows else self.config.get_data_limit()
         query = self.get_data_query(num_rows)
         
         query += f" ORDER BY [{self.config.get_class_column_name()}] DESC"

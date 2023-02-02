@@ -108,8 +108,8 @@ class MockConfig():
     def get_test_size(self) -> float:
         """ Gets the test_size """
 
-    def get_max_limit(self) -> int:
-        """ Get the max limit. Name might change depending on GUI names"""
+    def get_data_limit(self) -> int:
+        """ Get the data limit"""
 
     def get_max_iterations(self) -> int:
         """ Get max iterations """

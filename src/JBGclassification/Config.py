@@ -899,8 +899,8 @@ class Config:
         """ Gets the test_size as a percentage """
         return int(self.mode.test_size * 100.0)
 
-    def get_max_limit(self) -> int:
-        """ Get the max limit"""
+    def get_data_limit(self) -> int:
+        """ Get the data limit"""
         return self.get_none_or_positive_value("debug.data_limit")
 
     def get_max_iterations(self) -> int:

@@ -87,7 +87,7 @@ class TestConfig:
         """ Some values return either an int or None """
         assert valid_iris_config.get_num_selected_features() == 0 # None returns 0
         assert valid_iris_config.get_max_iterations() == 20000
-        assert valid_iris_config.get_max_limit() == 150
+        assert valid_iris_config.get_data_limit() == 150
 
         # What happens if we give an invalid type?
         attribute = "foo"

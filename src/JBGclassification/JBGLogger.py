@@ -100,7 +100,6 @@ class JBGLogger(terminal.Logger):
 
     def print_config_settings(self, config: Config) -> None:
         """ Prints out the dicts with various information as matrixes """
-        #self.print_unformatted(config, terminal_only = True)
         config_dict = config.to_dict()
 
         h2 = partial(html_wrapper, "h2")
@@ -419,10 +418,9 @@ class JBGLogger(terminal.Logger):
             self.inline_bars[key]["bar"].value = 1 # Since it's completed
             self.inline_bars[key]["percent_label"].value = "100%"
             
-    def parse_dataset_progress(self, key: str, num_lines: int, num_rows: int) -> None:
+    def parse_dataset_progress(self, key: str, num_lines: int, row_count: int, ) -> None:
         """ Groups the start of the parse_dataset functions print-outs """
-        self.print_unformatted(f"Fetching {num_lines} rows of {num_rows} total due to config")
-        self.start_inline_progress(key, "Fetching data", num_rows, "Percent data fetched of available")
+        self.start_inline_progress(key, "Fetching data", row_count, "Percent data fetched of available")
         self.update_inline_progress(key, num_lines, "Data fetched of available")
         
     
