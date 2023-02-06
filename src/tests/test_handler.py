@@ -2,11 +2,13 @@ from datetime import datetime
 import numpy as np
 import pandas
 import pytest
+from sklearn.pipeline import Pipeline
 from conftest import get_fixture_path
 
 from JBGExceptions import DatasetException, HandlerException
 
 from JBGHandler import JBGHandler, DatasetHandler, Model
+from JBGMeta import Algorithm, Preprocess, Reduction
 
 # One class per class in the module
 class TestHandler():
@@ -392,8 +394,6 @@ class TestDatasetHandler():
         #get_num_unpredicted_rows(self, dataset: pandas.DataFrame = None) -> int:
         # 1. Start by giving a dataset to the function
         column_names = default_dataset_handler.handler.config.get_column_names()
-        class_column = default_dataset_handler.handler.config.get_class_column_name()
-        # ["name", "age", "test_class", "test_id"]
         data = [
             ["Karan",23, "odd", "1"],
             ["Rohit",22, "even", "2"],
@@ -454,25 +454,22 @@ class TestModelHandler():
 
         assert default_model_handler.load_empty_model() == model
 
-    def test_load_model_from_file(self, default_model_handler):
+    def test_load_model_from_file(self, default_model_handler, default_model):
         """ Loads from model-save.sav """
-        # TODO: This needs to be rewritten entirely
-
         # 1. Ensure that None is returned if the path is wrong
         assert default_model_handler.load_model_from_file("does-not-exist") == None
 
         # 2. This exists, but is a bare .sav without the proper values, so still None
         filename = get_fixture_path() / "config-save.sav"
-        #assert default_model_handler.load_model_from_file(filename) == None
+        assert default_model_handler.load_model_from_file(filename) == default_model
         
         path = get_fixture_path() / "model-save.sav"
-        #assert default_model_handler.load_model_from_file(path) == Model()
+        assert default_model_handler.load_model_from_file(path) == default_model
 
     def test_load_pipeline_from_file(self, default_model_handler):
         """ This is almost identical to the one above, except only returning the Pipeline (here None)"""
-        # TODO: This needs to be rewritten entirely
         path = get_fixture_path() / "model-save.sav"
-        #assert default_model_handler.load_pipeline_from_file(path) == None
+        assert default_model_handler.load_pipeline_from_file(path) == None
 
     # Series of functions calling each other
     # train_model calls get_model_from
