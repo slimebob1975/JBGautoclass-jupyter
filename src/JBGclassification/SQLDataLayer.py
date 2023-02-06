@@ -183,7 +183,7 @@ class DataLayer(DataLayerBase):
         """ Used in the GUI, to get the tables """
         return self.get_gui_list("tables", "{}.{}")
 
-    def get_id_columns(self, database: str, table: str) -> list:
+    def get_id_columns(self, database: str, table: str) -> dict:
         """ Gets name and type for columns in specified <database> and <table> """
 
         database = to_quoted_string(database)

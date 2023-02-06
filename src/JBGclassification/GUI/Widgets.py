@@ -8,7 +8,7 @@ from IPython.display import display
 
 from typing import Callable, Iterable, Protocol
 import ipywidgets as widgets
-from pandas import DataFrame, Series
+from pandas import DataFrame
 from sklearn.utils import Bunch
 
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
@@ -21,6 +21,12 @@ import Helpers
 class WidgetConstant(Enum):
     DATA_NUMERICAL = 1
     DATA_TEXT = 2
+
+class WidgetStatus(Enum):
+    UNCHECKED = 0
+    OK = 1
+    WARNING = 2
+    ERROR = 3
 
 class EventHandler:
     """ Handles interactions between widgets """
@@ -89,11 +95,21 @@ class EventHandler:
             self.widgets.update_class_id_data_columns()
         
         self.widgets.disable_post_model_dropdowns() # Locks all except project name
-        if change.new == 1: # This is the default train option
-            self.widgets.disable_button("continuation_button")
-            return
         
-        self.widgets.update_from_model_config()
+        self.widgets.form_field_enabled_toggle("data", disabled=True) # Disable before updating
+
+        self.widgets.reset_field_status("models")
+        self.widgets.update_field_status("models")
+
+        if self.widgets.models_status == WidgetStatus.OK:
+            if change.new == 1: # This is the default train option
+                self.widgets.form_field_enabled_toggle("data", disabled=False)
+
+                self.widgets.disable_button("continuation_button")
+                return
+            
+            self.widgets.update_from_model_config()
+        
 
     def class_column(self, change: Bunch) -> None:
         """ Handler for class_column
@@ -219,7 +235,7 @@ class DataLayer(Protocol):
     def get_trained_models_from_files(self, model_path: str, model_file_extension: str, preface: list = None) -> list:
         """ Used in the GUI, get a list of pretrained models (base implementation assumes files)"""
 
-    def get_id_columns(self, **kwargs) -> list:
+    def get_id_columns(self, **kwargs) -> dict:
         """ Used in the GUI, gets name and type for columns """
         
 class GUIhandler(Protocol):
@@ -259,6 +275,7 @@ class Widgets:
         self.default_widgets = self.settings.get("widgets")
         self.sections = self.settings.get("sections")
         self.logo_image =  self.get_sibling_file_path(self.settings.get("logo"))
+        self.field_statuses = {}
         
         self.states = {
             "rerun": False,
@@ -266,8 +283,10 @@ class Widgets:
         }
         self.widgets = {}
         self._load_default_widgets()
+        
         self.forms = {
             "catalog": [self.data_catalogs_dropdown, self.data_tables_dropdown],
+            "models": [self.models_dropdown, self.field_status("models")],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
             "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
@@ -279,7 +298,83 @@ class Widgets:
 
         # We need a dictionary to keep track of datatypes
         self.datatype_dict = None
+
+    def field_status(self, type: str) -> widgets.HTML:
+        """ HTML fields for issues, connected to a particular field """
+        
+        if type in self.field_statuses:
+            return self.update_field_status(type)
+
+        self.field_statuses[type] = {
+            "check": WidgetStatus.UNCHECKED,
+            "note": widgets.HTML()
+        }
+        self.field_statuses[type]["note"].add_class(f"{type}-status")
+        return self.field_statuses[type]["note"]
+
+    def reset_field_status(self, type: str) -> None:
+        self.field_statuses[type]["note"].value = "<em>Checking status</em>"
+
     
+    def update_field_status(self, type: str) -> widgets.HTML:
+        """ Updates the note based on the status of the field """
+        check, note = self.get_field_status(type)
+
+        if check == WidgetStatus.UNCHECKED:
+            value = ""
+        elif check == WidgetStatus.OK:
+            value = "OK"
+        elif check == WidgetStatus.WARNING:
+            value = "<b>Warning</b>"
+        elif check == WidgetStatus.ERROR:
+            value = "<b>Error</b>"
+        else:
+            value = "Unknown value from status"
+
+        self.field_statuses[type]["check"] = check
+        if note:
+            value = f"{value}: {note}"
+        
+        self.field_statuses[type]["note"].value = value
+
+        return self.field_statuses[type]["note"]
+
+
+    def get_field_status(self, field: str) -> tuple(WidgetStatus, str):
+        """ Returns a constant based on the state of the field """
+        func_name = f"check_{field}_field_status"
+        func = getattr(self, func_name)
+        return func()
+        
+    @property
+    def models_status(self) -> WidgetStatus:
+        return self.field_statuses["models"]["check"]
+
+
+    def check_models_field_status(self) -> tuple(WidgetStatus, str):
+        """ The specific code for checking the models_dropdown field """
+        if not self.data_form_fields_valid:
+            return WidgetStatus.WARNING, "Columns from table not available"
+        
+        if self.models_dropdown.value == "":
+            return WidgetStatus.UNCHECKED, ""
+
+        if self.new_model:
+            return WidgetStatus.OK, ""
+
+        try:
+            config = self.load_model_config()
+        except Exception as e:
+            return WidgetStatus.ERROR, str(e)
+
+        columns = list(self.datatype_dict.keys())
+        if config.check_config_against_data_configuration(columns):
+            return WidgetStatus.OK, ""
+
+        note = f"Model <em>{self.model_name}</em> contains columns not in chosen table"
+        return WidgetStatus.ERROR, note
+
+
     def get_sibling_file_path(self, file: str) -> Path:
         """ Gets a file in the same directory as the GUI module """
         return Path(__file__).parent / file
@@ -314,14 +409,18 @@ class Widgets:
         self.update_data_catalogs_dropdown()
         self.update_models_dropdown_options()
 
-    def update_from_model_config(self, model: str = None ) -> None:
-        """ Sets values based on the config in the chosen model """
+    def load_model_config(self, model: str = None) -> Config:
+        """ Break out the loading so it can be checked earlier """
         value = model if model else self.models_dropdown.value
         model_path = self.model_path / value
         
-        config = Config.load_config_from_model_file(model_path)
+        return Config.load_config_from_model_file(model_path)
+
+    def update_from_model_config(self, model: str = None ) -> None:
+        """ Sets values based on the config in the chosen model """
+        config = self.load_model_config(model)
         self.categorize_columns.options = config.get_text_column_names()
-        
+            
         # Values from config
         self.update_values({
             "class_column": config.get_class_column_name(),
@@ -348,6 +447,7 @@ class Widgets:
         # Enable and disable buttons
         self.enable_button("continuation_button")
         self.disable_button("start_button")
+            
         
     def activate_section(self, name: str) -> None:
         """ This should probably be a toggle, but for the moment we'll do it this way"""
@@ -698,7 +798,6 @@ class Widgets:
             return
         
         columns = self.datalayer.get_id_columns(self.data_catalogs_dropdown.value, self.data_tables_dropdown.value)
-        
         self.datatype_dict = columns
         columns_list = list(columns.keys())
 
@@ -708,7 +807,6 @@ class Widgets:
             self.class_column.value = self.class_column.options[0]
         else:
             self.class_column.value = None
-        self.class_column.disabled = False
         
         self.id_column.options =  \
             [var for var in columns_list if self.datatype_dict[var] in Config.INT_DATATYPES and var != self.class_column.value]
@@ -716,13 +814,12 @@ class Widgets:
             self.id_column.value = self.id_column.options[0]
         else:
             self.id_column.value = None
-        self.id_column.disabled = False
         
         self.data_columns.options = \
             [var for var in columns_list if var not in (self.class_column.value, self.id_column.value)]
         self.data_columns.value = []
-        self.data_columns.disabled = False
-    
+        
+
     @property
     def data_settings(self) -> dict:
         """ Settings on which data to classify """
@@ -845,6 +942,29 @@ class Widgets:
             else:
                 print(f"Couldn't set value on {name}")
 
+    def form_field_enabled_toggle(self, form_name: str, disabled: bool = False) -> None:
+        """ Sets disabled to <disabled> for all fields in the form group """
+        fields = self.forms.get(form_name, [])
+
+        for field in fields:
+            setattr(field, "disabled", disabled)
+
+    
+    def models_form(self) -> widgets.Box:
+        return self.create_form(self.forms["models"], widgets.HBox)
+
+    
+    @property
+    def data_form_fields_valid(self) -> bool:
+        """ Checks so that fields in the data form have a non-default value """
+        fields = self.forms.get("data", [])
+        
+        for field in fields:
+            if "N/A" in field.options: # N/A is default option
+                return False
+
+        return True
+        
     def data_form(self) -> widgets.Box:
         return self.create_form(self.forms["data"], widgets.Box)
     

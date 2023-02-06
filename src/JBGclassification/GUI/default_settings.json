@@ -389,7 +389,7 @@
         "project",
         "data_catalogs_dropdown",
         "data_tables_dropdown",
-        "models_dropdown",
+        "models_form",
         "data_form",
         "class_summary",
         "continuation_button",

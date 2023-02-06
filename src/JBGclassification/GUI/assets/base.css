@@ -24,3 +24,7 @@
 .result-display .widget-hprogress label {
     width: fit-content
 }
+
+.models-status {
+    margin-left: 16px; /* Air between the models_dropdown and it's status text */
+}

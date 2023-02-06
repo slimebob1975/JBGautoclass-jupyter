@@ -87,7 +87,7 @@ class DataLayerBase:
         """ Used in the GUI, to get the tables """
         raise NotImplementedError
 
-    def get_id_columns(self, **kwargs) -> list:
+    def get_id_columns(self, **kwargs) -> dict:
         """ Used in the GUI, gets name and type for columns """
         raise NotImplementedError
 

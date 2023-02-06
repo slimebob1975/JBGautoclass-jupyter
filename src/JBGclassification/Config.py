@@ -699,6 +699,15 @@ class Config:
         with open(filepath, "w", encoding="utf-8") as fout:
            fout.writelines(lines)
 
+    def check_config_against_data_configuration(self, columns: list) -> bool:
+        """ Check that the columns in the given table matches the config """
+        class_check = [self.get_class_column_name() in columns]
+        id_check = [self.get_id_column_name() in columns]
+        data_check = [item in columns for item in self.get_data_column_names()]
+        
+        return all(class_check + id_check + data_check)
+        
+
     @classmethod
     def load_config_from_model_file(cls: Type[T], filename: str, config: T = None) -> T:
         try:
