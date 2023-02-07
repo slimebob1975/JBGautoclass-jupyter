@@ -246,13 +246,11 @@ class TestConfig:
         # 2. Without a config
         new_config = Config.load_config_from_model_file(filename)
         
-        # TODO: Rewrite alongside model-handler tests
-        #assert new_config == bare_iris_config
-
+        assert new_config == bare_iris_config
+        
         # 3. With a config
         new_config = Config.load_config_from_model_file(filename, valid_iris_config)
-        # TODO: Rewrite alongside model-handler tests
-        #assert new_config == saved_with_valid_iris_config
+        assert new_config == saved_with_valid_iris_config
 
     def test_load_config_from_module(self, valid_iris_config):
         """ While it uses the load_config_from_module, it mainly checks load_config_2 """
@@ -263,7 +261,6 @@ class TestConfig:
         ]
 
         loaded_config = Config.load_config_from_module(argv)
-        # TODO: see above
         assert loaded_config == valid_iris_config
 
     def test_scoring_mechanism(self):

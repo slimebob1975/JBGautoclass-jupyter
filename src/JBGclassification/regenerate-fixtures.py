@@ -1,5 +1,6 @@
 import os
 import dill
+from sklearn.pipeline import Pipeline
 from Config import Config
 from JBGMeta import Algorithm, Preprocess, Reduction, ScoreMetric, AlgorithmTuple, PreprocessTuple, ReductionTuple
 
@@ -37,7 +38,7 @@ def bare_iris_config() -> Config:
             train=False,
             predict=True,
             mispredicted=False,
-            use_metas= True,
+            use_metas= False,
             use_stop_words=False,
             specific_stop_words_threshold=1.0,
             hex_encode=True,
@@ -77,19 +78,22 @@ def bare_iris_config() -> Config:
 
     return config
 
-def save_model_to_file(filename, config, model = None):
-    """ This is a copy of save_model_to_file in JBGHandler, update if necessary"""
+def save_model_to_file(filename, config):
+    """ Based on ModelHandler.save_model_to_file, update as needed """
+    preprocess = Preprocess.NOS
+    reduction = Reduction.NOR
+    algorithm = Algorithm.DUMY
     try:
         save_config = config.get_clean_config()
-        data = [
-            save_config,
-            (None, None, None),
-            None,
-            None,
-            None
-        ]
+        data = {
+            "config": save_config,
+            "text_converter": None,
+            "pipeline names": (preprocess, reduction, algorithm),
+            "pipeline": None,
+            "n_features_out": 4
+        }
         
-        dill.dump(data, open(filename,'wb'))
+        dill.dump(list(data.values()), open(filename,'wb'))
     except Exception as e:
         print(f"Something went wrong on saving model to file: {e}")
 
@@ -101,7 +105,7 @@ def regenerate_model_save():
     
     modelSaveName = os.path.join(path, "model-save.sav")
 
-    save_model_to_file(modelSaveName, config, "")
+    save_model_to_file(modelSaveName, config)
 
 def regenerate_config_save():
     config = bare_iris_config()

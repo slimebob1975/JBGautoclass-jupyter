@@ -1,6 +1,7 @@
 from __future__ import annotations
 import enum
 from typing import Callable, Iterable, Protocol, Union, Type, TypeVar
+from functools import total_ordering
 
 import pandas
 import numpy as np
@@ -143,6 +144,7 @@ class RateType(enum.Enum):
 
 META_ENUM_DEFAULT_TERMS = ("ALL", "DUMY", "NOR", "NOS")
 
+@total_ordering
 class MetaEnum(enum.Enum):
     @property
     def full_name(self):
@@ -202,38 +204,12 @@ class MetaEnum(enum.Enum):
         
         return False
 
-        # TODO: Make a less naive "equals" comparison
-        # Att jämföra två Algorithm objekt bör ske i två steg. 
-        # Att det är samma typ av objekt, dvs samma förkortning 
-        # eller typ på objektet. Vill man gå vidare kan man 
-        # plocka ut alla parameterar via get_params och jämföra 
-        # att de är exakt lika också
-
     def __lt__(self, other: MetaEnum) -> bool:
         """
         This bases the comparisons on the name
         """
         return self.name < other.name
 
-        # TODO: Implement so that default values (all/none/dumy/etc) are first
-
-    def __gt__(self, other: MetaEnum) -> bool:
-        """
-        This bases the comparisons on the name
-        """
-        return self.name > other.name
-
-    def __le__(self, other: MetaEnum) -> bool:
-        """
-        This bases the comparisons on the name
-        """
-        return self.name <= other.name
-
-    def __ge__(self, other: MetaEnum) -> bool:
-        """
-        This bases the comparisons on the name
-        """
-        return self.name >= other.name
 
 T = TypeVar('T', bound='MetaTuple')
 
@@ -324,7 +300,6 @@ class MetaTuple:
             ]
         metaEnums.sort(key=lambda enumtuple: enumtuple[0].name)
         return metaEnums    
-
 
 
 class Detector(MetaEnum):

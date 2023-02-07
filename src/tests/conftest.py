@@ -64,6 +64,9 @@ class MockLogger():
     
     def end_inline_progress(self, key: str, set_100: bool = True) -> None:
         """ Ensures that any loose ends are tied up after the progress is done """
+
+    def print_code(self, key: str, code: str) -> None:
+        """ Prints out a text with a (in output) code-tagged end """
    
 
 class MockConfig():
@@ -419,3 +422,12 @@ def default_model_handler(default_handler) -> ModelHandler:
 @pytest.fixture
 def default_predictions_handler(default_handler) -> PredictionsHandler:
     return PredictionsHandler(handler=default_handler)
+
+@pytest.fixture
+def default_model() -> Model:
+    preprocess = Preprocess.NOS
+    reduction = Reduction.NOR
+    algorithm = Algorithm.DUMY
+    
+    return Model(text_converter=None, preprocess=preprocess, reduction=reduction, algorithm=algorithm, pipeline=None, n_features_out=4)
+        

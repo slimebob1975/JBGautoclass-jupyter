@@ -451,7 +451,7 @@ class Config:
                 "Train new model":                       self.train,
                 "Make predictions with model":           self.predict,
                 "Display mispredicted training data":    self.mispredicted,
-                "Pass on meta data for predictions":     self.mispredicted,
+                "Pass on meta data for predictions":     self.use_metas,
                 "Use stop words":                        self.use_stop_words,
                 "Material specific stop words threshold":self.specific_stop_words_threshold,
                 "Hex encode text data":                  self.hex_encode,
