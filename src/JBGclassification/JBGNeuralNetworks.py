@@ -29,13 +29,9 @@ class BaseNNClassifier(BaseEstimator):
         self.net = None
     
     def fit(self, X, y):
-        if self.classes_ is None:
-            self.classes_ = unique_labels(y)
-
+        self.classes_ = unique_labels(y)
         self.label_encoder = self.label_encoder.fit(y)
-        
-        if not self.net:
-            self._setup_net(X, y)
+        self._setup_net(X, y)
         self.net.fit( X.astype(np.float32), self.label_encoder.transform(y) )
         
     def predict(self, X):
