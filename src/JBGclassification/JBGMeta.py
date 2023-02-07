@@ -46,6 +46,7 @@ from imblearn.ensemble import (EasyEnsembleClassifier, RUSBoostClassifier,
 from JBGExperimental import (JBGRobustLogisticRegression, JBGRobustCentroid, 
                             JBGPartitioningDetector, JBGMCS, JBGInstanceHardness,
                             JBGRandomForestDetector)
+from JBGNeuralNetworks import (NNClassifier2L, NNClassifierXL)
 
 PCA_VARIANCE_EXPLAINED = 0.999
 LOWER_LIMIT_REDUCTION = 100
@@ -452,6 +453,8 @@ class AlgorithmGridSearchParams(MetaEnum):
     CLFK = {"parameters": {}}
     CLIH = {"parameters": {}}
     VOTG = {"parameters": {'voting': ('hard', 'soft')}}
+    NN2L = {"parameters": {}}
+    NNXL = {"parameters": {}}
     
     @property
     def parameters(self):
@@ -519,7 +522,8 @@ class Algorithm(MetaEnum):
     CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK, "rfe_compatible": False}
     CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH, "rfe_compatible": False}
     VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False}
-
+    NN2L = { "full_name":  "PyTorch Network (2 Layers, beta)", "search_params": AlgorithmGridSearchParams.NN2L, "rfe_compatible": False}
+    NNXL = { "full_name":  "PyTorch Network (X Layers, beta)", "search_params": AlgorithmGridSearchParams.NNXL, "rfe_compatible": False}
 
     def get_full_name(self) -> str:
         return self.full_name
@@ -788,6 +792,12 @@ class Algorithm(MetaEnum):
         clf3 = LogisticRegression()
         estimators=[('lsvc', clf1), ('rfc', clf2), ('lrn', clf3)]
         return VotingClassifier(estimators=estimators)
+    
+    def do_NN2L(self, max_iterations: int, size: int)-> NNClassifier2L:     
+        return NNClassifier2L(verbose=False)
+    
+    def do_NNXL(self, max_iterations: int, size: int)-> NNClassifierXL:     
+        return NNClassifierXL(verbose=False)
 
 class Preprocess(MetaEnum):
     NOS = "No Scaling"
