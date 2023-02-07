@@ -2,13 +2,11 @@ from datetime import datetime
 import numpy as np
 import pandas
 import pytest
-from sklearn.pipeline import Pipeline
 from conftest import get_fixture_path
 
 from JBGExceptions import DatasetException, HandlerException
 
 from JBGHandler import JBGHandler, DatasetHandler, Model
-from JBGMeta import Algorithm, Preprocess, Reduction
 
 # One class per class in the module
 class TestHandler():
@@ -170,7 +168,6 @@ class TestDatasetHandler():
         assert isinstance(dataset, pandas.DataFrame)
         pandas.testing.assert_frame_equal(dataset, expected_dataset)
 
-        # This should (doesn't?) have some values that needs fixing
         data = [
             ["Karan",23, "odd", 1],
             [True, 22, "even", 2],
