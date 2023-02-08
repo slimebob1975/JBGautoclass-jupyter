@@ -41,7 +41,7 @@ class BaseNNClassifier(BaseEstimator):
         return self.net.predict_proba(X.astype(np.float32))
 
 # A neural network with 2 layers of hidden units
-class NeuralNet2L(nn.Module):
+class _NeuralNetwork2L(nn.Module):
     def __init__(
             self,
             num_features,
@@ -51,7 +51,7 @@ class NeuralNet2L(nn.Module):
             dropout=0.5
             
     ):
-        super(NeuralNet2L, self).__init__()
+        super(_NeuralNetwork2L, self).__init__()
         self.num_features = num_features
         self.num_classes = num_classes
         self.hidden_layer_size = hidden_layer_size
@@ -105,14 +105,15 @@ class NNClassifier2L(BaseNNClassifier):
         self.num_features = X.shape[1]
         self.num_classes = len(set(y))
         self.net = NeuralNetClassifier(
-            NeuralNet2L(self.num_features, self.num_classes, self.hidden_layer_size, self.nonlin, self.dropout), \
+            _NeuralNetwork2L(self.num_features, self.num_classes, self.hidden_layer_size, self.nonlin, self.dropout), \
             max_epochs=self.max_epochs, lr=self.lr, device=self.dev, verbose=self.verbose)
          
 # A neural network with num_classes layers of hidden units
-class NeuralNetXL(nn.Module):
+class _NeuralNetworkXL(nn.Module):
     
-    def __init__(self, input_size, layers_data: list, learning_rate=0.01, optimizer=optim.Adam):
-        super(NeuralNetXL, self).__init__()
+    def __init__(self, input_size, layers_data: list, learning_rate=0.01, optimizer=optim.Adam, dropout=0.1):
+
+        super(_NeuralNetworkXL, self).__init__()
 
         self.layers = nn.ModuleList()
         self.input_size = input_size  # Can be useful later ...
@@ -128,10 +129,12 @@ class NeuralNetXL(nn.Module):
         self.to(self.device)
         self.learning_rate = learning_rate
         self.optimizer = optimizer(params=self.parameters(), lr=learning_rate)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, X):
         for layer in self.layers:
             X = layer(X)
+            X = self.dropout(X)
         X = torch.nn.functional.softmax(X, dim=-1)
         return X
     
@@ -162,7 +165,7 @@ class NNClassifierXL(BaseNNClassifier):
         layers_data.append((self.num_classes, nn.Sigmoid()))
                     
         # Construct the PyTorch neural net
-        the_net = NeuralNetXL(self.num_features, layers_data)
+        the_net = _NeuralNetworkXL(self.num_features, layers_data)
         
         # Put the SKORCH wrapper around the classifier
         self.net = NeuralNetClassifier(the_net, max_epochs=20, verbose=self.verbose)
