@@ -41,6 +41,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
+#warnings.filterwarnings("ignore", category=ResourceWarning)
 
 class AutomaticClassifier:
 

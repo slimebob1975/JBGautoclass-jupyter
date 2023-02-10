@@ -881,7 +881,6 @@ class ModelHandler:
             # Create search grid and fit model
             search_verbosity = 4 if self.handler.config.io.verbose else 0
             search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True, verbose=search_verbosity)
-            
             try:
                 search.fit(X, Y)
             except TypeError:
