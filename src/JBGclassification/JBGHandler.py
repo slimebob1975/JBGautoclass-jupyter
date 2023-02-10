@@ -879,7 +879,8 @@ class ModelHandler:
             scorer = self.handler.config.get_scoring_mechanism()
 
             # Create search grid and fit model
-            search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True)
+            search_verbosity = 4 if self.handler.config.io.verbose else 0
+            search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True, verbose=search_verbosity)
             
             try:
                 search.fit(X, Y)
