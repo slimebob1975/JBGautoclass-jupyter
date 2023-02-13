@@ -304,6 +304,7 @@ class DatasetHandler:
         # TODO: validate_dataset should probably do a report of potentional issues, or lead into the function that does
         # Warning, not error
         dataset = self.validate_dataset(data, column_names, class_column)
+        self.handler.logger.print_key_value_pair("Memory usage", dataset.memory_usage().sum())
         
         dataset = self.shuffle_dataset(dataset)
         
