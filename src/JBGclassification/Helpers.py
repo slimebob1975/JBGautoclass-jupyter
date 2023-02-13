@@ -215,6 +215,15 @@ def add_prefix_to_dict_keys(prefix: str, the_dict: dict):
         new_dict[prefix+key] = the_dict[key]
     return new_dict
 
+def bytes_to_suffix(nbytes):
+    suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+    i = 0
+    while nbytes >= 1024 and i < len(suffixes)-1:
+        nbytes /= 1024.
+        i += 1
+    f = ('%.2f' % nbytes).rstrip('0').rstrip('.')
+    return '%s %s' % (f, suffixes[i])
+
 # In case the user has specified some input arguments to command line calls
 # As written, you need to call on the class in the src\JBGclassification dir, with
 # the configfilename on the format of ".\config\filename.py", where it has to be
