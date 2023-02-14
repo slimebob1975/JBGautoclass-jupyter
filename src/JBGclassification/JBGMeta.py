@@ -428,9 +428,8 @@ class AlgorithmGridSearchParams(MetaEnum):
     CLFK = {"parameters": {}}
     CLIH = {"parameters": {}}
     VOTG = {"parameters": {'voting': ('hard', 'soft')}}
-    NN3L = {"parameters": {'learning_rate': [0.01, 0.02, 0.05, 0.1], 'max_epochs': [10, 20, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5],
-                           'num_hidden_layers': [1, 2, 3], 'hidden_layer_size': [16, 48, 100], 'activation': ['relu', 'tanh', 'sigmoid'],
-                           'optimizer': ['adam', 'sgd']}}
+    PYNN = {"parameters": {'learning_rate': [0.01, 0.02, 0.05, 0.1], 'max_epochs': [10, 20, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5],
+                           'num_hidden_layers': [1, 2, 3], 'hidden_layer_size': [16, 48, 100]}}
     
     @property
     def parameters(self):
@@ -498,8 +497,13 @@ class Algorithm(MetaEnum):
     CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK, "rfe_compatible": False}
     CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH, "rfe_compatible": False}
     VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False}
-    NN3L = { "full_name":  "PyTorch Network (3+ Layers, beta)", "search_params": AlgorithmGridSearchParams.NN3L, "rfe_compatible": False}
-
+    TORA = { "full_name":  "PyTorch ReLu+Adam (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TORS = { "full_name":  "PyTorch ReLu+SGD (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TOTA = { "full_name":  "PyTorch Tanh+Adam (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TOTS = { "full_name":  "PyTorch Tanh+SGD (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TOSA = { "full_name":  "PyTorch Sigm+Adam (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TOSS = { "full_name":  "PyTorch Sigm+SGD (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    
     def get_full_name(self) -> str:
         return self.full_name
 
@@ -768,8 +772,26 @@ class Algorithm(MetaEnum):
         estimators=[('lsvc', clf1), ('rfc', clf2), ('lrn', clf3)]
         return VotingClassifier(estimators=estimators)
     
-    def do_NN3L(self, max_iterations: int, size: int)-> NNClassifier3PL:     
-        return NNClassifier3PL(verbose=False, train_split=False)
+    def do_TORA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
+        return self.call_PYNN(activation='relu', optimizer='adam')
+    
+    def do_TORS(self, max_iterations: int, size: int)-> NNClassifier3PL:     
+        return self.call_PYNN(activation='relu', optimizer='sgd')
+    
+    def do_TOTA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
+        return self.call_PYNN(activation='tanh', optimizer='adam')
+    
+    def do_TOTS(self, max_iterations: int, size: int)-> NNClassifier3PL:     
+        return self.call_PYNN(activation='tanh', optimizer='sgd')
+    
+    def do_TOSA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
+        return self.call_PYNN(activation='sigmoid', optimizer='adam')
+    
+    def do_TOSS(self, max_iterations: int, size: int)-> NNClassifier3PL:     
+        return self.call_PYNN(activation='sigmoid', optimizer='sgd')
+    
+    def call_PYNN(self, activation: str, optimizer: str)-> NNClassifier3PL:     
+        return NNClassifier3PL(activation=activation, optimizer=optimizer, verbose=False, train_split=False)
 
 class Preprocess(MetaEnum):
     NOS = "No Scaling"
