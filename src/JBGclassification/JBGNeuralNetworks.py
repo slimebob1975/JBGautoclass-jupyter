@@ -139,7 +139,7 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
     
     def _get_history_file_dir(self):
         pwd = os.path.dirname(os.path.realpath(__file__))
-        dir = Path(pwd) / ".nn_checkpoint_tmp/"
+        dir = Path(pwd) / "./.nn_checkpoint_tmp/"
         try:
             os.rmdir(dir)
         except OSError:
