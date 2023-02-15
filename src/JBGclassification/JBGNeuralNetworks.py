@@ -1,9 +1,12 @@
 # Experimental test of PyTorch functionality via SKORCH
 # https://skorch.readthedocs.io/en/stable/index.html
 
+import os
+from pathlib import Path
 import torch
 from torch import nn, optim 
 from skorch import NeuralNetClassifier
+from skorch.callbacks import Checkpoint
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.preprocessing import LabelEncoder
@@ -78,8 +81,8 @@ class _NeuralNetwork3PL(nn.Module):
 
 # A classifier based on the neural network with at least one hidden layer
 class NNClassifier3PL(BaseNeuralNetClassifier):
-    def __init__(self, num_hidden_layers=1, hidden_layer_size=100, activation='relu', learning_rate=0.01, max_epochs=20, \
-        optimizer='adam', dropout_prob=0.5, verbose=True, train_split=True):
+    def __init__(self, num_hidden_layers=2, hidden_layer_size=48, activation='tanh', learning_rate=0.02, max_epochs=20, \
+        optimizer='adam', dropout_prob=0.1, verbose=True, train_split=True):
         
         super().__init__()
         
@@ -99,13 +102,14 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
         self.num_features = X.shape[1]
         self.num_classes = len(unique_labels(y))
         the_net = _NeuralNetwork3PL(self.num_features, self.num_classes, self.num_hidden_layers, self.hidden_layer_size, \
-            self._get_activation_function(self.activation), self._get_optimizer(self.optimizer), self.dropout_prob)
+            self._get_activation_function(self.activation), self._get_optimizer(self.optimizer), self.dropout_prob )
         if self.train_split:
             self.net = NeuralNetClassifier(the_net, max_epochs=self.max_epochs, lr=self.learning_rate, device=self.device, \
-                verbose=self.verbose)
+                verbose=self.verbose, callbacks=[self._get_early_stopping_callback()])
+
         else:
             self.net = NeuralNetClassifier(the_net, max_epochs=self.max_epochs, lr=self.learning_rate, device=self.device, \
-                verbose=self.verbose, train_split=None)
+                verbose=self.verbose, train_split=None, callbacks=[self._get_early_stopping_callback()])
             
     def _get_activation_function(self, activation):
         if activation =='relu':
@@ -124,7 +128,29 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
             return optim.SGD
         else:
             raise ValueError(f"Optimizer {optimizer} not recognized!")
+        
+    def _get_early_stopping_callback(self):
+        if self.train_split:
+            monitor = lambda net: all(net.history[-1, ('train_loss_best', 'valid_loss_best')])
+        else:
+            monitor = 'train_loss_best'
+        dirname = self._get_history_file_dir()
+        return Checkpoint(monitor=monitor, dirname=dirname, load_best=True)
     
+    def _get_history_file_dir(self):
+        pwd = os.path.dirname(os.path.realpath(__file__))
+        dir = Path(pwd) / "./.nn_checkpoint_tmp/"
+        try:
+            os.rmdir(dir)
+        except OSError:
+            pass
+        try:
+            os.makedirs(dir)
+        except OSError:
+            return Path(pwd)
+        else:
+            return dir
+
 # Class which handles the case of Long integer class labels
 class LongLabelEncoder(LabelEncoder):
     def __init__(self):
@@ -153,7 +179,7 @@ def main():
     y = ["class " + str(elem) for elem in y]
 
     # Create the net in question
-    net = NNClassifier3PL()
+    net = NNClassifier3PL(train_split=True)
     
     # Fit the net to the data
     net.fit(X, y)
