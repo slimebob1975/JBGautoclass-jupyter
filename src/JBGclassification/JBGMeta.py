@@ -429,8 +429,8 @@ class AlgorithmGridSearchParams(MetaEnum):
     CLIH = {"parameters": {}}
     VOTG = {"parameters": {'voting': ('hard', 'soft')}}
     #PYNN = {"parameters": {}}
-    PYNN = {"parameters": {'learning_rate': [0.01, 0.02, 0.05, 0.1], 'max_epochs': [10, 20, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5],
-                           'num_hidden_layers': [1, 2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
+    PYNN = {"parameters": {'learning_rate': [0.01, 0.05, 0.1], 'max_epochs': [10, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5],
+                           'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
     
     @property
     def parameters(self):
