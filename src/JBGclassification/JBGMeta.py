@@ -498,12 +498,12 @@ class Algorithm(MetaEnum):
     CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK, "rfe_compatible": False}
     CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH, "rfe_compatible": False}
     VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False}
-    TORA = { "full_name":  "PyTorch ReLu+Adam (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TORS = { "full_name":  "PyTorch ReLu+SGD (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TOTA = { "full_name":  "PyTorch Tanh+Adam (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TOTS = { "full_name":  "PyTorch Tanh+SGD (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TOSA = { "full_name":  "PyTorch Sigm+Adam (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TOSS = { "full_name":  "PyTorch Sigm+SGD (3+ layers)", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TORA = { "full_name":  "PyTorch ReLu+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TORS = { "full_name":  "PyTorch ReLu+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TOTA = { "full_name":  "PyTorch Tanh+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TOTS = { "full_name":  "PyTorch Tanh+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TOSA = { "full_name":  "PyTorch Sigm+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    TOSS = { "full_name":  "PyTorch Sigm+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
     
     def get_full_name(self) -> str:
         return self.full_name
