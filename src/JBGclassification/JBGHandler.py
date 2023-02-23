@@ -79,9 +79,6 @@ class Logger(Protocol):
     def update_progress(self, percent: float, message: str = None) -> float:
         """ Tracks the progress through the run """
 
-    def get_minor_percentage(self, minor_tasks: int) -> float:
-        """ Given a number of minor tasks, returns what percentage each is worth """
-
     def print_key_value_pair(self, key: str, value, print_always: bool = False) -> None:
         """ Prints out '<key>: <value>'"""
 
@@ -94,6 +91,9 @@ class Logger(Protocol):
     def start_inline_progress(self, key: str, description: str, final_count: int, tooltip: str) -> None:
         """ This will overwrite any prior bars with the same key """
     
+    def reset_inline_progress(self, key: str) -> None:
+        """ If the progress bar needs to be set back to 0"""
+
     def end_inline_progress(self, key: str, set_100: bool = True) -> None:
         """ Ensures that any loose ends are tied up after the progress is done """
    
@@ -199,6 +199,18 @@ class Config(Protocol):
 
     def get_clean_config(self):
         """ Extracts the config information to save with a model """
+
+    def get_callable_reductions(self, num_samples: int, num_features: int, num_selected_features: int = None) -> list:
+        """ Returns callable reductions from mode.feature_selection """
+
+
+    def get_callable_algorithms(self, size: int, max_iterations: int) -> list:
+        """ Returns callable algorithms from mode.algorithm """
+
+
+    def get_callable_preprocessors(self) -> list:
+        """ Returns callable preprocessors from mode.algorithm """
+
         
 @dataclass
 class JBGHandler:
@@ -965,18 +977,27 @@ class ModelHandler:
         standardProgressText = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot-checking ML algorithms")
         
-        # TODO: test this vs functions on row 1016+ of Config 
         # Prepare a list of feature reduction transforms to loop over
-        reductions = self.handler.config.mode.feature_selection.list_callable_reductions(*dh.X.shape)
+        reductions = self.handler.config.get_callable_reductions(*dh.X.shape)
         
         # Prepare list of algorithms to loop over
-        algorithms = self.handler.config.mode.algorithm.list_callable_algorithms(
+        algorithms = self.handler.config.get_callable_algorithms(
             size=dh.X.shape[0], 
             max_iterations=self.handler.config.get_max_iterations()
         )
 
         # Prepare list of preprocessors
-        preprocessors = self.handler.config.mode.preprocessor.list_callable_preprocessors()
+        preprocessors = self.handler.config.get_callable_preprocessors()
+
+        progress_key = "training_model"
+        number_of_tries = len(algorithms) * len(reductions) * len(preprocessors)
+        
+        self.handler.logger.start_inline_progress(
+            progress_key, 
+            "Checking & Training models", 
+            number_of_tries, 
+            "Percent models checked")
+
         
         # Evaluate each model in turn in combination with all reduction and preprocessing methods
         best_mean = 0.0
@@ -992,21 +1013,19 @@ class ModelHandler:
         
         # Make evaluation of model
         try:
-            #if k < 2: # What to do?
             kfold = StratifiedKFold(n_splits=k, random_state=1, shuffle=True)
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"StratifiedKfold raised an exception with message: {e}")
         
-        first_printed_line = True
-
-        numMinorTasks = len(reductions) * len(algorithms) * len(preprocessors)
-        percentAddPerMinorTask = self.handler.logger.get_minor_percentage(numMinorTasks)
-        
         # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
         success = False
         repetitions = 0
         while repetitions < self.SPOT_CHECK_REPETITIONS and not success:
+            if repetitions > 0:
+                self.handler.logger.reset_inline_progress(progress_key)
+                self.handler.logger.print_warning("All algorithms failed. Restarting spot check.")
+            
             repetitions += 1
         
             # Loop over pre-processing methods
@@ -1031,8 +1050,8 @@ class ModelHandler:
                         
                         # Update progressbar percent and label
                         self.handler.logger.print_progress(message=f"{standardProgressText} ({preprocessor.name}-{reduction.name}-{algorithm.name})")
-                        if not first_rfe_round: 
-                            self.handler.logger.update_progress(percent=percentAddPerMinorTask)
+                        if not first_rfe_round:
+                            self.handler.logger.update_inline_progress(progress_key, 1, "Percent models checked")
                         else:
                             first_rfe_round = False
 
@@ -1117,13 +1136,7 @@ class ModelHandler:
                             else:
                                 success = True
 
-                            # Print results to screen
-                            if not first_printed_line:
-                                self.handler.logger.clear_last_printed_result_line()
-                            else:
-                                first_printed_line = False
-
-                            tempResult = [ 
+                            listOfResults.append([ 
                                 preprocessor.name,
                                 reduction.name,
                                 algorithm.name,
@@ -1132,23 +1145,8 @@ class ModelHandler:
                                 temp_stdev,
                                 test_score,
                                 t,
-                                failure]
-                            listOfResults.append(tempResult)
-                            """self.handler.logger.print_result_line(
-                                preprocessor.name,
-                                reduction.name,
-                                algorithm.name,
-                                min(num_components, num_features),
-                                temp_score,
-                                temp_stdev,
-                                test_score,
-                                t,
-                                failure,
-                                ending = '\r'
-                            )"""
-                            self.handler.logger.print_result_line(
-                                tempResult
-                            )
+                                failure])
+                            
                             
                     
         updates = {"feature_selection": reduction, "algorithm": best_algorithm, \
@@ -1166,6 +1164,7 @@ class ModelHandler:
         self.handler.logger.clear_last_printed_result_line()
         self.handler.logger.print_test_performance(listOfResults, cross_validation_filepath)
         
+        self.handler.logger.end_inline_progress(progress_key)
         # Return best model for start making predictions
         return best_model
 

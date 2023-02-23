@@ -65,7 +65,7 @@ class TestAlgorithm:
         """ Class Method that gets all callable algorithms and their function """
         algorithms = Algorithm.list_callable_algorithms(size=5, max_iterations=10)
         # 53 callable algorithms
-        assert len(algorithms) == 57
+        assert len(algorithms) == 63
 
         # It's a list of tuples
         assert all(isinstance(x,tuple) for x in algorithms)
@@ -84,8 +84,8 @@ class TestAlgorithm:
         sorted_list_default = Algorithm.get_sorted_list(default_terms_first=False)
         sorted_list_dumy_first = Algorithm.get_sorted_list()
 
-        assert len(sorted_list_default) == 58
-        assert len(sorted_list_dumy_first) == 58
+        assert len(sorted_list_default) == 64
+        assert len(sorted_list_dumy_first) == 64
 
         # They are a list of tuples
         assert all(isinstance(x,tuple) for x in sorted_list_default)

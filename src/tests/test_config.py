@@ -42,6 +42,42 @@ class TestConfig:
         
         assert valid_iris_config.get_categorical_text_column_names() == []
 
+    def test_list_callable_metas(self, valid_iris_config):
+        """ 
+        Ensures that the shorter calls to get the callable reductions/algorithms/preprocessors work
+        """
+        reduction_args = {
+            "num_samples": 1,
+            "num_features": 1,
+            "num_selected_features": None
+        }
+        algorithm_args = {
+            "size": 1,
+            "max_iterations": 2
+        }
+        reductions = valid_iris_config.mode.feature_selection.list_callable_reductions(
+            *reduction_args.values()
+        )
+        
+        algorithms = valid_iris_config.mode.algorithm.list_callable_algorithms(
+            *algorithm_args.values()
+        )
+
+        preprocessors = valid_iris_config.mode.preprocessor.list_callable_preprocessors()
+        
+        config_reduction_call = valid_iris_config.get_callable_reductions(*reduction_args.values())
+        config_algorithm_call = valid_iris_config.get_callable_algorithms(*algorithm_args.values())
+        config_preprocessor_call = valid_iris_config.get_callable_preprocessors()
+
+        assert len(config_reduction_call) == len(reductions), "The two reduction calls have different lengths"
+        assert len(config_algorithm_call) == len(algorithms), "The two algorithm calls have different lengths"
+        assert len(config_preprocessor_call) == len(preprocessors), "The two preprocessor calls have different lengths"
+
+        assert all([x[0] == y[0] for x,y in zip(config_reduction_call, reductions)]), "The reduction calls have different results"
+        assert all([x[0] == y[0] for x,y in zip(config_algorithm_call, algorithms)]), "The algorithm calls have different results"
+        assert all([x[0] == y[0] for x,y in zip(config_preprocessor_call, preprocessors)]), "The preprocessor calls have different results"
+        
+
     def test_calculated_booleans(self, valid_iris_config):
         """ This tests that calculated booleans are calculated correctly """
         # Expected values

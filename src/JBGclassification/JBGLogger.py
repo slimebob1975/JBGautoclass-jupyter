@@ -382,7 +382,18 @@ class JBGLogger(terminal.Logger):
         progress_box = widgets.HBox([self.inline_bars[key]["bar"], self.inline_bars[key]["percent_label"]])
         IPython.display.display(progress_box)
 
-    
+    def reset_inline_progress(self, key: str) -> None:
+        """ If the progress bar needs to be set back to 0"""
+
+        if self._enable_quiet:
+            return
+
+        information = self.inline_bars[key]
+        information["bar"].value = 0
+            
+
+
+
     def update_inline_progress(self, key: str, current_count: int, terminal_text: str) -> None:
         """ Updates progress bars within the script"""
         

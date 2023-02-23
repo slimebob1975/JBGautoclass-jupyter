@@ -67,6 +67,10 @@ class MockLogger():
 
     def print_code(self, key: str, code: str) -> None:
         """ Prints out a text with a (in output) code-tagged end """
+
+    def print_key_value_pair(self, key: str, value, print_always: bool = False) -> None:
+        """ Prints out '<key>: <value>'"""
+
    
 
 class MockConfig():

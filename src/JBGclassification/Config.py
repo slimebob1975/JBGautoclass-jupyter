@@ -1034,20 +1034,20 @@ class Config:
         self.mode.num_selected_features = num_features
 
     
-    def get_callable_reductions(self, *args) -> list:
+    def get_callable_reductions(self, num_samples: int, num_features: int, num_selected_features: int = None) -> list:
         """ Returns callable reductions from mode.feature_selection """
 
-        return self.mode.feature_selection.list_callable_reductions(*args)
+        return self.mode.feature_selection.list_callable_reductions(num_samples, num_features, num_selected_features)
 
-    def get_callable_algorithms(self, *args) -> list:
+    def get_callable_algorithms(self, size: int, max_iterations: int) -> list:
         """ Returns callable algorithms from mode.algorithm """
 
-        return self.mode.algorithm.list_callable_algorithms(*args)
+        return self.mode.algorithm.list_callable_algorithms(size, max_iterations)
 
-    def get_callable_preprocessors(self, *args) -> list:
+    def get_callable_preprocessors(self) -> list:
         """ Returns callable preprocessors from mode.algorithm """
 
-        return self.mode.preprocessor.list_callable_preprocessors(*args)
+        return self.mode.preprocessor.list_callable_preprocessors()
 
     def update_attribute(self, attribute: Union[str, dict], new_value) -> None:
         """ attribute is either a string on the form 'name.subname' 

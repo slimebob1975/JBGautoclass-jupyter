@@ -96,8 +96,6 @@ class TaskRunner:
                 - Other keys as used by the following task
         """
         number_of_tasks = len(tasks)
-        if self.config.should_train():
-            number_of_tasks += 1 # train_model__task has an extra share
         self.logger.initiate_progress(number_of_tasks=number_of_tasks)
         
         self.dh = self.handler.get_handler("dataset")
