@@ -12,3 +12,8 @@ src/JBGclassification/model/*.sav
 .pytest_cache
 __test.py
 settings.json
+.nn_checkpoint_tmp/
+criterion.pt
+optimizer.pt
+params.pt
+history.json
