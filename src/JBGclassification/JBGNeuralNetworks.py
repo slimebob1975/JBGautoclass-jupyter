@@ -12,8 +12,13 @@ from sklearn.base import BaseEstimator
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.multiclass import unique_labels
 
+OUTPUT_DIR = "output"
+CHECKPOINT_DIR = "nn_checkpoint"
+
+
 # The base neural network classifier
 class BaseNeuralNetClassifier(BaseEstimator):
+
     
     def __init__(self):
 
@@ -135,23 +140,30 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
         else:
             monitor = 'train_loss_best'
         dirname = self._get_history_file_dir()
+        
         return Checkpoint(monitor=monitor, dirname=dirname, load_best=True)
     
-    def _get_history_file_dir(self):
-        pwd = os.path.dirname(os.path.realpath(__file__))
-        dir = Path(pwd) / "./.nn_checkpoint_tmp/"
+    def _get_history_file_dir(self) -> Path:
+        """ Defines the directory to save the best checkpoint"""
+
+        pwd = Path(os.path.dirname(os.path.realpath(__file__)))
+        dir = pwd / OUTPUT_DIR / CHECKPOINT_DIR
         try:
-            os.rmdir(dir)
+            import shutil
+            # Shutil needed to remove non-empty directory
+            shutil.rmtree(dir)
         except OSError:
             pass
         try:
             os.makedirs(dir)
         except OSError:
-            return Path(pwd)
+            return pwd
         else:
             return dir
 
 # Class which handles the case of Long integer class labels
+# Should probably not be in here, but can't be in JBGMeta due to circular dependency
+# Possibly break out all of the transforms/etc.
 class LongLabelEncoder(LabelEncoder):
     def __init__(self):
         super().__init__()
@@ -165,6 +177,7 @@ class LongLabelEncoder(LabelEncoder):
     def inverse_transform(self, X): 
         return super().inverse_transform(X.astype(int))
 
+
 def main():
     print("Testing NNClassifier3PL!")
     
@@ -177,7 +190,7 @@ def main():
     X, y = make_classification(1000, 5, n_classes=2, random_state=0)
     X = X.astype(np.float64)
     y = ["class " + str(elem) for elem in y]
-
+    
     # Create the net in question
     net = NNClassifier3PL(train_split=True)
     
@@ -192,6 +205,7 @@ def main():
     y_proba = net.predict_proba(X[:5])
     print(y_proba)
     
+
 # Start main
 if __name__ == "__main__":
     main()
