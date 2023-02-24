@@ -3,11 +3,12 @@ from __future__ import annotations
 import dill
 import time
 import psutil
+import multiprocessing as mp
 import traceback
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
-from typing import Callable, Protocol, Union, Any
+from typing import Callable, Iterator, Protocol, Union, Any
 
 import langdetect
 import numpy as np
@@ -342,33 +343,99 @@ class DatasetHandler:
         # Make an extensive search through the data for any inconsistencies (like NaNs and NoneType). 
         # Also convert datetime numerical variables to ordinals, i.e., convert them to the number of days 
         # or similar from a certain starting point, if any are left after the conversion above.
-        number_data_columns = len(dataset.columns) - 1
+        columns_to_validate = [(key, column) for key, column in dataset.items() if key != class_column]
+        
+        if self.should_validate_concurrently(dataset):
+            dataset = self.concurrent_validation(dataset, columns_to_validate)
+        
+        else:
+            dataset = self.serial_validation(dataset, columns_to_validate)
+        
+        return dataset
+
+    def max_dataset_size(self) -> int:
+        """ Uses the .env file to determine the max dataset size """
+        # if MAX_DATASET_SIZE is set (via .env file), use that, otherwise 0
+        """
+        Hum. Inser plötsligt att det finns ett litet problem med att använda .env filen på det sättet. Den är inte nödvändigtvis laddad i autoclassifiern >.> (men det är lätt att fixa)
+        """
+        calced_max = 200
+        
+        return 0 # 0 means no limit
+
+
+    def should_validate_concurrently(self, dataset: pandas.DataFrame) -> bool:
+        """ Calculates whether the validation should be called concurrently """
+        # https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.memory_usage.html
+        dataset_size = dataset.memory_usage().sum()
+
+        return dataset_size > self.max_dataset_size()
+
+
+    def serial_validation(self, dataset: pandas.DataFrame, columns_to_validate: Iterator) -> pandas.DataFrame:
+        """ When the dataset isn't large enough to need to be processed concurrently, this function is used to validate columns"""
+
+        number_data_columns = len(columns_to_validate)
         column_number = 0
         progress_key = "validate_dataset"
         self.handler.logger.start_inline_progress(progress_key, "Validation progress", number_data_columns, "Percent data checked of fetched")
         try:
-            for key, column in dataset.items():
-                if key != class_column:
-                            
-                    # TODO: If possible, parallelize this call over available CPU:s
-                    dataset[key] = self.validate_column(key, column)
-                    
-                    column_number += 1
-                    self.handler.logger.update_inline_progress(progress_key, column_number, "Data checked of fetched")
+            for key, column in columns_to_validate:
+                dataset[key] = self.sanitize_column(key, column)
+                
+                column_number += 1
+                self.handler.logger.update_inline_progress(progress_key, column_number, "Data checked of fetched")
                     
         except Exception as ex:
             self.handler.logger.print_dragon(exception=ex)
-            print(ex)
             raise DatasetException(f"Something went wrong in inconsistency check at column {key}: {ex}")
         
         self.handler.logger.end_inline_progress(progress_key)
+
         return dataset
 
-    def validate_column(self, key: str, column: pandas.Series) -> pandas.Series:
+    def concurrent_validation(self, dataset: pandas.DataFrame, columns_to_validate: Iterator) -> pandas.DataFrame:
+        """ When the dataset is large enough to need to run validation concurrently """
         
+        processor_count = mp.cpu_count()
+        self.handler.logger.print_formatted_info(f"Using {processor_count} processor(s) to parallelize validation")
+
+        pool = mp.Pool(processor_count)
+        #key is a string, column is a pandas.Series
+        results = pool.starmap_async(self.validate_column, [(key, column) for key, column in columns_to_validate])
+
+        # Close Pool and let all the processes complete    
+        pool.close()
+        pool.join()  # postpones the execution of next line of code until all processes in the queue are done.
+
+        for result in results.get():
+            key, column = result
+            
+            if isinstance(column, Exception):
+                self.handler.logger.print_dragon(exception=column)
+                raise DatasetException(f"Something went wrong in inconsistency check at column {key}: {column}")
+            
+            dataset[key] = column
+                    
+        return dataset
+
+    def validate_column(self, key: str, column: pandas.Series) -> tuple[str, Union[pandas.Series, Exception]]:
+        """ This ensures the MapResults has access to both key and column """
+        try:
+            sanitized_column = self.sanitize_column(key, column)
+        except Exception as ex:
+            sanitized_column = ex
+        
+        return (key, sanitized_column)
+
+
+    def sanitize_column(self, key: str, column: pandas.Series) -> pandas.Series:
+        """ Cleans up a Series based on the type of the column """
+
         column_is_text = self.handler.config.column_is_text(key)
         return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
         
+    
     def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
         """ Impossible to test, due to random being random """
         # Shuffle the upper part of the data, such that all already classified material are
@@ -892,8 +959,8 @@ class ModelHandler:
             scorer = self.handler.config.get_scoring_mechanism()
 
             # Create search grid and fit model
-            search_verbosity = 4 if self.handler.config.io.verbose else 0
-            search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True, verbose=search_verbosity)
+            search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True)
+            
             try:
                 search.fit(X, Y)
             except TypeError:
