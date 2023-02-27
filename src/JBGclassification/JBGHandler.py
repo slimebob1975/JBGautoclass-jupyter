@@ -1027,7 +1027,7 @@ class ModelHandler:
                 self.handler.logger.print_warning("All algorithms failed. Restarting spot check.")
             
             repetitions += 1
-            tries = 0
+            tries = -1 # Starting on negative number with ensure the first update will give 0 percent progress
         
             # Loop over pre-processing methods
             for preprocessor, preprocessor_callable in preprocessors:
