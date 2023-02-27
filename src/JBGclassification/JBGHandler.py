@@ -991,6 +991,7 @@ class ModelHandler:
 
         progress_key = "training_model"
         number_of_tries = len(algorithms) * len(reductions) * len(preprocessors)
+        tries = 0
         
         self.handler.logger.start_inline_progress(
             progress_key, 
@@ -1040,6 +1041,8 @@ class ModelHandler:
 
                     # Loop over the algorithms
                     for algorithm, algorithm_callable in algorithms:
+                        tries += 1
+                        #print(tries,number_of_tries)
                         
                         # Some combinations of REF and algorithms are error prone and should be skipped
                         if not self.should_run_computation(reduction, algorithm):
@@ -1051,7 +1054,7 @@ class ModelHandler:
                         # Update progressbar percent and label
                         self.handler.logger.print_progress(message=f"{standardProgressText} ({preprocessor.name}-{reduction.name}-{algorithm.name})")
                         if not first_rfe_round:
-                            self.handler.logger.update_inline_progress(progress_key, 1, "Percent models checked")
+                            self.handler.logger.update_inline_progress(progress_key, tries, "Percent models checked")
                         else:
                             first_rfe_round = False
 
