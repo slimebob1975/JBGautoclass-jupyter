@@ -991,7 +991,6 @@ class ModelHandler:
 
         progress_key = "training_model"
         number_of_tries = len(algorithms) * len(reductions) * len(preprocessors)
-        tries = 0
         
         self.handler.logger.start_inline_progress(
             progress_key, 
@@ -1028,6 +1027,7 @@ class ModelHandler:
                 self.handler.logger.print_warning("All algorithms failed. Restarting spot check.")
             
             repetitions += 1
+            tries = 0
         
             # Loop over pre-processing methods
             for preprocessor, preprocessor_callable in preprocessors:
@@ -1041,8 +1041,9 @@ class ModelHandler:
 
                     # Loop over the algorithms
                     for algorithm, algorithm_callable in algorithms:
-                        tries += 1
-                        #print(tries,number_of_tries)
+                        
+                        # Keep track so we can update the progress bar correctly
+                        tries += 1        
                         
                         # Some combinations of REF and algorithms are error prone and should be skipped
                         if not self.should_run_computation(reduction, algorithm):
@@ -1149,8 +1150,6 @@ class ModelHandler:
                                 test_score,
                                 t,
                                 failure])
-                            
-                            
                     
         updates = {"feature_selection": reduction, "algorithm": best_algorithm, \
             "preprocessor" : best_preprocessor, "num_selected_features": best_rfe_feature_selection}
