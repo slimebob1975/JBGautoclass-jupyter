@@ -28,7 +28,7 @@ from Config import Config
 from JBGMeta import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
 from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
-from JBGTextHandling import TextDataToNumbersConverter
+from JBGTransformers import TextDataToNumbersConverter
 import Helpers
 
 GIVE_EXCEPTION_TRACEBACK = False

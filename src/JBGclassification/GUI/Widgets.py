@@ -13,7 +13,7 @@ from sklearn.utils import Bunch
 
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
     AlgorithmTuple, Preprocess, PreprocessTuple, ScoreMetric)
-from JBGTextHandling import TextDataToNumbersConverter
+from JBGTransformers import TextDataToNumbersConverter
         
 from JBGExceptions import GuiWidgetsException
 import Helpers

@@ -1,10 +1,10 @@
+import pytest
 import pandas as pd
 
-from JBGTextHandling import TextDataToNumbersConverter
+from JBGTransformers import TextDataToNumbersConverter
 
-# One class per class in the module
 class TestTextDataToNumbersConverter():
-    
+    """ Tests the transform TextDataToNumbersConverter """
     def test_transform(self):
         list_of_columns = [
             [31, 19, 74, 111, 2],
@@ -47,3 +47,26 @@ class TestTextDataToNumbersConverter():
         
         pd.testing.assert_frame_equal(dataset, expected_dataset, check_dtype=False, check_exact=False, atol=0.1, rtol=0.1)
    
+
+class TestNNClassifier3PL:
+    """ Tests the estimator NNClassifier3PL """
+
+    def test_main(self, binary_classification_dataset):
+        """ This needs to be tweaked so it can actually be used """
+
+        X, y = binary_classification_dataset
+        """
+        # Create the net in question
+        net = NNClassifier3PL(train_split=True)
+        
+        # Fit the net to the data
+        net.fit(X, y)
+        
+        # Making prediction for first 5 data points of X
+        y_pred = net.predict(X[:5])
+        print(y_pred)
+        
+        # Checking probarbility of each class for first 5 data points of X
+        y_proba = net.predict_proba(X[:5])
+        print(y_proba)
+        """
