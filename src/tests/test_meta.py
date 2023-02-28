@@ -1,7 +1,6 @@
 import pytest
 
-from JBGMeta import (Algorithm, AlgorithmTuple, Detector, Preprocess,
-                    PreprocessTuple, Reduction, ReductionTuple, ScoreMetric)
+from JBGMeta import (Algorithm, Detector, Preprocess, Reduction, ScoreMetric)
 
 class TestDetector:
     """ Tests the Enum Detector functions """

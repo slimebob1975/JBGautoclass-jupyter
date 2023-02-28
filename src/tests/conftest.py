@@ -223,6 +223,29 @@ class MockDataLayer():
 
         return "SQL"
 
+@pytest.fixture
+def binary_classification_dataset():
+    """
+        toy dataset for binary classification, 1000 data points with 5 features each
+    
+        X : ndarray of shape (1000, 5)
+        The generated samples.
+
+        y : ndarray of shape (1000,)
+        The integer labels for class membership of each sample.
+    """
+    import numpy as np
+    import torch
+    from sklearn.datasets import make_classification
+    torch.manual_seed(0)
+    torch.cuda.manual_seed(0)
+    
+    X, y = make_classification(1000, 5, n_classes=2, random_state=0)
+    X = X.astype(np.float64)
+    y = ["class " + str(elem) for elem in y]
+
+    return (X, y)
+
 
 @pytest.fixture
 def valid_iris_config() -> Config:

@@ -1,53 +1,54 @@
 from __future__ import annotations
-import enum
-from typing import Callable, Iterable, Protocol, Union, Type, TypeVar
-from functools import total_ordering
 
-import pandas
+import enum
+from functools import total_ordering
+from typing import Callable, Iterable, Protocol, Type, TypeVar, Union
+
 import numpy as np
-from sklearn.dummy import DummyClassifier
-from sklearn.preprocessing import FunctionTransformer
-from sklearn.decomposition import PCA, FastICA, TruncatedSVD, NMF
+import pandas
+from imblearn.ensemble import (BalancedBaggingClassifier,
+                               BalancedRandomForestClassifier,
+                               EasyEnsembleClassifier, RUSBoostClassifier)
+from JBGTransformers import (JBGMCS, JBGInstanceHardness,
+                             JBGPartitioningDetector, JBGRandomForestDetector,
+                             JBGRobustCentroid, JBGRobustLogisticRegression,
+                             NNClassifier3PL)
+from skclean.detectors import KDN, ForestKDN, RkDN
+from skclean.handlers import CLNI, Costing, Filter, WeightedBagging
+from skclean.models import RobustForest
+from sklearn.decomposition import NMF, PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
+from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
                               ExtraTreesClassifier, GradientBoostingClassifier,
+                              HistGradientBoostingClassifier,
                               RandomForestClassifier, StackingClassifier,
-                              HistGradientBoostingClassifier, VotingClassifier)
-from sklearn.semi_supervised import SelfTrainingClassifier
+                              VotingClassifier)
+from sklearn.feature_selection import RFE, SelectFromModel
 from sklearn.gaussian_process import GaussianProcessClassifier
-from sklearn.feature_selection import SelectFromModel, RFE
 from sklearn.kernel_approximation import Nystroem
 from sklearn.linear_model import (LogisticRegression,
                                   PassiveAggressiveClassifier, Perceptron,
                                   RidgeClassifier, SGDClassifier)
 from sklearn.manifold import Isomap, LocallyLinearEmbedding
+from sklearn.metrics import (accuracy_score, average_precision_score,
+                             balanced_accuracy_score, f1_score, make_scorer,
+                             matthews_corrcoef, precision_score, recall_score)
 from sklearn.naive_bayes import (BernoulliNB, ComplementNB, GaussianNB,
                                  MultinomialNB)
 from sklearn.neighbors import (KNeighborsClassifier, NearestCentroid,
                                RadiusNeighborsClassifier)
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import (Binarizer, MaxAbsScaler, MinMaxScaler,
-                                   Normalizer, StandardScaler)
+from sklearn.preprocessing import (Binarizer, FunctionTransformer,
+                                   MaxAbsScaler, MinMaxScaler, Normalizer,
+                                   StandardScaler)
 from sklearn.random_projection import GaussianRandomProjection
+from sklearn.semi_supervised import SelfTrainingClassifier
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
-from sklearn.metrics import (make_scorer, accuracy_score, balanced_accuracy_score,
-                             f1_score, recall_score, precision_score,
-                             matthews_corrcoef, average_precision_score)
-
-from skclean.models import RobustForest
-from skclean.detectors import (KDN, ForestKDN, RkDN)
-from skclean.handlers import WeightedBagging, Costing, CLNI, Filter
-
-from imblearn.ensemble import (EasyEnsembleClassifier, RUSBoostClassifier, 
-     BalancedBaggingClassifier, BalancedRandomForestClassifier)
-
-from JBGExperimental import (JBGRobustLogisticRegression, JBGRobustCentroid, 
-                            JBGPartitioningDetector, JBGMCS, JBGInstanceHardness,
-                            JBGRandomForestDetector)
-from JBGNeuralNetworks import NNClassifier3PL
+from Types import Detecter, Estimator, Transform
 
 PCA_VARIANCE_EXPLAINED = 0.999
 LOWER_LIMIT_REDUCTION = 100
@@ -64,75 +65,6 @@ class Logger(Protocol):
     def print_components(self, component, components, exception = None) -> None:
         """ Printing Reduction components"""
 
-""" For a Pipeline the steps are n+1 objects which show the sequential changes done to X """
-class Transform(Protocol):
-    """ 0 => n, requires both fit() and transform() """
-    def fit(self, X, y=None, sample_weight=None):
-        """
-         Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            The data used to compute the per-feature minimum and maximum
-            used for later scaling along the features axis.
-
-        y : None
-            Not used, present here for API consistency by convention.
-
-        sample_weight : array-like of shape (n_samples,), default=None
-            Individual weights for each sample (depending on the object's type)
-
-        Returns
-        -------
-        self : object
-            Fitted scaler.
-        """
-    
-    def transform(self, X):
-        """Scale features of X according to feature_range.
-
-                Parameters
-                ----------
-                X : array-like of shape (n_samples, n_features)
-                    Input data that will be transformed.
-
-                Returns
-                -------
-                Xt : ndarray of shape (n_samples, n_features)
-                    Transformed data.
-        """
-
-
-class Estimator(Protocol):
-    """ Final n+1, requires only fit() """
-
-    def fit(self, X, y=None, sample_weight=None):
-        """
-         Parameters
-        ----------
-        X : array-like of shape (n_samples, n_features)
-            The data used to compute the per-feature minimum and maximum
-            used for later scaling along the features axis.
-
-        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
-            The target values (class labels in classification, real numbers in
-            regression).
-
-        sample_weight : array-like of shape (n_samples,), default=None
-            Individual weights for each sample (depending on the object's type)
-
-        Returns
-        -------
-        self : object
-            Fitted scaler.
-        """
-
-class Detecter(Protocol):
-    """ Given to some Estimators, requires detect()
-        As the class that tracks detecters is called Detector, that name is already taken
-    """
-    def detect(self, X, y):
-        """ Detects noise likelihood for each sample in the dataset """
-
 
 class RateType(enum.Enum):
     # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
@@ -141,6 +73,7 @@ class RateType(enum.Enum):
     A = "General"
     # U = Okänd. Lade jag till som en framtida utväg ifall ingen av de ovanstående fanns tillgängliga.
     U = "Unknown"
+
 
 META_ENUM_DEFAULT_TERMS = ("ALL", "DUMY", "NOR", "NOS")
 

@@ -4,6 +4,7 @@ import getopt
 import importlib
 import os
 import sys
+import shutil
 from typing import Iterable
 
 
@@ -22,6 +23,18 @@ def clean_list(dirty_list: list) -> list[str]:
     
     # Removes empty strings
     return [c for c in cleaned_list if c]
+
+
+def recreate_dir(dir: str) -> None:
+    """ Deletes a directory and it's content, then recreates it
+    """
+    try:
+        # Shutil needed to remove non-empty directory
+        shutil.rmtree(dir)
+        os.makedirs(dir)
+    except OSError as e:
+        print(str(e))
+
 
 def save_matrix_as_csv(matrix: pandas.DataFrame, filepath: str, index_label: str = None) -> None:
     """ Unifies any matrices saved to CSV """
