@@ -15,6 +15,7 @@
 # Standard imports
 import os
 import sys
+from dotenv import load_dotenv
 
 from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
 from scipy.sparse import SparseEfficiencyWarning
@@ -47,6 +48,9 @@ class AutomaticClassifier:
 
     # Constructor with arguments
     def __init__(self, config: Config.Config, logger: JBGLogger.JBGLogger, datalayer: SQLDataLayer.DataLayer):
+        # loads all .env variables, which are called using os.environ.get("NAME_OF_VARIABLE")
+        load_dotenv()
+        
         self.config = config
 
         self.logger = logger

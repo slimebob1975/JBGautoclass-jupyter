@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 
 import dill
 import time
@@ -353,23 +354,26 @@ class DatasetHandler:
         
         return dataset
 
+    @property
     def max_dataset_size(self) -> int:
         """ Uses the .env file to determine the max dataset size """
-        # if MAX_DATASET_SIZE is set (via .env file), use that, otherwise 0
-        """
-        Hum. Inser plötsligt att det finns ett litet problem med att använda .env filen på det sättet. Den är inte nödvändigtvis laddad i autoclassifiern >.> (men det är lätt att fixa)
-        """
-        calced_max = 200
         
-        return 0 # 0 means no limit
+        # if MAX_DATASET_SIZE is set (via .env file), use that. 
+        # otherwise -1, meaning the dataset is validated serially
+        return os.environ.get("MAX_DATASET_SIZE", -1)
 
 
     def should_validate_concurrently(self, dataset: pandas.DataFrame) -> bool:
         """ Calculates whether the validation should be called concurrently """
+        if self.max_dataset_size < 0:
+            return False
+        
         # https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.memory_usage.html
+        # TODO: Might need to refine the dataset_size
+
         dataset_size = dataset.memory_usage().sum()
 
-        return dataset_size > self.max_dataset_size()
+        return dataset_size > self.max_dataset_size
 
 
     def serial_validation(self, dataset: pandas.DataFrame, columns_to_validate: Iterator) -> pandas.DataFrame:
@@ -396,6 +400,7 @@ class DatasetHandler:
 
     def concurrent_validation(self, dataset: pandas.DataFrame, columns_to_validate: Iterator) -> pandas.DataFrame:
         """ When the dataset is large enough to need to run validation concurrently """
+        # TODO: This has the concurrent/parallel implementation
         
         processor_count = mp.cpu_count()
         self.handler.logger.print_formatted_info(f"Using {processor_count} processor(s) to parallelize validation")
