@@ -12,7 +12,7 @@ from imblearn.ensemble import (BalancedBaggingClassifier,
 from JBGTransformers import (JBGMCS, JBGInstanceHardness,
                              JBGPartitioningDetector, JBGRandomForestDetector,
                              JBGRobustCentroid, JBGRobustLogisticRegression,
-                             NNClassifier3PL)
+                             NNClassifier3PL, MLPKerasClassifier)
 from skclean.detectors import KDN, ForestKDN, RkDN
 from skclean.handlers import CLNI, Costing, Filter, WeightedBagging
 from skclean.models import RobustForest
@@ -364,6 +364,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     #PYNN = {"parameters": {}}
     PYNN = {"parameters": {'learning_rate': [0.01, 0.05, 0.1], 'max_epochs': [10, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5],
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
+    KERA = {"parameters": {}}
     
     @property
     def parameters(self):
@@ -437,6 +438,7 @@ class Algorithm(MetaEnum):
     TOTS = { "full_name":  "PyTorch Tanh+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
     TOSA = { "full_name":  "PyTorch Sigm+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
     TOSS = { "full_name":  "PyTorch Sigm+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
+    KERA = { "full_name": "Keras MLP Classifier", "search_params": AlgorithmGridSearchParams.KERA, "rfe_compatible": False}
     
     def get_full_name(self) -> str:
         return self.full_name
@@ -726,6 +728,10 @@ class Algorithm(MetaEnum):
     
     def call_PYNN(self, activation: str, optimizer: str)-> NNClassifier3PL:     
         return NNClassifier3PL(activation=activation, optimizer=optimizer, verbose=False, train_split=True)
+    
+    def do_KERA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
+        return  MLPKerasClassifier()
+    
 
 class Preprocess(MetaEnum):
     NOS = "No Scaling"
