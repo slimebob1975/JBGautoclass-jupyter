@@ -163,6 +163,7 @@ class MLPKerasClassifier(KerasClassifier):
 
     def __init__(
         self,
+        model=None,
         hidden_layer_sizes=(100, ),
         optimizer="adam",
         optimizer__learning_rate=0.001,
@@ -170,7 +171,9 @@ class MLPKerasClassifier(KerasClassifier):
         verbose=0,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        self.model = model
+        super().__init__(self.model, **kwargs)
+        
         self.hidden_layer_sizes = hidden_layer_sizes
         self.optimizer = optimizer
         self.epochs = epochs

@@ -64,7 +64,7 @@ class Logger(Protocol):
 
     def print_components(self, component, components, exception = None) -> None:
         """ Printing Reduction components"""
-
+        
 
 class RateType(enum.Enum):
     # I = Individuell bedömning. Modellen kan ge sannolikheter för individuella dataelement.
@@ -234,6 +234,15 @@ class MetaTuple:
         metaEnums.sort(key=lambda enumtuple: enumtuple[0].name)
         return metaEnums    
 
+class Library(MetaEnum):
+    SCIKIT = "Scikit Learn"
+    CLEAN = "Scikit Clean"
+    IMBLRN = "Imbalanced Learn"
+    TORCH = "PyTorch"
+    KERAS = "Keras/Tensorflow"
+    
+    def get_full_name(self) -> str:
+        return self.full_name
 
 class Detector(MetaEnum):
     ALL = { "full_name": "All" }
@@ -374,71 +383,71 @@ class AlgorithmGridSearchParams(MetaEnum):
         return {}
 
 class Algorithm(MetaEnum):
-    DUMY = { "full_name": "Dummy Classifier", "search_params": AlgorithmGridSearchParams.DUMY, "rfe_compatible": False}
-    SRF1 = { "full_name": "Stacked Random Forests 1", "search_params": AlgorithmGridSearchParams.SRF1, "rfe_compatible": False}
-    SRF2 = { "full_name": "Stacked Random Forests 2", "search_params": AlgorithmGridSearchParams.SRF2, "rfe_compatible": False}
-    BARF = { "full_name": "Balanced Random Forest", "search_params": AlgorithmGridSearchParams.BARF, "rfe_compatible": True}
-    BABC = { "full_name": "Balanced Bagging Classifier", "search_params": AlgorithmGridSearchParams.BABC, "rfe_compatible": False}
-    RUBC = { "full_name": "RUS Boost Classifier", "search_params": AlgorithmGridSearchParams.RUBC, "rfe_compatible": True}
-    EAEC = { "full_name": "Easy Ensamble Classifier", "search_params": AlgorithmGridSearchParams.EAEC, "rfe_compatible": False}
-    RTCL = { "full_name": "Robust Tree Classifier", "search_params": AlgorithmGridSearchParams.RTCL, "rfe_compatible": False}
-    RLRN = { "full_name": "Robust Logistic Regression + Label Encoder", "search_params": AlgorithmGridSearchParams.RLRN, "rfe_compatible": False}
-    RCNT = { "full_name": "Robust Centroid + Label Encoder", "search_params": AlgorithmGridSearchParams.RCNT, "rfe_compatible": False}
-    LRN = { "full_name": "Logistic Regression", "search_params": AlgorithmGridSearchParams.LRN, "rfe_compatible": True}
-    KNN = { "full_name": "K-Neighbors Classifier", "search_params": AlgorithmGridSearchParams.KNN, "rfe_compatible": False}
-    RADN = { "full_name": "Radius Neighbors Classifier", "search_params": AlgorithmGridSearchParams.RADN, "rfe_compatible": False}
-    DTC = { "full_name": "Decision Tree Classifier", "search_params": AlgorithmGridSearchParams.DTC, "rfe_compatible": True}
-    GNB = { "full_name": "Gaussian Naive Bayes", "search_params": AlgorithmGridSearchParams.GNB, "rfe_compatible": False}
-    MNB = { "full_name": "Multinomial Naive Bayes", "search_params": AlgorithmGridSearchParams.MNB, "rfe_compatible": True}
-    BNB = { "full_name": "Bernoulli Naive Bayes", "search_params": AlgorithmGridSearchParams.BNB, "rfe_compatible": True}
-    CNB = { "full_name": "Complement Naive Bayes", "search_params": AlgorithmGridSearchParams.CNB, "rfe_compatible": True}
-    REC = { "full_name": "Ridge Classifier", "search_params": AlgorithmGridSearchParams.REC, "rfe_compatible": True}
-    PCN = { "full_name": "Perceptron", "search_params": AlgorithmGridSearchParams.PCN, "rfe_compatible": True}
-    PAC = { "full_name": "Passive Aggressive Classifier", "search_params": AlgorithmGridSearchParams.PAC, "rfe_compatible": True}
-    RFCL = { "full_name": "Random Forest Classifier", "search_params": AlgorithmGridSearchParams.RFCL, "rfe_compatible": True}
-    LSVC = { "full_name":  "Linear Support Vector", "search_params": AlgorithmGridSearchParams.LSVC, "rfe_compatible": True}
-    SLSV = { "full_name": "Stacked Linear SVC", "search_params": AlgorithmGridSearchParams.SLSV, "rfe_compatible": False}
-    SGDE = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGDE, "rfe_compatible": True}
-    NCT = { "full_name": "Nearest Centroid", "search_params": AlgorithmGridSearchParams.NCT, "rfe_compatible": False}
-    SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC, "rfe_compatible": False}
-    STCL = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.STCL, "rfe_compatible": False}
-    LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA, "rfe_compatible": True}
-    QDA = { "full_name": "Quadratic Discriminant Analysis", "search_params": AlgorithmGridSearchParams.QDA, "rfe_compatible": False}
-    BGC = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BGC, "rfe_compatible": False}
-    ETC = { "full_name": "Extra Trees Classifier", "search_params": AlgorithmGridSearchParams.ETC, "rfe_compatible": True}
-    ABC = { "full_name": "Ada Boost Classifier", "search_params": AlgorithmGridSearchParams.ABC, "rfe_compatible": True}
-    GBC = { "full_name": "Gradient Boosting Classifier", "search_params": AlgorithmGridSearchParams.GBC, "rfe_compatible": True}
-    HIST = { "full_name": "Histogram-based Gradient B. Classifier", "search_params": AlgorithmGridSearchParams.HIST, "rfe_compatible": False}
-    MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC, "rfe_compatible": False}
-    GPC = { "full_name": "Gaussian Process Classifier", "search_params": AlgorithmGridSearchParams.GPC, "rfe_compatible": False}
-    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD, "rfe_compatible": False}
-    FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD, "rfe_compatible": False}
-    FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD, "rfe_compatible": False}
-    FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.FINH, "rfe_compatible": False}
-    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.CSTK, "rfe_compatible": False}
-    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.CSTM, "rfe_compatible": False}
-    CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CRFD, "rfe_compatible": False}
-    CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CPCD, "rfe_compatible": False}
-    CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CFKD, "rfe_compatible": False}
-    CINH = { "full_name": "Costing + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CINH, "rfe_compatible": False}
-    WBGK = { "full_name": "WeightedBagging + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.WBGK, "rfe_compatible": False}
-    WBGM = { "full_name": "WeightedBagging + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.WBGM, "rfe_compatible": False}   
-    WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.WRFD, "rfe_compatible": False}
-    WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.WPCD, "rfe_compatible": False}
-    WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.WFKD, "rfe_compatible": False}
-    WINH = { "full_name": "WeightedBagging + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.WINH, "rfe_compatible": False}
-    CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CLRF, "rfe_compatible": False}
-    CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CLPC, "rfe_compatible": False}
-    CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK, "rfe_compatible": False}
-    CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH, "rfe_compatible": False}
-    VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False}
-    TORA = { "full_name":  "PyTorch ReLu+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TORS = { "full_name":  "PyTorch ReLu+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TOTA = { "full_name":  "PyTorch Tanh+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TOTS = { "full_name":  "PyTorch Tanh+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TOSA = { "full_name":  "PyTorch Sigm+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    TOSS = { "full_name":  "PyTorch Sigm+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False}
-    KERA = { "full_name": "Keras MLP Classifier", "search_params": AlgorithmGridSearchParams.KERA, "rfe_compatible": False}
+    DUMY = { "full_name": "Dummy Classifier", "search_params": AlgorithmGridSearchParams.DUMY, "rfe_compatible": False, "lib": Library.SCIKIT}
+    SRF1 = { "full_name": "Stacked Random Forests 1", "search_params": AlgorithmGridSearchParams.SRF1, "rfe_compatible": False, "lib": Library.SCIKIT}
+    SRF2 = { "full_name": "Stacked Random Forests 2", "search_params": AlgorithmGridSearchParams.SRF2, "rfe_compatible": False, "lib": Library.SCIKIT}
+    BARF = { "full_name": "Balanced Random Forest", "search_params": AlgorithmGridSearchParams.BARF, "rfe_compatible": True, "lib": Library.IMBLRN}
+    BABC = { "full_name": "Balanced Bagging Classifier", "search_params": AlgorithmGridSearchParams.BABC, "rfe_compatible": False, "lib": Library.IMBLRN}
+    RUBC = { "full_name": "RUS Boost Classifier", "search_params": AlgorithmGridSearchParams.RUBC, "rfe_compatible": True, "lib": Library.IMBLRN}
+    EAEC = { "full_name": "Easy Ensamble Classifier", "search_params": AlgorithmGridSearchParams.EAEC, "rfe_compatible": False, "lib": Library.IMBLRN}
+    RTCL = { "full_name": "Robust Tree Classifier", "search_params": AlgorithmGridSearchParams.RTCL, "rfe_compatible": False, "lib": Library.CLEAN }
+    RLRN = { "full_name": "Robust Logistic Regression + Label Encoder", "search_params": AlgorithmGridSearchParams.RLRN, "rfe_compatible": False, "lib": Library.CLEAN}
+    RCNT = { "full_name": "Robust Centroid + Label Encoder", "search_params": AlgorithmGridSearchParams.RCNT, "rfe_compatible": False, "lib": Library.CLEAN}
+    LRN = { "full_name": "Logistic Regression", "search_params": AlgorithmGridSearchParams.LRN, "rfe_compatible": True, "lib": Library.SCIKIT}
+    KNN = { "full_name": "K-Neighbors Classifier", "search_params": AlgorithmGridSearchParams.KNN, "rfe_compatible": False, "lib": Library.SCIKIT}
+    RADN = { "full_name": "Radius Neighbors Classifier", "search_params": AlgorithmGridSearchParams.RADN, "rfe_compatible": False, "lib": Library.SCIKIT}
+    DTC = { "full_name": "Decision Tree Classifier", "search_params": AlgorithmGridSearchParams.DTC, "rfe_compatible": True, "lib": Library.SCIKIT}
+    GNB = { "full_name": "Gaussian Naive Bayes", "search_params": AlgorithmGridSearchParams.GNB, "rfe_compatible": False, "lib": Library.SCIKIT}
+    MNB = { "full_name": "Multinomial Naive Bayes", "search_params": AlgorithmGridSearchParams.MNB, "rfe_compatible": True, "lib": Library.SCIKIT}
+    BNB = { "full_name": "Bernoulli Naive Bayes", "search_params": AlgorithmGridSearchParams.BNB, "rfe_compatible": True, "lib": Library.SCIKIT}
+    CNB = { "full_name": "Complement Naive Bayes", "search_params": AlgorithmGridSearchParams.CNB, "rfe_compatible": True, "lib": Library.SCIKIT}
+    REC = { "full_name": "Ridge Classifier", "search_params": AlgorithmGridSearchParams.REC, "rfe_compatible": True, "lib": Library.SCIKIT}
+    PCN = { "full_name": "Perceptron", "search_params": AlgorithmGridSearchParams.PCN, "rfe_compatible": True, "lib": Library.SCIKIT}
+    PAC = { "full_name": "Passive Aggressive Classifier", "search_params": AlgorithmGridSearchParams.PAC, "rfe_compatible": True, "lib": Library.SCIKIT}
+    RFCL = { "full_name": "Random Forest Classifier", "search_params": AlgorithmGridSearchParams.RFCL, "rfe_compatible": True, "lib": Library.SCIKIT}
+    LSVC = { "full_name":  "Linear Support Vector", "search_params": AlgorithmGridSearchParams.LSVC, "rfe_compatible": True, "lib": Library.SCIKIT}
+    SLSV = { "full_name": "Stacked Linear SVC", "search_params": AlgorithmGridSearchParams.SLSV, "rfe_compatible": False, "lib": Library.SCIKIT}
+    SGDE = { "full_name": "Stochastic Gradient Descent", "search_params": AlgorithmGridSearchParams.SGDE, "rfe_compatible": True, "lib": Library.SCIKIT}
+    NCT = { "full_name": "Nearest Centroid", "search_params": AlgorithmGridSearchParams.NCT, "rfe_compatible": False, "lib": Library.SCIKIT}
+    SVC = { "full_name": "Support Vector Classification", "limit": 10000, "search_params": AlgorithmGridSearchParams.SVC, "rfe_compatible": False, "lib": Library.SCIKIT}
+    STCL = { "full_name": "Self Training Classifier", "limit": 10000, "search_params": AlgorithmGridSearchParams.STCL, "rfe_compatible": False, "lib": Library.SCIKIT}
+    LDA = { "full_name": "Linear Discriminant Analysis", "search_params": AlgorithmGridSearchParams.LDA, "rfe_compatible": True, "lib": Library.SCIKIT}
+    QDA = { "full_name": "Quadratic Discriminant Analysis", "search_params": AlgorithmGridSearchParams.QDA, "rfe_compatible": False, "lib": Library.SCIKIT}
+    BGC = { "full_name": "Bagging Classifier", "search_params": AlgorithmGridSearchParams.BGC, "rfe_compatible": False, "lib": Library.SCIKIT}
+    ETC = { "full_name": "Extra Trees Classifier", "search_params": AlgorithmGridSearchParams.ETC, "rfe_compatible": True, "lib": Library.SCIKIT}
+    ABC = { "full_name": "Ada Boost Classifier", "search_params": AlgorithmGridSearchParams.ABC, "rfe_compatible": True, "lib": Library.SCIKIT}
+    GBC = { "full_name": "Gradient Boosting Classifier", "search_params": AlgorithmGridSearchParams.GBC, "rfe_compatible": True, "lib": Library.SCIKIT}
+    HIST = { "full_name": "Histogram-based Gradient B. Classifier", "search_params": AlgorithmGridSearchParams.HIST, "rfe_compatible": False, "lib": Library.SCIKIT}
+    MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC, "rfe_compatible": False, "lib": Library.SCIKIT}
+    GPC = { "full_name": "Gaussian Process Classifier", "search_params": AlgorithmGridSearchParams.GPC, "rfe_compatible": False, "lib": Library.SCIKIT}
+    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD, "rfe_compatible": False, "lib": Library.CLEAN}
+    FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD, "rfe_compatible": False, "lib": Library.CLEAN}
+    FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD, "rfe_compatible": False, "lib": Library.CLEAN}
+    FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.FINH, "rfe_compatible": False, "lib": Library.CLEAN}
+    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.CSTK, "rfe_compatible": False, "lib": Library.CLEAN}
+    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.CSTM, "rfe_compatible": False, "lib": Library.CLEAN}
+    CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CRFD, "rfe_compatible": False, "lib": Library.CLEAN}
+    CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CPCD, "rfe_compatible": False, "lib": Library.CLEAN}
+    CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CFKD, "rfe_compatible": False, "lib": Library.CLEAN}
+    CINH = { "full_name": "Costing + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CINH, "rfe_compatible": False, "lib": Library.CLEAN}
+    WBGK = { "full_name": "WeightedBagging + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.WBGK, "rfe_compatible": False, "lib": Library.CLEAN}
+    WBGM = { "full_name": "WeightedBagging + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.WBGM, "rfe_compatible": False, "lib": Library.CLEAN}   
+    WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.WRFD, "rfe_compatible": False, "lib": Library.CLEAN}
+    WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.WPCD, "rfe_compatible": False, "lib": Library.CLEAN}
+    WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.WFKD, "rfe_compatible": False, "lib": Library.CLEAN}
+    WINH = { "full_name": "WeightedBagging + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.WINH, "rfe_compatible": False, "lib": Library.CLEAN}
+    CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CLRF, "rfe_compatible": False, "lib": Library.CLEAN}
+    CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CLPC, "rfe_compatible": False, "lib": Library.CLEAN}
+    CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK, "rfe_compatible": False, "lib": Library.CLEAN}
+    CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH, "rfe_compatible": False, "lib": Library.CLEAN}
+    VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False, "lib": Library.SCIKIT}
+    TORA = { "full_name":  "PyTorch ReLu+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TORS = { "full_name":  "PyTorch ReLu+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TOTA = { "full_name":  "PyTorch Tanh+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TOTS = { "full_name":  "PyTorch Tanh+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TOSA = { "full_name":  "PyTorch Sigm+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TOSS = { "full_name":  "PyTorch Sigm+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    KERA = { "full_name": "Keras MLP Classifier", "search_params": AlgorithmGridSearchParams.KERA, "rfe_compatible": False, "lib": Library.KERAS}
     
     def get_full_name(self) -> str:
         return self.full_name
@@ -471,6 +480,13 @@ class Algorithm(MetaEnum):
         
         return None
 
+    @property
+    def lib(self):
+        if isinstance(self.value, dict):
+            return self.value.get("lib")
+        
+        return None
+    
     @property
     def fit_params(self):
         if isinstance(self.value, dict):
@@ -732,7 +748,6 @@ class Algorithm(MetaEnum):
     def do_KERA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
         return  MLPKerasClassifier()
     
-
 class Preprocess(MetaEnum):
     NOS = "No Scaling"
     STA = "Standard Scaler"

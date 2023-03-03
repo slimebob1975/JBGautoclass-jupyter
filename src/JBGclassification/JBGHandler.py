@@ -25,11 +25,12 @@ from sklearn.pipeline import Pipeline
 from stop_words import get_stop_words
 
 from Config import Config
-from JBGMeta import Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
+from JBGMeta import Library, Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
 from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
-from JBGTransformers import TextDataToNumbersConverter
+from JBGTransformers import TextDataToNumbersConverter, MLPKerasClassifier
 import Helpers
+import keras
 
 GIVE_EXCEPTION_TRACEBACK = False
 
@@ -745,6 +746,7 @@ class ModelHandler:
     SPOT_CHECK_REPETITIONS: int = 5
     STANDARD_K_FOLDS: int = 10
     STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE: int = 2
+    KERAS_FOLDER_SUFFIX: str = "_keras/"
     
     def __post_init__(self) -> None:
         """ Empty for now """
@@ -759,32 +761,49 @@ class ModelHandler:
 
         return class_labels
 
-    def load_model(self, filename: str = None) -> None:
+    def load_model(self, filename: str = None, dh: DatasetHandler = None) -> None:
         """ Called explicitly in run() """
         if filename is None:
             self.model = self.load_empty_model()
         else:
-            self.model = self.load_model_from_file(filename)
+            self.model = self.load_model_from_file(filename, dh)
 
     # Load ml model
-    def load_model_from_file(self, filename: str) -> Model:
+    def load_model_from_file(self, filename: str, dh: DatasetHandler=None) -> Model:
+        
+        # Load model from file, but handle Keras models differently since their algorithm was
+        # replaced by a path to model training information
         try:
-            _config, text_converter, pipeline_names, pipeline, n_features = dill.load(open(filename, 'rb'))
+            _config, text_converter, (preprocess, reduction, algorithm), pipeline, n_features = \
+                dill.load(open(filename, 'rb'))
+        
+            if algorithm.lib == Library.KERAS:
+                keras_files_path = str(filename).replace(".sav", self.KERAS_FOLDER_SUFFIX)
+                keras_model = keras.models.load_model(keras_files_path)
+                #keras_model = algorithm.call_algorithm(size=None, max_iterations=None)(keras_model)
+                keras_model = MLPKerasClassifier(keras_model) # This is not preferred
+                pipeline = Pipeline(steps=pipeline.steps[:-1] + [(algorithm.name, keras_model)])
+                        
+            the_model = Model(
+                text_converter=text_converter,
+                preprocess=preprocess,
+                reduction=reduction,
+                algorithm=algorithm,
+                pipeline=pipeline,
+                n_features_out=n_features
+            )
+            
+            if self.handler.config.should_predict():
+                
+                self.handler.config.set_num_selected_features(n_features)
+                
+                # TODO: do not forget to initialize the KERAS model with X and y parameters
+                if not the_model.pipeline[-1][-1].initialized_ and dh is not None:
+                    the_model.pipeline[-1][-1].initialize(dh.X_train, dh.Y_train)
+            
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on loading model from file: {e}")
             return None
-        
-        the_model = Model(
-            text_converter=text_converter,
-            preprocess=pipeline_names[0],
-            reduction=pipeline_names[1],
-            algorithm=pipeline_names[2],
-            pipeline=pipeline,
-            n_features_out=n_features
-        )
-        
-        if self.handler.config.should_predict():
-            self.handler.config.set_num_selected_features(n_features)
 
         return the_model
 
@@ -1037,7 +1056,7 @@ class ModelHandler:
 
                     # For RFE only
                     best_rfe_feature_selection = dh.X.shape[1]
-                    first_rfe_round = True
+                    first_rfe_round = True if reduction == Reduction.RFE else False
 
                     # Loop over the algorithms
                     for algorithm, algorithm_callable in algorithms:
@@ -1321,19 +1340,36 @@ class ModelHandler:
     
     def save_model_to_file(self, filename):
         """ Save ml model and corresponding configuration """
+        
+        save_config = self.handler.config.get_clean_config()
+
+        # Keras models has to be saved separately because of some internal issues in SciKeras. 
+        # The connection to the model is traced back via a path to the storage directory.
         try:
-            save_config = self.handler.config.get_clean_config()
+            if self.model.algorithm.lib == Library.KERAS:
+                keras_files_path = str(filename).replace(".sav", self.KERAS_FOLDER_SUFFIX)
+                keras_model_name, keras_model = self.model.pipeline.steps[-1]
+                keras_model.model_.save(keras_files_path)
+                self.model.pipeline.steps[-1] = (keras_model_name, keras_files_path)
+            
+            # Prepare the data to save
             data = [
                 save_config,
                 self.model.text_converter,
                 (self.model.preprocess, self.model.reduction, self.model.algorithm),
                 self.model.pipeline,
                 self.model.n_features_out
-            ]
+            ]   
+            
+            # Save the data
             dill.dump(data, open(filename,'wb'))
+            
+            # In case of Keras model, restore pipeline such that it can be used again
+            if self.model.algorithm.lib == Library.KERAS:
+                self.model.pipeline.steps[-1] = (keras_model_name, keras_model)
 
         except Exception as e:
-            self.handler.logger.print_warning(f"Something went wrong on saving model to file: {e}")
+            self.handler.logger.print_warning(f"Something went wrong on saving {self.model.algorithm.lib.get_full_name()} model to file: {e}")
 
 @dataclass
 class PredictionsHandler:
