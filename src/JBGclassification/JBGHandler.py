@@ -1617,10 +1617,6 @@ class PredictionsHandler:
             self.handler.logger.print_key_value_pair("Could not predict probabilities", e)
             could_predict_proba = False
 
-        print("Y_prob=",Y_prob)
-        print("Y_prob shape=",Y_prob.shape)
-        print("Y_prob type=",type(Y_prob))
-
         #  Re-insert original data columns but drop the class column
         self.X_mispredicted = X_original.loc[X_not]
         
@@ -1644,6 +1640,7 @@ class PredictionsHandler:
             self.X_most_mispredicted = self.X_mispredicted.sample(n=n_limit)
             return
         
+        Y_prob = Y_prob if len(Y_prob.shape) > 1 else np.array([Y_prob]) # Handle only one mispredicted sample
         Y_prob_max = np.amax(Y_prob, axis = 1)
         for i in reversed(range(Y_prob.shape[1])):
             self.X_mispredicted.insert(0, f"P({the_classes[i]})", Y_prob[:,i])
