@@ -441,7 +441,7 @@ class JBGLogger(terminal.Logger):
             Both to screen and CSV
         """
         resultsMatrix = pd.DataFrame(listOfResults,
-            columns=["Preprocessor","Feature Reduction","Algorithm","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
+            columns=["Preprocessor","Feature Reduction","Alg. Abbrev","Algorithm (Library)","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
         resultsMatrix.sort_values(by = ["Test data","Mean cv","Stdev."], axis = 0, ascending = [False, False, True], \
             inplace = True, ignore_index = True)
 
