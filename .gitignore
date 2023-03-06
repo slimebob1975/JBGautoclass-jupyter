@@ -13,3 +13,5 @@ __test.py
 settings.json
 src/*/*.pt 
 src/*/model/*/*.pb
+src/*/.nn_checkpoint_tmp/
+src/*/model/ 
