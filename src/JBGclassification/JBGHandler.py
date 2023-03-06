@@ -1617,6 +1617,10 @@ class PredictionsHandler:
             self.handler.logger.print_key_value_pair("Could not predict probabilities", e)
             could_predict_proba = False
 
+        print("Y_prob=",Y_prob)
+        print("Y_prob shape=",Y_prob.shape)
+        print("Y_prob type=",type(Y_prob))
+
         #  Re-insert original data columns but drop the class column
         self.X_mispredicted = X_original.loc[X_not]
         

@@ -645,19 +645,22 @@ class Config:
 
     def get_clean_config(self):
         """ Extracts the config information to save with a model """
-        configuration = Config()
-        configuration.connection = copy.deepcopy(self.connection)
-        configuration.connection.data_catalog = ""
-        configuration.connection.data_table = ""
-        configuration.mode = copy.deepcopy(self.mode)
-        configuration.mode.train = None
-        configuration.mode.predict = None
-        configuration.mode.mispredicted = None
-        configuration.io = copy.deepcopy(self.io)
-        configuration.io.model_name = ""
-        configuration.debug = copy.deepcopy(self.debug)
-        configuration.debug.data_limit = 0
-        configuration.save = False
+        try:
+            configuration = Config()
+            configuration.connection = copy.deepcopy(self.connection)
+            configuration.connection.data_catalog = ""
+            configuration.connection.data_table = ""
+            configuration.mode = copy.deepcopy(self.mode)
+            configuration.mode.train = None
+            configuration.mode.predict = None
+            configuration.mode.mispredicted = None
+            configuration.io = copy.deepcopy(self.io)
+            configuration.io.model_name = ""
+            configuration.debug = copy.deepcopy(self.debug)
+            configuration.debug.data_limit = 0
+            configuration.save = False
+        except Exception as ex:
+            print(f"Failed to extract configuration information: {str(self)} to save with a model: {str(ex)}")
         
         return configuration
 

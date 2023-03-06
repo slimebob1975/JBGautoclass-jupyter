@@ -340,11 +340,10 @@ class AlgorithmGridSearchParams(MetaEnum):
             'max_depth': range(1, 10, 1), 'max_features': ('sqrt', 'log2', None),
             'class_weight': ('balanced', 'balanced_subsample', None)}}
     ABC = {"parameters": {'n_estimators': (10,30,50,100), 'learning_rate':(0.1, 1.0, 2.0)}}
-    GBC = {"parameters": {'loss': ['log_loss', 'exponential'], 
-        'learning_rate': [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2],
+    GBC = {"parameters": {'loss': ['log_loss', 'exponential'], 'learning_rate': [0.01, 0.1, 0.2],
         'min_samples_split': np.linspace(0.1, 0.5, 12), 'min_samples_leaf': np.linspace(0.1, 0.5, 12),
-        'max_depth':[3,5,8], 'max_features':['log2','sqrt'], 'criterion': ['friedman_mse',  'mae'],
-        'subsample':[0.5, 0.618, 0.8, 0.85, 0.9, 0.95, 1.0], 'n_estimators':[10]}}
+        'max_depth':[3,5,8], 'max_features':['log2','sqrt'], 'criterion': ['friedman_mse', 'squared_error'],
+        'subsample':[0.5, 0.8, 0.9, 1.0], 'n_estimators':[10]}}
     HIST = {"parameters": {'learning_rate': [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2],
         'max_depth' : [25, 50, 75], 'l2_regularization': [0.0, 0.1, 1.5] }} 
     MLPC = {"parameters": {'activation': ('identity', 'logistic', 'tanh', 'relu'), 'solver': ('lbfgs', 'sgd', 'adam')}}

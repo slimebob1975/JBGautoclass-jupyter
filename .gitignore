@@ -4,14 +4,12 @@ __pycache__
 autoclassconfig_*.py
 src/*/config/test_*.py
 src/*/output/*.csv
-src/*/output/nn_checkpoint
+src/*/output/nn_checkpoints/*.pt
+src/*/output/nn_checkpoints/*.json
 src/*/model/*.sav
 .env
 .ideas
 .pytest_cache
 __test.py
 settings.json
-src/*/*.pt 
-src/*/model/*/*.pb
-src/*/.nn_checkpoint_tmp/
-src/*/model/ 
+src/*/*.pt

@@ -133,13 +133,14 @@ class TaskRunner:
             self.mh.load_model()
             return {"print": "We will train our ml model"}
         
-        if self.config.should_predict():
-            model_path = self.config.get_model_filename()
-            if os.path.exists(model_path):
-                self.mh.load_model(model_path)
-                return {"print": "We will reload and use old model"}
-            
-            raise ModelException(f"No trained model exists at {model_path}")
+        #if self.config.should_predict():
+
+        model_path = self.config.get_model_filename()
+        if os.path.exists(model_path):
+            self.mh.load_model(model_path, self.dh)
+            return {"print": "We will reload and use old model"}
+        
+        raise ModelException(f"No trained model exists at {model_path}")
         
         raise ModelException("User must choose either to train a new model or use an old one for predictions")
         
