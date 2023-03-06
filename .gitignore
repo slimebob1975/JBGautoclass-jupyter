@@ -13,3 +13,5 @@ src/*/model/*.sav
 __test.py
 settings.json
 src/*/*.pt
+src/databases/*
+!src/databases/.gitkeep

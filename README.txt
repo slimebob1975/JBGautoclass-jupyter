@@ -31,6 +31,28 @@ Troubleshooting:
 * If you only see text in the right hand side window of Jupyter-lab, try to restart the kernel
 (push the double play symbol)
 
+== Installing necessary packages ==
+
+At current not all of the used packages support the latest Python, so need to specifically
+state that you use python 3.10 when creating the conda environment. The reason to use a conda
+environment is to keep the base environment clean.
+
+The name can be anything, but using JBG3.10 ensures you remember which python version is in use.
+
+1. Create a conda environment: `conda create --name JBG3.10 python=3.10`
+2. Activate the environment: `conda activate JBG3.10`
+3. `python -m pip install -r .\requirements.txt`
+
+You need to activate the environment whenever you use it, and you can also deactivate it,
+using the command `conda deactivate`.
+
+== OBDC drivers & databases ==
+
+At the moment we support the following databases:
+
+- SQL Server (default)
+
+
 == Terminal ==
 
 To run the script in the terminal you need to have a file in `src\JBGclassification\config` with a functional config. 
