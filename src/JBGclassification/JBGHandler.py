@@ -1162,7 +1162,7 @@ class ModelHandler:
                             listOfResults.append([ 
                                 preprocessor.name,
                                 reduction.name,
-                                algorithm.name + " - " + str(algorithm.full_name) + " (" + str(algorithm.lib.full_name) + ")",
+                                str(algorithm.name) + " - " + str(algorithm.full_name) + " (" + str(algorithm.lib.full_name) + ")",
                                 min(num_components, num_features),
                                 temp_score,
                                 temp_stdev,

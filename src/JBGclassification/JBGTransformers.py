@@ -31,7 +31,7 @@ class BaseNeuralNetClassifier(BaseEstimator):
     """ The base neural network classifier """
     
     OUTPUT_DIR = "output"
-    CHECKPOINT_DIR = "nn_checkpoint"
+    CHECKPOINT_DIR = "nn_checkpoints"
 
     def __init__(self):
 
@@ -82,7 +82,7 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
         self.verbose = verbose
         self.train_split = train_split  # Whether to split the data into training and test sets internally
 
-        recreate_dir(self.history_file_dir) # Removes the directory and recreates it
+        #recreate_dir(self.history_file_dir) # Removes the directory and recreates it
         
     
     def _setup_net(self, X, y):

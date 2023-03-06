@@ -33,7 +33,7 @@ def recreate_dir(dir: str) -> None:
         shutil.rmtree(dir)
         os.makedirs(dir)
     except OSError as e:
-        print(str(e))
+        print("Helpers.recreate_dir:" + str(e))
 
 
 def save_matrix_as_csv(matrix: pandas.DataFrame, filepath: str, index_label: str = None) -> None:
