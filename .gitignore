@@ -4,9 +4,8 @@ __pycache__
 autoclassconfig_*.py
 src/*/config/test_*.py
 src/*/output/*.csv
-src/*/output/nn_checkpoints/*.pt
-src/*/output/nn_checkpoints/*.json
-src/*/model/*.sav
+src/*/output/nn_checkpoints/*
+src/*/model/*
 .env
 .ideas
 .pytest_cache
