@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 import os
 from pathlib import Path
 from typing import Protocol
+import copy
 
 from sklearn.pipeline import Pipeline
 
@@ -239,7 +240,11 @@ class TaskRunner:
         self.logger.print_task_header(title="Retraining model")
         self.logger.print_progress(message="Retrain model on whole dataset")
         
-        cross_trained_model = self.mh.load_pipeline_from_file(self.config.get_model_filename())
+        filename = self.config.get_model_filename()
+        cross_trained_model = self.mh.load_pipeline_from_file(filename)
+        if cross_trained_model is None:
+            self.handler.logger.print_warning(f"Could not load model for retraining from file: {filename}. Using previoulsy trained model as fallback.")
+            cross_trained_model = self.mh.model.pipeline
         trained_model = self.mh.train_picked_model( self.mh.model.pipeline, self.dh.X, self.dh.Y)
             
         self.mh.save_model_to_file(self.config.get_model_filename())

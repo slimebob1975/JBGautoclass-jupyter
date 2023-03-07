@@ -746,7 +746,6 @@ class ModelHandler:
     SPOT_CHECK_REPETITIONS: int = 5
     STANDARD_K_FOLDS: int = 10
     STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE: int = 2
-    KERAS_FOLDER_SUFFIX: str = "_keras/"
     
     def __post_init__(self) -> None:
         """ Empty for now """
@@ -761,32 +760,21 @@ class ModelHandler:
 
         return class_labels
 
-    def load_model(self, filename: str = None, dh: DatasetHandler = None) -> None:
+    def load_model(self, filename: str = None) -> None:
         """ Called explicitly in run() """
         if filename is None:
             self.model = self.load_empty_model()
         else:
-            self.model = self.load_model_from_file(filename, dh)
+            self.model = self.load_model_from_file(filename)
 
     # Load ml model
-    def load_model_from_file(self, filename: str, dh: DatasetHandler=None) -> Model:
+    def load_model_from_file(self, filename: str) -> Model:
         
         # Load model from file, but handle Keras models differently since their algorithm was
         # replaced by a path to model training information
         try:
             _config, text_converter, (preprocess, reduction, algorithm), pipeline, n_features = \
                 dill.load(open(filename, 'rb'))
-        
-            if algorithm.lib == Library.KERAS:
-                keras_files_path = str(filename).replace(".sav", self.KERAS_FOLDER_SUFFIX)
-                keras_model = keras.models.load_model(keras_files_path)
-                #keras_model = algorithm.call_algorithm(size=None, max_iterations=None)(keras_model)
-                keras_model = MLPKerasClassifier(keras_model) # This is not preferred
-                the_steps = pipeline.steps[:-1] + [(algorithm.name, keras_model)]
-                if algorithm.use_imb_pipeline() or self.handler.config.use_imb_pipeline():
-                    pipeline = ImbPipeline(steps=the_steps)
-                else:
-                    pipeline = Pipeline(steps=the_steps)
                         
             the_model = Model(
                 text_converter=text_converter,
@@ -800,10 +788,6 @@ class ModelHandler:
             if self.handler.config.should_predict():
                 
                 self.handler.config.set_num_selected_features(n_features)
-                
-                # TODO: do not forget to initialize the KERAS model with X and y parameters
-                if not the_model.pipeline[-1][-1].initialized_ and dh is not None:
-                    the_model.pipeline[-1][-1].initialize(dh.X_train, dh.Y_train)
             
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on loading model from file: {e}")
@@ -815,8 +799,10 @@ class ModelHandler:
     def load_pipeline_from_file(self, filename: str) -> Pipeline:
         self.handler.logger.print_code("Loading pipeline from", filename)
         model = self.load_model_from_file(filename)
-
-        return model.pipeline
+        if model:
+            return model.pipeline
+        else:
+            return None
     
     # Sets default (read: empty) values
     def load_empty_model(self) -> Model:
@@ -1347,14 +1333,8 @@ class ModelHandler:
         
         save_config = self.handler.config.get_clean_config()
 
-        # Keras models has to be saved separately because of some internal issues in SciKeras. 
         # The connection to the model is traced back via a path to the storage directory.
         try:
-            if self.model.algorithm.lib == Library.KERAS:
-                keras_files_path = str(filename).replace(".sav", self.KERAS_FOLDER_SUFFIX)
-                keras_model_name, keras_model = self.model.pipeline.steps[-1]
-                keras_model.model_.save(keras_files_path)
-                self.model.pipeline.steps[-1] = (keras_model_name, keras_files_path)
             
             # Prepare the data to save
             data = [
@@ -1367,10 +1347,6 @@ class ModelHandler:
             
             # Save the data
             dill.dump(data, open(filename,'wb'))
-            
-            # In case of Keras model, restore pipeline such that it can be used again
-            if self.model.algorithm.lib == Library.KERAS:
-                self.model.pipeline.steps[-1] = (keras_model_name, keras_model)
 
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on saving {self.model.algorithm.lib.get_full_name()} model to file: {e}")
