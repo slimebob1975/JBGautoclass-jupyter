@@ -782,7 +782,11 @@ class ModelHandler:
                 keras_model = keras.models.load_model(keras_files_path)
                 #keras_model = algorithm.call_algorithm(size=None, max_iterations=None)(keras_model)
                 keras_model = MLPKerasClassifier(keras_model) # This is not preferred
-                pipeline = Pipeline(steps=pipeline.steps[:-1] + [(algorithm.name, keras_model)])
+                the_steps = pipeline.steps[:-1] + [(algorithm.name, keras_model)]
+                if algorithm.use_imb_pipeline() or self.handler.config.use_imb_pipeline():
+                    pipeline = ImbPipeline(steps=the_steps)
+                else:
+                    pipeline = Pipeline(steps=the_steps)
                         
             the_model = Model(
                 text_converter=text_converter,
