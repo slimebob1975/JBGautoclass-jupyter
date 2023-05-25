@@ -1,11 +1,12 @@
 <!--THE README INSTRUCTION FILE FOR JBG classification with an additional Jupyter GUI.-->
 # JBG automatic spotchecking of classifiers
 
+## Summary
 This project aims on collecting many different data classifiers from several different
 libraries under a common Jupyter GUI with the purpose of simplifying inital testing and 
 spot-checking of algorithms for a particular dataset. For the time being JBG is limited
 to a Windows and SQL Server environment and works for numerical, categorical and textual
-data.
+data. It is partly a Building AI course project.
 
 ## How to use JBG
 To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
