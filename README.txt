@@ -1,5 +1,9 @@
 THE README INSTRUCTION FILE FOR JBG classification with an additional Jupyter GUI.
 
+This project aims on collecting many different data classifiers from several different
+libraries under a common Jupyter GUI with the purpose of simplifying inital testing and 
+spot-checking of algorithms for a particular dataset.
+
 To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 
 1. Get a hold of the JBGclassification GUI codes in exactly one of the two following ways:
