@@ -1,6 +1,6 @@
 <!--THE README INSTRUCTION FILE FOR JBG classification with an additional Jupyter GUI.-->
 
-## JBG automatic spotchecking of classifiers
+# JBG automatic spotchecking of classifiers
 
 This project aims on collecting many different data classifiers from several different
 libraries under a common Jupyter GUI with the purpose of simplifying inital testing and 
