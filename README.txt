@@ -69,4 +69,5 @@ Specific warnings we know are irrelevant:
 * UserWarning (-Wi::UserWarning)
 * RuntimeWarning (-Wi::RuntimeWarning))
 
-
+## Acknowledgments
+This work was partly inspired by Jason Brownlee: https://machinelearningmastery.com/
