@@ -1,16 +1,19 @@
-THE README INSTRUCTION FILE FOR JBG classification with an additional Jupyter GUI.
+<!--THE README INSTRUCTION FILE FOR JBG classification with an additional Jupyter GUI.-->
+
+## JBG automatic spotchecking of classifiers
 
 This project aims on collecting many different data classifiers from several different
 libraries under a common Jupyter GUI with the purpose of simplifying inital testing and 
 spot-checking of algorithms for a particular dataset.
 
+## How to use JBG
 To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 
 1. Get a hold of the JBGclassification GUI codes in exactly one of the two following ways:
     a) Use GIT:
         i) Install GIT, see https://github.com/git-guides/install-git 
         ii) Clone the code from the repository in a terminal window: 
-                git clone https://github.com/slimebob1975/IAFautoclass-jupyter.git
+                git clone https://github.com/slimebob1975/JBGautoclass-jupyter.git
             into an appropriate directory
     b) Ask a friend to get a copy of the code
 
