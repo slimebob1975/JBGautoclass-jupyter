@@ -357,11 +357,15 @@ class Config:
         test_size: float = 0.2
         smote: bool = False
         undersample: bool = False
-        algorithm: AlgorithmTuple = AlgorithmTuple([Algorithm.LDA])
-        preprocessor: PreprocessTuple = PreprocessTuple([Preprocess.NOS])
-        feature_selection: ReductionTuple = ReductionTuple([Reduction.NOR])
+        #algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple([Algorithm.LDA]))
+        algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple.defaultAlgorithmTuple)        
+        #preprocessor: PreprocessTuple = field(default_factory=PreprocessTuple([Preprocess.NOS]))
+        preprocessor: PreprocessTuple = field(default_factory=PreprocessTuple.defaultPreprocessTuple)
+        #feature_selection: ReductionTuple = field(default_factory=ReductionTuple([Reduction.NOR]))
+        feature_selection: ReductionTuple = field(default_factory=ReductionTuple.defaultReductionTuple)
         num_selected_features: int = None
-        scoring: ScoreMetric = ScoreMetric.accuracy
+        #scoring: ScoreMetric = field(default_factory=ScoreMetric.accuracy)
+        scoring: ScoreMetric = field(default_factory=ScoreMetric.defaultScoreMetric)
         max_iterations: int = None
 
         def validate(self) -> None:

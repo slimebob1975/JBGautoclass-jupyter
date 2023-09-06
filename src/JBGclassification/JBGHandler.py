@@ -1546,22 +1546,22 @@ class PredictionsHandler:
     
     # Function for finding the n most mispredicted data rows
     # TODO: Clean up a bit more
-    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> None:
+    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pandas.DataFrame, Y: pandas.Series) -> None:
         
         # Calculate predictions for both total model and cross trained model
         for what_model, the_model in [("model retrained on all data", full_pipe), ("model cross trained on training data", ct_pipe)]:
             
             try:
-                Y_pred = pandas.DataFrame(the_model.predict(X), index = Y.index)
+                Y_pred = pandas.Series(the_model.predict(X), index = Y.index)
             except TypeError:
-                Y_pred = pandas.DataFrame(the_model.predict(X.to_numpy()), index = Y.index)
+                Y_pred = pandas.Series(the_model.predict(X.to_numpy()), index = Y.index)
 
             # Find the data rows where the real category is different from the predictions
             # Iterate over the indexes (they are now not in order)
             X_not = []
             for i in Y.index:
                 try:
-                    X_not.append((Y.loc[i] != Y_pred.loc[i]).bool())
+                    X_not.append((Y.loc[i] != Y_pred.loc[i]))
                 except Exception as e:
                     self.handler.logger.print_warning(f"Append of data row with index: {i} failed: {e}. Probably duplicate indicies in data!")
                     break

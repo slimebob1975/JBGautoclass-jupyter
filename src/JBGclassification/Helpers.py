@@ -52,7 +52,7 @@ def save_matrix_as_csv(matrix: pandas.DataFrame, filepath: str, index_label: str
         compression='infer',
         quoting=None,
         quotechar='"',
-        line_terminator=None,
+        lineterminator=None,
         chunksize=None,
         date_format=None,
         doublequote=True,

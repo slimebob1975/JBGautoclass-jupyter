@@ -168,6 +168,13 @@ class MetaTuple:
         """
         return cls([x.strip() for x in commaseparated_list_as_string.split(",")])
     
+    @classmethod
+    def createTuple(cls, initiating_values: Iterable) -> None:
+        """
+        Overloaded initiation function
+        """
+        return cls(initiating_values)
+    
     def __init__(self, initiating_values: Iterable) -> None:
         if isinstance(initiating_values, Iterable):
             metaEnums = []
@@ -1038,6 +1045,10 @@ class ScoreMetric(MetaEnum):
             return make_scorer(self.callable, **(self.kwargs))
         else:
             return make_scorer(self.callable)
+        
+    @classmethod
+    def defaultScoreMetric(cls):
+        return cls.accuracy
 
 class AlgorithmTuple(MetaTuple):
 
@@ -1048,6 +1059,10 @@ class AlgorithmTuple(MetaTuple):
             in the form (algorithm, called function)
         """
         return self.list_callables("do", max_iterations=max_iterations, size=size)
+    
+    @classmethod
+    def defaultAlgorithmTuple(cls):
+        return cls([Algorithm.LDA])
 
 class PreprocessTuple(MetaTuple):
 
@@ -1059,6 +1074,9 @@ class PreprocessTuple(MetaTuple):
         """
         return self.list_callables("do")
 
+    @classmethod
+    def defaultPreprocessTuple(cls):
+        return cls([Preprocess.NOS])
     
 class ReductionTuple(MetaTuple):
 
@@ -1075,3 +1093,7 @@ class ReductionTuple(MetaTuple):
             num_features=num_features,
             num_selected_features=num_selected_features
         )
+    
+    @classmethod
+    def defaultReductionTuple(cls):
+        return cls([Reduction.NOR])
