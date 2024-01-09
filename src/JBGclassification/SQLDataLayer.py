@@ -230,7 +230,7 @@ class DataLayer(DataLayerBase):
         c_column = self.config.get_class_column_name()
 
         table = self.config.get_connection().get_formatted_data_table()
-        print(table)
+        #print(table)
         
         select = f"SELECT [{c_column}], COUNT(*) FROM {table}"
 
@@ -242,7 +242,7 @@ class DataLayer(DataLayerBase):
         """ Function for counting the number of rows in data corresponding to each class """
 
         query = self.get_class_distribution_query()
-        print(query)
+        #print(query)
         data = []
         try:
             data = self.get_data_list_from_query(query)
