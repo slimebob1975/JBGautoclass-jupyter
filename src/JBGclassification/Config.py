@@ -13,12 +13,13 @@ from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 
 import Helpers
-from JBGExceptions import ConfigException
+from JBGExceptions import ConfigException, ODBCDriverException
 from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
                      Reduction, ReductionTuple, ScoreMetric, MetaTuple)
 
 
 T = TypeVar('T', bound='Config')
+ODBC_drivers = ["SQL Server", "ODBC Driver 13 for SQL Server", "ODBC Driver 17 for SQL Server"]
 
 
 @dataclass
@@ -81,7 +82,7 @@ class Config:
 
     @dataclass
     class Connection:
-        odbc_driver: str = "ODBC Driver 17 for SQL Server"
+        odbc_driver: str = "ODBC Driver 13 for SQL Server"
         host: str = ""
         trusted_connection: bool = True
         class_catalog: str = ""
@@ -167,7 +168,7 @@ class Config:
             """ Returns whether the driver of the config is implemented """
             # TODO: Probably want to make this sturdier, but that would require
             # rewriting the dependancy on odbc_driver and the str
-            if self.odbc_driver in ["SQL Server", "Mock Server"]:
+            if self.odbc_driver in ODBC_drivers:
                 return True
             
             return False
@@ -196,7 +197,7 @@ class Config:
             """ Gets a class table formatted for the type, which is based on odbc_driver
             """
             if not self.driver_is_implemented():
-                return ""
+                raise ODBCDriverException(message="The current driver has not been tested. Please add it to the Connection.driver_is_implemented function.")
 
             table_attr = type + "_table"
             table = getattr(self, table_attr)

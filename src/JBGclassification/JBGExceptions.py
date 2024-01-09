@@ -37,3 +37,7 @@ class GuiWidgetsException(Exception):
 class SQLException(Exception):
     def __init__(self, message):
         super().__init__(f"SQLException: {message}")
+
+class ODBCDriverException(Exception):
+    def __init__(self, message):
+        super().__init__(f"ODBCDriverException: {message}")
