@@ -9,6 +9,15 @@ import pandas
 from imblearn.ensemble import (BalancedBaggingClassifier,
                                BalancedRandomForestClassifier,
                                EasyEnsembleClassifier, RUSBoostClassifier)
+from imblearn.over_sampling import (RandomOverSampler, SMOTE, SMOTEN,
+                                    SMOTENC, ADASYN, BorderlineSMOTE,
+                                    KMeansSMOTE, SVMSMOTE)
+from imblearn.under_sampling import (ClusterCentroids, CondensedNearestNeighbour,
+                                     EditedNearestNeighbours, AllKNN, 
+                                     InstanceHardnessThreshold, NearMiss, 
+                                     NeighbourhoodCleaningRule, OneSidedSelection,
+                                     RandomUnderSampler, TomekLinks,
+                                     RepeatedEditedNearestNeighbours)
 from JBGTransformers import (JBGMCS, JBGInstanceHardness,
                              JBGPartitioningDetector, JBGRandomForestDetector,
                              JBGRobustCentroid, JBGRobustLogisticRegression,
@@ -754,6 +763,130 @@ class Algorithm(MetaEnum):
     def do_KERA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
         return  MLPKerasClassifier()
     
+class Oversampling(MetaEnum):
+    NOS = "No Oversampling"
+    RND = "Random"
+    SME = "SMOTE"
+    SNC = "SMOTE-NC"
+    SNN = "SMOTE-N"
+    ADA = "ADASYN"
+    BRD = "Borderline SMOTE"
+    KMS = "Kmeans SMOTE"
+    SVM = "SVM SMOTE"
+
+    def get_full_name(self) -> str:
+        return self.full_name
+
+    @classmethod
+    def list_callable_oversamplers(cls) -> list[tuple]:
+        """ Gets a list of oversampling methods that are callable (including NOS -> None)
+            in the form (oversampler, called function)
+        """
+        return [(osm, osm.call_oversampler()) for osm in cls if osm.has_function() ]
+
+    def do_NOS(self) -> NonOversampler:
+        """ While this return is superfluos, it helps with the listings of oversamplers """
+        return self.NonOversampler()
+
+    def NonOversampler(self):
+        return FunctionTransformer(lambda X: X)
+
+    def do_RND(self) -> RandomOverSampler:
+        return RandomOverSampler(sampling_strategy = 'auto')
+    
+    def do_SME(self) -> SMOTE:
+        return SMOTE(sampling_strategy = 'auto')
+    
+    def do_SNC(self) -> SMOTENC:
+        return SMOTENC(sampling_strategy = 'auto')
+    
+    def do_SNN(self) -> SMOTEN:
+        return SMOTEN(sampling_strategy = 'auto')
+    
+    def do_ADA(self) -> ADASYN:
+        return ADASYN(sampling_strategy = 'auto')
+    
+    def do_BRD(self) -> BorderlineSMOTE:
+        return BorderlineSMOTE(sampling_strategy = 'auto')
+    
+    def do_KMS(self) -> KMeansSMOTE:
+        return KMeansSMOTE(sampling_strategy = 'auto')
+    
+    def do_SVM(self) -> SVMSMOTE:
+        return SVMSMOTE(sampling_strategy = 'auto')
+
+    def call_oversampler(self) -> Union[Transform, None]:
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function('do')
+    
+class Undersampling(MetaEnum):
+    NOS = "No Undersampling"
+    RND = "Random"
+    CCS = "Cluster Centroids"
+    CNN = "Condensed Nearest Neighbours"
+    ENN = "Edited Nearest Neighours"
+    RNN = "Repeated Edited NN"
+    AKN = "All KNN"
+    IHT = "Instance Hardess Threshold"
+    NMS = "Near Miss"
+    NCR = "Neighbourhood Cleaning Rule"
+    OSS = "One Sided Selection"
+    TKL = "Tomek Links"
+
+    def get_full_name(self) -> str:
+        return self.full_name
+
+    @classmethod
+    def list_callable_undersamplers(cls) -> list[tuple]:
+        """ Gets a list of undersampling methods that are callable (including NOS -> None)
+            in the form (undersampler, called function)
+        """
+        return [(usm, usm.call_undersampler()) for usm in cls if usm.has_function() ]
+
+    def do_NOS(self) -> NonUndersampler:
+        """ While this return is superfluos, it helps with the listings of oversamplers """
+        return self.NonUndersampler()
+
+    def NonUndersampler(self):
+        return FunctionTransformer(lambda X: X)
+
+    def do_RND(self) -> RandomUnderSampler:
+        return RandomUnderSampler(sampling_strategy = 'auto')
+    
+    def do_CCS(self) -> ClusterCentroids:
+        return ClusterCentroids(sampling_strategy = 'auto')
+    
+    def do_CNN(self) -> CondensedNearestNeighbour:
+        return CondensedNearestNeighbour(sampling_strategy = 'auto')
+    
+    def do_ENN(self) -> EditedNearestNeighbours:
+        return EditedNearestNeighbours(sampling_strategy = 'auto')
+    
+    def do_RNN(self) -> RepeatedEditedNearestNeighbours:
+        return RepeatedEditedNearestNeighbours(sampling_strategy = 'auto')
+    
+    def do_AKN(self) -> AllKNN:
+        return AllKNN(sampling_strategy = 'auto')
+    
+    def do_IHT(self) -> InstanceHardnessThreshold:
+        return InstanceHardnessThreshold(sampling_strategy = 'auto')
+    
+    def do_NMS(self) -> NearMiss:
+        return NearMiss(sampling_strategy = 'auto')
+    
+    def do_NCR(self) -> NeighbourhoodCleaningRule:
+        return NeighbourhoodCleaningRule(sampling_strategy = 'auto')
+    
+    def do_OSS(self) -> OneSidedSelection:
+        return OneSidedSelection(sampling_strategy = 'auto')
+    
+    def do_TKL(self) -> TomekLinks:
+        return TomekLinks(sampling_strategy = 'auto')
+
+    def call_undersampler(self) -> Union[Transform, None]:
+        """ Wrapper to general function for DRY, but name/signature kept for ease. """
+        return self.call_function('do')
+
 class Preprocess(MetaEnum):
     NOS = "No Scaling"
     STA = "Standard Scaler"
@@ -797,6 +930,7 @@ class Preprocess(MetaEnum):
     def call_preprocess(self) -> Union[Transform, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
         return self.call_function('do')
+
 
 class Reduction(MetaEnum):
     NOR = "No Reduction"
