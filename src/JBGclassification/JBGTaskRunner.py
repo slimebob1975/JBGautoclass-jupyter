@@ -138,7 +138,10 @@ class TaskRunner:
 
         model_path = self.config.get_model_filename()
         if os.path.exists(model_path):
-            self.mh.load_model(model_path, self.dh)
+            
+            self.mh.load_model(model_path)
+            #self.mh.load_model(model_path, self.dh) # Probably a bug, found 2024-02-15
+
             return {"print": "We will reload and use old model"}
         
         raise ModelException(f"No trained model exists at {model_path}")

@@ -853,8 +853,6 @@ class Config:
 
     def use_imb_pipeline(self) -> bool:
         """ Returns True if either oversampling or undersampling is used """
-        print("Mode for oversampler:", self.mode.oversampler)
-        print("Mode for undersampler:", self.mode.undersampler)
         if self.mode.oversampler != Oversampling.NOS or self.mode.undersampler != Undersampling.NUS:
             return True
 
