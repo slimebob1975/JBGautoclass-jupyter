@@ -12,7 +12,8 @@ from pandas import DataFrame
 from sklearn.utils import Bunch
 
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
-    AlgorithmTuple, Preprocess, PreprocessTuple, ScoreMetric)
+                    AlgorithmTuple, Preprocess, PreprocessTuple, 
+                    ScoreMetric, Oversampling, Undersampling)
 from JBGTransformers import TextDataToNumbersConverter
         
 from JBGExceptions import GuiWidgetsException
@@ -290,7 +291,7 @@ class Widgets:
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
             "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
-            "data_handling": [self.smote_checkbox, self.undersample_checkbox, self.testdata_slider, self.iterations_slider],
+            "data_handling": [self.oversampler_dropdown, self.undersampler_dropdown, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.filter_slider],
             "debug": [self.data_limit, self.show_info_checkbox, self.num_variables],
             "progress": [self.progress_bar, self.progress_label]
@@ -437,8 +438,8 @@ class Widgets:
             "categorize_checkbox": config.use_categorization(),
             "categorize_columns":  config.get_categorical_text_column_names(),
             "testdata_slider": config.get_test_size_percentage(),
-            "smote_checkbox": config.use_smote(),
-            "undersample_checkbox": config.use_undersample(),
+            "oversampler_dropdown": config.get_oversampler_abbreviation(),
+            "undersampler_dropdown": config.get_undersampler_abbreviation(),
         })
         
         # Disabled items:
@@ -537,8 +538,8 @@ class Widgets:
                 "preprocess_dropdown",
                 "reduction_dropdown",
                 "scoremetric_dropdown", 
-                "smote_checkbox",
-                "undersample_checkbox",
+                "oversampler_dropdown",
+                "undersampler_dropdown",
                 "testdata_slider",
                 "iterations_slider",
                 "encryption_checkbox",
@@ -685,8 +686,8 @@ class Widgets:
                 use_categorization = self.categorize_checkbox.value,
                 category_text_columns = list(self.categorize_columns.value),
                 test_size = float(self.testdata_slider.value) / 100.0,
-                smote = self.smote_checkbox.value,
-                undersample = self.undersample_checkbox.value,
+                oversampler = Oversampling[self.oversampler_dropdown.value],
+                undersampler = Undersampling[self.undersampler_dropdown.value],
                 algorithm = AlgorithmTuple(self.algorithm_dropdown.value),
                 preprocessor = PreprocessTuple(self.preprocess_dropdown.value),
                 feature_selection = ReductionTuple(self.reduction_dropdown.value),
@@ -1200,15 +1201,19 @@ class Widgets:
     
     
     @property
-    def smote_checkbox(self) -> widgets.Checkbox:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        return self._load_widget(name)
+    def oversampler_dropdown(self) -> widgets.Dropdown:
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name, calculated_params={
+            "options": Oversampling.get_sorted_list()
+        })
         
     
     @property
-    def undersample_checkbox(self) -> widgets.Checkbox:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        return self._load_widget(name)
+    def undersampler_dropdown(self) -> widgets.Dropdown:
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name, calculated_params={
+            "options":Undersampling.get_sorted_list()
+        })
         
     
     @property

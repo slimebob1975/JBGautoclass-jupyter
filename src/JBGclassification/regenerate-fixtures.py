@@ -2,7 +2,10 @@ import os
 import dill
 from sklearn.pipeline import Pipeline
 from Config import Config
-from JBGMeta import Algorithm, Preprocess, Reduction, ScoreMetric, AlgorithmTuple, PreprocessTuple, ReductionTuple
+from JBGMeta import (Algorithm, Preprocess, Reduction, ScoreMetric, 
+                     AlgorithmTuple, PreprocessTuple, ReductionTuple,
+                    Oversampling, Undersampling)
+
 
 """ This is a script to quick-and-dirty regenerate some fixtures that might be annoying otherwise
 
@@ -45,8 +48,8 @@ def bare_iris_config() -> Config:
             use_categorization=True,
             category_text_columns=[],
             test_size=0.2,
-            smote=False,
-            undersample=False,
+            oversampler=Oversampling.NOS,
+            undersampler=Undersampling.NUS,
             algorithm=AlgorithmTuple([Algorithm.LDA]),
             preprocessor=PreprocessTuple([Preprocess.NOS]),
             feature_selection=ReductionTuple([Reduction.NOR]),
@@ -83,6 +86,8 @@ def save_model_to_file(filename, config):
     preprocess = Preprocess.NOS
     reduction = Reduction.NOR
     algorithm = Algorithm.DUMY
+    oversampler = Oversampling.NOS
+    undersampler = Undersampling.NUS
     try:
         save_config = config.get_clean_config()
         data = {

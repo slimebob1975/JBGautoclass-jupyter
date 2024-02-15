@@ -4,7 +4,7 @@ import pytest
 from conftest import get_fixture_path, get_fixture_content_as_string
 
 from Config import Config
-from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import oversampler
 from imblearn.under_sampling import RandomUnderSampler
 from JBGExceptions import ConfigException
 from path import Path
@@ -103,21 +103,21 @@ class TestConfig:
         
         
 
-    def test_smote_and_undersampler(self, valid_iris_config):
-        # Using the default both smote and undersampler are False and should return None
-        assert valid_iris_config.get_smote() is None
+    def test_oversampler_and_undersampler(self, valid_iris_config):
+        # Using the default both oversampler and undersampler are False and should return None
+        assert valid_iris_config.get_callable_oversamplers() is None
         assert valid_iris_config.get_undersampler() is None
-        assert not valid_iris_config.use_imb_pipeline(), "Neither smote nor undersampler means no imb_pipeline"
+        assert not valid_iris_config.use_imb_pipeline(), "Neither oversampler nor undersampler means no imb_pipeline"
         
         # Update the config to confirm that it's the right type of class
-        valid_iris_config.mode.smote = True
+        valid_iris_config.mode.oversampler = True
         
-        assert valid_iris_config.use_imb_pipeline(), "Smote or undersampler means imb_pipeline"
-        valid_iris_config.mode.undersample = True
+        assert valid_iris_config.use_imb_pipeline(), "oversampler or undersampler means imb_pipeline"
+        valid_iris_config.mode.undersampler = True
 
-        assert isinstance(valid_iris_config.get_smote(), SMOTE)
+        assert isinstance(valid_iris_config.get_callable_oversamplers(), oversampler)
         assert isinstance(valid_iris_config.get_undersampler(), RandomUnderSampler)
-        assert valid_iris_config.use_imb_pipeline(), "Smote and undersampler means imb_pipeline"
+        assert valid_iris_config.use_imb_pipeline(), "oversampler and undersampler means imb_pipeline"
         
     def test_none_or_positive_int(self, valid_iris_config):
         """ Some values return either an int or None """

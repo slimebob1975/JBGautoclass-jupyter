@@ -9,13 +9,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Type, TypeVar, Union
 
-from imblearn.over_sampling import SMOTE
-from imblearn.under_sampling import RandomUnderSampler
-
 import Helpers
 from JBGExceptions import ConfigException, ODBCDriverException
 from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
-                     Reduction, ReductionTuple, ScoreMetric, MetaTuple)
+                     Reduction, ReductionTuple, ScoreMetric, MetaTuple, Oversampling,
+                     Undersampling)
 
 
 T = TypeVar('T', bound='Config')
@@ -65,8 +63,8 @@ class Config:
         "mode.use_categorization": "<use_categorization>",
         "mode.category_text_columns": "<category_text_columns>",
         "mode.test_size": "<test_size>",
-        "mode.smote": "<smote>",
-        "mode.undersample": "<undersample>",
+        "mode.oversampler": "<oversampler>",
+        "mode.undersampler": "<undersampler>",
         "mode.algorithm": "<algorithm>",
         "mode.preprocessor": "<preprocessor>",
         "mode.feature_selection": "<feature_selection>",
@@ -356,8 +354,8 @@ class Config:
         use_categorization: bool = True
         category_text_columns: list = field(default_factory=list)
         test_size: float = 0.2
-        smote: bool = False
-        undersample: bool = False
+        oversampler: Oversampling = field(default_factory=Oversampling.defaultOversampler)
+        undersampler: Undersampling = field(default_factory=Undersampling.defaultUndersampler)
         #algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple([Algorithm.LDA]))
         algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple.defaultAlgorithmTuple)        
         #preprocessor: PreprocessTuple = field(default_factory=PreprocessTuple([Preprocess.NOS]))
@@ -431,12 +429,19 @@ class Config:
 
             if not (isinstance(self.feature_selection, ReductionTuple)):
                 raise TypeError(f"Argument feature_selection is invalid: {str(self.feature_selection)}")
+            
+            if not (isinstance(self.scoring, ScoreMetric)):
+                raise TypeError(f"Argument scoring is invalid: {str(self.scoring)}")
+
+            if not (isinstance(self.oversampler, Oversampling)):
+                raise TypeError(f"Argument oversampler is invalid: {str(self.oversampler)}")
+
+            if not (isinstance(self.undersampler, Undersampling)):
+                raise TypeError(f"Argument undersampler is invalid: {str(self.undersampler)}")
 
             for item in [
                 "use_stop_words",
                 "hex_encode",
-                "smote",
-                "undersample"
             ]:
                 if not isinstance(getattr(self, item), bool):
                     raise TypeError(f"Argument {item} must be True or False")
@@ -463,8 +468,8 @@ class Config:
                 "Categorize text data where applicable": self.use_categorization,
                 "Force categorization to these columns": forced_columns,
                 "Test size for trainings":               self.test_size,
-                "Use SMOTE":                             self.smote,
-                "Use undersampling of majority class":   self.undersample,
+                "Oversampling technique":                self.oversampler.full_name,
+                "Undersampling technique":               self.undersampler.full_name,
                 "Algorithms of choice":                  self.algorithm.full_name,
                 "Preprocessing method of choice":        self.preprocessor.full_name,
                 "Scoring method":                        self.scoring.full_name,
@@ -795,8 +800,8 @@ class Config:
                 use_categorization=module.mode["use_categorization"],
                 category_text_columns=category_text_columns,
                 test_size=float(module.mode["test_size"]),
-                smote=module.mode["smote"],
-                undersample=module.mode["undersample"],
+                oversampler=Oversampling[module.mode["oversampler"]],
+                undersampler=Undersampling[module.mode["undersampler"]],
                 algorithm=AlgorithmTuple.from_string(module.mode["algorithm"]),
                 preprocessor=PreprocessTuple.from_string(module.mode["preprocessor"]),
                 feature_selection=ReductionTuple.from_string(module.mode["feature_selection"]),
@@ -847,11 +852,13 @@ class Config:
         return column in self.get_text_column_names()
 
     def use_imb_pipeline(self) -> bool:
-        """ Returns True if either smote or undersampler should is True """
-        if not self.mode.smote and not self.mode.undersample:
-            return False
+        """ Returns True if either oversampling or undersampling is used """
+        print("Mode for oversampler:", self.mode.oversampler)
+        print("Mode for undersampler:", self.mode.undersampler)
+        if self.mode.oversampler != Oversampling.NOS or self.mode.undersampler != Undersampling.NUS:
+            return True
 
-        return True
+        return False
 
     def get_classification_script_path(self) -> Path:
         """ Gives a calculated path based on config"""
@@ -1009,34 +1016,30 @@ class Config:
         """ Returns if categorization should be used """
         return self.mode.use_categorization
 
-    def get_smote(self, k_neighbors=5) -> Union[SMOTE, None]:
-        """ Gets the SMOTE for the model, or None if it shouldn't be """
-        if self.mode.smote:
-            return SMOTE(sampling_strategy='auto', k_neighbors=k_neighbors)
+    def get_oversampler(self) -> Union[Oversampling, None]:
+        """ Gets the oversampler for the model """
+        return self.mode.oversampler.get_callable_oversampler()
 
-        return None
+    def set_oversampler(self, oversampler: Oversampling) -> None:
+        """ Sets oversampler """
+
+        self.mode.oversampler = oversampler
+
+    def use_oversampling(self) -> bool:
+        return self.mode.oversampler != Oversampling.NOS
     
-    def use_smote(self) -> bool:
-        """ Simple check if it's used or note """
-        return self.mode.smote
-
-    def set_smote(self, smote: bool) -> None:
-        """ Sets smote """
-
-        self.mode.smote = smote
+    def get_undersampler(self) -> Union[Undersampling, None]:
+        """ Gets the UnderSampler """
+        return self.mode.undersampler.get_callable_undersampler()
     
-    def get_undersampler(self) -> Union[RandomUnderSampler, None]:
-        """ Gets the UnderSampler, or None if there should be none"""
-        if self.mode.undersample:
-            return RandomUnderSampler(sampling_strategy='auto')
+    def set_undersampler(self, undersampler: Oversampling) -> None:
+        """ Sets undersampler """
 
-        return None
+        self.mode.undersampler = undersampler
 
-    def use_undersample(self) -> bool:
-        """ Simple check if it's used or note """
-        return self.mode.undersample
-    
-    
+    def use_undersampling(self) -> bool:
+        return self.mode.undersampler != Undersampling.NUS
+
     def set_num_selected_features(self, num_features: int) -> None:
         """ Updates the config with the number """
         self.mode.num_selected_features = num_features
@@ -1136,6 +1139,18 @@ class Config:
             return item.get_abbreviations()
 
         return [item.name]
+    
+    def get_oversampler_abbreviation(self) -> str:
+        item = self.mode.oversampler
+        if isinstance(item, tuple):
+            return item.get_abbreviations()
+        return item.name
+    
+    def get_undersampler_abbreviation(self) -> str:
+        item = self.mode.undersampler
+        if isinstance(item, tuple):
+            return item.get_abbreviations()
+        return item.name
 
     def get_class_catalog(self) -> str:
         """ Gets the class catalog """

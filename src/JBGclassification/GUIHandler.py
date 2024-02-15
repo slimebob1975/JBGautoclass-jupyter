@@ -28,6 +28,7 @@ from GUI.Widgets import Widgets
 class GUIHandler:
     # Constructor
     def __init__(self):
+
         settings = None
         settings_file = os.path.join(os.getcwd(), "settings.json")
         if os.path.isfile(settings_file):
@@ -55,7 +56,7 @@ class GUIHandler:
             )
         )
         self.gui_datalayer = DataLayer(config=config, logger=self.logger)
-        
+
         if not self.gui_datalayer.can_connect(verbose=True):
             sys.exit("GUI Handler could not connect to Server")
         

@@ -7,7 +7,7 @@ import JBGHandler
 from typing import Callable, Union
 from path import Path
 import pytest
-from imblearn.over_sampling import SMOTE
+from imblearn.over_sampling import oversampler
 from imblearn.under_sampling import RandomUnderSampler
 
 from JBGHandler import JBGHandler, DatasetHandler, Model, ModelHandler, PredictionsHandler
@@ -177,8 +177,8 @@ class MockConfig():
         """ Returns if categorization should be used """
         return True
 
-    def get_smote(self) -> Union[SMOTE, None]:
-        """ Gets the SMOTE for the model, or None if it shouldn't be """
+    def get_callable_oversamplers(self) -> Union[oversampler, None]:
+        """ Gets the oversampler for the model, or None if it shouldn't be """
         
     def get_undersampler(self) -> Union[RandomUnderSampler, None]:
         """ Gets the UnderSampler, or None if there should be none"""
@@ -278,8 +278,8 @@ def valid_iris_config() -> Config:
             use_categorization=True,
             category_text_columns=[],
             test_size=0.2,
-            smote=False,
-            undersample=False,
+            oversampler=False,
+            undersampler=False,
             algorithm=AlgorithmTuple([Algorithm.LDA]),
             preprocessor=PreprocessTuple([Preprocess.NOS]),
             feature_selection=ReductionTuple([Reduction.NOR]),
@@ -332,8 +332,8 @@ def bare_iris_config() -> Config:
             use_categorization=True,
             category_text_columns=[],
             test_size=0.2,
-            smote=False,
-            undersample=False,
+            oversampler=False,
+            undersampler=False,
             algorithm=AlgorithmTuple([Algorithm.LDA]),
             preprocessor=PreprocessTuple([Preprocess.NOS]),
             feature_selection=ReductionTuple([Reduction.NOR]),
@@ -395,8 +395,8 @@ def saved_with_valid_iris_config() -> Config:
             use_categorization=True,
             category_text_columns=[],
             test_size=0.2,
-            smote=False,
-            undersample=False,
+            oversampler=False,
+            undersampler=False,
             algorithm=AlgorithmTuple([Algorithm.LDA]),
             preprocessor=PreprocessTuple([Preprocess.NOS]),
             feature_selection=ReductionTuple([Reduction.NOR]),

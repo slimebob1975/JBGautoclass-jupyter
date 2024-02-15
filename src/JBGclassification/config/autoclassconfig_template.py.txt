@@ -89,11 +89,11 @@ mode = {
     # used for prediction)
     "test_size": "<test_size>",
 
-    # Use Synthetic Minority Oversampling Technique
-    "smote": <smote>,
+    # Use oversampling techniques
+    "oversampler": <oversampler>,
 
-    # Use Random Undersampling of majority class
-    "undersample": <undersample>,
+    # Use undersampling techniques
+    "undersampler": <undersampler>,
 
     # What algorithm to use
     "algorithm": "<algorithm>",

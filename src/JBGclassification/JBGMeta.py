@@ -777,12 +777,10 @@ class Oversampling(MetaEnum):
     def get_full_name(self) -> str:
         return self.full_name
 
-    @classmethod
-    def list_callable_oversamplers(cls) -> list[tuple]:
-        """ Gets a list of oversampling methods that are callable (including NOS -> None)
-            in the form (oversampler, called function)
+    def get_callable_oversampler(self) -> tuple:
+        """ Gets the undersampling method that is callable 
         """
-        return [(osm, osm.call_oversampler()) for osm in cls if osm.has_function() ]
+        return self.call_oversampler()
 
     def do_NOS(self) -> NonOversampler:
         """ While this return is superfluos, it helps with the listings of oversamplers """
@@ -819,8 +817,12 @@ class Oversampling(MetaEnum):
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
         return self.call_function('do')
     
+    @classmethod
+    def defaultOversampler(cls):
+        return cls.NOS
+    
 class Undersampling(MetaEnum):
-    NOS = "No Undersampling"
+    NUS = "No Undersampling"
     RND = "Random"
     CCS = "Cluster Centroids"
     CNN = "Condensed Nearest Neighbours"
@@ -836,14 +838,12 @@ class Undersampling(MetaEnum):
     def get_full_name(self) -> str:
         return self.full_name
 
-    @classmethod
-    def list_callable_undersamplers(cls) -> list[tuple]:
-        """ Gets a list of undersampling methods that are callable (including NOS -> None)
-            in the form (undersampler, called function)
+    def get_callable_undersampler(self) -> tuple:
+        """ Gets the undersampling method that is callable 
         """
-        return [(usm, usm.call_undersampler()) for usm in cls if usm.has_function() ]
+        return self.call_undersampler()
 
-    def do_NOS(self) -> NonUndersampler:
+    def do_NUS(self) -> NonUndersampler:
         """ While this return is superfluos, it helps with the listings of oversamplers """
         return self.NonUndersampler()
 
@@ -886,6 +886,10 @@ class Undersampling(MetaEnum):
     def call_undersampler(self) -> Union[Transform, None]:
         """ Wrapper to general function for DRY, but name/signature kept for ease. """
         return self.call_function('do')
+    
+    @classmethod
+    def defaultUndersampler(cls):
+        return cls.NUS
 
 class Preprocess(MetaEnum):
     NOS = "No Scaling"

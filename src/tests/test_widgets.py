@@ -222,13 +222,13 @@ def widget_parameters() -> dict:
                 "description_tooltip": "Pick by which methods the number of features (variables) are reduced"
             },
         },
-        "smote_checkbox": {
+        "oversampler_checkbox": {
             "pre__load": {
                 "value": False,
                 "disabled": True,
                 "indent": True,
-                "description": "SMOTE",
-                "description_tooltip": "Use SMOTE (synthetic minority oversampling technique) for training data"
+                "description": "oversampler",
+                "description_tooltip": "Use oversampler (synthetic minority oversampling technique) for training data"
             }
         },
         "undersample_checkbox": {
@@ -568,17 +568,17 @@ class TestWidgets:
         assert reduction_dropdown.description == widget_parameters["reduction_dropdown"]["pre__load"]["description"]
         assert reduction_dropdown.description_tooltip == widget_parameters["reduction_dropdown"]["pre__load"]["description_tooltip"]
 
-        # SMOTE Checkbox
-        smote_checkbox = widgets.smote_checkbox
-        assert isinstance(smote_checkbox, ipywidgets.Checkbox)
-        assert smote_checkbox.value == widget_parameters["smote_checkbox"]["pre__load"]["value"]
-        assert smote_checkbox.disabled == widget_parameters["smote_checkbox"]["pre__load"]["disabled"]
-        assert smote_checkbox.indent == widget_parameters["smote_checkbox"]["pre__load"]["indent"]
-        assert smote_checkbox.description == widget_parameters["smote_checkbox"]["pre__load"]["description"]
-        assert smote_checkbox.description_tooltip == widget_parameters["smote_checkbox"]["pre__load"]["description_tooltip"]
+        # oversampler Checkbox
+        oversampler_checkbox = widgets.oversampler_checkbox
+        assert isinstance(oversampler_checkbox, ipywidgets.Checkbox)
+        assert oversampler_checkbox.value == widget_parameters["oversampler_checkbox"]["pre__load"]["value"]
+        assert oversampler_checkbox.disabled == widget_parameters["oversampler_checkbox"]["pre__load"]["disabled"]
+        assert oversampler_checkbox.indent == widget_parameters["oversampler_checkbox"]["pre__load"]["indent"]
+        assert oversampler_checkbox.description == widget_parameters["oversampler_checkbox"]["pre__load"]["description"]
+        assert oversampler_checkbox.description_tooltip == widget_parameters["oversampler_checkbox"]["pre__load"]["description_tooltip"]
        
 
-        # Undersample Checkbox
+        # undersampler Checkbox
         undersample_checkbox = widgets.undersample_checkbox
         assert isinstance(undersample_checkbox, ipywidgets.Checkbox)
         assert undersample_checkbox.value == widget_parameters["undersample_checkbox"]["pre__load"]["value"]

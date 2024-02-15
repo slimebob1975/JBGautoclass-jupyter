@@ -185,24 +185,22 @@
                 "description_tooltip": "Pick by which methods the number of features (variables) are reduced"
             }
         },
-        "smote_checkbox": {
-            "type": "Checkbox",
+        "oversampler_dropdown": {
+            "type": "Dropdown",
             "params": {
-                "value": false,
+                "value": "NOS",
                 "disabled": true,
-                "indent": true,
-                "description": "SMOTE",
-                "description_tooltip": "Use SMOTE (synthetic minority oversampling technique) for training data"
+                "description": "Oversampler:",
+                "description_tooltip": "Use oversampling techniques for training data"
             }
         },
-        "undersample_checkbox": {
-            "type": "Checkbox",
+        "undersampler_dropdown": {
+            "type": "Dropdown",
             "params": {
-                "value": false,
+                "value": "NUS",
                 "disabled": true,
-                "indent": true,
-                "description": "Undersampling",
-                "description_tooltip": "Use undersampling of majority training data"
+                "description": "Undersampl.:",
+                "description_tooltip": "Use undersampling techniques for training data"
             }
         },
         "testdata_slider": {
@@ -426,8 +424,8 @@
             "preprocess_dropdown",
             "scoremetric_dropdown",
             "reduction_dropdown",
-            "smote_checkbox",
-            "undersample_checkbox",
+            "oversampler_dropdown",
+            "undersampler_dropdown",
             "testdata_slider",
             "iterations_slider",
             "encryption_checkbox",

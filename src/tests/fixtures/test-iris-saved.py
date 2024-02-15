@@ -90,10 +90,10 @@ mode = {
     "test_size": "0.2",
 
     # Use Synthetic Minority Oversampling Technique
-    "smote": False,
+    "oversampler": False,
 
     # Use Random Undersampling of majority class
-    "undersample": False,
+    "undersampler": False,
 
     # What algorithm to use
     "algorithm": "LDA",

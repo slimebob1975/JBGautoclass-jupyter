@@ -12,9 +12,7 @@ from typing import Callable, Protocol, Union, Any
 import langdetect
 import numpy as np
 import pandas
-from imblearn.over_sampling import SMOTE
 from imblearn.pipeline import Pipeline as ImbPipeline
-from imblearn.under_sampling import RandomUnderSampler
 from lexicalrichness import LexicalRichness
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
@@ -25,12 +23,12 @@ from sklearn.pipeline import Pipeline
 from stop_words import get_stop_words
 
 from Config import Config
-from JBGMeta import Library, Algorithm, Preprocess, Reduction, RateType, Estimator, Transform
+from JBGMeta import (Algorithm, Preprocess, Reduction, RateType, Estimator, Transform,
+                     Oversampling, Undersampling)
 from JBGExceptions import (DatasetException, ModelException, HandlerException, 
     UnstableModelException, PipelineException)
-from JBGTransformers import TextDataToNumbersConverter, MLPKerasClassifier
+from JBGTransformers import TextDataToNumbersConverter
 import Helpers
-import keras
 
 GIVE_EXCEPTION_TRACEBACK = False
 
@@ -157,7 +155,7 @@ class Config(Protocol):
         """ Returns if a specific column is categorical """
 
     def use_imb_pipeline(self) -> bool:
-        """ Returns true if smote or undersampler is not None """
+        """ Returns true if oversampler or undersampler is used """
 
     def should_train(self) -> bool:
         """ Returns if this is a training config """
@@ -180,17 +178,20 @@ class Config(Protocol):
     def use_categorization(self) -> bool:
         """ Returns if categorization should be used """
 
-    def get_smote(self) -> Union[SMOTE, None]:
-        """ Gets the SMOTE for the model, or None if it shouldn't be """
+    def get_callable_oversamplers(self) -> Union[Oversampling, None]:
+        """ Gets the oversampler for the model, or None if it shouldn't be """
 
-    def use_smote(self) -> bool:
+    def use_oversampling(self) -> bool:
         """ Simple check if it's used or note """
 
-    def set_smote(self, smote: bool) -> None:
-        """ Sets smote """
+    def set_oversampler(self, oversampler: Oversampling) -> None:
+        """ Sets oversampler """
         
-    def get_undersampler(self) -> Union[RandomUnderSampler, None]:
+    def get_undersampler(self) -> Union[Undersampling, None]:
         """ Gets the UnderSampler, or None if there should be none"""
+
+    def set_undersampler(self, undersampler: Undersampling) -> None:
+        """ Sets undersampler """
 
     def update_attributes(self, updates: dict,  type: str = None) -> None:
         """ Updates several values inside the config """
@@ -697,6 +698,8 @@ class Model:
     preprocess: Preprocess = field(default=None)
     reduction: Reduction = field(default=None)
     algorithm: Algorithm = field(default=None)
+    oversampler: Oversampling = field(default=None)
+    undersampler: Undersampling = field(default=None)
     pipeline: Pipeline = field(default=None)
     n_features_out: int = field(default=None)
 
@@ -745,7 +748,7 @@ class ModelHandler:
     text_data: bool = field(init=False)
     SPOT_CHECK_REPETITIONS: int = 5
     STANDARD_K_FOLDS: int = 10
-    STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE: int = 2
+    STANDARD_NUM_SAMPLES_PER_FOLD_FOR_OVERSAMPLER: int = 2
     
     def __post_init__(self) -> None:
         """ Empty for now """
@@ -773,7 +776,7 @@ class ModelHandler:
         # Load model from file, but handle Keras models differently since their algorithm was
         # replaced by a path to model training information
         try:
-            _config, text_converter, (preprocess, reduction, algorithm), pipeline, n_features = \
+            _config, text_converter, (preprocess, reduction, algorithm, oversampler, undersampler), pipeline, n_features = \
                 dill.load(open(filename, 'rb'))
                         
             the_model = Model(
@@ -781,6 +784,8 @@ class ModelHandler:
                 preprocess=preprocess,
                 reduction=reduction,
                 algorithm=algorithm,
+                oversampler=oversampler,
+                undersampler=undersampler,
                 pipeline=pipeline,
                 n_features_out=n_features
             )
@@ -825,12 +830,12 @@ class ModelHandler:
         k_train = int(Helpers.find_smallest_class_number(dh.Y) * 1.0-self.handler.config.get_test_size())
         k = min(self.STANDARD_K_FOLDS, k_train)
         
-        # If smote is turned on, we need to have at least two samples of the smallest class in each fold
-        if self.handler.config.use_smote():
-            k2 = int(float(k_train) / self.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_SMOTE)
+        # If oversampler is turned on, we need to have at least two samples of the smallest class in each fold
+        if self.handler.config.use_oversampling():
+            k2 = int(float(k_train) / self.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_OVERSAMPLER)
             if k2 < 2:
-                self.handler.logger.print_warning(f"The smallest class is of size {k}, which is to small for using smote in cross-validation. Turning SMOTE off!") 
-                self.handler.config.set_smote(False)
+                self.handler.logger.print_warning(f"The smallest class is of size {k}, which is too small for using oversampler in cross-validation. Turning oversampler off!") 
+                self.handler.config.set_oversampler(Oversampling.NOS)
             else:
                 k = min(k, k2)
         if k < self.STANDARD_K_FOLDS:
@@ -998,6 +1003,13 @@ class ModelHandler:
         # Prepare list of preprocessors
         preprocessors = self.handler.config.get_callable_preprocessors()
 
+        # Prepare over- and undersampling methods
+        oversampler = self.handler.config.mode.oversampler
+        oversampler_callable = oversampler.get_callable_oversampler()
+        undersampler = self.handler.config.mode.undersampler
+        undersampler_callable = undersampler.get_callable_undersampler()
+
+        # Prepare some guidance
         progress_key = "training_model"
         number_of_tries = len(algorithms) * len(reductions) * len(preprocessors)
         
@@ -1006,7 +1018,6 @@ class ModelHandler:
             "Checking & Training models", 
             number_of_tries, 
             "Percent models checked")
-
         
         # Evaluate each model in turn in combination with all reduction and preprocessing methods
         best_mean = 0.0
@@ -1097,7 +1108,8 @@ class ModelHandler:
                                 # Create pipeline and cross validate
                                 current_pipeline, cv_results, failure = \
                                     self.create_pipeline_and_cv(reduction, algorithm, preprocessor, reduction_callable, \
-                                        algorithm_callable, preprocessor_callable, kfold, dh, num_features)
+                                        algorithm_callable, preprocessor_callable, oversampler_callable, undersampler_callable, \
+                                            kfold, dh, num_features)
                                 
                                 # Train and evaluate on test data
                                 if dh.X_validation is not None and dh.Y_validation is not None:
@@ -1209,15 +1221,16 @@ class ModelHandler:
 
     # Build pipeline and perform cross validation
     def create_pipeline_and_cv(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess, feature_reducer: Transform, \
-        estimator: Estimator, scaler: Transform, kfold: StratifiedKFold, dh: DatasetHandler, num_features: int):
+        estimator: Estimator, scaler: Transform, oversampler: Transform, undersampler: Transform, kfold: StratifiedKFold, \
+        dh: DatasetHandler, num_features: int):
 
         exception = ""
         try:
                     
             # Build pipeline of model and preprocessor.
             pipe = self.get_pipeline(reduction, feature_reducer, algorithm, estimator, preprocessor, scaler, \
-                dh.X_train.shape[1], num_features, min(5, kfold.get_n_splits()))
-            
+                oversampler, undersampler, dh.X_train.shape[1], num_features, min(5, kfold.get_n_splits()))
+                        
             # Use parallel processing for k-folded cross evaluation
             cv_results = self.get_cross_val_score(pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm)
 
@@ -1232,8 +1245,9 @@ class ModelHandler:
     
     # Build the pipeline
     def get_pipeline(self, reduction: Reduction, feature_reducer: Transform, algorithm: Algorithm, \
-        estimator: Estimator, preprocessor: Preprocess, scaler: Transform, max_features: int, \
-        rfe_features: int = None, max_k_neighbors: int = 2) -> Union[Pipeline, Estimator]:
+                estimator: Estimator, preprocessor: Preprocess, scaler: Transform, \
+                oversampler: Transform, undersampler: Transform, max_features: int, \
+                rfe_features: int = None, max_k_neighbors: int = 2) -> Union[Pipeline, Estimator]:
        
         try:
             # First, put estimator/algorithm in pipeline
@@ -1248,14 +1262,14 @@ class ModelHandler:
             else:
                 the_feature_reducer = feature_reducer
             steps.insert(1, (reduction.name, the_feature_reducer))
-            steps.insert(2, ("SMOTE", self.handler.config.get_smote(k_neighbors=max_k_neighbors)))
-            steps.insert(3, ("Undersampler", self.handler.config.get_undersampler()))
+            steps.insert(2, ("Oversampler", oversampler))
+            steps.insert(3, ("Undersampler", undersampler))
             
             steps = [step for step in steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] # List of 1 to 4 elements
         except Exception as ex:
             raise PipelineException(f"Could not build Pipeline correctly: {str(ex)}") from ex
 
-        # Robust algorithms all use ImbPipeline, Smote and/or Undersample (Config options) do too
+        # Robust algorithms all use ImbPipeline, oversampler and/or undersampler (Config options) do too
         if algorithm.use_imb_pipeline() or self.handler.config.use_imb_pipeline(): 
             return ImbPipeline(steps=steps)
         
@@ -1340,7 +1354,7 @@ class ModelHandler:
             data = [
                 save_config,
                 self.model.text_converter,
-                (self.model.preprocess, self.model.reduction, self.model.algorithm),
+                (self.model.preprocess, self.model.reduction, self.model.algorithm, self.model.oversampler, self.model.undersampler),
                 self.model.pipeline,
                 self.model.n_features_out
             ]   
