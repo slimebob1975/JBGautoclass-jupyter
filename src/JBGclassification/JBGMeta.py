@@ -49,7 +49,7 @@ from sklearn.naive_bayes import (BernoulliNB, ComplementNB, GaussianNB,
 from sklearn.neighbors import (KNeighborsClassifier, NearestCentroid,
                                RadiusNeighborsClassifier)
 from sklearn.neural_network import MLPClassifier
-from sklearn.pipeline import Pipeline
+from imblearn.pipeline import Pipeline
 from sklearn.preprocessing import (Binarizer, FunctionTransformer,
                                    MaxAbsScaler, MinMaxScaler, Normalizer,
                                    StandardScaler)

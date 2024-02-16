@@ -1,6 +1,6 @@
 import os
 import dill
-from sklearn.pipeline import Pipeline
+from imblearn.pipeline import Pipeline
 from Config import Config
 from JBGMeta import (Algorithm, Preprocess, Reduction, ScoreMetric, 
                      AlgorithmTuple, PreprocessTuple, ReductionTuple,

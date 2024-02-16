@@ -12,14 +12,13 @@ from typing import Callable, Protocol, Union, Any
 import langdetect
 import numpy as np
 import pandas
-from imblearn.pipeline import Pipeline as ImbPipeline
 from lexicalrichness import LexicalRichness
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split, GridSearchCV)
-from sklearn.pipeline import Pipeline
+from imblearn.pipeline import Pipeline
 from stop_words import get_stop_words
 
 from Config import Config
@@ -1272,12 +1271,8 @@ class ModelHandler:
         
         except Exception as ex:
             raise PipelineException(f"Could not build Pipeline correctly: {str(ex)}") from ex
-
-        # Robust algorithms all use ImbPipeline, oversampler and/or undersampler (Config options) do too
-        if algorithm.use_imb_pipeline() or self.handler.config.use_imb_pipeline(): 
-            return ImbPipeline(steps=steps)
         
-        return Pipeline(steps=steps)
+        return Pipeline(steps=steps, verbose=False)
 
     # Find number of components in reduction step in Pipeline
     def get_components_from_pipeline(self, reduction, pipeline, num_features) -> int:

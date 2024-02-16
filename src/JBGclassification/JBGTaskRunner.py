@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Protocol
 import copy
 
-from sklearn.pipeline import Pipeline
+from imblearn.pipeline import Pipeline
 
 from JBGExceptions import PredictionsException, ModelException, DatasetException, ConfigException
 from JBGHandler import JBGHandler
