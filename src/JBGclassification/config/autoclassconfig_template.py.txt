@@ -90,10 +90,10 @@ mode = {
     "test_size": "<test_size>",
 
     # Use oversampling techniques
-    "oversampler": <oversampler>,
+    "oversampler": "<oversampler>",
 
     # Use undersampling techniques
-    "undersampler": <undersampler>,
+    "undersampler": "<undersampler>",
 
     # What algorithm to use
     "algorithm": "<algorithm>",
