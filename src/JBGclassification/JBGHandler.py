@@ -835,7 +835,7 @@ class ModelHandler:
             k2 = int(float(k_train) / self.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_OVERSAMPLER)
             if k2 < 2:
                 self.handler.logger.print_warning(f"The smallest class is of size {k}, which is too small for using oversampler in cross-validation. Turning oversampler off!") 
-                self.handler.config.set_oversampler(Oversampling.NOS)
+                self.handler.config.set_oversampler(Oversampling.NOG)
             else:
                 k = min(k, k2)
         if k < self.STANDARD_K_FOLDS:
@@ -1005,9 +1005,7 @@ class ModelHandler:
 
         # Prepare over- and undersampling methods
         oversampler = self.handler.config.mode.oversampler
-        oversampler_callable = oversampler.get_callable_oversampler()
         undersampler = self.handler.config.mode.undersampler
-        undersampler_callable = undersampler.get_callable_undersampler()
 
         # Prepare some guidance
         progress_key = "training_model"
@@ -1108,7 +1106,7 @@ class ModelHandler:
                                 # Create pipeline and cross validate
                                 current_pipeline, cv_results, failure = \
                                     self.create_pipeline_and_cv(reduction, algorithm, preprocessor, reduction_callable, \
-                                        algorithm_callable, preprocessor_callable, oversampler_callable, undersampler_callable, \
+                                        algorithm_callable, preprocessor_callable, oversampler, undersampler, \
                                             kfold, dh, num_features)
                                 
                                 # Train and evaluate on test data
@@ -1221,7 +1219,7 @@ class ModelHandler:
 
     # Build pipeline and perform cross validation
     def create_pipeline_and_cv(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess, feature_reducer: Transform, \
-        estimator: Estimator, scaler: Transform, oversampler: Transform, undersampler: Transform, kfold: StratifiedKFold, \
+        estimator: Estimator, scaler: Transform, oversampler: Oversampling, undersampler: Undersampling, kfold: StratifiedKFold, \
         dh: DatasetHandler, num_features: int):
 
         exception = ""
@@ -1246,7 +1244,7 @@ class ModelHandler:
     # Build the pipeline
     def get_pipeline(self, reduction: Reduction, feature_reducer: Transform, algorithm: Algorithm, \
                 estimator: Estimator, preprocessor: Preprocess, scaler: Transform, \
-                oversampler: Transform, undersampler: Transform, max_features: int, \
+                oversampler: Oversampling, undersampler: Undersampling, max_features: int, \
                 rfe_features: int = None, max_k_neighbors: int = 2) -> Union[Pipeline, Estimator]:
        
         try:
@@ -1256,16 +1254,22 @@ class ModelHandler:
             # Secondly, add the other steps to the pipeline BEFORE the algorithm
             steps.insert(0, (preprocessor.name, scaler))
             
-            # RFE object must unfortunately be updated with the correct estimator
+            # RFE object must unfortunately be updated with the correct estimator at this point
             if reduction == Reduction.RFE:
                 the_feature_reducer = RFE(estimator=estimator, n_features_to_select=rfe_features)
             else:
                 the_feature_reducer = feature_reducer
-            steps.insert(1, (reduction.name, the_feature_reducer))
-            steps.insert(2, ("Oversampler", oversampler))
-            steps.insert(3, ("Undersampler", undersampler))
             
-            steps = [step for step in steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] # List of 1 to 4 elements
+            # Then add the feature reduction part of the pipeline between the preprocessor and the estimator
+            steps.insert(1, (reduction.name, the_feature_reducer))
+
+            # Finally, put oversampling and undersampling techniques before everything else
+            steps.insert(0, (oversampler.name, oversampler.get_callable_oversampler()))
+            steps.insert(1, (undersampler.name, undersampler.get_callable_undersampler()))
+            
+            # Check that all steps in pipeline implements "fit"
+            steps = [step for step in steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] 
+        
         except Exception as ex:
             raise PipelineException(f"Could not build Pipeline correctly: {str(ex)}") from ex
 

@@ -188,7 +188,7 @@
         "oversampler_dropdown": {
             "type": "Dropdown",
             "params": {
-                "value": "NOS",
+                "value": "NOG",
                 "disabled": true,
                 "description": "Oversampler:",
                 "description_tooltip": "Use oversampling techniques for training data"
@@ -197,7 +197,7 @@
         "undersampler_dropdown": {
             "type": "Dropdown",
             "params": {
-                "value": "NUS",
+                "value": "NUG",
                 "disabled": true,
                 "description": "Undersampl.:",
                 "description_tooltip": "Use undersampling techniques for training data"

@@ -84,7 +84,7 @@ class RateType(enum.Enum):
     U = "Unknown"
 
 
-META_ENUM_DEFAULT_TERMS = ("ALL", "DUMY", "NOR", "NOS")
+META_ENUM_DEFAULT_TERMS = ("ALL", "DUMY", "NOR", "NOS", "NOG", "NUG")
 
 @total_ordering
 class MetaEnum(enum.Enum):
@@ -764,7 +764,7 @@ class Algorithm(MetaEnum):
         return  MLPKerasClassifier()
     
 class Oversampling(MetaEnum):
-    NOS = "No Oversampling"
+    NOG = "No Oversampling"
     RND = "Random"
     SME = "SMOTE"
     SNC = "SMOTE-NC"
@@ -782,7 +782,7 @@ class Oversampling(MetaEnum):
         """
         return self.call_oversampler()
 
-    def do_NOS(self) -> NonOversampler:
+    def do_NOG(self) -> NonOversampler:
         """ While this return is superfluos, it helps with the listings of oversamplers """
         return self.NonOversampler()
 
@@ -819,10 +819,10 @@ class Oversampling(MetaEnum):
     
     @classmethod
     def defaultOversampler(cls):
-        return cls.NOS
+        return cls.NOG
     
 class Undersampling(MetaEnum):
-    NUS = "No Undersampling"
+    NUG = "No Undersampling"
     RND = "Random"
     CCS = "Cluster Centroids"
     CNN = "Condensed Nearest Neighbours"
@@ -843,7 +843,7 @@ class Undersampling(MetaEnum):
         """
         return self.call_undersampler()
 
-    def do_NUS(self) -> NonUndersampler:
+    def do_NUG(self) -> NonUndersampler:
         """ While this return is superfluos, it helps with the listings of oversamplers """
         return self.NonUndersampler()
 
@@ -889,7 +889,7 @@ class Undersampling(MetaEnum):
     
     @classmethod
     def defaultUndersampler(cls):
-        return cls.NUS
+        return cls.NUG
 
 class Preprocess(MetaEnum):
     NOS = "No Scaling"
@@ -1222,7 +1222,7 @@ class ReductionTuple(MetaTuple):
 
     def list_callable_reductions(self, num_samples: int, num_features: int, \
         num_selected_features: int = None) -> list[tuple]:
-        """ Gets a list of preprocessors that are callable (including NOS -> None)
+        """ Gets a list of preprocessors that are callable (including NOR -> None)
             in the form (preprocessor, called function)
         """
         return self.list_callables(

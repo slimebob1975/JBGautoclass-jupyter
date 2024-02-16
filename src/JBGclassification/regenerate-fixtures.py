@@ -48,8 +48,8 @@ def bare_iris_config() -> Config:
             use_categorization=True,
             category_text_columns=[],
             test_size=0.2,
-            oversampler=Oversampling.NOS,
-            undersampler=Undersampling.NUS,
+            oversampler=Oversampling.NOG,
+            undersampler=Undersampling.NUG,
             algorithm=AlgorithmTuple([Algorithm.LDA]),
             preprocessor=PreprocessTuple([Preprocess.NOS]),
             feature_selection=ReductionTuple([Reduction.NOR]),
@@ -86,8 +86,8 @@ def save_model_to_file(filename, config):
     preprocess = Preprocess.NOS
     reduction = Reduction.NOR
     algorithm = Algorithm.DUMY
-    oversampler = Oversampling.NOS
-    undersampler = Undersampling.NUS
+    oversampler = Oversampling.NOG
+    undersampler = Undersampling.NUG
     try:
         save_config = config.get_clean_config()
         data = {

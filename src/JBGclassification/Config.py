@@ -356,14 +356,10 @@ class Config:
         test_size: float = 0.2
         oversampler: Oversampling = field(default_factory=Oversampling.defaultOversampler)
         undersampler: Undersampling = field(default_factory=Undersampling.defaultUndersampler)
-        #algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple([Algorithm.LDA]))
         algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple.defaultAlgorithmTuple)        
-        #preprocessor: PreprocessTuple = field(default_factory=PreprocessTuple([Preprocess.NOS]))
         preprocessor: PreprocessTuple = field(default_factory=PreprocessTuple.defaultPreprocessTuple)
-        #feature_selection: ReductionTuple = field(default_factory=ReductionTuple([Reduction.NOR]))
         feature_selection: ReductionTuple = field(default_factory=ReductionTuple.defaultReductionTuple)
         num_selected_features: int = None
-        #scoring: ScoreMetric = field(default_factory=ScoreMetric.accuracy)
         scoring: ScoreMetric = field(default_factory=ScoreMetric.defaultScoreMetric)
         max_iterations: int = None
 
@@ -853,7 +849,7 @@ class Config:
 
     def use_imb_pipeline(self) -> bool:
         """ Returns True if either oversampling or undersampling is used """
-        if self.mode.oversampler != Oversampling.NOS or self.mode.undersampler != Undersampling.NUS:
+        if self.mode.oversampler != Oversampling.NOG or self.mode.undersampler != Undersampling.NUG:
             return True
 
         return False
@@ -1024,7 +1020,7 @@ class Config:
         self.mode.oversampler = oversampler
 
     def use_oversampling(self) -> bool:
-        return self.mode.oversampler != Oversampling.NOS
+        return self.mode.oversampler != Oversampling.NOG
     
     def get_undersampler(self) -> Union[Undersampling, None]:
         """ Gets the UnderSampler """
@@ -1036,7 +1032,7 @@ class Config:
         self.mode.undersampler = undersampler
 
     def use_undersampling(self) -> bool:
-        return self.mode.undersampler != Undersampling.NUS
+        return self.mode.undersampler != Undersampling.NUG
 
     def set_num_selected_features(self, num_features: int) -> None:
         """ Updates the config with the number """
