@@ -600,7 +600,7 @@ class Widgets:
     def create_inpage_styles(self, section: str) -> widgets.HTML:
         """ 
             Defined in default_settings.json it uses the section to get a dict
-            Section (as a class) scopes the selectors
+            Section (as a class) scopes the selectorsss
         """
         styles_dict = self.settings.get("styles")
         section_styles = styles_dict.get(section)

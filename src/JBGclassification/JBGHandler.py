@@ -858,8 +858,11 @@ class ModelHandler:
                 self.handler.logger.print_progress(f"Using grid search for final training of model {model_name}...")
 
                 # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
-                prefix = alg_name + "__"
-                search_params = Helpers.add_prefix_to_dict_keys(prefix, model.algorithm.search_params.parameters)
+                #search_params = \
+                #    Helpers.add_missing_prefix_double_underscore_to_dict_keys(prefix=alg_name, the_dict=model.algorithm.search_params.parameters)
+                search_params = \
+                    Helpers.add_prefix_to_dict_keys(prefix=alg_name, the_dict=model.algorithm.search_params.parameters)
+                self.handler.logger.print_info(f"Using grid search parameters: {str(search_params)} for model {model_name}")
                 try:
                     # grid_cv_info is no used right now, but stays for debugging purposes
                     model.pipeline, grid_cv_info = self.model_parameter_grid_search(
@@ -1205,16 +1208,16 @@ class ModelHandler:
         if abs(train_score - test_score) > 2.0 * train_stdev:
             raise UnstableModelException(f"Performance metric difference for cross evaluation and final test exceeds 2*stdev")
         
-        if train_score < best_score:   # Obviously if current is less it's worse
+        if test_score > best_score:   # If it is better, it is better
+            return True
+        elif test_score < best_score: # Obviously if current is less it's worse
             return False
-        elif train_score > best_score: # If it is better, it is better
+        elif train_score > best_score:  # With equal score on test data, check if it is better on training data
             return True
-        elif train_stdev < best_stdev: # From here it is comparable and with lower standard deviation it is also better
+        elif train_stdev < best_stdev: # From here it is comparable for both test and train, so with a lower standard deviation it is also better
             return True                   
-        elif test_score > best_score:  # With higher score on test data, is is also better (even though we ignore stdev)
-            return True
         else:
-            return False               # Comparable, but it fails in the end since no better stdev or better on evaluation data
+            return False               # Comparable, but it fails in the end
 
     # Build pipeline and perform cross validation
     def create_pipeline_and_cv(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess, feature_reducer: Transform, \

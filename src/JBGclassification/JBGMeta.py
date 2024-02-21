@@ -389,6 +389,16 @@ class AlgorithmGridSearchParams(MetaEnum):
     PYNN = {"parameters": {'learning_rate': [0.01, 0.05, 0.1], 'max_epochs': [10, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5],
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
     KERA = {"parameters": {}}
+    FUTV = {"parameters": {'voting': ('hard', 'soft')} } #| \
+        #{"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+        #{"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
+        #{"abc__" + str(key): val for key, val in ABC["parameters"].items()} \
+        #    }
+    FUTS =  {"parameters": {'cv': (5, 10, 20)}  } #| \
+        #{"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+        #{"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
+        #{"abc__" + str(key): val for key, val in ABC["parameters"].items()} \
+        #    }
     
     @property
     def parameters(self):
@@ -463,6 +473,8 @@ class Algorithm(MetaEnum):
     TOSA = { "full_name":  "PyTorch Sigm+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
     TOSS = { "full_name":  "PyTorch Sigm+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
     KERA = { "full_name": "Keras MLP Classifier", "search_params": AlgorithmGridSearchParams.KERA, "rfe_compatible": False, "lib": Library.KERAS}
+    FUTV = { "full_name":  "FUT Voting Classifier", "search_params": AlgorithmGridSearchParams.FUTV, "rfe_compatible": False, "lib": Library.SCIKIT}
+    FUTS = { "full_name":  "FUT Stacking Classifier", "search_params": AlgorithmGridSearchParams.FUTS, "rfe_compatible": False, "lib": Library.SCIKIT}
     
     def get_full_name(self) -> str:
         return self.full_name
@@ -736,7 +748,7 @@ class Algorithm(MetaEnum):
         clf1 = LinearSVC()
         clf2 = RandomForestClassifier()
         clf3 = LogisticRegression()
-        estimators=[('lsvc', clf1), ('rfc', clf2), ('lrn', clf3)]
+        estimators=[('lsvc', clf1), ('rfcl', clf2), ('lrn', clf3)]
         return VotingClassifier(estimators=estimators)
     
     def do_TORA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
@@ -762,6 +774,20 @@ class Algorithm(MetaEnum):
     
     def do_KERA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
         return  MLPKerasClassifier()
+    
+    def do_FUTV(self, max_iterations: int, size: int) -> Filter:
+        clf1 = MLPClassifier(max_iter=max_iterations)
+        clf2 = RandomForestClassifier()
+        clf3 = AdaBoostClassifier()
+        estimators=[('mlpc', clf1), ('rfcl', clf2), ('abc', clf3)]
+        return VotingClassifier(estimators=estimators, voting = 'soft')
+     
+    def do_FUTS(self, max_iterations: int, size: int) -> Filter:
+        clf1 = MLPClassifier(max_iter=max_iterations)
+        clf2 = RandomForestClassifier()
+        clf3 = AdaBoostClassifier()
+        estimators=[('mlpc', clf1), ('rfcl', clf2), ('abc', clf3)]
+        return StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
     
 class Oversampling(MetaEnum):
     NOG = "No Oversampling"
@@ -796,7 +822,7 @@ class Oversampling(MetaEnum):
         return SMOTE(sampling_strategy = 'auto')
     
     def do_SNC(self) -> SMOTENC:
-        return SMOTENC(sampling_strategy = 'auto')
+        return SMOTENC(categorical_features = 'auto', sampling_strategy = 'auto')
     
     def do_SNN(self) -> SMOTEN:
         return SMOTEN(sampling_strategy = 'auto')

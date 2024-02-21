@@ -12,6 +12,8 @@ import numpy as np
 import pandas
 import IPython.display
 
+DOUBLE_UNDERSCORE = "__"
+
 def clean_list(dirty_list: list) -> list[str]:
     """ 
         Given a list removes duplicates & empty objects.
@@ -225,7 +227,16 @@ def count_value_distr_as_dict(list: Iterable) -> dict:
 def add_prefix_to_dict_keys(prefix: str, the_dict: dict):
     new_dict = {}
     for key in the_dict.keys():
-        new_dict[prefix+key] = the_dict[key]
+        new_dict[prefix + DOUBLE_UNDERSCORE + key] = the_dict[key]
+    return new_dict
+
+def add_missing_prefix_double_underscore_to_dict_keys(prefix: str, the_dict: dict):
+    new_dict = {}
+    for key in the_dict.keys():
+        if key.find(DOUBLE_UNDERSCORE) == -1:
+            new_dict[prefix + DOUBLE_UNDERSCORE + key] = the_dict[key]
+        else:
+            new_dict[key] = the_dict[key]
     return new_dict
 
 def bytes_to_suffix(nbytes):
