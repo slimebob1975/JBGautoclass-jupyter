@@ -929,7 +929,7 @@ class ModelHandler:
     def train_and_evaluate_picked_model(self, pipeline: Pipeline, dh: DatasetHandler):
 
         exception = ""
-        the_score = -1.0
+        test_score = -1.0
         try:
             # First train model on whole of test data (no k-folded cross validation here).
             # Handle problems with sparse input by conversion to numpy, if needed
@@ -942,18 +942,18 @@ class ModelHandler:
             if dh.X_validation is not None and dh.Y_validation is not None:
                 scorer = self.handler.config.get_scoring_mechanism()
                 try:
-                    the_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
+                    test_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
                 except TypeError:
-                    the_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
+                    test_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
 
         except Exception as ex:
-            the_score = np.nan
+            test_score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
                 exception = str("{0}: {1}".format(type(ex).__name__, ','.join(ex.args)))
             else:
                 exception = str(traceback.format_exc())
 
-        return pipeline, the_score, exception
+        return pipeline, test_score, exception
 
     # Help function for running other functions in parallel
     def execute_n_job(self, func: function, *args: tuple, **kwargs: dict) -> Any:
@@ -1020,8 +1020,9 @@ class ModelHandler:
             "Percent models checked")
         
         # Evaluate each model in turn in combination with all reduction and preprocessing methods
-        best_mean = 0.0
+        best_cv_score = 0.0
         best_stdev = 1.0
+        best_test_score = 0.0
         trained_pipeline = None
         best_algorithm = None
         best_preprocessor = None
@@ -1113,10 +1114,10 @@ class ModelHandler:
                                 
                                 # Train and evaluate on test data
                                 if dh.X_validation is not None and dh.Y_validation is not None:
-                                    current_pipeline, test_score, failure = \
+                                    current_pipeline, tmp_test_score, failure = \
                                         self.train_and_evaluate_picked_model(current_pipeline, dh)
                                 else:
-                                    test_score = 0.0
+                                    tmp_test_score = 0.0
 
                                 # Get used number of features after reduction (components)
                                 num_components = self.get_components_from_pipeline(reduction, current_pipeline, num_features)
@@ -1131,14 +1132,14 @@ class ModelHandler:
                             t = time.time() - t0
 
                             # For current settings, calculate score
-                            temp_score = cv_results.mean()
-                            temp_stdev = cv_results.std()
+                            temp_cv_score = cv_results.mean()
+                            temp_cv_stdev = cv_results.std()
 
                             # Evaluate if feature selection changed accuracy or not. 
                             # Notice: Better or same score with less variables are both seen as an improvement,
                             # since the chance of finding an improvement increases when number of variables decrease
-                            if  temp_score >= rfe_score:
-                                rfe_score = temp_score
+                            if  temp_cv_score >= rfe_score:
+                                rfe_score = temp_cv_score
                                 max_features_selection = num_features   # We need to reduce more features
                             else:
                                 min_features_selection = num_features   # We have reduced too much already  
@@ -1146,13 +1147,15 @@ class ModelHandler:
                             # Save result if it is the overall best (inside RFE-while)
                             # Notice the difference from above, here we demand a better score.
                             try:
-                                if self.is_best_run_yet(temp_score, temp_stdev, best_mean, best_stdev, test_score):
+                                if self.is_best_run_yet(temp_cv_score, temp_cv_stdev, best_cv_score, best_stdev, \
+                                                        tmp_test_score, best_test_score):
                                     trained_pipeline = current_pipeline
                                     best_reduction = reduction
                                     best_algorithm = algorithm
                                     best_preprocessor = preprocessor
-                                    best_mean = temp_score
-                                    best_stdev = temp_stdev
+                                    best_cv_score = temp_cv_score
+                                    best_stdev = temp_cv_stdev
+                                    best_test_score = tmp_test_score
                                     best_rfe_feature_selection = num_features
                                     best_num_components = num_components
                             except UnstableModelException as ex:
@@ -1166,9 +1169,9 @@ class ModelHandler:
                                 reduction.name,
                                 str(algorithm.name) + " - " + str(algorithm.full_name) + " (" + str(algorithm.lib.full_name) + ")",
                                 min(num_components, num_features),
-                                temp_score,
-                                temp_stdev,
-                                test_score,
+                                temp_cv_score,
+                                temp_cv_stdev,
+                                tmp_test_score,
                                 t,
                                 failure])
                     
@@ -1201,23 +1204,24 @@ class ModelHandler:
         # Too much reduced
         return best_score, max_features, num_features
 
-    def is_best_run_yet(self, train_score: float, train_stdev: float, best_score: float, best_stdev: float, test_score: float) -> bool:
-        """ Calculates if this round is better than any prior 
-        But first check if performance is suspicios """
+    def is_best_run_yet(self, train_score: float, train_stdev: float, best_train_score: float, best_stdev: float, \
+                        test_score: float, best_test_score: float) -> bool:
+        """ Calculates if this round is better than any prior """
         
+        # First check if performance seems unstable
         if abs(train_score - test_score) > 2.0 * train_stdev:
             raise UnstableModelException(f"Performance metric difference for cross evaluation and final test exceeds 2*stdev")
         
-        if train_score > best_score:   # If it is better, it is better
+        # If performance is stable, check if it is better than last time.
+        # Use these rules to detemine:
+        # 1. If it is better on test and at least comparable for train data, it is better
+        if test_score > best_test_score and train_score >= best_train_score: 
             return True
-        elif train_score < best_score: # Obviously if current is less it's worse
-            return False
-        elif test_score > best_score:  # With equal score on cross validation, check if it is better on test data
+        # 2. If at least comparable on test and train data and with lower standard deviation, it is better
+        elif test_score >= best_test_score and train_score >= best_train_score and train_stdev < best_stdev:
             return True
-        elif train_stdev < best_stdev: # From here it is comparable for both test and train, so with a lower standard deviation it is also better
-            return True                   
         else:
-            return False               # Comparable, but it fails in the end
+            return False
 
     # Build pipeline and perform cross validation
     def create_pipeline_and_cv(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess, feature_reducer: Transform, \
