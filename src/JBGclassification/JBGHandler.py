@@ -1208,11 +1208,11 @@ class ModelHandler:
         if abs(train_score - test_score) > 2.0 * train_stdev:
             raise UnstableModelException(f"Performance metric difference for cross evaluation and final test exceeds 2*stdev")
         
-        if test_score > best_score:   # If it is better, it is better
+        if train_score > best_score:   # If it is better, it is better
             return True
-        elif test_score < best_score: # Obviously if current is less it's worse
+        elif train_score < best_score: # Obviously if current is less it's worse
             return False
-        elif train_score > best_score:  # With equal score on test data, check if it is better on training data
+        elif test_score > best_score:  # With equal score on cross validation, check if it is better on test data
             return True
         elif train_stdev < best_stdev: # From here it is comparable for both test and train, so with a lower standard deviation it is also better
             return True                   
