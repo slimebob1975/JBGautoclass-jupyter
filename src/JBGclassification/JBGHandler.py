@@ -1370,6 +1370,9 @@ class ModelHandler:
 @dataclass
 class PredictionsHandler:
     LIMIT_MISPREDICTED = 50
+    CROSS_TRAINED_MODEL = "cross trained"
+    RETRAINED_MODEL = "retrained"
+    NO_MODEL = "no model"
     
     handler: JBGHandler
     could_predict_proba: bool = False
@@ -1565,65 +1568,85 @@ class PredictionsHandler:
     def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pandas.DataFrame, Y: pandas.Series) -> None:
         
         # Calculate predictions for both total model and cross trained model
-        for what_model, the_model in [("model retrained on all data", full_pipe), ("model cross trained on training data", ct_pipe)]:
-            
-            try:
-                Y_pred = pandas.Series(the_model.predict(X), index = Y.index)
-            except TypeError:
-                Y_pred = pandas.Series(the_model.predict(X.to_numpy()), index = Y.index)
-
-            # Find the data rows where the real category is different from the predictions
-            # Iterate over the indexes (they are now not in order)
-            X_not = []
-            for i in Y.index:
-                try:
-                    X_not.append((Y.loc[i] != Y_pred.loc[i]))
-                except Exception as e:
-                    self.handler.logger.print_warning(f"Append of data row with index: {i} failed: {e}. Probably duplicate indicies in data!")
-                    break
-
-            # Quick end of loop if possible
-            num_mispredicted = sum(elem == True for elem in X_not)
-            if num_mispredicted != 0:
-                break
+        self.num_mispredicted = 0
+        self.model = self.NO_MODEL
         
-        self.num_mispredicted = num_mispredicted
-        self.model = what_model
-            
+        # For storing mismatching informations
+        X_not = [] 
+        model_not = pandas.Series(index = Y.index)
+        Y_not = pandas.Series(index = Y.index)  
+
+        # Make predictions using both models
+        try:
+            Y_pred_ct, ct_model = pandas.Series(ct_pipe.predict(X), index = Y.index), self.CROSS_TRAINED_MODEL
+            Y_pred_ft, ft_model = pandas.Series(full_pipe.predict(X), index = Y.index), self.RETRAINED_MODEL
+        except TypeError:
+            Y_pred_ct, ct_model = pandas.Series(ct_pipe.predict(X.to_numpy()), index = Y.index), self.CROSS_TRAINED_MODEL 
+            Y_pred_ft, ft_model = pandas.Series(full_pipe.predict(X.to_numpy()), index = Y.index), self.RETRAINED_MODEL 
+        
+        for Y_pred_what, what_model in [(Y_pred_ct, ct_model), (Y_pred_ft, ft_model)]:
+            self.handler.logger.print_key_value_pair(f"Accuracy score for {what_model} model", accuracy_score(Y, Y_pred_what), print_always=True)
+
+        # Find the data rows where the real category is different from the predictions on at least one of the models.
+        # The cross trained model has precedence over the retrained model in case both predictions are incorrect.
+        # Iterate over the indexes (they are now not in order).
+        for i in Y.index:
+            mismatch_ct = Y.loc[i] != Y_pred_ct.loc[i]
+            mismatch_ft = Y.loc[i] != Y_pred_ft.loc[i]
+            try:
+                X_not.append(mismatch_ct or mismatch_ft)
+                model_not.loc[i] = ct_model if mismatch_ct else ft_model if mismatch_ft else self.model
+                Y_not.loc[i] = Y_pred_ct.loc[i] if mismatch_ct else Y_pred_ft.loc[i] if mismatch_ft else Y.loc[i]
+            except Exception as e:
+                self.handler.logger.print_warning(f"Append of data row with index: {i} failed: {e}. Indicates duplicate indicies in data!")
+                break
+
+        # Update on the number of mispredicted data rows
+        model_not = model_not.loc[X_not]
+        self.num_mispredicted = sum(elem == True for elem in X_not)
+        if self.num_mispredicted > 0:
+            self.model = str(model_not.value_counts())
+        
         # Quick return if possible
-        if num_mispredicted == 0:
+        else:
             self.X_most_mispredicted = pandas.DataFrame()
             self.X_mispredicted = pandas.DataFrame()
-            self.model = "no model produced mispredictions"
             return
         
-        self.handler.logger.print_key_value_pair(f"Accuracy score for {what_model}", accuracy_score(Y, Y_pred), print_always=True)
-
-        # Select the found mispredicted data
+        # Select the found mispredicted data from the computations
         self.X_mispredicted = X.loc[X_not]
 
-        # Predict probabilites
+        # Predict probabilities for predictions in both models and pick the one to display
         try:
             try:
-                Y_prob = the_model.predict_proba(self.X_mispredicted)
+                Y_prob_ct = ct_pipe.predict_proba(self.X_mispredicted)
+                Y_prob_ft = full_pipe.predict_proba(self.X_mispredicted)
             except TypeError:
-                Y_prob = the_model.predict_proba(self.X_mispredicted.to_numpy())
+                Y_prob_ct = ct_pipe.predict_proba(self.X_mispredicted.to_numpy())
+                Y_prob_ft = full_pipe.predict_proba(self.X_mispredicted.to_numpy())
+            Y_prob = []
+            i = 0
+            for model in model_not.to_numpy():
+                Y_prob.append(Y_prob_ct[i,:] if model == self.CROSS_TRAINED_MODEL else Y_prob_ft[i,:])
+                i += 1
+            Y_prob = np.array(Y_prob)
             could_predict_proba = True
         except Exception as e:
             self.handler.logger.print_key_value_pair("Could not predict probabilities", e)
             could_predict_proba = False
 
-        #  Re-insert original data columns but drop the class column
+        #  Re-insert original data columns into mispredicted data DataFrame but drop the class column
         self.X_mispredicted = X_original.loc[X_not]
         
         # Add other columns to mispredicted data
         self.X_mispredicted.insert(0, "Actual", Y.loc[X_not].to_numpy())
-        self.X_mispredicted.insert(0, "Predicted", Y_pred.loc[X_not].to_numpy())
-        
+        self.X_mispredicted.insert(1, "Predicted", Y_not.loc[X_not].to_numpy())
+        self.X_mispredicted.insert(2, "Model", value=model_not.to_numpy())
+
         # Add probabilities and sort only if they could be calculated above, otherwise
         # return a random sample of mispredicted
         try:
-            the_classes = the_model.classes_
+            the_classes = ct_pipe.classes_
         except AttributeError as e:
             self.handler.logger.print_key_value_pair("No classes_ attribute in model, using original classes as fallback", e)
             the_classes = [y for y in set(Y) if y is not None]

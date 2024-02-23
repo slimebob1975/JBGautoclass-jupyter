@@ -389,11 +389,11 @@ class AlgorithmGridSearchParams(MetaEnum):
     PYNN = {"parameters": {'learning_rate': [0.01, 0.05, 0.1], 'max_epochs': [10, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5],
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
     KERA = {"parameters": {}}
-    FUTV = {"parameters": {'voting': ('hard', 'soft')} } #| \
-        #{"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-        #{"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
-        #{"abc__" + str(key): val for key, val in ABC["parameters"].items()} \
-        #    }
+    FUTV = {"parameters": {}} #| \
+       # {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+       # {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
+       # {"abc__" + str(key): val for key, val in ABC["parameters"].items()} \
+       # }
     FUTS =  {"parameters": {'cv': (5, 10, 20)}  } #| \
         #{"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
         #{"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
@@ -445,26 +445,26 @@ class Algorithm(MetaEnum):
     HIST = { "full_name": "Histogram-based Gradient B. Classifier", "search_params": AlgorithmGridSearchParams.HIST, "rfe_compatible": False, "lib": Library.SCIKIT}
     MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC, "rfe_compatible": False, "lib": Library.SCIKIT}
     GPC = { "full_name": "Gaussian Process Classifier", "search_params": AlgorithmGridSearchParams.GPC, "rfe_compatible": False, "lib": Library.SCIKIT}
-    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD, "rfe_compatible": False, "lib": Library.CLEAN}
-    FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD, "rfe_compatible": False, "lib": Library.CLEAN}
-    FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD, "rfe_compatible": False, "lib": Library.CLEAN}
-    FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.FINH, "rfe_compatible": False, "lib": Library.CLEAN}
-    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.CSTK, "rfe_compatible": False, "lib": Library.CLEAN}
-    CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.CSTM, "rfe_compatible": False, "lib": Library.CLEAN}
-    CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CRFD, "rfe_compatible": False, "lib": Library.CLEAN}
-    CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CPCD, "rfe_compatible": False, "lib": Library.CLEAN}
-    CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CFKD, "rfe_compatible": False, "lib": Library.CLEAN}
-    CINH = { "full_name": "Costing + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CINH, "rfe_compatible": False, "lib": Library.CLEAN}
-    WBGK = { "full_name": "WeightedBagging + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.WBGK, "rfe_compatible": False, "lib": Library.CLEAN}
-    WBGM = { "full_name": "WeightedBagging + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.WBGM, "rfe_compatible": False, "lib": Library.CLEAN}   
-    WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.WRFD, "rfe_compatible": False, "lib": Library.CLEAN}
-    WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.WPCD, "rfe_compatible": False, "lib": Library.CLEAN}
-    WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.WFKD, "rfe_compatible": False, "lib": Library.CLEAN}
-    WINH = { "full_name": "WeightedBagging + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.WINH, "rfe_compatible": False, "lib": Library.CLEAN}
-    CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CLRF, "rfe_compatible": False, "lib": Library.CLEAN}
-    CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CLPC, "rfe_compatible": False, "lib": Library.CLEAN}
-    CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK, "rfe_compatible": False, "lib": Library.CLEAN}
-    CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH, "rfe_compatible": False, "lib": Library.CLEAN}
+    #FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.FINH, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.CSTK, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.CSTM, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CRFD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CPCD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CFKD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CINH = { "full_name": "Costing + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CINH, "rfe_compatible": False, "lib": Library.CLEAN}
+    #WBGK = { "full_name": "WeightedBagging + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.WBGK, "rfe_compatible": False, "lib": Library.CLEAN}
+    #WBGM = { "full_name": "WeightedBagging + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.WBGM, "rfe_compatible": False, "lib": Library.CLEAN}   
+    #WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.WRFD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.WPCD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.WFKD, "rfe_compatible": False, "lib": Library.CLEAN}
+    #WINH = { "full_name": "WeightedBagging + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.WINH, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CLRF, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CLPC, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK, "rfe_compatible": False, "lib": Library.CLEAN}
+    #CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH, "rfe_compatible": False, "lib": Library.CLEAN}
     VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False, "lib": Library.SCIKIT}
     TORA = { "full_name":  "PyTorch ReLu+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
     TORS = { "full_name":  "PyTorch ReLu+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
