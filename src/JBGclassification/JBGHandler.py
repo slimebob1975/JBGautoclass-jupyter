@@ -1220,6 +1220,9 @@ class ModelHandler:
         # 2. If at least comparable on test and train data and with lower standard deviation, it is better
         elif test_score >= best_test_score and train_score >= best_train_score and train_stdev < best_stdev:
             return True
+        # 3. If strictly better on test and the difference between train and test is less than or equal to 1*stdev
+        elif test_score > best_test_score and abs(train_score - test_score) <= 1*train_stdev:
+            return True
         else:
             return False
 
