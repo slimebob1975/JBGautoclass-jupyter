@@ -24,6 +24,36 @@
                 "description_tooltip": "Enter a distinct project name for the model"
             }
         },
+        "sql_username": {
+            "type": "Text",
+            "params": {
+                "value": "",
+                "disabled": false,
+                "placeholder": "Enter username",
+                "description": "Username:",
+                "description_tooltip": "Enter your SQL username for logging into the database"
+            }
+        },
+        "sql_password": {
+            "type": "Password",
+            "params": {
+                "value": "",
+                "disabled": false,
+                "placeholder": "Enter password",
+                "description": "Password:",
+                "description_tooltip": "Enter your SQL password for login to the database"
+            }
+        },
+        "sql_trusted_connection": {
+            "type": "Checkbox",
+            "params": {
+                "value": false,
+                "disabled": false,
+                "indent": true,
+                "description": "Trusted connection",
+                "description_tooltip": "Use Windows user to log in to the database"
+            }
+        },
         "data_catalogs_dropdown": {
             "type": "Dropdown",
             "params": {
@@ -385,6 +415,9 @@
         "logo",
         "welcome",
         "project",
+        "sql_username",
+        "sql_password",
+        "sql_trusted_connection",
         "data_catalogs_dropdown",
         "data_tables_dropdown",
         "models_form",
@@ -405,6 +438,9 @@
     "sections": {
         "data": [
             "project",
+            "sql_username",
+            "sql_password",
+            "sql_trusted_connection",
             "data_catalogs_dropdown",
             "data_tables_dropdown",
             "models_dropdown",

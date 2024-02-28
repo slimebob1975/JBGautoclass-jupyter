@@ -26,8 +26,8 @@ connection = {
 
     # User information for classification
     # Notice: ignored if trusted_connection = "true".
-    "class_username": "some_fake_name",
-    "class_password": "",
+    "sql_username": "some_fake_name",
+    "sql_password": "",
 
     # Database catalog for data to be classified
     "data_catalog": "DatabaseTwo",
@@ -50,11 +50,6 @@ connection = {
     # The unique key index in the data table by which each row is
     # uniquely identied
     "id_column": "id",
-
-    # User information for data table access.
-    # Notice: ignored if trusted_connection = "true"
-    "data_username": "some_fake_name",
-    "data_password": "",
 }
 
 # Specified modes of operation

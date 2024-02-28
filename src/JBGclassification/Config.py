@@ -43,16 +43,14 @@ class Config:
         "connection.trusted_connection": "<trusted_connection>",
         "connection.class_catalog": "<class_catalog>", 
         "connection.class_table": "<class_table>",
-        "connection.class_username": "<class_username>",
-        "connection.class_password": "<class_password>",
+        "connection.sql_username": "<sql_username>",
+        "connection.sql_password": "<sql_password>",
         "connection.data_catalog": "<data_catalog>",
         "connection.data_table": "<data_table>",
         "connection.class_column": "<class_column>",
         "connection.data_text_columns": "<data_text_columns>",
         "connection.data_numerical_columns": "<data_numerical_columns>",
         "connection.id_column": "<id_column>",
-        "connection.data_username": "<data_username>",
-        "connection.data_password": "<data_password>",
         "mode.train": "<train>",
         "mode.predict": "<predict>",
         "mode.mispredicted": "<mispredicted>",
@@ -80,21 +78,19 @@ class Config:
 
     @dataclass
     class Connection:
-        odbc_driver: str = "ODBC Driver 13 for SQL Server"
+        odbc_driver: str = "SQL Server"
         host: str = ""
         trusted_connection: bool = True
         class_catalog: str = ""
         class_table: str = ""
-        class_username: str = ""
-        class_password: str = ""
+        sql_username: str = ""
+        sql_password: str = ""
         data_catalog: str = ""
         data_table: str = ""
         class_column: str = ""
         data_text_columns: list = field(default_factory=list)
         data_numerical_columns: list = field(default_factory=list)
         id_column: str = "id"
-        data_username: str = ""
-        data_password: str = ""
 
         def validate(self) -> None:
             """ Throws TypeError if invalid """
@@ -103,8 +99,8 @@ class Config:
                 isinstance(self.host, str),
                 isinstance(self.class_catalog, str),
                 isinstance(self.class_table, str),
-                isinstance(self.class_username, str),
-                isinstance(self.class_password, str),
+                isinstance(self.sql_username, str),
+                isinstance(self.sql_password, str),
                 isinstance(self.data_catalog, str),
                 isinstance(self.data_table, str),
                 isinstance(self.class_column, str),
@@ -126,8 +122,8 @@ class Config:
             
             # Login credentials
             login_credentials = [
-                isinstance(self.data_username, str),
-                isinstance(self.data_password, str)
+                isinstance(self.sql_username, str),
+                isinstance(self.sql_password, str)
             ]
 
             if not all(login_credentials):
@@ -135,12 +131,10 @@ class Config:
 
             # Overriding values
             if self.trusted_connection:
-                self.data_password = ""
-                self.class_password = ""
+                self.sql_password = ""
 
                 username = Config.get_username()
-                self.class_username = username
-                self.data_username = username
+                self.sql_username = username
 
         def update_columns(self, updated_columns: dict) -> dict:
             """ Given the dictionary updated_columns set attributes to values """
@@ -247,14 +241,12 @@ class Config:
                 "password": ""
             }
 
+            params["username"] = self.sql_username
+            params["password"] = self.sql_password
             if type == "class":
                 params["catalog"] = self.class_catalog
-                params["username"] = self.class_username
-                params["password"] = self.class_password
             elif type == "data":
                 params["catalog"] = self.data_catalog
-                params["username"] = self.data_username
-                params["password"] = self.data_password
             else:
                 raise ConfigException(f"Type {type} not acceptable as a connection type")
             
@@ -283,10 +275,8 @@ class Config:
 
         def to_dict(self) -> dict[str, str]:
             """ A dict with the headers for each value """
-            class_username = self.class_username if self.class_username else None
-            class_password= self.class_password if self.class_password else None
-            data_username = self.data_username if self.data_username else None
-            data_password = self.data_password if self.data_password else None
+            sql_username = self.sql_username if self.sql_username else None
+            sql_password= self.sql_password if self.sql_password else None
 
             str_dict = {
                 "title": "Database settings", # 1
@@ -295,16 +285,14 @@ class Config:
                 "Trusted connection":             self.trusted_connection,
                 "Classification Table":           self.class_catalog,
                 "Classification Table":           self.class_table,
-                "Classification Db username (*)": class_username,
-                "Classification Db password (*)": class_password,
+                "MS SQL username (*)":            sql_username,
+                "MS SQL password (*)": sql_password,
                 "Data Catalog":                   self.data_catalog,
                 "Data Table":                     self.data_table,
                 "Classification column":          self.class_column,
                 "Text Data columns (CSV)":        ', '.join(self.data_text_columns),
                 "Numerical Data columns (CSV)":   ', '.join(self.data_numerical_columns),
                 "Unique data id column":          self.id_column,
-                "Data username (*)":              data_username,
-                "Data password (*)":              data_password,
             }
 
             return str_dict
@@ -555,7 +543,7 @@ class Config:
 
         type_dict = types[type]
 
-        shared_parts = f"{self.name}_{self.connection.data_username}_{self.mode_suffix}"
+        shared_parts = f"{self.name}_{self.connection.sql_username}_{self.mode_suffix}"
 
         return f"{type_dict['prefix']}{shared_parts}.{type_dict['suffix']}"
 
@@ -773,16 +761,14 @@ class Config:
                 trusted_connection=module.connection["trusted_connection"],
                 class_catalog=module.connection["class_catalog"],
                 class_table=module.connection["class_table"],
-                class_username=module.connection["class_username"],
-                class_password=module.connection["class_password"],
+                sql_username=module.connection["sql_username"],
+                sql_password=module.connection["sql_password"],
                 data_catalog=module.connection["data_catalog"],
                 data_table=module.connection["data_table"],
                 class_column=module.connection["class_column"],
                 data_text_columns=data_text_columns,
                 data_numerical_columns=data_numerical_columns,
                 id_column=module.connection["id_column"],
-                data_username=module.connection["data_username"],
-                data_password=module.connection["data_password"]
             ),
             Config.Mode(
                 train=module.mode["train"],
@@ -1168,7 +1154,7 @@ class Config:
 
     def get_data_username(self) -> str:
         """ Gets the data user name """
-        return self.connection.data_username
+        return self.connection.sql_username
 
     def get_class_catalog_params(self) -> dict:
         """ Gets params to connect to class database """

@@ -26,16 +26,14 @@ def bare_iris_config() -> Config:
             trusted_connection=True,
             class_catalog="DatabaseOne",
             class_table="ResultTable",
-            class_username="some_fake_name",
-            class_password="",
+            sql_username="some_fake_name",
+            sql_password="",
             data_catalog="DatabaseTwo",
             data_table="InputTable",
             class_column="class",
             data_text_columns=[],
             data_numerical_columns=["sepal-length","sepal-width","petal-length","petal-width"],
             id_column="id",
-            data_username="some_fake_name",
-            data_password=""
         ),
         Config.Mode(
             train=False,
