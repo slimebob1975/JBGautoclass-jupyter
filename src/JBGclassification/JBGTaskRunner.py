@@ -244,7 +244,7 @@ class TaskRunner:
         self.logger.print_progress(message="Retrain model on whole dataset")
         
         filename = self.config.get_model_filename()
-        cross_trained_model = self.mh.load_pipeline_from_file(filename)
+        cross_trained_model = self.mh.load_pipeline_from_file(filename, self.dh)
         if cross_trained_model is None:
             self.handler.logger.print_warning(f"Could not load model for retraining from file: {filename}. Using previoulsy trained model as fallback.")
             cross_trained_model = self.mh.model.pipeline

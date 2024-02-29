@@ -52,13 +52,16 @@ class GUIHandler:
             class_catalog=os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
             class_table=os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
             data_catalog=os.environ.get("DEFAULT_DATA_CATALOG"),
-            data_table=os.environ.get("DEFAULT_DATA_TABLE")
+            data_table=os.environ.get("DEFAULT_DATA_TABLE"),
+            sql_username="",
+            sql_password="",
+            trusted_connection=True
             )
         )
         self.gui_datalayer = DataLayer(config=config, logger=self.logger)
 
         if not self.gui_datalayer.can_connect(verbose=True):
-            sys.exit("GUI Handler could not connect to Server")
+            self.logger.print_info("GUI cound not use trusted connection to connect to the database!")
         
         self.widgets.load_contents()
         
@@ -107,7 +110,9 @@ class GUIHandler:
                         host = os.environ.get("DEFAULT_HOST"),
                         class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
                         class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
-                        trusted_connection = True,
+                        sql_username = data_settings["connection"]["sql_username"],
+                        sql_password = data_settings["connection"]["sql_password"],
+                        trusted_connection = data_settings["connection"]["sql_trusted_connection"],
                         data_catalog = data_settings["data"]["catalog"],
                         data_table = data_settings["data"]["table"],
                         class_column = data_settings["columns"]["class"], 

@@ -10,6 +10,10 @@ class ModelException(Exception):
     def __init__(self, message):
         super().__init__(f"ModelException: {message}")
 
+class ModelInitializationException(Exception):
+    def __init__(self, message):
+        super().__init__(f"ModelException: {message}")
+
 class PipelineException(Exception):
     def __init__(self, message):
         super().__init__(f"PipelineException: {message}")

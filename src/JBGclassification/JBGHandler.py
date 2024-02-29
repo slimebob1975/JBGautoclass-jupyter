@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pathlib import Path
 
 import dill
 import time
@@ -18,15 +19,16 @@ from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split, GridSearchCV)
+from tensorflow import keras
 from imblearn.pipeline import Pipeline
 from stop_words import get_stop_words
 
 from Config import Config
-from JBGMeta import (Algorithm, Preprocess, Reduction, RateType, Estimator, Transform,
+from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estimator, Transform,
                      Oversampling, Undersampling)
-from JBGExceptions import (DatasetException, ModelException, HandlerException, 
+from JBGExceptions import (DatasetException, ModelException, HandlerException, ModelInitializationException, 
     UnstableModelException, PipelineException)
-from JBGTransformers import TextDataToNumbersConverter
+from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 import Helpers
 
 GIVE_EXCEPTION_TRACEBACK = False
@@ -694,11 +696,11 @@ class DatasetHandler:
 class Model:
 
     text_converter: TextDataToNumbersConverter = field(default=None)
+    oversampler: Oversampling = field(default=None)
+    undersampler: Undersampling = field(default=None)
     preprocess: Preprocess = field(default=None)
     reduction: Reduction = field(default=None)
     algorithm: Algorithm = field(default=None)
-    oversampler: Oversampling = field(default=None)
-    undersampler: Undersampling = field(default=None)
     pipeline: Pipeline = field(default=None)
     n_features_out: int = field(default=None)
 
@@ -770,21 +772,38 @@ class ModelHandler:
             self.model = self.load_model_from_file(filename)
 
     # Load ml model
-    def load_model_from_file(self, filename: str) -> Model:
-        
+    def load_model_from_file(self, filename: Path, dh: DatasetHandler = None) -> Model:
+
         # Load model from file, but handle Keras models differently since their algorithm was
         # replaced by a path to model training information
         try:
-            _config, text_converter, (preprocess, reduction, algorithm, oversampler, undersampler), pipeline, n_features = \
-                dill.load(open(filename, 'rb'))
+            config, text_converter, (oversampler, undersampler, preprocess, reduction, algorithm), pipeline, \
+                keras_name, n_features = dill.load(open(filename, 'rb'))
                         
+            # Handle Keras models differently
+            if (keras_name is not None):
+                
+                if dh is None:
+                    raise ModelInitializationException("Could not initialize Keras model: no training or prediction data available!")
+                keras_model = keras.models.load_model(str(filename) + "." + keras_name)
+                
+                try:
+                    # TODO: change explicit MLPKerasClassifier constructor to dynamic KERAS model constructor
+                    # Note: we need to apply the preceeding transforms to original data before initializing the Keras model
+                    keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_original), dh.Y_original)
+                except Exception as e:
+                    raise ModelInitializationException(str(e))
+    
+                # Load the rest of steps of Pipeline and add keras_model
+                pipeline = Pipeline(steps=pipeline.steps + [(keras_name, keras_step)])
+            
             the_model = Model(
                 text_converter=text_converter,
+                oversampler=oversampler,
+                undersampler=undersampler,
                 preprocess=preprocess,
                 reduction=reduction,
                 algorithm=algorithm,
-                oversampler=oversampler,
-                undersampler=undersampler,
                 pipeline=pipeline,
                 n_features_out=n_features
             )
@@ -800,9 +819,9 @@ class ModelHandler:
         return the_model
 
     # load pipeline
-    def load_pipeline_from_file(self, filename: str) -> Pipeline:
+    def load_pipeline_from_file(self, filename: str, init_dh: DatasetHandler = None) -> Pipeline:
         self.handler.logger.print_code("Loading pipeline from", filename)
-        model = self.load_model_from_file(filename)
+        model = self.load_model_from_file(filename, init_dh)
         if model:
             return model.pipeline
         else:
@@ -1351,25 +1370,46 @@ class ModelHandler:
         
         return cv_results
     
-    def save_model_to_file(self, filename):
+    def save_model_to_file(self, filename: Path):
         """ Save ml model and corresponding configuration """
-        
+
         save_config = self.handler.config.get_clean_config()
 
-        # The connection to the model is traced back via a path to the storage directory.
+        # Handle KERAS models differently because of problems with Access denied errors
         try:
-            
-            # Prepare the data to save
-            data = [
-                save_config,
-                self.model.text_converter,
-                (self.model.preprocess, self.model.reduction, self.model.algorithm, self.model.oversampler, self.model.undersampler),
-                self.model.pipeline,
-                self.model.n_features_out
-            ]   
-            
-            # Save the data
-            dill.dump(data, open(filename,'wb'))
+            if self.model.algorithm.lib == Library.KERAS:
+                
+                # Prepare the data to save
+                keras_name = self.model.pipeline.steps[-1][0]
+                data = [
+                    save_config,
+                    self.model.text_converter,
+                    (self.model.oversampler, self.model.undersampler, self.model.preprocess, self.model.reduction, self.model.algorithm),
+                    Pipeline(steps=self.model.pipeline.steps[:-1]),
+                    keras_name,
+                    self.model.n_features_out
+                ]   
+                
+                # Save the data minus the KERAS model
+                dill.dump(data, open(filename,'wb'))
+
+                # Save the KERAS model separately
+                self.model.pipeline.steps[-1][-1].model_.save(str(filename) + "." + keras_name)
+
+            else: # Non KERAS models
+                
+                # Prepare the data to save
+                data = [
+                    save_config,
+                    self.model.text_converter,
+                    (self.model.oversampler, self.model.undersampler, self.model.preprocess, self.model.reduction, self.model.algorithm),
+                    self.model.pipeline,
+                    None,                       # Placeholder for Keras model name (unused)
+                    self.model.n_features_out
+                ]   
+                
+                # Save the data
+                dill.dump(data, open(filename,'wb'))
 
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on saving {self.model.algorithm.lib.get_full_name()} model to file: {e}")

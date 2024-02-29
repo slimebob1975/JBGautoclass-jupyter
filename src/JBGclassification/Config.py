@@ -80,7 +80,7 @@ class Config:
     class Connection:
         odbc_driver: str = "SQL Server"
         host: str = ""
-        trusted_connection: bool = True
+        trusted_connection: bool = False
         class_catalog: str = ""
         class_table: str = ""
         sql_username: str = ""
