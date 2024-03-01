@@ -1668,18 +1668,26 @@ class PredictionsHandler:
             try:
                 Y_prob_ct = ct_pipe.predict_proba(self.X_mispredicted)
                 Y_prob_ft = full_pipe.predict_proba(self.X_mispredicted)
+                ndim = Y_prob_ct.ndim
             except TypeError:
                 Y_prob_ct = ct_pipe.predict_proba(self.X_mispredicted.to_numpy())
                 Y_prob_ft = full_pipe.predict_proba(self.X_mispredicted.to_numpy())
+                ndim = Y_prob_ct.ndim
             Y_prob = []
-            i = 0
-            for model in model_not.to_numpy():
-                Y_prob.append(Y_prob_ct[i,:] if model == self.CROSS_TRAINED_MODEL else Y_prob_ft[i,:])
-                i += 1
+            
+            # Handle the case of only one mispredicted data row
+            if ndim == 1:
+                Y_prob.append(Y_prob_ct[:] if model_not.iloc[0] == self.CROSS_TRAINED_MODEL else Y_prob_ft[:])
+            else:
+                # Handle the case of more than one mispredicted data row
+                i = 0
+                for model in model_not.to_numpy():
+                    Y_prob.append(Y_prob_ct[i,:] if model == self.CROSS_TRAINED_MODEL else Y_prob_ft[i,:])
+                    i += 1
             Y_prob = np.array(Y_prob)
             could_predict_proba = True
         except Exception as e:
-            self.handler.logger.print_key_value_pair("Could not predict probabilities", e)
+            self.handler.logger.print_key_value_pair("Could not predict probabilities for most mispredicted", e)
             could_predict_proba = False
 
         #  Re-insert original data columns into mispredicted data DataFrame but drop the class column
