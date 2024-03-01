@@ -12,7 +12,7 @@ from Config import Config as Cf
 from Config import period_to_brackets, to_quoted_string
 from JBGMeta import  RateType
 from DataLayer.Base import DataLayerBase
-from JBGExceptions import DataLayerException
+from JBGExceptions import DataLayerException, SQLException
 
 
 class Logger(Protocol):
@@ -325,42 +325,67 @@ class DataLayer(DataLayerBase):
 
     def get_dataset(self, num_rows: int = None) -> list:
         """ Gets the needed data from the database """
+        
+        # Calculate the maximum number of rows that can be fetched from the database
         num_rows = num_rows if num_rows else self.config.get_data_limit()
-        query = self.get_data_query(num_rows)
         
-        query += f" ORDER BY [{self.config.get_class_column_name()}] DESC"
-        
-        self.logger.print_query(type="Classification data", query=query)
+        # To be able to fetch the correct number of data rows, we need to find the 
+        # data distribution for each class
+        data_dist = self.count_class_distribution()
 
+        # Remove the unpredicted data counts if no predictions should be performed and sum up
+        if self.config.mode.predict == False:
+            for key in ["", "NULL", None]:
+                data_dist.pop(key, None)
+            max_num_rows = sum(data_dist.values())
+            num_rows = min(num_rows, max_num_rows)
+        
+        # Start fetching the data from the database
         try:
-            # Get a sql handler and connect to data database
-            sqlHelper = self.get_connection()
-
-             # Setup and execute a query to get the wanted data. 
+        
+            # Setup and execute a query to get the wanted data. 
             # 
             # The query has the form 
             # 
-            #   SELECT columns FROM ( SELECT columns FROM table ORDER BY NEWID()) ORDER BY class_column
+            #   SELECT TOP(columns) FROM ( SELECT TOP(columns) FROM table ORDER BY NEWID()) ORDER BY class_column
             #
             # to ensure a random selection (if not all rows are chosen) and ordering of data, and a 
             # subsequent sorting by class_column to put the NULL-classification last
             #
-            
             # Now we are ready to execute the sql query
             # By default, all fetched data is placed in one long 1-dim list. The alternative is to read by chunks.
             num_lines = 0
-            
-            data = []
-            if sqlHelper.execute_query(query, get_data=True):
-                read_data_function = (
-                    sqlHelper.read_next,
-                    {
-                        "chunksize": self.SQL_CHUNKSIZE if self.SQL_USE_CHUNKS else None
-                    }
-                )
-                data = self.parse_dataset(num_rows, use_chunks=self.SQL_USE_CHUNKS, read_data_func=read_data_function)
+            data = None
+
+            # Get a sql handler and connect to data database
+            sqlHelper = self.get_connection()
+
+            # If network issues comes up, we might need to read by several queries
+            loc_num_rows = num_rows
+            while num_lines < num_rows:
+
+                query = self.get_data_query_with_order(loc_num_rows, True, True)
+                self.logger.print_query(type="Classification data", query=query)
+
+                # Try and catch DataLayerExceptions because of network issues
+                try:
+                    if sqlHelper.execute_query(query, get_data=True):
+                        read_data_function = (
+                            sqlHelper.read_next,
+                            {
+                                "chunksize": self.SQL_CHUNKSIZE if self.SQL_USE_CHUNKS else None
+                            }
+                        )
+                        _data = self.parse_dataset(loc_num_rows, use_chunks=self.SQL_USE_CHUNKS, read_data_func=read_data_function)
+                        data = self.add_data_without_duplicates(old_data = data, new_data = _data)
+                        num_lines = len(data)
                 
-                num_lines = len(data)
+                # In case of SQLException, divide the fetched number of rows by 2 and try again
+                except SQLException as e:
+                    sqlHelper.disconnect()
+                    loc_num_rows = max(self.SQL_CHUNKSIZE, int(loc_num_rows / 2))
+                    sqlHelper = self.get_connection()
+
             self.logger.print_formatted_info(f"Fetched {num_lines} data rows in total")
             
             # Disconnect from database
@@ -371,11 +396,45 @@ class DataLayer(DataLayerBase):
                 return None
             
             return data
-
+        
         except Exception as e:
             self.logger.print_dragon(e)
             raise DataLayerException(f"Something went wrong when fetching dataset ({e})")
 
+    def add_data_without_duplicates(self, old_data: list = None, new_data: list = None) -> list:
+        
+        # Trivial cases where there is no old data or no new data
+        if old_data is None:
+            return new_data
+        elif new_data is None:
+            return old_data
+        else:
+            # Concatenate the old data with the new data
+            data = np.concatenate((old_data, new_data), axis = 0)
+
+            # Get the unique and sorted values of the conatenated data. Since we do not want to
+            # sort the data here, we throw it away but save the return_index to reconstruct the
+            # original order of the concatenated data
+            _, return_index = np.unique(data, axis = 0, return_index=True)
+
+            # Use the data_indices to get the data from the concatenated
+            return data[np.sort(return_index)]
+
+    def get_data_query_with_order(self, num_rows: int, order_by_class: bool = True, descending: bool = True ) -> str:
+        
+        # Build the query for getting data from the database
+        query = self.get_data_query(num_rows)
+
+        # Add the order by class column if needed
+        if order_by_class:
+            query += f" ORDER BY [{self.config.get_class_column_name()}] "
+            if descending: 
+                query += "DESC"
+            else:
+                query += "ASC"
+
+        return query
+    
     def get_mispredicted_query(self, new_class: str, index: int) -> str:
         """ Set together SQL code for the insert """
         query_strings = [

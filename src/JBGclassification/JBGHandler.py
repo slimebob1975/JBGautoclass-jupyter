@@ -789,8 +789,11 @@ class ModelHandler:
                 
                 try:
                     # TODO: change explicit MLPKerasClassifier constructor to dynamic KERAS model constructor
-                    # Note: we need to apply the preceeding transforms to original data before initializing the Keras model
-                    keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_original), dh.Y_original)
+                    # Note: we need to apply the preceeding transforms to data before initializing the Keras model
+                    try:
+                        keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_train), dh.Y_train)
+                    except Exception as e:
+                        keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_prediction), dh.Y_prediction)
                 except Exception as e:
                     raise ModelInitializationException(str(e))
     
