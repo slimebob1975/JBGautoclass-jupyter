@@ -362,11 +362,13 @@ class DataLayer(DataLayerBase):
             sqlHelper = self.get_connection()
 
             # If network issues comes up, we might need to read by several queries
+            num_queries = 0
             loc_num_rows = num_rows
             while num_lines < num_rows:
 
                 query = self.get_data_query_with_order(loc_num_rows, True, True)
                 self.logger.print_query(type="Classification data", query=query)
+                num_queries += 1
 
                 # Try and catch SQLException because of network issues
                 try:
@@ -383,8 +385,11 @@ class DataLayer(DataLayerBase):
                 
                 # In case of SQLException, divide the fetched number of rows by 2 and try again
                 except SQLException as e:
+                    if num_queries < 2:
+                        self.logger.print_formatted_info(f"An SQL Exception occured {str(e)}. Using multiple queries for dataset...")
                     sqlHelper.disconnect()
                     loc_num_rows = max(self.SQL_CHUNKSIZE, int(loc_num_rows / 2))
+                    self.logger.print_formatted_info(f"\tScaling down number of rows per query to: {str(loc_num_rows)}")
                     sqlHelper = self.get_connection()
                 
                 # Do not fetch more than necessary
