@@ -6,6 +6,7 @@ from typing import Callable, Protocol
 import hashlib
 
 import numpy as np
+import pandas as pd
 import pyodbc
 import SqlHelper.JBGSqlHelper as sql
 from Config import Config as Cf
@@ -367,7 +368,7 @@ class DataLayer(DataLayerBase):
                 query = self.get_data_query_with_order(loc_num_rows, True, True)
                 self.logger.print_query(type="Classification data", query=query)
 
-                # Try and catch DataLayerExceptions because of network issues
+                # Try and catch SQLException because of network issues
                 try:
                     if sqlHelper.execute_query(query, get_data=True):
                         read_data_function = (
@@ -385,6 +386,11 @@ class DataLayer(DataLayerBase):
                     sqlHelper.disconnect()
                     loc_num_rows = max(self.SQL_CHUNKSIZE, int(loc_num_rows / 2))
                     sqlHelper = self.get_connection()
+                
+                # Do not fetch more than necessary
+                loc_num_rows = min(loc_num_rows, num_rows - num_lines)
+                if loc_num_rows < 1:
+                    break
 
             self.logger.print_formatted_info(f"Fetched {num_lines} data rows in total")
             
@@ -409,16 +415,24 @@ class DataLayer(DataLayerBase):
         elif new_data is None:
             return old_data
         else:
-            # Concatenate the old data with the new data
-            data = np.concatenate((old_data, new_data), axis = 0)
 
-            # Get the unique and sorted values of the conatenated data. Since we do not want to
-            # sort the data here, we throw it away but save the return_index to reconstruct the
-            # original order of the concatenated data
-            _, return_index = np.unique(data, axis = 0, return_index=True)
+           # Get column names and unique index of the dataset
+            column_names = self.config.get_column_names()
+            unique_index = self.config.get_id_column_name()
 
-            # Use the data_indices to get the data from the concatenated
-            return data[np.sort(return_index)]
+            # Convert both new and old data into panda Dataframes
+            old_df = pd.DataFrame(old_data, columns = column_names)
+            new_df = pd.DataFrame(new_data, columns = column_names)
+
+            # Merge the two DataFrames
+            concatenated_df = pd.concat([old_df, new_df], axis = 0)
+
+            # Get rid of duplicate data rows with the same index (keep the old)
+            concatenated_df.drop_duplicates(subset = [unique_index], keep = 'first', inplace=True)
+            
+            # Return the resulting data in numpy format
+            return concatenated_df.to_numpy()
+
 
     def get_data_query_with_order(self, num_rows: int, order_by_class: bool = True, descending: bool = True ) -> str:
         
