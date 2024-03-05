@@ -385,11 +385,12 @@ class DataLayer(DataLayerBase):
                 
                 # In case of SQLException, divide the fetched number of rows by 2 and try again
                 except SQLException as e:
+                    self.logger.print_formatted_info(f"An SQL Exception occured {str(e)}.")
                     if num_queries < 2:
-                        self.logger.print_formatted_info(f"An SQL Exception occured {str(e)}. Using multiple queries for dataset...")
+                        self.logger.print_formatted_info(f"Using multiple queries for dataset...")
                     sqlHelper.disconnect()
                     loc_num_rows = max(self.SQL_CHUNKSIZE, int(loc_num_rows / 2))
-                    self.logger.print_formatted_info(f"\tScaling down number of rows per query to: {str(loc_num_rows)}")
+                    self.logger.print_formatted_info(f"Scaling down number of rows per query to: {str(loc_num_rows)}")
                     sqlHelper = self.get_connection()
                 
                 # Do not fetch more than necessary
