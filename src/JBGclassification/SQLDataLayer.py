@@ -440,7 +440,8 @@ class DataLayer(DataLayerBase):
             if num_lines == 0:
                 return None
             
-            return data
+            # Make sure to sort the data before returning
+            return self.sort_data_on_class_column(data) 
         
         except Exception as e:
             self.logger.print_dragon(e)
@@ -472,6 +473,16 @@ class DataLayer(DataLayerBase):
             # Return the resulting data in numpy format
             return concatenated_df.to_numpy()
 
+    def sort_data_on_class_column(self, data, asc = False):
+        
+        class_column = self.config.get_class_column()
+        column_names = self.config.get_column_names()
+
+        df = pd.DataFrame(data, columns = column_names)
+        df.sort_values(by = class_column, axis=0, ascending=asc, inplace=True, \
+            kind='quicksort', na_position='last', ignore_index=False, key=None)
+
+        return df.to_numpy()
 
     def get_data_query_with_order(self, num_rows: int, order_by_class: bool = True, descending: bool = True ) -> str:
         
