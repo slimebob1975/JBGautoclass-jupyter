@@ -2,6 +2,7 @@
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+import time
 from typing import Callable, Protocol
 import hashlib
 
@@ -119,6 +120,8 @@ class Config(Protocol):
 class DataLayer(DataLayerBase):
     SQL_CHUNKSIZE = 1000 #TODO: Decide how many
     SQL_USE_CHUNKS = True
+    SQL_STALLED_FETCHES_LIMIT = 5
+    SQL_MIN_PERCENT_FETCH = 0.05
 
     config: Config
     logger: Logger
@@ -356,6 +359,8 @@ class DataLayer(DataLayerBase):
             # Now we are ready to execute the sql query
             # By default, all fetched data is placed in one long 1-dim list. The alternative is to read by chunks.
             num_lines = 0
+            num_added_lines = 0
+            num_stalled_fetches = 0
             data = None
 
             # Get a sql handler and connect to data database
@@ -380,8 +385,16 @@ class DataLayer(DataLayerBase):
                             }
                         )
                         _data = self.parse_dataset(loc_num_rows, use_chunks=self.SQL_USE_CHUNKS, read_data_func=read_data_function)
+                        if data is None:
+                            old_num_lines = 0
+                        else:
+                            old_num_lines = len(data)
                         data = self.add_data_without_duplicates(old_data = data, new_data = _data)
                         num_lines = len(data)
+                        num_added_lines = num_lines - old_num_lines
+                        num_lines_missing = num_rows - num_lines
+                        if num_added_lines > 0:
+                            self.logger.print_formatted_info(f"Last query added {str(num_added_lines)} to dataset. Still needs {str(num_lines_missing)}.")
                 
                 # In case of SQLException, divide the fetched number of rows by 2 and try again
                 except SQLException as e:
@@ -389,14 +402,34 @@ class DataLayer(DataLayerBase):
                     if num_queries < 2:
                         self.logger.print_formatted_info(f"Using multiple queries for dataset...")
                     sqlHelper.disconnect()
-                    loc_num_rows = max(self.SQL_CHUNKSIZE, int(loc_num_rows / 2))
+                    loc_num_rows = int(loc_num_rows / 2)
                     self.logger.print_formatted_info(f"Scaling down number of rows per query to: {str(loc_num_rows)}")
                     sqlHelper = self.get_connection()
+                
+                # Break the while loop when fetching has stalled
+                if data is not None and num_added_lines == 0:
+                    num_stalled_fetches += 1
+                    self.logger.print_warning(f"Warning! Last {str(num_stalled_fetches)} queries added no rows to dataset")
+                    if num_stalled_fetches > self.SQL_STALLED_FETCHES_LIMIT:
+                        self.logger.print_formatted_info(f"Data fetching stalled. Breaking the fetch loop...")
+                        break
+                else:
+                    num_stalled_fetches = 0
                 
                 # Do not fetch more than necessary
                 loc_num_rows = min(loc_num_rows, num_rows - num_lines)
                 if loc_num_rows < 1:
                     break
+
+                # On the other hand, if we add very litte data, add one chuncksize to number of fetched lines
+                # TODO: use class constant instead of hard-coded number 
+                if data is not None and num_added_lines <= int(loc_num_rows * self.SQL_MIN_PERCENT_FETCH):
+                    loc_num_rows += self.SQL_CHUNKSIZE
+                    self.logger.print_formatted_info(f"Scaling up number of rows per query to: {str(loc_num_rows)}")
+
+                # In case of debug mode, wait five seconds before continuing
+                if self.config.debug:
+                    time.sleep(5)
 
             self.logger.print_formatted_info(f"Fetched {num_lines} data rows in total")
             
