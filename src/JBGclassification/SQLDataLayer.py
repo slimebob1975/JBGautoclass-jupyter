@@ -372,12 +372,15 @@ class DataLayer(DataLayerBase):
             while num_lines < num_rows:
 
                 query = self.get_data_query_with_order(loc_num_rows, True, True)
-                self.logger.print_query(type="Classification data", query=query)
+                if num_queries == 0:
+                    self.logger.print_query(type="Classification data", query=query)
                 num_queries += 1
 
-                # Try and catch SQLException because of network issues
+                # Try and possibly catch SQLException because of network issues
                 try:
                     if sqlHelper.execute_query(query, get_data=True):
+                        
+                        # Get the data from the current query
                         read_data_function = (
                             sqlHelper.read_next,
                             {
@@ -385,16 +388,20 @@ class DataLayer(DataLayerBase):
                             }
                         )
                         _data = self.parse_dataset(loc_num_rows, use_chunks=self.SQL_USE_CHUNKS, read_data_func=read_data_function)
+                        
+                        # Take care of retreived data
                         if data is None:
                             old_num_lines = 0
                         else:
                             old_num_lines = len(data)
                         data = self.add_data_without_duplicates(old_data = data, new_data = _data)
+
+                        # Keep track of the progress
                         num_lines = len(data)
                         num_added_lines = num_lines - old_num_lines
                         num_lines_missing = num_rows - num_lines
                         if num_added_lines > 0:
-                            self.logger.print_formatted_info(f"Last query added {str(num_added_lines)} to dataset. Still needs {str(num_lines_missing)}.")
+                            self.logger.print_formatted_info(f"Last query added {str(num_added_lines)} to dataset. (Still missing {str(num_lines_missing)}.)")
                 
                 # In case of SQLException, divide the fetched number of rows by 2 and try again
                 except SQLException as e:
@@ -440,8 +447,10 @@ class DataLayer(DataLayerBase):
             if num_lines == 0:
                 return None
             
-            # Make sure to sort the data before returning
-            return self.sort_data_on_class_column(data) 
+            # If multiple querires were used, make sure to sort the data before returning since the SQL sorting most likely was corrupted
+            if num_queries > 1:
+                data = self.sort_data_on_class_column(data)
+            return data
         
         except Exception as e:
             self.logger.print_dragon(e)
