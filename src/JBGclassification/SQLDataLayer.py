@@ -484,7 +484,7 @@ class DataLayer(DataLayerBase):
 
     def sort_data_on_class_column(self, data, asc = False):
         
-        class_column = self.config.get_class_column()
+        class_column = self.config.get_class_column_name()
         column_names = self.config.get_column_names()
 
         df = pd.DataFrame(data, columns = column_names)

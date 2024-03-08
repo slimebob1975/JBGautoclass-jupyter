@@ -286,7 +286,7 @@ class Config:
                 "Classification Table":           self.class_catalog,
                 "Classification Table":           self.class_table,
                 "MS SQL username (*)":            sql_username,
-                "MS SQL password (*)": sql_password,
+                "MS SQL password (*)":            sql_password,
                 "Data Catalog":                   self.data_catalog,
                 "Data Table":                     self.data_table,
                 "Classification column":          self.class_column,
