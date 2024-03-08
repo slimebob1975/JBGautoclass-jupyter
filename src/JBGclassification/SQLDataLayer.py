@@ -118,9 +118,9 @@ class Config(Protocol):
 
 @dataclass
 class DataLayer(DataLayerBase):
-    SQL_CHUNKSIZE = 1000 #TODO: Decide how many
+    SQL_CHUNKSIZE = 5000
     SQL_USE_CHUNKS = True
-    SQL_STALLED_FETCHES_LIMIT = 5
+    SQL_STALLED_FETCHES_LIMIT = 3
     SQL_MIN_PERCENT_FETCH = 0.05
 
     config: Config
@@ -413,26 +413,33 @@ class DataLayer(DataLayerBase):
                     self.logger.print_formatted_info(f"Scaling down number of rows per query to: {str(loc_num_rows)}")
                     sqlHelper = self.get_connection()
                 
-                # Break the while loop when fetching has stalled
+                # Keep track of stalling, adjust number of rows and break the while loop when fetching has stalled
                 if data is not None and num_added_lines == 0:
                     num_stalled_fetches += 1
                     self.logger.print_warning(f"Warning! Last {str(num_stalled_fetches)} queries added no rows to dataset")
                     if num_stalled_fetches > self.SQL_STALLED_FETCHES_LIMIT:
                         self.logger.print_formatted_info(f"Data fetching stalled. Breaking the fetch loop...")
                         break
+                    else:
+                        # Increase number of lines per query
+                        loc_num_rows += self.SQL_CHUNKSIZE
                 else:
+                    
+                    # We did fetch something, didn't we?
                     num_stalled_fetches = 0
                 
-                # Do not fetch more than necessary
-                loc_num_rows = min(loc_num_rows, num_rows - num_lines)
-                if loc_num_rows < 1:
-                    break
-
-                # On the other hand, if we add very litte data, add one chuncksize to number of fetched lines
-                # TODO: use class constant instead of hard-coded number 
-                if data is not None and num_added_lines <= int(loc_num_rows * self.SQL_MIN_PERCENT_FETCH):
-                    loc_num_rows += self.SQL_CHUNKSIZE
-                    self.logger.print_formatted_info(f"Scaling up number of rows per query to: {str(loc_num_rows)}")
+                    # If we added very litte data last time, add one chuncksize to number of fetched lines.
+                    if data is not None and num_added_lines <= int(loc_num_rows * self.SQL_MIN_PERCENT_FETCH):
+                        loc_num_rows += self.SQL_CHUNKSIZE
+                        self.logger.print_formatted_info(f"Scaling up number of rows per query to: {str(loc_num_rows)}")
+                    
+                    # Next time, do not fetch more than necessary.
+                    else:
+                        loc_num_rows = min(loc_num_rows, num_rows - num_lines)
+                        
+                    # This condiction ensures that we break the loop when finished (maybe not necessary)
+                    if loc_num_rows < 1:
+                        break
 
                 # In case of debug mode, wait five seconds before continuing
                 if self.config.debug:
