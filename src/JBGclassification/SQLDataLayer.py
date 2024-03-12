@@ -402,8 +402,9 @@ class DataLayer(DataLayerBase):
                         num_lines_missing = num_rows - num_lines
                         if num_added_lines > 0:
                             self.logger.print_formatted_info(f"Last query added {str(num_added_lines)} to dataset. (Still missing {str(num_lines_missing)}.)")
+                        
                         # If we are done, we are done
-                        else:
+                        if num_lines_missing == 0:
                             break
                 
                 # In case of SQLException, divide the fetched number of rows by 2 and try again
