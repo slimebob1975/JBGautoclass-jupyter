@@ -118,10 +118,10 @@ class Config(Protocol):
 
 @dataclass
 class DataLayer(DataLayerBase):
-    SQL_CHUNKSIZE = 5000
+    SQL_CHUNKSIZE = 2500
     SQL_USE_CHUNKS = True
     SQL_STALLED_FETCHES_LIMIT = 3
-    SQL_MIN_PERCENT_FETCH = 0.05
+    SQL_MIN_PERCENT_FETCH = 0.025
 
     config: Config
     logger: Logger
@@ -402,6 +402,9 @@ class DataLayer(DataLayerBase):
                         num_lines_missing = num_rows - num_lines
                         if num_added_lines > 0:
                             self.logger.print_formatted_info(f"Last query added {str(num_added_lines)} to dataset. (Still missing {str(num_lines_missing)}.)")
+                        # If we are done, we are done
+                        else:
+                            break
                 
                 # In case of SQLException, divide the fetched number of rows by 2 and try again
                 except SQLException as e:
@@ -412,6 +415,9 @@ class DataLayer(DataLayerBase):
                     loc_num_rows = int(loc_num_rows / 2)
                     self.logger.print_formatted_info(f"Scaling down number of rows per query to: {str(loc_num_rows)}")
                     sqlHelper = self.get_connection()
+                    
+                    # In case of an exception, do not proceed further but try again from the beginning of the loop
+                    continue
                 
                 # Keep track of stalling, adjust number of rows and break the while loop when fetching has stalled
                 if data is not None and num_added_lines == 0:
