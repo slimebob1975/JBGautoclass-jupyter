@@ -1,4 +1,4 @@
-imbalanced_learn=0.10.1
+imbalanced_learn==0.10.1
 ipywidgets==8.0.4
 langdetect==1.0.9
 lexicalrichness==0.5.1
@@ -15,8 +15,8 @@ scikit_learn==1.2.2
 scipy==1.11.1
 stop_words==2018.7.23
 terminal==0.4.0
-dill==0.3.7
-torch==2.0.1+cpu
+dill==0.3.6
+torch==2.2.1
 skorch==0.15.0
 scikeras==0.11.0
-tensorflow==2.13.0
+tensorflow==2.16.1
