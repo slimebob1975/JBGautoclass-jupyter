@@ -6,13 +6,14 @@ import os
 import sys
 import shutil
 from typing import Iterable
-
+import re
 
 import numpy as np
 import pandas
 import IPython.display
 
 DOUBLE_UNDERSCORE = "__"
+EMAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
 def clean_list(dirty_list: list) -> list[str]:
     """ 
@@ -156,6 +157,13 @@ def is_str(val) -> bool:
         isinstance(val, bool) or \
         val_is_datetime is not None
     return not is_other_type 
+
+def is_valid_email(val) -> bool:
+
+    if(re.fullmatch(EMAIL_REGEX, val)):
+        return True
+    else:
+        return False  
     
 def get_datetime(val) -> datetime:
     """ In DatasetHandler.read_data() """

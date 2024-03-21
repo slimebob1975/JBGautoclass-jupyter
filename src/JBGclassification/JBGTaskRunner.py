@@ -311,12 +311,13 @@ class TaskRunner:
         msg['To'] = self.config.mail.notification_email
 
         # Send the message via our own SMTP server.
-        try:
-            s = smtplib.SMTP(self.config.mail.smtp_server)
-            s.send_message(msg)
-            s.quit()
-        except Exception as e:
-            self.logger.print_info("Error sending completion mail:", str(e))
+        if Helpers.is_valid_email(msg['To']):
+            try:
+                s = smtplib.SMTP(self.config.mail.smtp_server)
+                s.send_message(msg)
+                s.quit()
+            except Exception as e:
+                self.logger.print_info("Error sending completion mail:", str(e))
             
         return {}
 
