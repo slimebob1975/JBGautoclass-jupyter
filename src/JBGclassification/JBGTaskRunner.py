@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Protocol
 import copy
+import smtplib
 
 from imblearn.pipeline import Pipeline
 
@@ -292,6 +293,33 @@ class TaskRunner:
             raise PredictionsException("No data to predict on")
 
         return {}
+    
+    def send_completetion_email__task(self) -> dict:
+        
+        # Import the email modules we'll need
+        from email.message import EmailMessage
+
+        # Set content
+        message = "Your last JBG classification task has been completed!\nSincerely yours,\nJBG"
+        msg = EmailMessage()
+        msg.set_content(message)
+
+        # me == the sender's email address
+        # you == the recipient's email address
+        msg['Subject'] = "JBG classification"
+        msg['From'] = "no-reply@iaf.se"
+        msg['To'] = "robert.granat@iaf.se"
+
+        # Send the message via our own SMTP server.
+        try:
+            s = smtplib.SMTP('mail.iaf.se')
+            s.send_message(msg)
+            s.quit()
+        except Exception as e:
+            self.logger.print_info("Error sending completion mail (email and smtp server are still hardcoded!):", str(e))
+            
+        return {}
+
 
 def get_tasks(config: Config) -> list:
     """ Gets a list of tasks for the given config """
@@ -319,5 +347,7 @@ def get_tasks(config: Config) -> list:
             "make_predictions"
         ]
         tasks.extend(predict_tasks)
+        
+    tasks.extend(["send_completetion_email"])
 
     return tasks

@@ -494,11 +494,16 @@ class Config:
 
             return str_dict
 
+    @dataclass
+    class Mail:
+        smtp_server: str = "localhost"
+        notification_email: str = ""
     
     connection: Connection = field(default_factory=Connection)
     mode: Mode  = field(default_factory=Mode)
     io: IO = field(default_factory=IO)
     debug: Debug = field(default_factory=Debug)
+    mail: Mail = field(default_factory=Mail)
     name: str = "iris"
     config_path: Path = None
     script_path: Path = None
