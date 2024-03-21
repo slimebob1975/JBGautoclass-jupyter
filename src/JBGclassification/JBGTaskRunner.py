@@ -300,23 +300,23 @@ class TaskRunner:
         from email.message import EmailMessage
 
         # Set content
-        message = "Your last JBG classification task has been completed!\nSincerely yours,\nJBG"
+        message = "Your last JBG classification task has been completed!\n\nSincerely yours,\nJBG"
         msg = EmailMessage()
         msg.set_content(message)
 
         # me == the sender's email address
         # you == the recipient's email address
         msg['Subject'] = "JBG classification"
-        msg['From'] = "no-reply@iaf.se"
-        msg['To'] = "robert.granat@iaf.se"
+        msg['From'] = "no-reply@jbg.se"
+        msg['To'] = self.config.mail.notification_email
 
         # Send the message via our own SMTP server.
         try:
-            s = smtplib.SMTP('mail.iaf.se')
+            s = smtplib.SMTP(self.config.mail.smtp_server)
             s.send_message(msg)
             s.quit()
         except Exception as e:
-            self.logger.print_info("Error sending completion mail (email and smtp server are still hardcoded!):", str(e))
+            self.logger.print_info("Error sending completion mail:", str(e))
             
         return {}
 

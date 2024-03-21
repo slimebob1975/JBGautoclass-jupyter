@@ -731,6 +731,10 @@ class Widgets:
                 verbose=self.show_info_checkbox.value,
                 model_name=self.model_name
             ),
+            "mail": Config.Mail(
+                smtp_server=os.environ.get("DEFAULT_SMTP_SERVER"),
+                notification_email=os.environ.get("DEFAULT_NOTIFICATION_EMAIL")  
+            ),
             "debug": Config.Debug(
                 on=True,
                 data_limit=self.data_limit.value

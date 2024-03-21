@@ -801,6 +801,10 @@ class Config:
                 model_path=module.io["model_path"],
                 model_name=module.io["model_name"]
             ),
+            Config.Mail(
+                smtp_server=module.mail["smtp_server"],
+                notification_email=module.mail["notification_email"]
+            ),
             Config.Debug(
                 on=module.debug["on"],
                 data_limit=data_limit
