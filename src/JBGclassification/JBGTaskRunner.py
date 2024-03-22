@@ -300,7 +300,7 @@ class TaskRunner:
         from email.message import EmailMessage
 
         # Set content
-        message = "Your last JBG classification task has been completed!\n\nSincerely yours,\nJBG"
+        message = f"Your last JBG classification task \"{self.config.name}\" has been completed!\n\nSincerely yours,\nJBG"
         msg = EmailMessage()
         msg.set_content(message)
 
