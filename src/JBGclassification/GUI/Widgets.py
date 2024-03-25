@@ -59,11 +59,16 @@ class EventHandler:
         print(f"{caller}: {change.name=}, {change.old=}, {change.new=}")
 
     def sql_username_and_password(self, change: Bunch) -> None:
+        
         # Handler for changes in sql username and password text fields
         if not self.widgets.sql_trusted_connection.value:
 
             if change['name'] == 'value':                
-                if self.widgets.sql_username.value != "" and self.widgets.sql_password.value!= "":
+                if self.widgets.sql_username.value != "" and self.widgets.sql_password.value != "":
+                    self.widgets.update_sql_username_and_password(
+                        self.widgets.sql_username.value,
+                        self.widgets.sql_password.value
+                    )
                     self.widgets.update_data_catalogs_dropdown()
                     self.widgets.data_catalogs_dropdown.disabled = False
                 else:
@@ -793,6 +798,10 @@ class Widgets:
         # TODO: This doesn't work as expected (changing the catalog) currently because the datalayer *only* looks at class_catalog
         self.guihandler.set_data_catalog(self.data_catalogs_dropdown.value)
 
+    def update_sql_username_and_password(self, username, password) -> None:
+        self.datalayer.config.connection.sql_username = username
+        self.datalayer.config.connection.sql_password = password
+    
     def update_data_catalogs_dropdown(self) -> None:
         catalog_list = self.datalayer.get_catalogs_as_options()
         updates = {

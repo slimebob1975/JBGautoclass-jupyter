@@ -145,8 +145,11 @@ class DataLayer(DataLayerBase):
             raise ValueError(f"Given ODBC driver ({driver}) cannot be found")
 
         """ Checks that the server connection is valid """
-        if not self.can_connect():
-            raise ValueError(f"Connection to server failed")
+        #print(self.config)
+        if self.config.connection.trusted_connection or \
+            (self.config.connection.sql_username and self.config.connection.sql_password):
+            if not self.can_connect():
+                raise ValueError(f"Connection to server failed")
         
     def get_connection(self) -> sql.JBGSqlHelper:
         """ Get an odbc-based sql handler using the class catalog from the config """

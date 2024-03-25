@@ -55,7 +55,7 @@ class GUIHandler:
             data_table=os.environ.get("DEFAULT_DATA_TABLE"),
             sql_username="",
             sql_password="",
-            trusted_connection=True
+            trusted_connection=False
             )
         )
         self.gui_datalayer = DataLayer(config=config, logger=self.logger)

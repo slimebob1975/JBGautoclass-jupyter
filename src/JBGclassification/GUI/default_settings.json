@@ -31,7 +31,8 @@
                 "disabled": false,
                 "placeholder": "Enter username",
                 "description": "Username:",
-                "description_tooltip": "Enter your SQL username for logging into the database"
+                "description_tooltip": "Enter your SQL username for logging into the database",
+                "continuous_update": false
             }
         },
         "sql_password": {
@@ -41,7 +42,8 @@
                 "disabled": false,
                 "placeholder": "Enter password",
                 "description": "Password:",
-                "description_tooltip": "Enter your SQL password for login to the database"
+                "description_tooltip": "Enter your SQL password for login to the database",
+                "continuous_update": false
             }
         },
         "sql_trusted_connection": {
