@@ -1206,10 +1206,15 @@ class ScoreMetric(MetaEnum):
     def get_parametrized_scorer(self) -> Callable:
         """ Returns a scorer callable based on the ScoreMetric """
         
-        if self.kwargs:
-            return make_scorer(self.callable, **(self.kwargs))
+        if self.name == self.auc:
+            needs_proba = True
         else:
-            return make_scorer(self.callable)
+            needs_proba = False
+
+        if self.kwargs:
+            return make_scorer(self.callable, needs_proba=needs_proba, **(self.kwargs))
+        else:
+            return make_scorer(self.callable, needs_proba=needs_proba)
         
     @classmethod
     def defaultScoreMetric(cls):
