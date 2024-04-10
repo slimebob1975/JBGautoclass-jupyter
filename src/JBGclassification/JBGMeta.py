@@ -41,7 +41,7 @@ from sklearn.linear_model import (LogisticRegression,
                                   PassiveAggressiveClassifier, Perceptron,
                                   RidgeClassifier, SGDClassifier)
 from sklearn.manifold import Isomap, LocallyLinearEmbedding
-from sklearn.metrics import (accuracy_score, average_precision_score,
+from sklearn.metrics import (roc_auc_score, accuracy_score, average_precision_score,
                              balanced_accuracy_score, f1_score, make_scorer,
                              matthews_corrcoef, precision_score, recall_score)
 from sklearn.naive_bayes import (BernoulliNB, ComplementNB, GaussianNB,
@@ -1164,6 +1164,7 @@ class Reduction(MetaEnum):
             num_selected_features=num_selected_features)
 
 class ScoreMetric(MetaEnum):
+    auc = {{"full_name": "Area under ROC curve", "callable": roc_auc_score, "kwargs": {"multi_class": "ovo"}}}
     accuracy = {"full_name": "Accuracy", "callable": accuracy_score, "kwargs": None}
     balanced_accuracy = {"full_name": "Balanced Accuracy", "callable": balanced_accuracy_score, "kwargs": {"adjusted": False}}
     balanced_accuracy_adjusted = {"full_name": "Balanced Accuracy (Adjusted)", "callable": balanced_accuracy_score, "kwargs": {"adjusted": True}}
