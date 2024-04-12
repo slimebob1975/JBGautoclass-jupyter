@@ -1164,7 +1164,7 @@ class Reduction(MetaEnum):
             num_selected_features=num_selected_features)
 
 class ScoreMetric(MetaEnum):
-    #auc = {"full_name": "Area under ROC curve", "callable": roc_auc_score, "kwargs": {"multi_class": "ovo"}}
+    auc = {"full_name": "Area under ROC curve", "callable": 'roc_auc_ovo', "kwargs": None}
     accuracy = {"full_name": "Accuracy", "callable": accuracy_score, "kwargs": None}
     balanced_accuracy = {"full_name": "Balanced Accuracy", "callable": balanced_accuracy_score, "kwargs": {"adjusted": False}}
     balanced_accuracy_adjusted = {"full_name": "Balanced Accuracy (Adjusted)", "callable": balanced_accuracy_score, "kwargs": {"adjusted": True}}
@@ -1206,12 +1206,15 @@ class ScoreMetric(MetaEnum):
     def get_parametrized_scorer(self) -> Callable:
         """ Returns a scorer callable based on the ScoreMetric """
         
-        needs_proba = False
-
-        if self.kwargs:
-            return make_scorer(self.callable, needs_proba=needs_proba, **(self.kwargs))
+        if isinstance(self.callable, str):
+            return self.callable
+        
         else:
-            return make_scorer(self.callable, needs_proba=needs_proba)
+
+            if self.kwargs:
+                return make_scorer(self.callable, **(self.kwargs))
+            else:
+                return make_scorer(self.callable)
         
     @classmethod
     def defaultScoreMetric(cls):
