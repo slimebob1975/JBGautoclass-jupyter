@@ -965,17 +965,13 @@ class ModelHandler:
                 scorer = self.handler.config.get_scoring_mechanism()
                 
                 if not isinstance(scorer, str):
-                
                     try:
                         test_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
                     except TypeError:
                         test_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
                         
                 elif scorer == 'roc_auc_ovo':
-                    try:
-                        test_score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(dh.X_validation), multi_class='ovo')
-                    except TypeError:
-                        test_score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy()), multi_class='ovo')
+                    test_score = self.generate_roc_auc_score(pipeline, dh)
                 else:
                     raise MissingScorerException("Scorer {0} is not supported".format(scorer))
                     
@@ -987,6 +983,24 @@ class ModelHandler:
                 exception = str(traceback.format_exc())
 
         return pipeline, test_score, exception
+    
+    # Help function for generating roc_auc_score in the general case
+    def generate_roc_auc_score(self, pipeline: Pipeline, dh: DatasetHandler):
+        
+        # Multilabel case does not raise an ValueError
+        try:
+            try:
+                score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(dh.X_validation), multi_class='ovo')
+            except TypeError:
+                score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy()), multi_class='ovo')
+        # Binary case
+        except ValueError:
+            try:
+                score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(dh.X_validation)[:, 1], multi_class='ovo')
+            except TypeError:
+                score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy())[:, 1], multi_class='ovo')
+        return score
+        
 
     # Help function for running other functions in parallel
     def execute_n_job(self, func: function, *args: tuple, **kwargs: dict) -> Any:
