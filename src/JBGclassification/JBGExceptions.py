@@ -1,6 +1,10 @@
 class DatasetException(Exception):
     def __init__(self, message):
         super().__init__(f"DatasetException: {message}")
+        
+class MissingScorerException(Exception):
+    def __init__(self, message):
+        super().__init__(f"MissingScorerException: {message}")
 
 class HandlerException(Exception):
     def __init__(self, message):

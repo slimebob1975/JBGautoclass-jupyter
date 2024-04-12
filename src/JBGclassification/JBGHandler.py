@@ -16,7 +16,7 @@ import pandas
 from lexicalrichness import LexicalRichness
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split, GridSearchCV)
 from tensorflow import keras
@@ -26,7 +26,7 @@ from stop_words import get_stop_words
 from Config import Config
 from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estimator, Transform,
                      Oversampling, Undersampling)
-from JBGExceptions import (DatasetException, ModelException, HandlerException, ModelInitializationException, 
+from JBGExceptions import (DatasetException, MissingScorerException, ModelException, HandlerException, ModelInitializationException, 
     UnstableModelException, PipelineException)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 import Helpers
@@ -963,11 +963,22 @@ class ModelHandler:
             # Evaluate on test_data with correct scorer
             if dh.X_validation is not None and dh.Y_validation is not None:
                 scorer = self.handler.config.get_scoring_mechanism()
-                try:
-                    test_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
-                except TypeError:
-                    test_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
-
+                
+                if not isinstance(scorer, str):
+                
+                    try:
+                        test_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
+                    except TypeError:
+                        test_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
+                        
+                elif scorer == 'roc_auc_ovo':
+                    try:
+                        test_score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(dh.X_validation), multi_class='ovo')
+                    except TypeError:
+                        test_score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy()), multi_class='ovo')
+                else:
+                    raise MissingScorerException("Scorer {0} is not supported".format(scorer))
+                    
         except Exception as ex:
             test_score = np.nan
             if not GIVE_EXCEPTION_TRACEBACK:
