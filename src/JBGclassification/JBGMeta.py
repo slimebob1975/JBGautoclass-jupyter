@@ -717,7 +717,7 @@ class Algorithm(MetaEnum):
         return self.call_CST(self.detector)
     
     def call_CST(self, detector) -> Costing:
-        return Costing(detector=detector.call_detector())
+        return Costing(classifier=BaggingClassifier(), detector=detector.call_detector())
 
     def do_CLRF(self, max_iterations: int, size: int)-> CLNI:
         return self.call_CLNI(self.detector)
