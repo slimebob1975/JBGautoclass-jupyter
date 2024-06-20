@@ -696,7 +696,7 @@ class Algorithm(MetaEnum):
         return self.call_WB(self.detector)
     
     def call_WB(self, detector) -> WeightedBagging:
-        return WeightedBagging(detector=detector.call_detector())
+        return WeightedBagging(classifier=BaggingClassifier(), detector=detector.call_detector())
     
     def do_CSTK(self, max_iterations: int, size: int)-> Costing:
         return self.call_CST(self.detector)
