@@ -2,11 +2,7 @@ import sys
 import platform
 from typing import Generator, Iterator, List, Sequence, Union
 from JBGExceptions import SQLException
-
-if platform.system() == 'Windows':
-    import pyodbc
-else:
-    sys.exit("Aborting! This application cannot run on platform: " + str(platform.system()))      
+import pyodbc 
 
 class JBGSqlHelper():
     """JBG SQL helper class, using ODBC to connect to database"""
@@ -61,22 +57,25 @@ class JBGSqlHelper():
         
         connection = [ f"{key.upper()}={value}" for (key,value) in fields.items()]
         
-        return ";".join(connection)
+        return ";".join(connection) + ";Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30";
 
     def build_connection_string(self) -> str:
-        if not self.Trusted_connection:
-            connect_string = \
+        
+        connect_string = \
                 "DRIVER=" + self.Driver + ";" + \
                 "SERVER=" + self.Host + ";" + \
-                "DATABASE=" + self.Catalog + ";" + \
+                "DATABASE=" + self.Catalog + ";"
+        
+        if not self.Trusted_connection:
+                connect_string += \
                 "UID=" + self.Username +";" + \
                 "PWD=" + self.Password + ";"
         else:
-            connect_string = \
-                "DRIVER=" + self.Driver + ";" + \
-                "SERVER=" + self.Host + ";" + \
-                "DATABASE=" + self.Catalog + ";" + \
+            connect_string += \
                 "TRUSTED_CONNECTION=yes;" 
+        
+        connect_string += \
+            "Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30";
         
         return connect_string
 

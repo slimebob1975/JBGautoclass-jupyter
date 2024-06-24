@@ -17,7 +17,7 @@ from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
 
 
 T = TypeVar('T', bound='Config')
-ODBC_drivers = ["SQL Server", "ODBC Driver 13 for SQL Server", "ODBC Driver 17 for SQL Server"]
+ODBC_drivers = ["SQL Server", "ODBC Driver 13 for SQL Server", "ODBC Driver 17 for SQL Server", "ODBC Driver 18 for SQL Server"]
 
 
 @dataclass
