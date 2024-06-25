@@ -57,7 +57,7 @@ class JBGSqlHelper():
         
         connection = [ f"{key.upper()}={value}" for (key,value) in fields.items()]
         
-        return ";".join(connection) + ";Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30";
+        return ";".join(connection) + ";Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30";
 
     def build_connection_string(self) -> str:
         
