@@ -5,6 +5,21 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
 
+def compute_dark_number(df: pd.DataFrame, real: str, predicted: str, alpha: float):
+    
+    # Compute confusion matrix elements
+    TP = len(df[(df[real] == 1) & (df[predicted] == 1)])
+    FP = len(df[(df[real] == 0) & (df[predicted] == 1)])
+    FN = len(df[(df[real] == 1) & (df[predicted] == 0)])
+    
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 0
+    recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+
+    # Calculate dark number using single alpha correction
+    dark_number = alpha * (precision**(-1) - 1) * (2 - recall)
+    
+    return dark_number
+
 # Compute dark number based on one single alpha value
 def compute_dark_number_single_alpha(df: pd.DataFrame, real: str, predicted: str, probability: str):
     
@@ -80,7 +95,7 @@ def main():
     model.fit(X_train, y_train)
 
     # Predict probabilities and classes
-    y_prob = model.predict_proba(X_test)[:, 1]  # Probability of being class 1 (Iris-virginica)
+    y_prob = model.predict_proba(X_test)[:, 1]
     y_pred = model.predict(X_test)
 
     # Create a DataFrame with the real, predicted classes and probabilities
@@ -91,11 +106,13 @@ def main():
     })
 
     # Calculate the dark number estimates
+    dark_number = compute_dark_number(df, 'real', 'predicted', 1.0)
     dark_number_single_alpha = compute_dark_number_single_alpha(df, 'real', 'predicted', 'probability')
     dark_number_separated_alpha = compute_dark_number_separated_alpha(df, 'real', 'predicted', 'probability')
     dark_number_non_linear = compute_dark_number_non_linear(df, 'real', 'predicted', 'probability')
 
     # Print the results
+    print(f"Dark Number (No Alpha): {dark_number}")
     print(f"Dark Number (Single Alpha Correction): {dark_number_single_alpha}")
     print(f"Dark Number (Separated Alpha Correction): {dark_number_separated_alpha}")
     print(f"Dark Number (Non-Linear Scaling): {dark_number_non_linear}")
