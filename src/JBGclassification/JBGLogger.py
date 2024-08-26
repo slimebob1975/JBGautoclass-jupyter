@@ -188,8 +188,7 @@ class JBGLogger(terminal.Logger):
         confusion_matrix: ndarray, 
         class_labels: list,
         classification_matrix: dict, 
-        sample_rates: tuple[str, str] = None,
-        dark_numbers: pd.DataFrame = None) -> None:
+        sample_rates: tuple[str, str]) -> None:
         """ Printing out info about the prediction"""
         self.print_progress(message="Evaluate predictions")
         evaluation_dict = {}
@@ -200,8 +199,6 @@ class JBGLogger(terminal.Logger):
     
         self.display_matrix("Evaluation information", pd.DataFrame.from_dict(data=evaluation_dict, orient="index", columns=[""]))
         self.display_matrix(f"Confusion matrix for evaluation data", pd.DataFrame(confusion_matrix, columns=class_labels, index=class_labels))
-        if not dark_numbers.empty:
-            self.display_matrix(f"Dark number calculations for evaluation data", dark_numbers)
         self.display_matrix(f"Classification matrix for evaluation data", pd.DataFrame.from_dict(classification_matrix).transpose())
 
     def print_progress(self, message: str = None, percent: float = None) -> None:

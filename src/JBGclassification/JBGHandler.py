@@ -44,8 +44,7 @@ class Logger(Protocol):
         confusion_matrix: np.ndarray, 
         class_labels: list,
         classification_matrix: dict, 
-        sample_rates: tuple[str, str] = None,
-        dark_numbers: pd.DataFrame = None) -> None:
+        sample_rates: tuple[str, str] = None) -> None:
         """ Printing out info about the prediction"""
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
@@ -1530,8 +1529,6 @@ class PredictionsHandler:
         # Evaluate predictions (optional)
         accuracy = accuracy_score(Y, self.predictions)
         con_matrix = confusion_matrix(Y, self.predictions)
-        dark_numbers = self.calculate_dark_numbers(pd.Series(Y), pd.Series(self.predictions), \
-                                                   pd.Series([max(row) for row in self.probabilites]))
         class_labels = sorted(set(Y.tolist() + self.predictions.tolist()))
         class_matrix = classification_report(Y, self.predictions, zero_division='warn', output_dict=True)
         self.handler.logger.print_prediction_report(
@@ -1539,9 +1536,7 @@ class PredictionsHandler:
             confusion_matrix=con_matrix,
             class_labels= class_labels,
             classification_matrix=class_matrix,
-            sample_rates= rates,
-            dark_numbers=dark_numbers        
-        )
+            sample_rates= rates)
 
 
     # Evaluates mispredictions

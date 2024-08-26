@@ -12,7 +12,7 @@ def compute_dark_number(real: pd.Series, predicted: pd.Series):
     TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
     # Compute performance metrics
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 0
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 1
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
 
     # Calculate dark number using single alpha correction
@@ -135,7 +135,6 @@ def main():
 
     # Split into train and test datasets
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    y_test = pd.Series(y_test)
 
     # Train a logistic regression model
     model = LogisticRegression(max_iter=200)
@@ -146,23 +145,24 @@ def main():
     print(f"Test accuracy: {accuracy}")
 
     # Predict probabilities and classes
-    y_prob = model.predict_proba(X_test)
+    y_prob = model.predict_proba(X_train)
     y_prob = [max(row) for row in y_prob]
-    y_pred = model.predict(X_test)
+    y_pred = model.predict(X_train)
 
-    # Create a DataFrame with the real, predicted classes and probabilities
+    # Create Series with the real, predicted classes and probabilities
+    y_train = pd.Series(y_train)
     y_pred = pd.Series(y_pred)
     y_prob = pd.Series(y_prob)
 
     # Calculate the dark number estimates
     # Convert to binary classification 
-    y_test_bin = pd.Series(y_test.apply(func=(lambda x: 1 if x == 1 else 0)))
+    y_train_bin = pd.Series(y_train.apply(func=(lambda x: 1 if x == 1 else 0)))
     y_pred_bin = pd.Series(y_pred.apply(func=(lambda x: 1 if x == 1 else 0)))
-    dark_number = compute_dark_number(y_test_bin, y_pred_bin)
-    dark_number_single_alpha = compute_dark_number_single_alpha(y_test_bin, y_pred_bin, y_prob)
-    dark_number_separated_alpha = compute_dark_number_separated_alpha(y_test_bin, y_pred_bin, y_prob)
-    dark_number_non_linear = compute_dark_number_non_linear(y_test_bin, y_pred_bin, y_prob)
-    dark_number_non_linear_alpha = compute_dark_number_non_linear(y_test_bin, y_pred_bin, y_prob, use_alpha=True)
+    dark_number = compute_dark_number(y_train_bin, y_pred_bin)
+    dark_number_single_alpha = compute_dark_number_single_alpha(y_train_bin, y_pred_bin, y_prob)
+    dark_number_separated_alpha = compute_dark_number_separated_alpha(y_train_bin, y_pred_bin, y_prob)
+    dark_number_non_linear = compute_dark_number_non_linear(y_train_bin, y_pred_bin, y_prob)
+    dark_number_non_linear_alpha = compute_dark_number_non_linear(y_train_bin, y_pred_bin, y_prob, use_alpha=True)
 
     # Print the results
     print(f"Dark Number (No Alpha): {dark_number}")
@@ -172,7 +172,7 @@ def main():
     print(f"Dark Number (Non-Linear Scaling with Alpha correction): {dark_number_non_linear_alpha}")
 
     for type in ["single_alpha", "separated_alpha", "non_linear", "non_linear_alpha", "all"]:
-        dark_numbers = compute_dark_numbers(y_test, y_pred, y_prob, type=type, log_base=np.e, root_degree=3)
+        dark_numbers = compute_dark_numbers(y_train, y_pred, y_prob, type=type, log_base=np.e, root_degree=3)
     print(dark_numbers)
     
     
