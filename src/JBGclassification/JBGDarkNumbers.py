@@ -1,17 +1,17 @@
 import numpy as np
 import pandas as pd
-from sklearn.datasets import load_breast_cancer
+from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
+import sys
 
-def compute_dark_number(df: pd.DataFrame, real: str, predicted: str):
+def compute_dark_number(real: pd.Series, predicted: pd.Series):
     
-    # Compute confusion matrix elements
-    TP = len(df[(df[real] == 1) & (df[predicted] == 1)])
-    FP = len(df[(df[real] == 0) & (df[predicted] == 1)])
-    FN = len(df[(df[real] == 1) & (df[predicted] == 0)])
+   # Compute confusion matrix elements
+    TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
+    # Compute performance metrics
     precision = TP / (TP + FP) if (TP + FP) > 0 else 0
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
 
@@ -21,18 +21,17 @@ def compute_dark_number(df: pd.DataFrame, real: str, predicted: str):
     return dark_number
 
 # Compute dark number based on one single alpha value
-def compute_dark_number_single_alpha(df: pd.DataFrame, real: str, predicted: str, probability: str):
+def compute_dark_number_single_alpha(real: pd.Series, predicted: pd.Series, pred_prob: pd.Series):
     
     # Compute confusion matrix elements
-    TP = len(df[(df[real] == 1) & (df[predicted] == 1)])
-    FP = len(df[(df[real] == 0) & (df[predicted] == 1)])
-    FN = len(df[(df[real] == 1) & (df[predicted] == 0)])
+    TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 0
+    # Compute performance metrics 
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 1
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
 
     # Compute the mean certainty of the predictions where real and predicted differ
-    alpha = df[(df[real] != df[predicted])][probability].mean()
+    alpha = pred_prob[real != predicted].mean() if (FP > 0) else 1
     
     # Calculate dark number using single alpha correction
     dark_number = alpha * (precision**(-1) - 1) * (2 - recall)
@@ -41,19 +40,18 @@ def compute_dark_number_single_alpha(df: pd.DataFrame, real: str, predicted: str
 
 # Compute dark number based on two alpha values
 
-def compute_dark_number_separated_alpha(df: pd.DataFrame, real: str, predicted: str, probability: str):
+def compute_dark_number_separated_alpha(real: pd.Series, predicted: pd.Series, pred_prob: pd.Series):
     
     # Compute confusion matrix elements
-    TP = len(df[(df[real] == 1) & (df[predicted] == 1)])
-    FP = len(df[(df[real] == 0) & (df[predicted] == 1)])
-    FN = len(df[(df[real] == 1) & (df[predicted] == 0)])
+    TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 0
+    # Compute performance metrics
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 1
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
 
     # Compute mean certainty for FP and FN
-    alpha_FP = df[(df[real] == 0) & (df[predicted] == 1)][probability].mean() if FP > 0 else 1
-    alpha_FN = df[(df[real] == 1) & (df[predicted] == 0)][probability].mean() if FN > 0 else 1
+    alpha_FP = pred_prob[(real == 0) & (predicted == 1)].mean() if FP > 0 else 1
+    alpha_FN = pred_prob[(real == 1) & (predicted == 0)].mean() if FN > 0 else 1
 
     # Calculate dark number using separated alpha correction
     dark_number = alpha_FP * (precision**(-1) - 1) * alpha_FN * (2 - recall)
@@ -61,59 +59,68 @@ def compute_dark_number_separated_alpha(df: pd.DataFrame, real: str, predicted: 
     return [alpha_FP, alpha_FN], dark_number
 
 # Compute dark number with non-linear scaling
-def compute_dark_number_non_linear(df: pd.DataFrame, real: str, predicted: str, probability: str,  \
+def compute_dark_number_non_linear(real: pd.Series, predicted: pd.Series, pred_prob: pd.Series,  \
                                    use_alpha=False, log_base: float=np.e, root_degree: int=3):
     
     # Compute confusion matrix elements
-    TP = len(df[(df[real] == 1) & (df[predicted] == 1)])
-    FP = len(df[(df[real] == 0) & (df[predicted] == 1)])
-    FN = len(df[(df[real] == 1) & (df[predicted] == 0)])
+    TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 0
+    # Compute performance metrics
+    precision = TP / (TP + FP) if (TP + FP) > 0 else 1
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
 
     # Alpha calculation where real and predicted differs
     if use_alpha:
-        alpha = df[(df[real] != df[predicted])][probability].mean()
+        alpha = pred_prob[real != predicted].mean() if (FP > 0) else 1
     else:
         alpha = 1.0
 
     # Calculate dark number using non-linear scaling
-    dark_number = alpha * np.log(precision**(-1)) / np.log(log_base) * (2 - recall**(1/root_degree))
+    dark_number = alpha * np.log(precision**(-1)) / np.log(log_base) * (2 - recall**(1 / root_degree))
     
-    return alpha if use_alpha else None, dark_number
+    return alpha if use_alpha else 1.0, dark_number
 
 # Unified interface for calculating dark numbers
-def compute_dark_numbers(df, real_target, pred_target, prob_pred, type=None, log_base=np.e, root_degree=3):
+def compute_dark_numbers(real_target: pd.Series, pred_target: pd.Series, prob_pred: pd.Series, \
+                         type="base", log_base=np.e, root_degree=3):
 
-    df_mod = df.copy(deep=True)
-    
+    # This DataFrame will hold the results
     dark_numbers = pd.DataFrame(columns=["type", "target", "alphas", "dark_number"])
 
-    # Compute dark number for each type of dark number
-    for target in df[real_target].unique():
+    # What types of dark numbers to consider?
+    if type == "all":
+        types = ["base", "single_alpha", "separated_alpha", "non_linear", "non_linear_alpha"]
+    else:
+        types = [type]
 
-        # Convert to binary classification 
-        # TODO: check why it produces the same results for each target
-        df_mod[real_target] = df_mod[real_target].apply(func=(lambda x: 1 if x == target else 0))
-        df_mod[pred_target] = df_mod[pred_target].apply(func=(lambda x: 1 if x == target else 0))
+    # Compute dark number for each type
+    for type in types:
+    
+    # Compute dark number for each target in the classification
+        for target in real_target.unique():
 
-        if type == "single_alpha":
-            alpha, dark_number = compute_dark_number_single_alpha(df_mod, real_target, pred_target, prob_pred)
-        elif type == "separated_alpha":
-            alpha, dark_number = compute_dark_number_separated_alpha(df_mod, real_target, pred_target, prob_pred)
-        elif type == "non_linear":
-            alpha, dark_number = compute_dark_number_non_linear(df_mod, real_target, pred_target, prob_pred, \
-                                                         use_alpha=False, log_base=log_base, root_degree=root_degree)
-        elif type == "non_linear_alpha":
-            alpha, dark_number = compute_dark_number_non_linear(df_mod, real_target, pred_target, prob_pred, \
-                                                         use_alpha=True, log_base=log_base, root_degree=root_degree)
-        else:
-            dark_number = compute_dark_number(df_mod, real_target, pred_target)
-            alpha = None    
-        
-        row = {"type": type, "target": target, "alphas": alpha, "dark_number": dark_number}
-        dark_numbers.loc[len(dark_numbers)] = row
+            # Convert to binary classification 
+            real_target_bin = pd.Series(real_target.apply(func=(lambda x: 1 if x == target else 0)))
+            pred_target_bin = pd.Series(pred_target.apply(func=(lambda x: 1 if x == target else 0)))
+
+            if type == "base":
+                dark_number = compute_dark_number(real_target_bin, pred_target_bin)
+                alpha = 1.0   
+            elif type == "single_alpha":
+                alpha, dark_number = compute_dark_number_single_alpha(real_target_bin, pred_target_bin, prob_pred)
+            elif type == "separated_alpha":
+                alpha, dark_number = compute_dark_number_separated_alpha(real_target_bin, pred_target_bin, prob_pred)
+            elif type == "non_linear":
+                alpha, dark_number = compute_dark_number_non_linear(real_target_bin, pred_target_bin, prob_pred, \
+                                                            use_alpha=False, log_base=log_base, root_degree=root_degree)
+            elif type == "non_linear_alpha":
+                alpha, dark_number = compute_dark_number_non_linear(real_target_bin, pred_target_bin, prob_pred, \
+                                                            use_alpha=True, log_base=log_base, root_degree=root_degree)
+            else:
+                raise ValueError(f"The type of dark number is not supported: {type}")
+            
+            row = {"type": type, "target": target, "alphas": alpha, "dark_number": dark_number}
+            dark_numbers.loc[len(dark_numbers)] = row
         
     return dark_numbers
 
@@ -122,42 +129,51 @@ def main():
     print("Dark number computations")
 
     # Load the Breast Cancer dataset
-    data = load_breast_cancer()
+    data = load_iris()
     X = data.data
     y = data.target
 
     # Split into train and test datasets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    y_test = pd.Series(y_test)
 
     # Train a logistic regression model
     model = LogisticRegression(max_iter=200)
     model.fit(X_train, y_train)
+    accuracy = model.score(X_train, y_train)
+    print(f"Train accuracy: {accuracy}")
+    accuracy = model.score(X_test, y_test)
+    print(f"Test accuracy: {accuracy}")
 
     # Predict probabilities and classes
-    y_prob = model.predict_proba(X_test)[:, 1]
+    y_prob = model.predict_proba(X_test)
+    y_prob = [max(row) for row in y_prob]
     y_pred = model.predict(X_test)
 
     # Create a DataFrame with the real, predicted classes and probabilities
-    df = pd.DataFrame({
-        'real': y_test,
-        'predicted': y_pred,
-        'probability': y_prob
-    })
+    y_pred = pd.Series(y_pred)
+    y_prob = pd.Series(y_prob)
 
     # Calculate the dark number estimates
-    dark_number = compute_dark_number(df, 'real', 'predicted')
-    dark_number_single_alpha = compute_dark_number_single_alpha(df, 'real', 'predicted', 'probability')
-    dark_number_separated_alpha = compute_dark_number_separated_alpha(df, 'real', 'predicted', 'probability')
-    dark_number_non_linear = compute_dark_number_non_linear(df, 'real', 'predicted', 'probability')
+    # Convert to binary classification 
+    y_test_bin = pd.Series(y_test.apply(func=(lambda x: 1 if x == 1 else 0)))
+    y_pred_bin = pd.Series(y_pred.apply(func=(lambda x: 1 if x == 1 else 0)))
+    dark_number = compute_dark_number(y_test_bin, y_pred_bin)
+    dark_number_single_alpha = compute_dark_number_single_alpha(y_test_bin, y_pred_bin, y_prob)
+    dark_number_separated_alpha = compute_dark_number_separated_alpha(y_test_bin, y_pred_bin, y_prob)
+    dark_number_non_linear = compute_dark_number_non_linear(y_test_bin, y_pred_bin, y_prob)
+    dark_number_non_linear_alpha = compute_dark_number_non_linear(y_test_bin, y_pred_bin, y_prob, use_alpha=True)
 
     # Print the results
     print(f"Dark Number (No Alpha): {dark_number}")
     print(f"Dark Number (Single Alpha Correction): {dark_number_single_alpha}")
     print(f"Dark Number (Separated Alpha Correction): {dark_number_separated_alpha}")
     print(f"Dark Number (Non-Linear Scaling): {dark_number_non_linear}")
-    for type in [None, "single_alpha", "separated_alpha", "non_linear", "non_linear_alpha"]:
-        dark_numbers = compute_dark_numbers(df, 'real', 'predicted', 'probability', type=type, log_base=np.e, root_degree=3)
-        print(dark_numbers)
+    print(f"Dark Number (Non-Linear Scaling with Alpha correction): {dark_number_non_linear_alpha}")
+
+    for type in ["single_alpha", "separated_alpha", "non_linear", "non_linear_alpha", "all"]:
+        dark_numbers = compute_dark_numbers(y_test, y_pred, y_prob, type=type, log_base=np.e, root_degree=3)
+    print(dark_numbers)
     
     
 if __name__ == "__main__":

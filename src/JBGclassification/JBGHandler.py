@@ -12,7 +12,7 @@ from typing import Callable, Protocol, Union, Any
 
 import langdetect
 import numpy as np
-import pandas
+import pandas as pd
 from lexicalrichness import LexicalRichness
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
@@ -29,6 +29,7 @@ from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estima
 from JBGExceptions import (DatasetException, MissingScorerException, ModelException, HandlerException, ModelInitializationException, 
     UnstableModelException, PipelineException)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
+from JBGDarkNumbers import compute_dark_numbers
 import Helpers
 
 GIVE_EXCEPTION_TRACEBACK = False
@@ -43,7 +44,8 @@ class Logger(Protocol):
         confusion_matrix: np.ndarray, 
         class_labels: list,
         classification_matrix: dict, 
-        sample_rates: tuple[str, str] = None) -> None:
+        sample_rates: tuple[str, str] = None,
+        dark_numbers: pd.DataFrame = None) -> None:
         """ Printing out info about the prediction"""
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
@@ -52,7 +54,7 @@ class Logger(Protocol):
     def print_formatted_info(self, message: str) -> None:
         """ Printing info with """
 
-    def investigate_dataset(self, dataset: pandas.DataFrame, class_name: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
+    def investigate_dataset(self, dataset: pd.DataFrame, class_name: str, show_class_distribution: bool = True, show_statistics: bool = True) -> bool:
         """ Print information about dataset """
     
     def print_warning(self, *args) -> None:
@@ -287,26 +289,26 @@ class DatasetHandler:
     LIMIT_IS_CATEGORICAL = 30
     
     handler: JBGHandler
-    dataset: pandas.DataFrame = field(init=False)
+    dataset: pd.DataFrame = field(init=False)
     classes: list[str] = field(init=False)
-    keys: pandas.Series = field(init=False)
-    unpredicted_keys: pandas.Series = field(init=False)
-    X_original: pandas.DataFrame = field(init=False)
-    Y_original: pandas.DataFrame = field(init=False)
-    X: pandas.DataFrame = field(init=False)
-    Y: pandas.Series = field(init=False)
-    X_train: pandas.DataFrame = field(init=False)
-    X_validation: pandas.DataFrame = field(init=False)
-    Y_train: pandas.DataFrame = field(init=False)
-    Y_validation: pandas.DataFrame = field(init=False)
-    Y_prediction: pandas.DataFrame = field(init=False)
-    X_prediction: pandas.DataFrame = field(init=False)
+    keys: pd.Series = field(init=False)
+    unpredicted_keys: pd.Series = field(init=False)
+    X_original: pd.DataFrame = field(init=False)
+    Y_original: pd.DataFrame = field(init=False)
+    X: pd.DataFrame = field(init=False)
+    Y: pd.Series = field(init=False)
+    X_train: pd.DataFrame = field(init=False)
+    X_validation: pd.DataFrame = field(init=False)
+    Y_train: pd.DataFrame = field(init=False)
+    Y_validation: pd.DataFrame = field(init=False)
+    Y_prediction: pd.DataFrame = field(init=False)
+    X_prediction: pd.DataFrame = field(init=False)
 
     def __post_init__(self) -> None:
         """ Empty for now """
     
     # Sets the unpredicted keys
-    def set_unpredicted_keys(self, keys: pandas.Series) -> None:
+    def set_unpredicted_keys(self, keys: pd.Series) -> None:
         self.unpredicted_keys = keys
 
     def load_data(self, data: list):
@@ -332,8 +334,8 @@ class DatasetHandler:
         if self.handler.config.should_train():
             self.handler.logger.investigate_dataset(self.dataset, class_column) # Returns True if the investigation/printing was not suppressed
         
-    def validate_dataset(self, data: list, column_names: list, class_column: str) -> pandas.DataFrame:
-        dataset = pandas.DataFrame(data, columns = column_names)
+    def validate_dataset(self, data: list, column_names: list, class_column: str) -> pd.DataFrame:
+        dataset = pd.DataFrame(data, columns = column_names)
         
         # Make sure the class column is a categorical variable by setting it as string
         try:
@@ -367,12 +369,12 @@ class DatasetHandler:
         self.handler.logger.end_inline_progress(progress_key)
         return dataset
 
-    def validate_column(self, key: str, column: pandas.Series) -> pandas.Series:
+    def validate_column(self, key: str, column: pd.Series) -> pd.Series:
         
         column_is_text = self.handler.config.column_is_text(key)
         return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
         
-    def shuffle_dataset(self, dataset: pandas.DataFrame) -> pandas.DataFrame:
+    def shuffle_dataset(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """ Impossible to test, due to random being random """
         # Shuffle the upper part of the data, such that all already classified material are
         # put in random order keeping the unclassified material in the bottom
@@ -392,7 +394,7 @@ class DatasetHandler:
 
         return dataset
     
-    def split_keys_from_dataset(self, dataset: pandas.DataFrame, id_column: str) -> tuple[pandas.DataFrame, pandas.Series]:
+    def split_keys_from_dataset(self, dataset: pd.DataFrame, id_column: str) -> tuple[pd.DataFrame, pd.Series]:
         # Use the unique id column from the data as the index column and take a copy, 
         # since it will not be used in the classification but only to reconnect each 
         # data row with classification results later on
@@ -488,25 +490,25 @@ class DatasetHandler:
         return ttnc
     
     
-    def create_X(self, frames: list[pandas.DataFrame], index: pandas.Int64Index = None) -> pandas.DataFrame:
+    def create_X(self, frames: list[pd.DataFrame], index: pd.Int64Index = None) -> pd.DataFrame:
         """ Creates a dataframe from text and numerical data """
         if index is None:
             index = self.dataset.index
         
-        X = pandas.DataFrame()
+        X = pd.DataFrame()
         for df in frames:
             X = self.concat_with_index(X, df, index)
         
         return X
 
-    def concat_with_index(self, X: pandas.DataFrame, concat: pandas.DataFrame, index: pandas.Int64Index) -> pandas.DataFrame:
+    def concat_with_index(self, X: pd.DataFrame, concat: pd.DataFrame, index: pd.Int64Index) -> pd.DataFrame:
         """ The try/except ensures that the dataframe added has the right number of rows """
         try:
             concat.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
         except ValueError:
             return X
         
-        return pandas.concat([concat, X], axis = 1)
+        return pd.concat([concat, X], axis = 1)
 
     # Separate data in X and Y and in parts where classification is known and not known.
     # X and Y are further split in training and validation part in split_dataset
@@ -535,7 +537,7 @@ class DatasetHandler:
         
                 
     # Use the bag of words technique to convert text corpus into numbers
-    def word_in_a_bag_conversion(self, dataset: pandas.DataFrame, model: Model ) -> tuple:
+    def word_in_a_bag_conversion(self, dataset: pd.DataFrame, model: Model ) -> tuple:
 
         # Start working with datavalues in array
         X = dataset.values
@@ -556,7 +558,7 @@ class DatasetHandler:
         # Generate the sequences
         X = (tfid_transformer.transform(X)).toarray()
         
-        return pandas.DataFrame(X), count_vectorizer, tfid_transformer
+        return pd.DataFrame(X), count_vectorizer, tfid_transformer
 
     def get_tfid_transformer_from_dataset(self, tfid_transformer: TfidfTransformer, dataset: np.ndarray) -> TfidfTransformer:
         """ Generate frequencies, assuming tfid_transformer is not yet set """
@@ -676,14 +678,14 @@ class DatasetHandler:
             return True
         
     # Find out if a DataFrame column contains categorical data or not
-    def is_categorical_data(self, column: pandas.Series) -> bool:
+    def is_categorical_data(self, column: pd.Series) -> bool:
         if not (self.handler.config.should_train() and self.handler.config.use_categorization()):
             return False
         
         return column.value_counts().count() <= self.LIMIT_IS_CATEGORICAL or self.handler.config.is_categorical(column.name)
         
     # Calculate the number of unclassified rows in data matrix
-    def get_num_unpredicted_rows(self, dataset: pandas.DataFrame = None) -> int:
+    def get_num_unpredicted_rows(self, dataset: pd.DataFrame = None) -> int:
         if dataset is None:
             dataset = self.dataset
         num = 0
@@ -754,7 +756,7 @@ class ModelHandler:
     def __post_init__(self) -> None:
         """ Empty for now """
     
-    def get_class_labels(self, Y: pandas.Series) -> list:
+    def get_class_labels(self, Y: pd.Series) -> list:
         """ Wrapper function go get class labels from the Model, with backup """
         try:
             class_labels = self.model.class_labels
@@ -907,7 +909,7 @@ class ModelHandler:
         return model
 
     # Train ml model
-    def train_picked_model(self, model: Pipeline, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
+    def train_picked_model(self, model: Pipeline, X: pd.DataFrame, Y: pd.DataFrame) -> Pipeline:
         
         # Train model
         try:
@@ -920,7 +922,7 @@ class ModelHandler:
         
     
     # For pipelines with a specified fit search parameters list, do like this instead
-    def model_parameter_grid_search(self, model: Pipeline, search_params: dict, n_splits: int, X: pandas.DataFrame, Y: pandas.DataFrame) -> Pipeline:
+    def model_parameter_grid_search(self, model: Pipeline, search_params: dict, n_splits: int, X: pd.DataFrame, Y: pd.DataFrame) -> Pipeline:
 
         try:
             # Make a stratified kfold
@@ -941,7 +943,7 @@ class ModelHandler:
                 raise ModelException(f"Something went wrong on grid search training of picked model: {str(e)}")                
 
             # Choose best estimator from grid search
-            return search.best_estimator_, pandas.DataFrame.from_dict(search.cv_results_)
+            return search.best_estimator_, pd.DataFrame.from_dict(search.cv_results_)
         
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
@@ -1455,12 +1457,12 @@ class PredictionsHandler:
     predictions: np.ndarray = field(init=False)
     rates: np.ndarray = field(init=False)
     num_mispredicted: int = field(init=False)
-    X_mispredicted: pandas.DataFrame = field(init=False)
-    X_most_mispredicted: pandas.DataFrame = field(init=False)
+    X_mispredicted: pd.DataFrame = field(init=False)
+    X_most_mispredicted: pd.DataFrame = field(init=False)
     model: str = field(init=False)
     class_report: dict = field(init=False)
 
-    def get_prediction_results(self, keys: pandas.Series) -> list:
+    def get_prediction_results(self, keys: pd.Series) -> list:
         """ 
             Creates a list combining the values from the set prediction,
             using a given key. It is used to simplify saving the data
@@ -1512,7 +1514,7 @@ class PredictionsHandler:
             # This only happens if the model couldn't predict, so uses the mean
             return item
 
-    def get_mispredicted_dataframe(self) -> pandas.DataFrame:
+    def get_mispredicted_dataframe(self) -> pd.DataFrame:
         try:
             return self.X_most_mispredicted
         except AttributeError:
@@ -1528,6 +1530,8 @@ class PredictionsHandler:
         # Evaluate predictions (optional)
         accuracy = accuracy_score(Y, self.predictions)
         con_matrix = confusion_matrix(Y, self.predictions)
+        dark_numbers = self.calculate_dark_numbers(pd.Series(Y), pd.Series(self.predictions), \
+                                                   pd.Series([max(row) for row in self.probabilites]))
         class_labels = sorted(set(Y.tolist() + self.predictions.tolist()))
         class_matrix = classification_report(Y, self.predictions, zero_division='warn', output_dict=True)
         self.handler.logger.print_prediction_report(
@@ -1535,7 +1539,8 @@ class PredictionsHandler:
             confusion_matrix=con_matrix,
             class_labels= class_labels,
             classification_matrix=class_matrix,
-            sample_rates= rates
+            sample_rates= rates,
+            dark_numbers=dark_numbers        
         )
 
 
@@ -1560,8 +1565,14 @@ class PredictionsHandler:
             self.handler.config.get_id_column_name()
         )
     
+    # Compte dark number of predictions for all classes
+    def calculate_dark_numbers(self, Y_real: pd.Series, Y_predicted: pd.Series, Y_pred_proba: pd.Series) -> pd.DataFrame:
+
+        dark_numbers = compute_dark_numbers(Y_real, Y_predicted, Y_pred_proba, type="all")
+        return dark_numbers
+    
     # Make predictions on dataset
-    def make_predictions(self, model: Pipeline, X: pandas.DataFrame, classes: pandas.Series, Y: pandas.DataFrame = None) -> bool:
+    def make_predictions(self, model: Pipeline, X: pd.DataFrame, classes: pd.Series, Y: pd.DataFrame = None) -> bool:
         could_predict_proba = False
         try:
             predictions = model.predict(X)
@@ -1633,14 +1644,14 @@ class PredictionsHandler:
 
         return [mean, std]
 
-    def set_classification_report(self, Y: pandas.DataFrame) -> dict:
+    def set_classification_report(self, Y: pd.DataFrame) -> dict:
         report = classification_report(Y, self.predictions, output_dict = True)
         self.class_report = report
 
     
     # Function for finding the n most mispredicted data rows
     # TODO: Clean up a bit more
-    def most_mispredicted(self, X_original: pandas.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pandas.DataFrame, Y: pandas.Series) -> None:
+    def most_mispredicted(self, X_original: pd.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pd.DataFrame, Y: pd.Series) -> None:
         
         # Calculate predictions for both total model and cross trained model
         self.num_mispredicted = 0
@@ -1648,16 +1659,16 @@ class PredictionsHandler:
         
         # For storing mismatching informations
         X_not = [] 
-        model_not = pandas.Series(index = Y.index)
-        Y_not = pandas.Series(index = Y.index)  
+        model_not = pd.Series(index = Y.index)
+        Y_not = pd.Series(index = Y.index)  
 
         # Make predictions using both models
         try:
-            Y_pred_ct, ct_model = pandas.Series(ct_pipe.predict(X), index = Y.index), self.CROSS_TRAINED_MODEL
-            Y_pred_ft, ft_model = pandas.Series(full_pipe.predict(X), index = Y.index), self.RETRAINED_MODEL
+            Y_pred_ct, ct_model = pd.Series(ct_pipe.predict(X), index = Y.index), self.CROSS_TRAINED_MODEL
+            Y_pred_ft, ft_model = pd.Series(full_pipe.predict(X), index = Y.index), self.RETRAINED_MODEL
         except TypeError:
-            Y_pred_ct, ct_model = pandas.Series(ct_pipe.predict(X.to_numpy()), index = Y.index), self.CROSS_TRAINED_MODEL 
-            Y_pred_ft, ft_model = pandas.Series(full_pipe.predict(X.to_numpy()), index = Y.index), self.RETRAINED_MODEL 
+            Y_pred_ct, ct_model = pd.Series(ct_pipe.predict(X.to_numpy()), index = Y.index), self.CROSS_TRAINED_MODEL 
+            Y_pred_ft, ft_model = pd.Series(full_pipe.predict(X.to_numpy()), index = Y.index), self.RETRAINED_MODEL 
         
         for Y_pred_what, what_model in [(Y_pred_ct, ct_model), (Y_pred_ft, ft_model)]:
             self.handler.logger.print_key_value_pair(f"Accuracy score for {what_model} model", accuracy_score(Y, Y_pred_what), print_always=True)
@@ -1684,8 +1695,8 @@ class PredictionsHandler:
         
         # Quick return if possible
         else:
-            self.X_most_mispredicted = pandas.DataFrame()
-            self.X_mispredicted = pandas.DataFrame()
+            self.X_most_mispredicted = pd.DataFrame()
+            self.X_mispredicted = pd.DataFrame()
             return
         
         # Select the found mispredicted data from the computations
