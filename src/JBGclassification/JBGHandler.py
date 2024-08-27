@@ -32,7 +32,7 @@ from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import compute_dark_numbers
 import Helpers
 
-GIVE_EXCEPTION_TRACEBACK = True
+GIVE_EXCEPTION_TRACEBACK = False
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
