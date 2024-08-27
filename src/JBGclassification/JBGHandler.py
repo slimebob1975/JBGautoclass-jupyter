@@ -1794,7 +1794,7 @@ class PredictionsHandler:
     
     def evaluate_dark_numbers(self) -> None:
         
-        self.handler.logger.display_matrix(f"Dark number calculations", self.dark_numbers)
+        self.handler.logger.display_matrix(f"Dark number calculations", self.dark_numbers, precision = 4)
 
         return None
     

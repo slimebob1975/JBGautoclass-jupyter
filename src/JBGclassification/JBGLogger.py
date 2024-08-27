@@ -450,7 +450,7 @@ class JBGLogger(terminal.Logger):
         save_matrix_as_csv(resultsMatrix, cross_validation_filepath)
         self.display_matrix(f"Model test performance in descending order", resultsMatrix)
 
-    def display_matrix(self, title: str, matrix: pd.DataFrame, print_always: bool = True) -> None:
+    def display_matrix(self, title: str, matrix: pd.DataFrame, print_always: bool = True, precision: int = 2) -> None:
         """ Prints out a matrix, but only if it's verbose, or print_always is True """
         if self._enable_quiet and not print_always:
             return self
@@ -463,7 +463,7 @@ class JBGLogger(terminal.Logger):
         pd.set_option('display.width', 1000)
         pd.set_option('display.max_colwidth', None) # This makes sure no column info gets cut off due to long content
         pd.set_option('display.colheader_justify', 'center')
-        pd.set_option('display.precision', 2)
+        pd.set_option('display.precision', precision)
         IPython.display.display(matrix)
 
         if (self.in_terminal):
