@@ -32,7 +32,7 @@ from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import compute_dark_numbers
 import Helpers
 
-GIVE_EXCEPTION_TRACEBACK = False
+GIVE_EXCEPTION_TRACEBACK = True
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -1458,6 +1458,7 @@ class PredictionsHandler:
     num_mispredicted: int = field(init=False)
     X_mispredicted: pd.DataFrame = field(init=False)
     X_most_mispredicted: pd.DataFrame = field(init=False)
+    X_dark_numbers: pd.DataFrame = field(init=False)
     model: str = field(init=False)
     class_report: dict = field(init=False)
 
@@ -1762,7 +1763,41 @@ class PredictionsHandler:
         self.X_most_mispredicted = self.X_mispredicted.head(self.LIMIT_MISPREDICTED)
         
         return
+    
+    # Dark number stuffs
+    def get_dark_numbers(self, X: pd.DataFrame, Y: pd.DataFrame, type: str = "all", models: list = [None], \
+                         model_names: list = [None]) -> None:
 
+        self.dark_numbers = pd.DataFrame()
+        
+        # Compute dark number for all models
+        for model, model_name in models, model_names:
+
+            # Make prediction for current model
+            Y_pred = model.predict(X)
+
+            # Predict probabilities for current predictions
+            Y_prob_pred = model.predict_proba(X)
+
+            # Compute dark numbers
+            model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)
+
+            # Put together the results
+            model_name_col = pd.Series([model_name]+["" for i in range(model_dark_numbers.shape[0]-1)])
+            
+            if self.dark_numbers.empty:
+                self.dark_numbers = pd.concat([model_name_col, model_dark_numbers.copy(deep=True)], axis = 1)
+            else:
+                self.dark_numbers = pd.concat([self.dark_numbers, pd.concat([model_name_col, model_dark_numbers], axis=1)], axis=0)
+        
+        return None
+    
+    def evaluate_dark_number(self) -> None:
+        
+        self.logger.display_matrix(f"Dark number calculations", self.dark_numbers)
+
+        return None
+    
 
 def main():
     import JBGLogger, SQLDataLayer, Config, sys

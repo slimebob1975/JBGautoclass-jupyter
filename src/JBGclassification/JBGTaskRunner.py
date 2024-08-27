@@ -266,6 +266,11 @@ class TaskRunner:
         self.ph.most_mispredicted(self.dh.X_original, trained_model, cross_trained_model, self.dh.X, self.dh.Y)
 
         self.ph.evaluate_mispredictions(self.config.get_output_filepath("misplaced"))
+
+        self.ph.get_dark_numbers(X = self.dh.X, Y = self.dh.Y, type = "all", models = [trained_model, cross_trained_model], \
+                                 model_names = [self.ph.RETRAINED, self.ph.CROSS_TRAINED_MODEL])
+
+        self.ph.evaluate_dark_numbers()
         
         return {}
 
