@@ -1771,13 +1771,13 @@ class PredictionsHandler:
         self.dark_numbers = pd.DataFrame()
         
         # Compute dark number for all models
-        for model, model_name in models, model_names:
+        for model, model_name in zip(models, model_names):
 
             # Make prediction for current model
-            Y_pred = model.predict(X)
+            Y_pred = pd.Series(model.predict(X), index=Y.index)
 
             # Predict probabilities for current predictions
-            Y_prob_pred = model.predict_proba(X)
+            Y_prob_pred = pd.Series(model.predict_proba(X).argmax(axis=1), index=Y.index)
 
             # Compute dark numbers
             model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)
@@ -1792,9 +1792,9 @@ class PredictionsHandler:
         
         return None
     
-    def evaluate_dark_number(self) -> None:
+    def evaluate_dark_numbers(self) -> None:
         
-        self.logger.display_matrix(f"Dark number calculations", self.dark_numbers)
+        self.handler.logger.display_matrix(f"Dark number calculations", self.dark_numbers)
 
         return None
     
