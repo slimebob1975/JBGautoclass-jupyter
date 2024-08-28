@@ -10,7 +10,7 @@ psutil==5.9.0
 pyodbc==4.0.34 # 5.1.0
 pytest==7.4.0
 python-dotenv==1.0.0
-scikit_clean==0.1.2
+scikit_clean==0.1.2 # Needs to use https://github.com/slimebob1975/scikit-clean
 scikit_learn==1.5.0
 scipy==1.11.1
 stop_words==2018.7.23
