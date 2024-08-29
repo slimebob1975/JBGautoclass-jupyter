@@ -16,7 +16,7 @@ import pandas as pd
 from lexicalrichness import LexicalRichness
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, make_scorer, f1_score
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split, GridSearchCV)
 from tensorflow import keras
@@ -1370,6 +1370,7 @@ class ModelHandler:
        
         # Now make kfolded cross evaluation. Notice that fit_params are not used right now (just placeholder for future revisions)
         scorer_mechanism = self.handler.config.get_scoring_mechanism()
+
         fit_params = {}
         
         for key, function_name in algorithm.fit_params.items():
@@ -1777,7 +1778,7 @@ class PredictionsHandler:
             Y_pred = pd.Series(model.predict(X), index=Y.index)
 
             # Predict probabilities for current predictions
-            Y_prob_pred = pd.Series(model.predict_proba(X).argmax(axis=1), index=Y.index)
+            Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(X)], index=Y.index)
 
             # Compute dark numbers
             model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)

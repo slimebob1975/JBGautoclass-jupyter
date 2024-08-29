@@ -4,7 +4,10 @@ from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
+from JBGLogger import JBGLogger
 import sys
+
+DEBUG = False
 
 def compute_dark_number(real: pd.Series, predicted: pd.Series):
     
@@ -14,6 +17,9 @@ def compute_dark_number(real: pd.Series, predicted: pd.Series):
     # Compute performance metrics
     precision = TP / (TP + FP) if (TP + FP) > 0 else 1
     recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+
+    if DEBUG:
+        print(f"compute_dark_number:\n\tTP: {TP}, \n\tFP: {FP}, \n\tFN: {FN}, \n\tRecall: {recall}, \n\tPrecision: {precision}")
 
     # Calculate dark number using single alpha correction
     dark_number = (precision**(-1) - 1) * (2 - recall)
@@ -32,6 +38,9 @@ def compute_dark_number_single_alpha(real: pd.Series, predicted: pd.Series, pred
 
     # Compute the mean certainty of the predictions where real and predicted differ
     alpha = pred_prob[real != predicted].mean() if (FP > 0) else 1
+
+    if DEBUG:
+        print(f"compute_dark_number_single_alpha:\n\tTP: {TP}, \n\tFP: {FP}, \n\tFN: {FN}, \n\tRecall: {recall}, \n\tPrecision: {precision}, \n\talpha: {alpha}")
     
     # Calculate dark number using single alpha correction
     dark_number = alpha * (precision**(-1) - 1) * (2 - recall)
@@ -52,6 +61,9 @@ def compute_dark_number_separated_alpha(real: pd.Series, predicted: pd.Series, p
     # Compute mean certainty for FP and FN
     alpha_FP = pred_prob[(real == 0) & (predicted == 1)].mean() if FP > 0 else 1
     alpha_FN = pred_prob[(real == 1) & (predicted == 0)].mean() if FN > 0 else 1
+
+    if DEBUG:
+        print(f"compute_dark_number_separated_alpha:\n\tTP: {TP}, \n\tFP: {FP}, \n\tFN: {FN}, \n\tRecall: {recall}, \n\tPrecision: {precision}, \n\talpha_FP: {alpha_FP}, \n\talpha_FN: {alpha_FN}")
 
     # Calculate dark number using separated alpha correction
     dark_number = alpha_FP * (precision**(-1) - 1) * alpha_FN * (2 - recall)
@@ -74,6 +86,9 @@ def compute_dark_number_non_linear(real: pd.Series, predicted: pd.Series, pred_p
         alpha = pred_prob[real != predicted].mean() if (FP > 0) else 1
     else:
         alpha = 1.0
+
+    if DEBUG:
+        print(f"compute_dark_number_non_linear:\n\tTP: {TP}, \n\tFP: {FP}, \n\tFN: {FN}, \n\tRecall: {recall}, \n\tPrecision: {precision}, \n\talpha: {alpha}")
 
     # Calculate dark number using non-linear scaling
     dark_number = alpha * np.log(precision**(-1)) / np.log(log_base) * (2 - recall**(1 / root_degree))
@@ -99,9 +114,17 @@ def compute_dark_numbers(real_target: pd.Series, pred_target: pd.Series, prob_pr
     # Compute dark number for each target in the classification
         for target in real_target.unique():
 
+            if DEBUG: 
+                print (f"type: {type}, target: {target}")
+
             # Convert to binary classification 
-            real_target_bin = pd.Series(real_target.apply(func=(lambda x: 1 if x == target else 0)))
-            pred_target_bin = pd.Series(pred_target.apply(func=(lambda x: 1 if x == target else 0)))
+            real_target_bin = pd.Series(real_target.apply(func=(lambda x: 1 if x == target else 0)), name="real_target")
+            pred_target_bin = pd.Series(pred_target.apply(func=(lambda x: 1 if x == target else 0)), name="pred_target")
+
+            #if DEBUG:
+            #    prob_pred_bin = pd.Series(prob_pred, name="prob_pred")
+            #    data = pd.concat([real_target_bin, pred_target_bin, prob_pred_bin], axis = 1)
+            #    JBGLogger().display_matrix(title="Data",matrix=data)
 
             if type == "base":
                 dark_number = compute_dark_number(real_target_bin, pred_target_bin)

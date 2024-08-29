@@ -1179,9 +1179,9 @@ class ScoreMetric(MetaEnum):
     accuracy = {"full_name": "Accuracy", "callable": accuracy_score, "kwargs": None}
     balanced_accuracy = {"full_name": "Balanced Accuracy", "callable": balanced_accuracy_score, "kwargs": {"adjusted": False}}
     balanced_accuracy_adjusted = {"full_name": "Balanced Accuracy (Adjusted)", "callable": balanced_accuracy_score, "kwargs": {"adjusted": True}}
-    f1_micro = {"full_name": "Balanced F1 Micro", "callable": f1_score, "kwargs": {"average": 'micro'}}
-    f1_macro = {"full_name": "Balanced F1 Macro", "callable": f1_score, "kwargs": {"average": 'macro'}}
-    f1_weighted = {"full_name": "Balanced F1 Weighted", "callable": f1_score, "kwargs": {"average": 'weighted'}}
+    f1_micro = {"full_name": "Balanced F1 Micro", "callable": f1_score, "kwargs": {"average": 'micro', "pos_label": None}}
+    f1_macro = {"full_name": "Balanced F1 Macro", "callable": f1_score, "kwargs": {"average": 'macro', "pos_label": None}}
+    f1_weighted = {"full_name": "Balanced F1 Weighted", "callable": f1_score, "kwargs": {"average": 'weighted', "pos_label": None}}
     recall_micro = {"full_name": "Recall Micro", "callable": recall_score, "kwargs": {"average": 'micro'}}
     recall_macro = {"full_name": "Recall Macro", "callable": recall_score, "kwargs": {"average": 'macro'}}
     recall_weighted = {"full_name": "Recall Weighted", "callable": recall_score, "kwargs": {"average": 'weighted'}}
