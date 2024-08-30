@@ -121,11 +121,6 @@ def compute_dark_numbers(real_target: pd.Series, pred_target: pd.Series, prob_pr
             real_target_bin = pd.Series(real_target.apply(func=(lambda x: 1 if x == target else 0)), name="real_target")
             pred_target_bin = pd.Series(pred_target.apply(func=(lambda x: 1 if x == target else 0)), name="pred_target")
 
-            #if DEBUG:
-            #    prob_pred_bin = pd.Series(prob_pred, name="prob_pred")
-            #    data = pd.concat([real_target_bin, pred_target_bin, prob_pred_bin], axis = 1)
-            #    JBGLogger().display_matrix(title="Data",matrix=data)
-
             if type == "base":
                 dark_number = compute_dark_number(real_target_bin, pred_target_bin)
                 alpha = 1.0   

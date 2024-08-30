@@ -1459,7 +1459,8 @@ class PredictionsHandler:
     num_mispredicted: int = field(init=False)
     X_mispredicted: pd.DataFrame = field(init=False)
     X_most_mispredicted: pd.DataFrame = field(init=False)
-    X_dark_numbers: pd.DataFrame = field(init=False)
+    dark_numbers: pd.DataFrame = field(init=False)
+    dark_numb_conf_matrix: pd.DataFrame = field(init=False)
     model: str = field(init=False)
     class_report: dict = field(init=False)
 
@@ -1552,7 +1553,7 @@ class PredictionsHandler:
         self.handler.logger.print_key_value_pair(f"Total number of mispredicted elements", self.num_mispredicted, print_always=True)
         
         ids = ', '.join([str(id) for id in self.X_most_mispredicted.index.tolist()])
-        most_mispredicted_query = f"{self.handler.read_data_query} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
+        most_mispredicted_query = f"{self._get_rid_of_TOP_stuffs(self.handler.read_data_query)} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
         
         self.handler.logger.print_code("Get the most misplaced data by SQL query", most_mispredicted_query)
         self.handler.logger.print_code("Open the following csv-data file to get the full list", misplaced_filepath)
@@ -1562,11 +1563,24 @@ class PredictionsHandler:
             self.handler.config.get_id_column_name()
         )
     
-    # Compte dark number of predictions for all classes
-    def calculate_dark_numbers(self, Y_real: pd.Series, Y_predicted: pd.Series, Y_pred_proba: pd.Series) -> pd.DataFrame:
+    # Clean up data query string from the original TOP specification
+    def _get_rid_of_TOP_stuffs(self, query):
 
-        dark_numbers = compute_dark_numbers(Y_real, Y_predicted, Y_pred_proba, type="all")
-        return dark_numbers
+        top = "TOP("
+        parentesis = ")"
+
+        start = query.find(top)
+        stop = query.find(parentesis)
+
+        query = query[:start-1] + query[stop+1:]
+
+        return query
+
+    # Compte dark number of predictions for all classes
+    #def calculate_dark_numbers(self, Y_real: pd.Series, Y_predicted: pd.Series, Y_pred_proba: pd.Series) -> pd.DataFrame:
+    #
+    #    confusion_matrix, dark_numbers = compute_dark_numbers(Y_real, Y_predicted, Y_pred_proba, type="all")
+    #    return confusion_matrix, dark_numbers
     
     # Make predictions on dataset
     def make_predictions(self, model: Pipeline, X: pd.DataFrame, classes: pd.Series, Y: pd.DataFrame = None) -> bool:
@@ -1769,7 +1783,9 @@ class PredictionsHandler:
     def get_dark_numbers(self, X: pd.DataFrame, Y: pd.DataFrame, type: str = "all", models: list = [None], \
                          model_names: list = [None]) -> None:
 
+        # These DataFrames contain the results
         self.dark_numbers = pd.DataFrame()
+        self.dark_numb_conf_matrix = pd.DataFrame()
         
         # Compute dark number for all models
         for model, model_name in zip(models, model_names):
@@ -1777,14 +1793,28 @@ class PredictionsHandler:
             # Make prediction for current model
             Y_pred = pd.Series(model.predict(X), index=Y.index)
 
+            # Compute the confusion matrix
+            labels = np.sort(Y.unique())
+            model_confusion_matrix = pd.DataFrame(confusion_matrix(Y, Y_pred, labels=None), index=labels, columns=labels)
+
+            # Put together the results for the confusion matrix
+            model_name_col = pd.Series([model_name]+["" for i in range(model_confusion_matrix.shape[0]-1)], \
+                                       name="Model type", index=labels)
+
+            if self.dark_numb_conf_matrix.empty:
+                self.dark_numb_conf_matrix = pd.concat([model_name_col, model_confusion_matrix.copy(deep=True)], axis = 1)
+            else:
+                self.dark_numb_conf_matrix = \
+                    pd.concat([self.dark_numb_conf_matrix, pd.concat([model_name_col, model_confusion_matrix], axis=1)], axis=0)
+            
             # Predict probabilities for current predictions
             Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(X)], index=Y.index)
 
             # Compute dark numbers
             model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)
-
-            # Put together the results
-            model_name_col = pd.Series([model_name]+["" for i in range(model_dark_numbers.shape[0]-1)])
+            
+            # Put together the results for the dark numbers
+            model_name_col = pd.Series([model_name]+["" for i in range(model_dark_numbers.shape[0]-1)], name="Model type")
             
             if self.dark_numbers.empty:
                 self.dark_numbers = pd.concat([model_name_col, model_dark_numbers.copy(deep=True)], axis = 1)
@@ -1795,7 +1825,8 @@ class PredictionsHandler:
     
     def evaluate_dark_numbers(self) -> None:
         
-        self.handler.logger.display_matrix(f"Dark number calculations", self.dark_numbers, precision = 4)
+        self.handler.logger.display_matrix(f"Dark numbers confusion matrices", self.dark_numb_conf_matrix)
+        self.handler.logger.display_matrix(f"Dark numbers calculations", self.dark_numbers, precision = 4)
 
         return None
     
