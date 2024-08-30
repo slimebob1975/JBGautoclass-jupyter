@@ -1781,11 +1781,19 @@ class PredictionsHandler:
     
     # Dark number stuffs
     def get_dark_numbers(self, X: pd.DataFrame, Y: pd.DataFrame, type: str = "all", models: list = [None], \
-                         model_names: list = [None]) -> None:
+                         model_names: list = [None], combine_models=True) -> None:
 
         # These DataFrames contain the results
         self.dark_numbers = pd.DataFrame()
         self.dark_numb_conf_matrix = pd.DataFrame()
+
+        # Combine models to compute a worst case scenario
+        if combine_models:
+            Y_pred_worst = Y.copy(deep=True)
+            Y_prob_pred_worst = pd.Series([0.0 for i in range(Y.size)], index=Y.index)
+
+        # Use these as labels
+        labels = np.sort(Y.unique())
         
         # Compute dark number for all models
         for model, model_name in zip(models, model_names):
@@ -1793,36 +1801,63 @@ class PredictionsHandler:
             # Make prediction for current model
             Y_pred = pd.Series(model.predict(X), index=Y.index)
 
-            # Compute the confusion matrix
-            labels = np.sort(Y.unique())
-            model_confusion_matrix = pd.DataFrame(confusion_matrix(Y, Y_pred, labels=None), index=labels, columns=labels)
-
-            # Put together the results for the confusion matrix
-            model_name_col = pd.Series([model_name]+["" for i in range(model_confusion_matrix.shape[0]-1)], \
-                                       name="Model type", index=labels)
-
-            if self.dark_numb_conf_matrix.empty:
-                self.dark_numb_conf_matrix = pd.concat([model_name_col, model_confusion_matrix.copy(deep=True)], axis = 1)
-            else:
-                self.dark_numb_conf_matrix = \
-                    pd.concat([self.dark_numb_conf_matrix, pd.concat([model_name_col, model_confusion_matrix], axis=1)], axis=0)
+            # Update the confusion matrix
+            self._update_confusion_matrix(model_name, Y, Y_pred, labels)
             
             # Predict probabilities for current predictions
             Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(X)], index=Y.index)
 
-            # Compute dark numbers
-            model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)
-            
-            # Put together the results for the dark numbers
-            model_name_col = pd.Series([model_name]+["" for i in range(model_dark_numbers.shape[0]-1)], name="Model type")
-            
-            if self.dark_numbers.empty:
-                self.dark_numbers = pd.concat([model_name_col, model_dark_numbers.copy(deep=True)], axis = 1)
-            else:
-                self.dark_numbers = pd.concat([self.dark_numbers, pd.concat([model_name_col, model_dark_numbers], axis=1)], axis=0)
+            # Compute and update the dark numbers matrix
+            self._update_dark_numbers(model_name, Y, Y_pred, Y_prob_pred, type)
+
+            # Combine models processed so far to get worst case scenario by replacing wrong predictions with
+            # the currently worst one
+            if combine_models:
+                Y_pred_worst = Y_pred_worst.mask((Y_pred != Y) & (Y_prob_pred >= Y_prob_pred_worst), Y_pred)
+                Y_prob_pred_worst = Y_prob_pred_worst.mask((Y_pred != Y) & (Y_prob_pred >= Y_prob_pred_worst), Y_prob_pred)      
         
+        # In case we have combined the models, we need to repeat what we did above
+        if combine_models and not self.dark_numbers.empty:
+            
+            # Update the confusion matrix
+            self._update_confusion_matrix("Combined", Y, Y_pred_worst, labels)
+
+            # Compute and update the dark numbers matrix
+            self._update_dark_numbers("Combined", Y, Y_pred_worst, Y_prob_pred_worst, type)
+    
         return None
     
+    def _update_confusion_matrix(self, model_name, Y, Y_pred, labels):
+
+        model_confusion_matrix = pd.DataFrame(confusion_matrix(Y, Y_pred, labels=None), index=labels, columns=labels)
+
+        # Put together the results for the confusion matrix
+        model_name_col = pd.Series([model_name]+["" for i in range(model_confusion_matrix.shape[0]-1)], \
+                                    name="Model type", index=labels)
+
+        if self.dark_numb_conf_matrix.empty:
+            self.dark_numb_conf_matrix = pd.concat([model_name_col, model_confusion_matrix.copy(deep=True)], axis = 1)
+        else:
+            self.dark_numb_conf_matrix = \
+                pd.concat([self.dark_numb_conf_matrix, pd.concat([model_name_col, model_confusion_matrix], axis=1)], axis=0)
+
+        return None
+
+    def _update_dark_numbers(self, model_name, Y, Y_pred, Y_prob_pred, type):
+        
+        # Compute dark numbers
+        model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)
+        
+        # Put together the results for the dark numbers
+        model_name_col = pd.Series([model_name]+["" for i in range(model_dark_numbers.shape[0]-1)], name="Model type")
+        
+        if self.dark_numbers.empty:
+            self.dark_numbers = pd.concat([model_name_col, model_dark_numbers.copy(deep=True)], axis = 1)
+        else:
+            self.dark_numbers = pd.concat([self.dark_numbers, pd.concat([model_name_col, model_dark_numbers], axis=1)], axis=0)
+
+        return None
+
     def evaluate_dark_numbers(self) -> None:
         
         self.handler.logger.display_matrix(f"Dark numbers confusion matrices", self.dark_numb_conf_matrix)
