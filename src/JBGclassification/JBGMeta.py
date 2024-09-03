@@ -389,19 +389,14 @@ class AlgorithmGridSearchParams(MetaEnum):
                            'learning_rate': [0.01, 0.05, 0.1], 'max_epochs': [10, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5], \
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
     KERA = {"parameters": {'batch_size':[100, 20, 50, 25, 32],  'nb_epoch':[200, 100, 300, 400], 'unit':[5,6, 10, 11, 12, 15]}}
-    FUTV = {"parameters": {}} #| \
-       # {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-       # {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
-       # {"abc__" + str(key): val for key, val in ABC["parameters"].items()} \
-       # }
-    FUTS =  {"parameters": {'cv': (5, 10, 20)}  } #| \
-        #{"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-        #{"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
-        #{"abc__" + str(key): val for key, val in ABC["parameters"].items()} \
-        #    }
-    VOTK = {"parameters": {'cv': (5, 10, 20)} } #| \
-        #{"kera__" + str(key): val for key, val in KERA["parameters"].items()} | \
-        #{"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} }
+    FUTV = {"parameters": \
+        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()}
+        }
+    FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
+        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} 
+        }
     
     @property
     def parameters(self):
@@ -478,7 +473,6 @@ class Algorithm(MetaEnum):
     KERA = { "full_name": "Keras MLP Classifier", "search_params": AlgorithmGridSearchParams.KERA, "rfe_compatible": False, "lib": Library.KERAS}
     FUTV = { "full_name":  "FUT Voting Classifier", "search_params": AlgorithmGridSearchParams.FUTV, "rfe_compatible": False, "lib": Library.SCIKIT}
     FUTS = { "full_name":  "FUT Stacking Classifier", "search_params": AlgorithmGridSearchParams.FUTS, "rfe_compatible": False, "lib": Library.SCIKIT}
-    VOTK = { "full_name":  "FUT Keras + RF Classifier", "search_params": AlgorithmGridSearchParams.VOTK, "rfe_compatible": False, "lib": Library.KERAS}
 
 
     def get_full_name(self) -> str:
@@ -783,8 +777,7 @@ class Algorithm(MetaEnum):
     def do_FUTV(self, max_iterations: int, size: int) -> Filter:
         clf1 = MLPClassifier(max_iter=max_iterations)
         clf2 = RandomForestClassifier()
-        clf3 = AdaBoostClassifier()
-        estimators=[('mlpc', clf1), ('rfcl', clf2), ('abc', clf3)]
+        estimators=[('mlpc', clf1), ('rfcl', clf2)]
         return VotingClassifier(estimators=estimators, voting = 'soft')
      
     def do_FUTS(self, max_iterations: int, size: int) -> Filter:
@@ -793,12 +786,6 @@ class Algorithm(MetaEnum):
         clf3 = AdaBoostClassifier()
         estimators=[('mlpc', clf1), ('rfcl', clf2), ('abc', clf3)]
         return StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
-    
-    def do_VOTK(self, max_iterations: int, size: int) -> Filter:
-        clf1 = MLPKerasClassifier()
-        clf2 = RandomForestClassifier()
-        estimators=[('kera', clf1), ('rfcl', clf2)]
-        return VotingClassifier(estimators=estimators, voting = 'soft')
     
 class Oversampling(MetaEnum):
     NOG = "No Oversampling"
