@@ -393,6 +393,7 @@ class AlgorithmGridSearchParams(MetaEnum):
         {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
         {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()}
         }
+
     FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
         {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
         {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} 
