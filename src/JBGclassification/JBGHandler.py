@@ -1858,11 +1858,16 @@ class PredictionsHandler:
 
         return None
 
-    def evaluate_dark_numbers(self, dark_numbers_filepath: str) -> None:
+    def evaluate_dark_numbers(self, dark_numbers_filepath: str, dark_numbers_conf_matr_filepath: str) -> None:
         
         self.handler.logger.display_matrix(f"Dark numbers confusion matrices", self.dark_numb_conf_matrix)
         self.handler.logger.display_matrix(f"Dark numbers calculations", self.dark_numbers, precision = 4)
 
+        Helpers.save_matrix_as_csv(
+            self.dark_numb_conf_matrix,
+            dark_numbers_conf_matr_filepath
+        )
+        
         Helpers.save_matrix_as_csv(
             self.dark_numbers,
             dark_numbers_filepath

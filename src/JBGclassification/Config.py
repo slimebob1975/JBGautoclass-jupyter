@@ -532,6 +532,10 @@ class Config:
         """ Simplifies the names of config and output files"""
 
         types = {
+            "dark_numb_conf_matrix": {
+                "suffix": "csv",
+                "prefix": "dark_numbers_conf_matrix_"
+            },
             "dark_numbers": {
                 "suffix": "csv",
                 "prefix": "dark_numbers_"

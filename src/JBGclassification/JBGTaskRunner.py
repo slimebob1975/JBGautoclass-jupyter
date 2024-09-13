@@ -270,7 +270,8 @@ class TaskRunner:
         self.ph.get_dark_numbers(X = self.dh.X, Y = self.dh.Y, type = "all", models = [trained_model, cross_trained_model], \
                                  model_names = ["Retrained on all data", "Cross-trained on training data"])
 
-        self.ph.evaluate_dark_numbers(self.config.get_output_filepath("dark_numbers"))
+        self.ph.evaluate_dark_numbers(self.config.get_output_filepath("dark_numbers"),
+                                      self.config.get_output_filepath("dark_numb_conf_matrix"))
         
         return {}
 
