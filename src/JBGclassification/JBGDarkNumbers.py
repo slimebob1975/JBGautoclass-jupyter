@@ -7,22 +7,24 @@ from sklearn.metrics import confusion_matrix
 from JBGLogger import JBGLogger
 import sys
 
-DEBUG = False
+def compute_posneg_rates(TN: int, FP: int, FN: int, TP: int):
+
+    # Compute performance rates
+    TNr = TN / (TN + FP) if (TN + FP) > 0 else -1
+    TPr = TP / (TP + FN) if (TP + FN) > 0 else -1
+
+    return TPr, TNr
 
 def compute_dark_number(real: pd.Series, predicted: pd.Series):
     
-   # Compute confusion matrix elements
+    # Compute confusion matrix elements
     TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
-    # Compute performance metrics
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 1
-    recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+    # Computes rates
+    TPr, TNr = compute_posneg_rates(TN, FP, FN, TP)
 
-    if DEBUG:
-        print(f"compute_dark_number:\n\tTP: {TP}, \n\tFP: {FP}, \n\tFN: {FN}, \n\tRecall: {recall}, \n\tPrecision: {precision}")
-
-    # Calculate dark number using single alpha correction
-    dark_number = (precision**(-1) - 1) * (2 - recall)
+    # Calculate dark number using no alpha correction
+    dark_number = (1 - TNr) * (2 - TPr)
     
     return dark_number
 
@@ -32,18 +34,14 @@ def compute_dark_number_single_alpha(real: pd.Series, predicted: pd.Series, pred
     # Compute confusion matrix elements
     TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
-    # Compute performance metrics 
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 1
-    recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+    # Computes rates
+    TPr, TNr = compute_posneg_rates(TN, FP, FN, TP)
 
     # Compute the mean certainty of the predictions where real and predicted differ
     alpha = pred_prob[real != predicted].mean() if (FP > 0) else 1
-
-    if DEBUG:
-        print(f"compute_dark_number_single_alpha:\n\tTP: {TP}, \n\tFP: {FP}, \n\tFN: {FN}, \n\tRecall: {recall}, \n\tPrecision: {precision}, \n\talpha: {alpha}")
     
     # Calculate dark number using single alpha correction
-    dark_number = alpha * (precision**(-1) - 1) * (2 - recall)
+    dark_number = alpha * (1 - TNr) * (2 - TPr)
     
     return alpha, dark_number
 
@@ -54,32 +52,27 @@ def compute_dark_number_separated_alpha(real: pd.Series, predicted: pd.Series, p
     # Compute confusion matrix elements
     TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
-    # Compute performance metrics
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 1
-    recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+    # Computes rates
+    TPr, TNr = compute_posneg_rates(TN, FP, FN, TP)
 
     # Compute mean certainty for FP and FN
     alpha_FP = pred_prob[(real == 0) & (predicted == 1)].mean() if FP > 0 else 1
     alpha_FN = pred_prob[(real == 1) & (predicted == 0)].mean() if FN > 0 else 1
 
-    if DEBUG:
-        print(f"compute_dark_number_separated_alpha:\n\tTP: {TP}, \n\tFP: {FP}, \n\tFN: {FN}, \n\tRecall: {recall}, \n\tPrecision: {precision}, \n\talpha_FP: {alpha_FP}, \n\talpha_FN: {alpha_FN}")
-
     # Calculate dark number using separated alpha correction
-    dark_number = alpha_FP * (precision**(-1) - 1) * alpha_FN * (2 - recall)
+    dark_number = alpha_FP * (1 - TNr) * alpha_FN * (2 - TPr)
     
     return [alpha_FP, alpha_FN], dark_number
 
 # Compute dark number with non-linear scaling
 def compute_dark_number_non_linear(real: pd.Series, predicted: pd.Series, pred_prob: pd.Series,  \
-                                   use_alpha=False, log_base: float=np.e, root_degree: int=3):
+                                   use_alpha=False,  root_degree: int=3):
     
     # Compute confusion matrix elements
     TN, FP, FN, TP = confusion_matrix(real, predicted).ravel()
     
-    # Compute performance metrics
-    precision = TP / (TP + FP) if (TP + FP) > 0 else 1
-    recall = TP / (TP + FN) if (TP + FN) > 0 else 0
+    # Computes rates
+    TPr, TNr = compute_posneg_rates(TN, FP, FN, TP)
 
     # Alpha calculation where real and predicted differs
     if use_alpha:
@@ -87,17 +80,14 @@ def compute_dark_number_non_linear(real: pd.Series, predicted: pd.Series, pred_p
     else:
         alpha = 1.0
 
-    if DEBUG:
-        print(f"compute_dark_number_non_linear:\n\tTP: {TP}, \n\tFP: {FP}, \n\tFN: {FN}, \n\tRecall: {recall}, \n\tPrecision: {precision}, \n\talpha: {alpha}")
-
     # Calculate dark number using non-linear scaling
-    dark_number = alpha * np.log(precision**(-1)) / np.log(log_base) * (2 - recall**(1 / root_degree))
+    dark_number = alpha * (1 - TNr**(1 / root_degree)) * (2 - TPr**(1 / root_degree))
     
     return alpha if use_alpha else 1.0, dark_number
 
 # Unified interface for calculating dark numbers
 def compute_dark_numbers(real_target: pd.Series, pred_target: pd.Series, prob_pred: pd.Series, \
-                         type="base", log_base=np.e, root_degree=3):
+                         type="base", root_degree=3):
 
     # This DataFrame will hold the results
     dark_numbers = pd.DataFrame(columns=["type", "target", "alphas", "dark_number"])
@@ -114,9 +104,6 @@ def compute_dark_numbers(real_target: pd.Series, pred_target: pd.Series, prob_pr
     # Compute dark number for each target in the classification
         for target in real_target.unique():
 
-            if DEBUG: 
-                print (f"type: {type}, target: {target}")
-
             # Convert to binary classification 
             real_target_bin = pd.Series(real_target.apply(func=(lambda x: 1 if x == target else 0)), name="real_target")
             pred_target_bin = pd.Series(pred_target.apply(func=(lambda x: 1 if x == target else 0)), name="pred_target")
@@ -130,10 +117,10 @@ def compute_dark_numbers(real_target: pd.Series, pred_target: pd.Series, prob_pr
                 alpha, dark_number = compute_dark_number_separated_alpha(real_target_bin, pred_target_bin, prob_pred)
             elif type == "non_linear":
                 alpha, dark_number = compute_dark_number_non_linear(real_target_bin, pred_target_bin, prob_pred, \
-                                                            use_alpha=False, log_base=log_base, root_degree=root_degree)
+                                                            use_alpha=False, root_degree=root_degree)
             elif type == "non_linear_alpha":
                 alpha, dark_number = compute_dark_number_non_linear(real_target_bin, pred_target_bin, prob_pred, \
-                                                            use_alpha=True, log_base=log_base, root_degree=root_degree)
+                                                            use_alpha=True, root_degree=root_degree)
             else:
                 raise ValueError(f"The type of dark number is not supported: {type}")
             
@@ -190,7 +177,7 @@ def main():
     print(f"Dark Number (Non-Linear Scaling with Alpha correction): {dark_number_non_linear_alpha}")
 
     for type in ["single_alpha", "separated_alpha", "non_linear", "non_linear_alpha", "all"]:
-        dark_numbers = compute_dark_numbers(y_train, y_pred, y_prob, type=type, log_base=np.e, root_degree=3)
+        dark_numbers = compute_dark_numbers(y_train, y_pred, y_prob, type=type, root_degree=3)
     print(dark_numbers)
     
     

@@ -389,15 +389,17 @@ class AlgorithmGridSearchParams(MetaEnum):
                            'learning_rate': [0.01, 0.05, 0.1], 'max_epochs': [10, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5], \
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
     KERA = {"parameters": {'batch_size':[100, 20, 50, 25, 32],  'nb_epoch':[200, 100, 300, 400], 'unit':[5,6, 10, 11, 12, 15]}}
-    FUTV = {"parameters": \
-        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()}
-        }
+    #FUTV = {"parameters": \
+    #    {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+    #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()}
+    #    }
+    FUTV = {"parameters": {}}
 
-    FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
-        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} 
-        }
+    #FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
+    #    {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+    #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} 
+    #    }
+    FUTS = {"parameters": {}}
     
     @property
     def parameters(self):
