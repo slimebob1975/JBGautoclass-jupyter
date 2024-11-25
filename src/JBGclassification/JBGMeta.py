@@ -781,7 +781,8 @@ class Algorithm(MetaEnum):
     def do_FUTV(self, max_iterations: int, size: int) -> Filter:
         clf1 = MLPClassifier(max_iter=max_iterations)
         clf2 = RandomForestClassifier()
-        estimators=[('mlpc', clf1), ('rfcl', clf2)]
+        clf3 = AdaBoostClassifier()
+        estimators=[('mlpc', clf1), ('rfcl', clf2), ('abc', clf3)]
         return VotingClassifier(estimators=estimators, voting = 'soft')
      
     def do_FUTS(self, max_iterations: int, size: int) -> Filter:
