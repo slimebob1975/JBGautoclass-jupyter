@@ -22,6 +22,7 @@ from JBGTransformers import (JBGMCS, JBGInstanceHardness,
                              JBGPartitioningDetector, JBGRandomForestDetector,
                              JBGRobustCentroid, JBGRobustLogisticRegression,
                              NNClassifier3PL, MLPKerasClassifier)
+from JBGJaxTransformers import FlaxClassifier
 from skclean.detectors import KDN, ForestKDN, RkDN
 from skclean.handlers import CLNI, Costing, Filter, WeightedBagging
 from skclean.models import RobustForest
@@ -256,6 +257,7 @@ class Library(MetaEnum):
     IMBLRN = "Imbalanced Learn"
     TORCH = "PyTorch"
     KERAS = "Keras/Tensorflow"
+    FLAX = "Flax/Jax"
     
     def get_full_name(self) -> str:
         return self.full_name
@@ -401,6 +403,8 @@ class AlgorithmGridSearchParams(MetaEnum):
     #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} 
     #    }
     FUTS = {"parameters": {}}
+    FLAX = {"parameters": {'hidden_size': [16, 32, 64], 'num_layers': [3, 5, 10], 'learning_rate': [0.001, 0.01, 0.1], \
+                           'num_epochs': [10, 20, 50, 100], 'batch_size': (32,64) }}
     
     @property
     def parameters(self):
@@ -477,7 +481,7 @@ class Algorithm(MetaEnum):
     KERA = { "full_name": "Keras MLP Classifier", "search_params": AlgorithmGridSearchParams.KERA, "rfe_compatible": False, "lib": Library.KERAS}
     FUTV = { "full_name":  "FUT Voting Classifier", "search_params": AlgorithmGridSearchParams.FUTV, "rfe_compatible": False, "lib": Library.SCIKIT}
     FUTS = { "full_name":  "FUT Stacking Classifier", "search_params": AlgorithmGridSearchParams.FUTS, "rfe_compatible": False, "lib": Library.SCIKIT}
-
+    FLAX = { "full_name":  "Flax Neural Network", "search_params": AlgorithmGridSearchParams.FLAX, "rfe_compatible": False, "lib": Library.FLAX}
 
     def get_full_name(self) -> str:
         return self.full_name
@@ -791,6 +795,9 @@ class Algorithm(MetaEnum):
         clf3 = AdaBoostClassifier()
         estimators=[('mlpc', clf1), ('rfcl', clf2), ('abc', clf3)]
         return StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
+    
+    def do_FLAX(self, max_iterations: int, size: int)-> FlaxClassifier:     
+        return  FlaxClassifier(verbose=False)
     
 class Oversampling(MetaEnum):
     NOG = "No Oversampling"
