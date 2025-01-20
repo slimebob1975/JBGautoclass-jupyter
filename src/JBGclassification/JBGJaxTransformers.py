@@ -60,7 +60,8 @@ class FlaxClassifier(BaseEstimator, ClassifierMixin):
         y_encoded = jnp.array(y_encoded)
         
         # Initialize the model and training state if not already done
-        if self.state is None:
+        # Take into account the possibility of an input data dimension mismatch
+        if self.state is None or self.state.params['Dense_0']['kernel'].shape[0] != X.shape[1]:
             self._initialize_model(input_dim=X.shape[1], num_classes=len(self.classes_))
 
         # Training loop

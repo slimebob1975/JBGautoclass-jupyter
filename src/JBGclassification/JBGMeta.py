@@ -403,8 +403,9 @@ class AlgorithmGridSearchParams(MetaEnum):
     #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} 
     #    }
     FUTS = {"parameters": {}}
-    FLAX = {"parameters": {'hidden_size': [16, 32, 64], 'num_layers': [3, 5, 10], 'learning_rate': [0.001, 0.01, 0.1], \
-                           'num_epochs': [10, 20, 50, 100], 'batch_size': (32,64) }}
+    FLAX = {"parameters": {}}
+    #FLAX = {"parameters": {'hidden_size': [16, 32, 64], 'num_layers': [3, 5, 10], 'learning_rate': [0.001, 0.01, 0.1], \
+    #                       'num_epochs': [10, 20, 50, 100], 'batch_size': (32,64) }}
     
     @property
     def parameters(self):
