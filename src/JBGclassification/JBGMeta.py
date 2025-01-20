@@ -392,20 +392,18 @@ class AlgorithmGridSearchParams(MetaEnum):
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
     KERA = {"parameters": {'verbose': [1], 'epochs': [10, 50, 100, 200], 'optimizer': ["adam", "rmsprop"], \
                            'optimizer__learning_rate': [0.001, 0.01, 0.1]}}
-    #FUTV = {"parameters": \
-    #    {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-    #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()}
-    #    }
-    FUTV = {"parameters": {}}
-
-    #FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
-    #    {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-    #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} 
-    #    }
-    FUTS = {"parameters": {}}
-    FLAX = {"parameters": {}}
-    #FLAX = {"parameters": {'hidden_size': [16, 32, 64], 'num_layers': [3, 5, 10], 'learning_rate': [0.001, 0.01, 0.1], \
-    #                       'num_epochs': [10, 20, 50, 100], 'batch_size': (32,64) }}
+    FUTV = {"parameters": \
+        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
+        {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
+        }
+    FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
+        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
+        {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
+        }
+    FLAX = {"parameters": {'hidden_size': [16, 32, 64], 'num_layers': [3, 5, 10], 'learning_rate': [0.001, 0.01, 0.1], \
+                           'num_epochs': [10, 20, 50, 100], 'batch_size': (32,64) }}
     
     @property
     def parameters(self):
