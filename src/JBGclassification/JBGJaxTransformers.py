@@ -53,7 +53,7 @@ class FlaxClassifier(BaseEstimator, ClassifierMixin):
         
         self.label_encoder = self.label_encoder.fit(y)
         y_encoded = self.label_encoder.transform(y)
-        self.classes_ = jnp.unique(y_encoded)
+        self.classes_ = [str(the_class) for the_class in jnp.unique(y_encoded)]
         
         # Convert data to JAX arrays
         X = jnp.array(X)
