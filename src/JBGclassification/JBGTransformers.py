@@ -300,7 +300,7 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
     # Create new instance of converter object
     def __init__(self, text_columns: list[str] = None, category_columns: list[str] = None, \
         limit_categorize: int = LIMIT_IS_CATEGORICAL, language: str = STANDARD_LANGUAGE, \
-        stop_words: bool = True, df: float = 1.0, use_encryption: bool = True):
+        stop_words: bool = True, df: float = 1.0, use_encryption: bool = True, ngram_range=(1,2)):
                 
         # Take care of input
         if text_columns:
@@ -316,6 +316,7 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
         self.stop_words_ = stop_words
         self.df_ = df
         self.use_encryption_ = use_encryption
+        self.ngram_range_ = ngram_range
 
         # Internal transforms for conversion (placeholders)
         self.tfidvectorizer_ = None
@@ -355,7 +356,8 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
 
         # Depending on the division of columns, create conversion objects using fit.
         if self.text_columns_:
-            self.tfidvectorizer_ = TfidfVectorizer(stop_words=the_stop_words, max_df=self.df_).fit(X_document)
+            self.tfidvectorizer_ = TfidfVectorizer(stop_words=the_stop_words, ngram_range=self.ngram_range_ , 
+                                                   max_df=self.df_).fit(X_document)
         if self.category_columns_:
             self.ordinalencoder_ = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1).fit(X_category)
 
