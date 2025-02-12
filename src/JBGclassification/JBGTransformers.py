@@ -300,7 +300,7 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
     # Create new instance of converter object
     def __init__(self, text_columns: list[str] = None, category_columns: list[str] = None, \
         limit_categorize: int = LIMIT_IS_CATEGORICAL, language: str = STANDARD_LANGUAGE, \
-        stop_words: bool = True, df: float = 1.0, use_encryption: bool = True, ngram_range=(1,2)):
+        stop_words: bool = True, df: float = 1.0, use_encryption: bool = True, ngram_range=(1,3)):
                 
         # Take care of input
         if text_columns:
