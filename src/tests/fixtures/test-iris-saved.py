@@ -68,7 +68,7 @@ mode = {
      # Words which have a document frequency higher than
      # this threshold will be considered as stop words.
      # Set to 1.0 to not consider any specific stop words
-    "specific_stop_words_threshold": "1.0",
+    "ngram_range": "1.0",
 
     # Use hex encoding on text data before classification.
     "hex_encode": True,

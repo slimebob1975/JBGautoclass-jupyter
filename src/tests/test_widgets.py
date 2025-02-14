@@ -306,7 +306,7 @@ def widget_parameters() -> dict:
                 "description_tooltip": "Use Better Tooltip"
             }
         },
-        "filter_slider": {
+        "ngram_range": {
             "pre__load": {
                 "value": 100,
                 "min": 0,
@@ -654,19 +654,19 @@ class TestWidgets:
         assert filter_checkbox.description_tooltip == widget_parameters["filter_checkbox"]["pre__load"]["description_tooltip"]
 
         # Filter Slider
-        filter_slider = widgets.filter_slider
-        assert isinstance(filter_slider, ipywidgets.IntSlider)
-        assert filter_slider.value == widget_parameters["filter_slider"]["pre__load"]["value"]
-        assert filter_slider.min == widget_parameters["filter_slider"]["pre__load"]["min"]
-        assert filter_slider.max == widget_parameters["filter_slider"]["pre__load"]["max"]
-        assert filter_slider.step == widget_parameters["filter_slider"]["pre__load"]["step"]
-        assert filter_slider.disabled == widget_parameters["filter_slider"]["pre__load"]["disabled"]
-        assert filter_slider.continuous_update == widget_parameters["filter_slider"]["pre__load"]["continuous_update"]
-        assert filter_slider.orientation == widget_parameters["filter_slider"]["pre__load"]["orientation"]
-        assert filter_slider.readout == widget_parameters["filter_slider"]["pre__load"]["readout"]
-        assert filter_slider.readout_format == widget_parameters["filter_slider"]["pre__load"]["readout_format"]
-        assert filter_slider.description == widget_parameters["filter_slider"]["pre__load"]["description"]
-        assert filter_slider.description_tooltip == widget_parameters["filter_slider"]["pre__load"]["description_tooltip"]
+        ngram_range = widgets.ngram_range
+        assert isinstance(ngram_range, ipywidgets.IntSlider)
+        assert ngram_range.value == widget_parameters["ngram_range"]["pre__load"]["value"]
+        assert ngram_range.min == widget_parameters["ngram_range"]["pre__load"]["min"]
+        assert ngram_range.max == widget_parameters["ngram_range"]["pre__load"]["max"]
+        assert ngram_range.step == widget_parameters["ngram_range"]["pre__load"]["step"]
+        assert ngram_range.disabled == widget_parameters["ngram_range"]["pre__load"]["disabled"]
+        assert ngram_range.continuous_update == widget_parameters["ngram_range"]["pre__load"]["continuous_update"]
+        assert ngram_range.orientation == widget_parameters["ngram_range"]["pre__load"]["orientation"]
+        assert ngram_range.readout == widget_parameters["ngram_range"]["pre__load"]["readout"]
+        assert ngram_range.readout_format == widget_parameters["ngram_range"]["pre__load"]["readout_format"]
+        assert ngram_range.description == widget_parameters["ngram_range"]["pre__load"]["description"]
+        assert ngram_range.description_tooltip == widget_parameters["ngram_range"]["pre__load"]["description_tooltip"]
        
         # Num Rows IntText
         data_limit = widgets.data_limit

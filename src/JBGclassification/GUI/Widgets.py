@@ -13,7 +13,7 @@ from sklearn.utils import Bunch
 
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
                     AlgorithmTuple, Preprocess, PreprocessTuple, 
-                    ScoreMetric, Oversampling, Undersampling)
+                    ScoreMetric, Oversampling, Undersampling, NgramRange)
 from JBGTransformers import TextDataToNumbersConverter
         
 from JBGExceptions import GuiWidgetsException
@@ -327,7 +327,7 @@ class Widgets:
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
             "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.oversampler_dropdown, self.undersampler_dropdown, self.testdata_slider, self.iterations_slider],
-            "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.filter_slider],
+            "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.ngram_range_dropdown],
             "debug": [self.data_limit, self.show_info_checkbox, self.num_variables],
             "progress": [self.progress_bar, self.progress_label]
         }
@@ -468,7 +468,7 @@ class Widgets:
             "reduction_dropdown": tuple(config.get_feature_selection_abbreviations()),
             "num_variables": config.get_num_selected_features(),
             "filter_checkbox": config.use_stop_words(),
-            "filter_slider": config.get_stop_words_threshold_percentage(),
+            "ngram_range_dropdown": config.get_ngram_range(),
             "encryption_checkbox": config.should_hex_encode(),
             "categorize_checkbox": config.use_categorization(),
             "categorize_columns":  config.get_categorical_text_column_names(),
@@ -581,7 +581,7 @@ class Widgets:
                 "categorize_checkbox",
                 "categorize_columns",
                 "filter_checkbox",
-                "filter_slider"
+                "ngram_range_dropdown"
             ]
         
             self.categorize_columns.options = self.text_columns.value
@@ -718,7 +718,7 @@ class Widgets:
                 mispredicted = self.mispredicted_checkbox.value,
                 use_metas = self.metas_checkbox.value,
                 use_stop_words = self.filter_checkbox.value,
-                specific_stop_words_threshold = float(self.filter_slider.value) / 100.0,
+                ngram_range = NgramRange[self.ngram_range_dropdown.value],
                 hex_encode = self.encryption_checkbox.value,
                 use_categorization = self.categorize_checkbox.value,
                 category_text_columns = list(self.categorize_columns.value),
@@ -1328,9 +1328,11 @@ class Widgets:
         
     
     @property
-    def filter_slider(self) -> widgets.IntSlider:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        return self._load_widget(name)
+    def ngram_range_dropdown(self) -> widgets.DropDown:
+        name = sys._getframe().f_code.co_name # Current function name
+        return self._load_widget(name, calculated_params={
+            "options":NgramRange.get_plain_list()
+        })
         
     
     @property

@@ -97,6 +97,11 @@ class MetaEnum(enum.Enum):
         return self.value
     
     @classmethod
+    def get_plain_list(cls) -> list[tuple[str, str]]:
+        
+        return [(item.full_name, item.name) for item in cls]
+
+    @classmethod
     def get_sorted_list(cls, default_terms_first: bool = True) -> list[tuple[str, str]]:
         if not default_terms_first:
             return sorted([(item.full_name, item.name) for item in cls])
@@ -411,6 +416,22 @@ class AlgorithmGridSearchParams(MetaEnum):
             return self.value.get("parameters", {})
         
         return {}
+class NgramRange(MetaEnum):
+    UNI_GRAM = {"full_name": "Unigrams", "ngram_range": (1,1)}
+    UNI_BI_GRAM = {"full_name": "Uni- & Bigrams", "ngram_range": (1,2)}
+    UNI_BI_TRI_GRAM = {"full_name": "Uni-, Bi- & Trigrams", "ngram_range": (1,3)}
+    BIGRAM = {"full_name": "Bigrams", "ngram_range": (2,2)}
+    BI_TRI_GRAM = {"full_name": "Bi- & Trigrams", "ngram_range": (2,3)}
+    TRIGRAM = {"full_name": "Trigrams", "ngram_range": (3,3)}
+
+    @property
+    def ngram_range(self):
+        if isinstance(self.value, dict):
+            return self.value.get("ngram_range", {})
+
+    @classmethod
+    def defaultNgramRange(cls):
+        return cls.UNI_GRAM
 
 class Algorithm(MetaEnum):
     DUMY = { "full_name": "Dummy Classifier", "search_params": AlgorithmGridSearchParams.DUMY, "rfe_compatible": False, "lib": Library.SCIKIT}

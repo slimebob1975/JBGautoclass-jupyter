@@ -13,7 +13,7 @@ import Helpers
 from JBGExceptions import ConfigException, ODBCDriverException
 from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
                      Reduction, ReductionTuple, ScoreMetric, MetaTuple, Oversampling,
-                     Undersampling)
+                     Undersampling, NgramRange)
 
 
 T = TypeVar('T', bound='Config')
@@ -56,7 +56,7 @@ class Config:
         "mode.mispredicted": "<mispredicted>",
         "mode.use_metas": "<use_metas>",
         "mode.use_stop_words": "<use_stop_words>",
-        "mode.specific_stop_words_threshold": "<specific_stop_words_threshold>",
+        "mode.ngram_range": "<ngram_range>",
         "mode.hex_encode": "<hex_encode>",
         "mode.use_categorization": "<use_categorization>",
         "mode.category_text_columns": "<category_text_columns>",
@@ -337,7 +337,7 @@ class Config:
         mispredicted: bool = True
         use_metas: bool = True
         use_stop_words: bool = True
-        specific_stop_words_threshold: float = 1.0
+        ngram_range: NgramRange = field(default_factory=NgramRange.defaultNgramRange)
         hex_encode: bool = True
         use_categorization: bool = True
         category_text_columns: list = field(default_factory=list)
@@ -387,16 +387,11 @@ class Config:
                 raise ValueError(
                     "Class must be set for training if it is set for misprediction")
 
-            # Stop words threshold and test size
-            if isinstance(self.specific_stop_words_threshold, float):
-                if self.specific_stop_words_threshold > 1.0 or self.specific_stop_words_threshold < 0.0:
-                    raise ValueError(
-                        "Argument specific_stop_words_threshold must be between 0 and 1!")
-            else:
-                raise TypeError(
-                    "Argument specific_stop_words_threshold must be a float between 0 and 1!")
-
+            # Ngram range 
+            if not (isinstance(self.ngram_range, NgramRange)):
+                raise TypeError(f"Argument ngram_range is invalid: {str(self.ngram_range)}")
             
+            # Test size
             if isinstance(self.test_size, float):
                 if self.test_size > 1.0 or self.test_size < 0.0:
                     raise ValueError(
@@ -447,7 +442,7 @@ class Config:
                 "Display mispredicted training data":    self.mispredicted,
                 "Pass on meta data for predictions":     self.use_metas,
                 "Use stop words":                        self.use_stop_words,
-                "Material specific stop words threshold":self.specific_stop_words_threshold,
+                "Ngram range":                           self.ngram_range,
                 "Hex encode text data":                  self.hex_encode,
                 "Categorize text data where applicable": self.use_categorization,
                 "Force categorization to these columns": forced_columns,
@@ -789,8 +784,7 @@ class Config:
                 mispredicted=module.mode["mispredicted"],
                 use_metas=use_metas,
                 use_stop_words=module.mode["use_stop_words"],
-                specific_stop_words_threshold=float(
-                    module.mode["specific_stop_words_threshold"]),
+                ngram_range=module.mode["ngram_range"],
                 hex_encode=module.mode["hex_encode"],
                 use_categorization=module.mode["use_categorization"],
                 category_text_columns=category_text_columns,
@@ -997,13 +991,9 @@ class Config:
         """ Returns whether stop words should be used """
         return self.mode.use_stop_words
 
-    def get_stop_words_threshold(self) -> float:
-        """ Returns the threshold for the stop words """
-        return self.mode.specific_stop_words_threshold
-
-    def get_stop_words_threshold_percentage(self) -> int:
-        """ Returns the threshold as an integer between 0-100"""
-        return int(self.mode.specific_stop_words_threshold * 100.0)
+    def get_ngram_range(self) -> NgramRange:
+        """ Returns the ngram range"""
+        return self.mode.ngram_range
 
     def should_hex_encode(self) -> bool:
         """ Returns whether dataset should be hex encoded """

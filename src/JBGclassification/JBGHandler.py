@@ -25,7 +25,7 @@ from stop_words import get_stop_words
 
 from Config import Config
 from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estimator, Transform,
-                     Oversampling, Undersampling)
+                     Oversampling, Undersampling, NgramRange)
 from JBGExceptions import (DatasetException, MissingScorerException, ModelException, HandlerException, ModelInitializationException, 
     UnstableModelException, PipelineException)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
@@ -171,7 +171,7 @@ class Config(Protocol):
     def use_stop_words(self) -> bool:
         """ Returns whether stop words should be used """
 
-    def get_stop_words_threshold(self) -> float:
+    def get_ngram_range(self) -> NgramRange:
         """ Returns the threshold fo the stop words """
 
     def should_hex_encode(self) -> bool:
@@ -460,7 +460,8 @@ class DatasetHandler:
                     limit_categorize=TextDataToNumbersConverter.LIMIT_IS_CATEGORICAL, \
                     language=TextDataToNumbersConverter.STANDARD_LANGUAGE, \
                     stop_words=self.handler.config.use_stop_words(), \
-                    df=self.handler.config.get_stop_words_threshold(), \
+                    df=1.0, \
+                    ngram_range=(self.handler.config.get_ngram_range()).ngram_range, \
                     use_encryption=self.handler.config.should_hex_encode() \
                 )
             
@@ -611,7 +612,7 @@ class DatasetHandler:
 
             # Collect text specific stop words (already encrypted if encryption is on)
             text_specific_stop_words = []
-            threshold = self.handler.config.get_stop_words_threshold()
+            threshold = 1.0
             if threshold < 1.0:
                 try:
                     stop_vectorizer = CountVectorizer(min_df = threshold)

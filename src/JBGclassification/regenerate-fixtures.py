@@ -41,7 +41,7 @@ def bare_iris_config() -> Config:
             mispredicted=False,
             use_metas= False,
             use_stop_words=False,
-            specific_stop_words_threshold=1.0,
+            ngram_range=1.0,
             hex_encode=True,
             use_categorization=True,
             category_text_columns=[],

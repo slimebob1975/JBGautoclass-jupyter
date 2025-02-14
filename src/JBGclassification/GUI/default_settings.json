@@ -304,23 +304,16 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Text: Filter",
-                "description_tooltip": "Use Better Tooltip"
+                "description_tooltip": "Filter stop words from non-categorical text variables"
             }
         },
-        "filter_slider": {
-            "type": "IntSlider",
+        "ngram_range_dropdown": {
+            "type": "Dropdown",
             "params": {
-                "value": 100,
-                "min": 0,
-                "max": 100,
-                "step": 1,
+                "value": "UNI_GRAM",
                 "disabled": true,
-                "continuous_update": false,
-                "orientation": "horizontal",
-                "readout": true,
-                "readout_format": "d",
-                "description": "Doc.freq. (%):",
-                "description_tooltip": "Set document frequency limit for filtering of stop words"
+                "description": "Text: Ngrams",
+                "description_tooltip": "Defines the range of n-grams (word sequences) to extract from non-categorical text variables."
             }
         },
         "data_limit": {
@@ -470,7 +463,7 @@
             "categorize_checkbox",
             "categorize_columns",
             "filter_checkbox",
-            "filter_slider",
+            "ngram_range_dropdown",
             "data_limit",
             "show_info_checkbox",
             "num_variables",

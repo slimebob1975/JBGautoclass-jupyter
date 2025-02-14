@@ -60,15 +60,11 @@ mode = {
     "predict": <predict>,
     "mispredicted": <mispredicted>,
 
-    # Ignore standard stop words in classification and,
-    # possibly, material specific stop words (see below)
+    # Ignore standard stop words in classification 
     "use_stop_words": <use_stop_words>,
 
-     # Lower percentage limit for specific stop words retrieval. 
-     # Words which have a document frequency higher than
-     # this threshold will be considered as stop words.
-     # Set to 1.0 to not consider any specific stop words
-    "specific_stop_words_threshold": "<specific_stop_words_threshold>",
+    # For non-categorical text variables, set the level of ngrams to generate in tf-idf process
+    "ngram_range": <ngram_range>,
 
     # Use hex encoding on text data before classification.
     "hex_encode": <hex_encode>,

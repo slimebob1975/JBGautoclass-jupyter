@@ -210,7 +210,7 @@ class TestConfig:
         expected = "[DatabaseOne].[ResultTable]"
         assert valid_iris_config.get_class_table() == expected
 
-        assert valid_iris_config.get_stop_words_threshold_percentage() == 100
+        assert valid_iris_config.get_ngram_range()
 
         assert valid_iris_config.get_test_size_percentage() == 20
    
@@ -236,7 +236,7 @@ class TestConfig:
         
         assert not valid_iris_config.use_stop_words()
 
-        assert valid_iris_config.get_stop_words_threshold() == 1.0
+        assert valid_iris_config.get_ngram_range()
 
         assert valid_iris_config.should_hex_encode()
 

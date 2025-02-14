@@ -1,7 +1,7 @@
 import os
 import pytest
 from Config import Config
-from JBGMeta import AlgorithmTuple, Algorithm, PreprocessTuple, Preprocess, ReductionTuple, Reduction, ScoreMetric
+from JBGMeta import AlgorithmTuple, Algorithm, PreprocessTuple, Preprocess, ReductionTuple, Reduction, ScoreMetric, NgramRange
 import SQLDataLayer
 import JBGHandler
 from typing import Callable, Union
@@ -167,7 +167,7 @@ class MockConfig():
     def use_stop_words(self) -> bool:
         """ Returns whether stop words should be used """
 
-    def get_stop_words_threshold(self) -> float:
+    def get_ngram_range(self) -> NgramRange:
         """ Returns the threshold fo the stop words """
 
     def should_hex_encode(self) -> bool:
@@ -271,7 +271,7 @@ def valid_iris_config() -> Config:
             mispredicted=False,
             use_metas= False,
             use_stop_words=False,
-            specific_stop_words_threshold=1.0,
+            ngram_range=1.0,
             hex_encode=True,
             use_categorization=True,
             category_text_columns=[],
@@ -323,7 +323,7 @@ def bare_iris_config() -> Config:
             mispredicted=False,
             use_metas=False,
             use_stop_words=False,
-            specific_stop_words_threshold=1.0,
+            ngram_range=1.0,
             hex_encode=True,
             use_categorization=True,
             category_text_columns=[],
@@ -384,7 +384,7 @@ def saved_with_valid_iris_config() -> Config:
             mispredicted=False,
             use_metas= False,
             use_stop_words=False,
-            specific_stop_words_threshold=1.0,
+            ngram_range=1.0,
             hex_encode=True,
             use_categorization=True,
             category_text_columns=[],
