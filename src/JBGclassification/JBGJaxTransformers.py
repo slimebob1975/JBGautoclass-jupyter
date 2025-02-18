@@ -140,6 +140,10 @@ class FlaxClassifier(BaseEstimator, ClassifierMixin):
 
 def main():
 
+    # Check platform
+    print(f"Available JAX devices: {jax.devices()}")
+    jax.config.update("jax_platform_name", "gpu")
+    
     # Generate synthetic data
     X, y = make_classification(n_samples=1000, n_features=10, n_informative=8, n_classes=3, random_state=42)
     y = np.array(["Class " + str(y[i]) for i in range(y.shape[0])])
