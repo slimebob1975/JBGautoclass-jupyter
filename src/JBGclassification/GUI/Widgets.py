@@ -301,8 +301,7 @@ class Widgets:
         #print(self.widgets)
         
         self.forms = {
-            "connection": [self.sql_username, self.sql_password],
-            "catalog": [self.data_catalogs_dropdown, self.data_tables_dropdown],
+            "connection": [self.sql_username, self.sql_password, self.data_catalogs_dropdown, self.data_tables_dropdown],
             "models": [self.models_dropdown, self.field_status("models")],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
@@ -1021,6 +1020,7 @@ class Widgets:
     
 
     def create_form(self, children: list, boxtype: Callable) -> widgets.Box:
+        #print(f"Creating form: {str(type(self))}, with children: {children}")
         if boxtype == widgets.Box:
             return boxtype(children, layout=self.get_box_layout())
         
