@@ -61,35 +61,16 @@ class EventHandler:
     def sql_username_and_password(self, change: Bunch) -> None:
         
         # Handler for changes in sql username and password text fields
-        if not self.widgets.sql_trusted_connection.value:
-
-            if change['name'] == 'value':                
-                if self.widgets.sql_username.value != "" and self.widgets.sql_password.value != "":
-                    self.widgets.update_sql_username_and_password(
-                        self.widgets.sql_username.value,
-                        self.widgets.sql_password.value
-                    )
-                    self.widgets.update_data_catalogs_dropdown()
-                    self.widgets.data_catalogs_dropdown.disabled = False
-                else:
-                    self.widgets.data_catalogs_dropdown.disabled = True
-
-    def sql_trusted_connection(self, change: Bunch) -> None:
-        # Handler for sql_trusted_connection checkbox
         if change['name'] == 'value':                
-            if self.widgets.sql_trusted_connection.value:   # Trusted connection
-                self.widgets.sql_username.disabled = True
-                self.widgets.sql_username.value = ""
-                self.widgets.sql_password.disabled = True
-                self.widgets.sql_password.value = ""
+            if self.widgets.sql_username.value != "" and self.widgets.sql_password.value != "":
+                self.widgets.update_sql_username_and_password(
+                    self.widgets.sql_username.value,
+                    self.widgets.sql_password.value
+                )
                 self.widgets.update_data_catalogs_dropdown()
                 self.widgets.data_catalogs_dropdown.disabled = False
-
-            else:                                           # Not trusted connection
-                self.widgets.sql_username.disabled = False
-                self.widgets.sql_password.disabled = False
-                if self.widgets.sql_username.value == "" or self.widgets.sql_password.value == "":
-                    self.widgets.data_catalogs_dropdown.disabled = True
+            else:
+                self.widgets.data_catalogs_dropdown.disabled = True
     
     def data_catalogs_dropdown(self, change: Bunch) -> None:
         """ Handler for data_catalogs_dropdown
@@ -320,7 +301,7 @@ class Widgets:
         #print(self.widgets)
         
         self.forms = {
-            "connection": [self.sql_username, self.sql_password, self.sql_trusted_connection],
+            "connection": [self.sql_username, self.sql_password],
             "catalog": [self.data_catalogs_dropdown, self.data_tables_dropdown],
             "models": [self.models_dropdown, self.field_status("models")],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
@@ -702,7 +683,6 @@ class Widgets:
                 host = os.environ.get("DEFAULT_HOST"),
                 sql_username = data_settings["connection"]["sql_username"],
                 sql_password = data_settings["connection"]["sql_password"],
-                trusted_connection = data_settings["connection"]["sql_trusted_connection"],
                 class_catalog = os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
                 class_table = os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
                 data_catalog = data_settings["data"]["catalog"],
@@ -873,8 +853,7 @@ class Widgets:
             "project": self.project.value,
             "connection": {
                 "sql_username": self.sql_username.value,
-                "sql_password": self.sql_password.value,
-                "sql_trusted_connection": self.sql_trusted_connection.value
+                "sql_password": self.sql_password.value
             },
             "data": {
                 "catalog": self.data_catalogs_dropdown.value,
@@ -1137,14 +1116,6 @@ class Widgets:
         if name not in self.widgets:
             self._load_widget(name, handler=self.eventhandler.sql_username_and_password)
         
-        return self.widgets[name]
-
-    @property
-    def sql_trusted_connection(self) -> widgets.Checkbox:
-        name = sys._getframe(  ).f_code.co_name # Current function name
-        if name not in self.widgets:
-            self._load_widget(name, handler=self.eventhandler.sql_trusted_connection)
-            
         return self.widgets[name]
 
     @property

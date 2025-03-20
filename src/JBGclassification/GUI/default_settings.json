@@ -12,7 +12,7 @@
         "welcome": {
             "type": "HTML",
             "params": {
-                "value": "<h1>Welcome to JBG automatic classification!</h1>"
+                "value": "<h1>Supervised Machine Learning</h1>"
             }
         },
         "project": {
@@ -44,16 +44,6 @@
                 "description": "Password:",
                 "description_tooltip": "Enter your SQL password for login to the database",
                 "continuous_update": false
-            }
-        },
-        "sql_trusted_connection": {
-            "type": "Checkbox",
-            "params": {
-                "value": false,
-                "disabled": false,
-                "indent": true,
-                "description": "Trusted connection",
-                "description_tooltip": "Use Windows user to log in to the database"
             }
         },
         "data_catalogs_dropdown": {
@@ -412,7 +402,6 @@
         "project",
         "sql_username",
         "sql_password",
-        "sql_trusted_connection",
         "data_catalogs_dropdown",
         "data_tables_dropdown",
         "models_form",
@@ -435,7 +424,6 @@
             "project",
             "sql_username",
             "sql_password",
-            "sql_trusted_connection",
             "data_catalogs_dropdown",
             "data_tables_dropdown",
             "models_dropdown",
