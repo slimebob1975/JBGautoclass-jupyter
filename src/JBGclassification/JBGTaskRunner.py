@@ -215,10 +215,10 @@ class TaskRunner:
         try:
             output_filename = self.config.get_output_filepath("cross_validation")
             self.logger.print_progress(message="Check and train algorithms for best model")
-            self.logger.print_code("Cross validation filepath", \
-                                   Helpers.create_download_link(output_filename, title = ""))
             
             self.mh.train_model(self.dh, output_filename)
+            self.logger.print_code("Cross validation results filepath", \
+                                   Helpers.create_download_link(output_filename, title = ""))
             self.mh.save_model_to_file(self.mh.handler.config.get_model_filename())
         except Exception as e:
             raise Exception(f"Training or saving model failed: {e}")
