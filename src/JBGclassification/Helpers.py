@@ -7,6 +7,7 @@ import sys
 import shutil
 from typing import Iterable
 import re
+from pathlib import Path
 
 import numpy as np
 import pandas
@@ -14,6 +15,15 @@ import IPython.display
 
 DOUBLE_UNDERSCORE = "__"
 EMAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+
+def create_download_link(filename, title = "Click here to download file: "):  
+    data = open(filename, "rb").read()
+    b64 = base64.b64encode(data)
+    payload = b64.decode()
+    html = '<a download="{filename}" href="data:text/csv;base64,{payload}" target="_blank">{title}</a>'
+    html = html.format(payload=payload,title=title+f' {filename}',filename=Path(filename).name)
+    #return IPython.display.HTML(html)
+    return html
 
 def clean_list(dirty_list: list) -> list[str]:
     """ 

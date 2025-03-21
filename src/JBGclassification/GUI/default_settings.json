@@ -20,7 +20,7 @@
             "params": {
                 "value": "default",
                 "placeholder": "Project name",
-                "description": "Project name:",
+                "description": "Project:",
                 "description_tooltip": "Enter a distinct project name for the model"
             }
         },
@@ -30,7 +30,7 @@
                 "value": "",
                 "disabled": false,
                 "placeholder": "Enter username",
-                "description": "Username:",
+                "description": "SQL user:",
                 "description_tooltip": "Enter your SQL username for logging into the database",
                 "continuous_update": false
             }
@@ -102,7 +102,7 @@
                 "options": ["N/A"],
                 "value": [],
                 "disabled": true,
-                "description": "Data columns:",
+                "description": "Data:",
                 "description_tooltip": "Pick the columns with the data to be used in the classification"
             }
         },
