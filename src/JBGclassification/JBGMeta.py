@@ -397,11 +397,12 @@ class AlgorithmGridSearchParams(MetaEnum):
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
     KERA = {"parameters": {'verbose': [1], 'epochs': [10, 50, 100, 200], 'optimizer': ["adam", "rmsprop"], \
                            'optimizer__learning_rate': [0.001, 0.01, 0.1]}}
-    FUTV = {"parameters": \
-        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
-        {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
-        }
+    #FUTV = {"parameters": \
+    #    {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+    #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
+    #    {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
+    #    }
+    FUTV = {"parameters": {}}
     FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
         {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
         {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \

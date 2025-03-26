@@ -1557,12 +1557,12 @@ class PredictionsHandler:
         most_mispredicted_query = f"{self._get_rid_of_TOP_stuffs(self.handler.read_data_query)} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
         
         self.handler.logger.print_code("Get the most misplaced data by SQL query", most_mispredicted_query)
-        self.handler.logger.print_code("Open the following csv-data file to get the full list", Helpers.create_download_link(misplaced_filepath, title = ""))
         Helpers.save_matrix_as_csv(
             self.X_mispredicted,
             misplaced_filepath,
             self.handler.config.get_id_column_name()
         )
+        self.handler.logger.print_code("Open the following csv-data file to get the full list", Helpers.create_download_link(misplaced_filepath, title = ""))
     
     # Clean up data query string from the original TOP specification
     def _get_rid_of_TOP_stuffs(self, query):
