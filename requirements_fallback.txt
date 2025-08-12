@@ -16,7 +16,7 @@ scipy==1.11.1
 stop_words==2018.7.23
 terminal==0.4.0
 dill==0.3.6 # 0.3.8
-torch==2.6.0
+torch==2.8.0
 skorch==0.15.0 # 1.0.0
 scikeras==0.11.0 # 0.13.0
 tensorflow==2.16.1
