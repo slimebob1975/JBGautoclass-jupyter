@@ -20,6 +20,6 @@ torch==2.6.0
 skorch==0.15.0 # 1.0.0
 scikeras==0.11.0 # 0.13.0
 tensorflow==2.16.1
-jax=0.4.38
-optax=0.2.4
-flax=0.10.2
+jax==0.4.38
+optax==0.2.4
+flax==0.10.2
