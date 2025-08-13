@@ -18,14 +18,8 @@ from imblearn.under_sampling import (ClusterCentroids, CondensedNearestNeighbour
                                      NeighbourhoodCleaningRule, OneSidedSelection,
                                      RandomUnderSampler, TomekLinks,
                                      RepeatedEditedNearestNeighbours)
-from JBGTransformers import (JBGMCS, JBGInstanceHardness,
-                             JBGPartitioningDetector, JBGRandomForestDetector,
-                             JBGRobustCentroid, JBGRobustLogisticRegression,
-                             NNClassifier3PL, MLPKerasClassifier)
+from JBGTransformers import (NNClassifier3PL, MLPKerasClassifier)
 from JBGJaxTransformers import FlaxClassifier
-from skclean.detectors import KDN, ForestKDN, RkDN
-from skclean.handlers import CLNI, Costing, Filter, WeightedBagging
-from skclean.models import RobustForest
 from sklearn.decomposition import NMF, PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
                                            QuadraticDiscriminantAnalysis)
@@ -267,57 +261,9 @@ class Library(MetaEnum):
     def get_full_name(self) -> str:
         return self.full_name
 
-class Detector(MetaEnum):
-    ALL = { "full_name": "All" }
-    NON = { "full_name": "None" }
-    KDN = { "full_name":"KDN" }
-    FKDN = { "full_name": "Forest KDN" }
-    RKDN = { "full_name": "Recursive KDN" }
-    PDEC = { "full_name": "Partitioning Detector + Label Encoder" }
-    MCS = { "full_name": "Markov Chain Sampling + Label Encoder" } 
-    INH = { "full_name": "Instance Hardness Detector" }
-    RFD = { "full_name": "Random Forest Detector" }
-
-    @classmethod
-    def list_callable_detectors(cls) -> list[tuple]:
-        """ Gets a list of detectors that are callable (including NON -> None)
-            in the form (detector, called function)
-        """
-        return [(dt, dt.call_detector()) for dt in cls if dt.has_function()]
-
-    def call_detector(self)  -> Union[Detecter, None]: 
-        """ Wrapper to general function for DRY, but name/signature kept for ease. """
-        return self.call_function('do')
-
-    def do_NON(self) -> None:
-        """ While this return is superfluos, it helps with the listings of detectors """
-        return None
-
-    def do_KDN(self) -> KDN:
-        return KDN()
-
-    def do_FKDN(self) -> ForestKDN:
-        return ForestKDN()
-
-    def do_RKDN(self) -> RkDN:
-        return RkDN()
-
-    def do_PDEC(self) -> JBGPartitioningDetector:
-        return JBGPartitioningDetector()
-
-    def do_MCS(self) -> JBGMCS:
-        return JBGMCS()
-
-    def do_INH(self) -> JBGInstanceHardness:
-        return JBGInstanceHardness()
-
-    def do_RFD(self) -> JBGRandomForestDetector:
-        return JBGRandomForestDetector()
-
 class AlgorithmGridSearchParams(MetaEnum):
     DUMY =  {"parameters": {'strategy': ('most_frequent', 'prior', 'stratified', 'uniform', 'constant')}}
     SRF1 = {"parameters": {}}
-    SRF2 = {"parameters": {}} 
     BARF = {"parameters": {'criterion': ('gini', 'entropy'), 'n_estimators':[10,50,100,200], 
             'class_weight': ('balanced', 'balanced_subsample', None)}}
     BABC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
@@ -371,26 +317,6 @@ class AlgorithmGridSearchParams(MetaEnum):
         'max_depth' : [25, 50, 75], 'l2_regularization': [0.0, 0.1, 1.5] }} 
     MLPC = {"parameters": {'activation': ('identity', 'logistic', 'tanh', 'relu'), 'solver': ('lbfgs', 'sgd', 'adam')}}
     GPC =  {"parameters": {'warm_start': (True, False), 'multi_class': ('one_vs_rest', 'one_vs_one')}}
-    FRFD = {"parameters": {}}
-    FPCD = {"parameters": {}}
-    FFKD = {"parameters": {}}
-    FINH = {"parameters": {}}
-    CSTK = {"parameters": {}}
-    CSTM = {"parameters": {}}
-    CRFD = {"parameters": {}}
-    CPCD = {"parameters": {}}
-    CFKD = {"parameters": {}}
-    CINH = {"parameters": {}}
-    WBGK = {"parameters": {}}
-    WBGM = {"parameters": {}}   
-    WRFD = {"parameters": {}}
-    WPCD = {"parameters": {}}
-    WFKD = {"parameters": {}}
-    WINH = {"parameters": {}}
-    CLRF = {"parameters": {}}
-    CLPC = {"parameters": {}}
-    CLFK = {"parameters": {}}
-    CLIH = {"parameters": {}}
     VOTG = {"parameters": {'voting': ('hard', 'soft')}}
     PYNN = {"parameters": {'activation': ('relu', 'tanh', 'sigmoid'), 'optimizer': ('adam', 'sgd'), \
                            'learning_rate': [0.01, 0.05, 0.1], 'max_epochs': [10, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5], \
@@ -437,7 +363,6 @@ class NgramRange(MetaEnum):
 class Algorithm(MetaEnum):
     DUMY = { "full_name": "Dummy Classifier", "search_params": AlgorithmGridSearchParams.DUMY, "rfe_compatible": False, "lib": Library.SCIKIT}
     SRF1 = { "full_name": "Stacked Random Forests 1", "search_params": AlgorithmGridSearchParams.SRF1, "rfe_compatible": False, "lib": Library.SCIKIT}
-    SRF2 = { "full_name": "Stacked Random Forests 2", "search_params": AlgorithmGridSearchParams.SRF2, "rfe_compatible": False, "lib": Library.SCIKIT}
     BARF = { "full_name": "Balanced Random Forest", "search_params": AlgorithmGridSearchParams.BARF, "rfe_compatible": True, "lib": Library.IMBLRN}
     BABC = { "full_name": "Balanced Bagging Classifier", "search_params": AlgorithmGridSearchParams.BABC, "rfe_compatible": False, "lib": Library.IMBLRN}
     RUBC = { "full_name": "RUS Boost Classifier", "search_params": AlgorithmGridSearchParams.RUBC, "rfe_compatible": True, "lib": Library.IMBLRN}
@@ -472,33 +397,13 @@ class Algorithm(MetaEnum):
     HIST = { "full_name": "Histogram-based Gradient B. Classifier", "search_params": AlgorithmGridSearchParams.HIST, "rfe_compatible": False, "lib": Library.SCIKIT}
     MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC, "rfe_compatible": False, "lib": Library.SCIKIT}
     GPC = { "full_name": "Gaussian Process Classifier", "search_params": AlgorithmGridSearchParams.GPC, "rfe_compatible": False, "lib": Library.SCIKIT}
-    FRFD = { "full_name": "Filter + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.FRFD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #FPCD = { "full_name": "Filter + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.FPCD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #FFKD = { "full_name": "Filter + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.FFKD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #FINH = { "full_name": "Filter + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.FINH, "rfe_compatible": False, "lib": Library.CLEAN}
-    CSTK = { "full_name": "Costing + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.CSTK, "rfe_compatible": False, "lib": Library.CLEAN}
-    #CSTM = { "full_name": "Costing + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.CSTM, "rfe_compatible": False, "lib": Library.CLEAN}
-    #CRFD = { "full_name": "Costing + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CRFD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #CPCD = { "full_name": "Costing + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CPCD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #CFKD = { "full_name": "Costing + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CFKD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #CINH = { "full_name": "Costing + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CINH, "rfe_compatible": False, "lib": Library.CLEAN}
-    WBGK = { "full_name": "WeightedBagging + KDN", "detector": Detector.KDN, "search_params": AlgorithmGridSearchParams.WBGK, "rfe_compatible": False, "lib": Library.CLEAN}
-    #WBGM = { "full_name": "WeightedBagging + MCS", "detector": Detector.MCS, "search_params": AlgorithmGridSearchParams.WBGM, "rfe_compatible": False, "lib": Library.CLEAN}   
-    #WRFD = { "full_name": "WeightedBagging + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.WRFD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #WPCD = { "full_name": "WeightedBagging + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.WPCD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #WFKD = { "full_name": "WeightedBagging + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.WFKD, "rfe_compatible": False, "lib": Library.CLEAN}
-    #WINH = { "full_name": "WeightedBagging + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.WINH, "rfe_compatible": False, "lib": Library.CLEAN}
-    CLRF = { "full_name": "CLNI + RandomForestDetector", "detector": Detector.RFD, "search_params": AlgorithmGridSearchParams.CLRF, "rfe_compatible": False, "lib": Library.CLEAN}
-    #CLPC = { "full_name": "CLNI + PartitioningDetector", "detector": Detector.PDEC, "search_params": AlgorithmGridSearchParams.CLPC, "rfe_compatible": False, "lib": Library.CLEAN}
-    #CLFK = { "full_name": "CLNI + ForestKDN", "detector": Detector.FKDN, "search_params": AlgorithmGridSearchParams.CLFK, "rfe_compatible": False, "lib": Library.CLEAN}
-    #CLIH = { "full_name": "CLNI + InstanceHardness", "detector": Detector.INH, "search_params": AlgorithmGridSearchParams.CLIH, "rfe_compatible": False, "lib": Library.CLEAN}
     VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False, "lib": Library.SCIKIT}
     TORA = { "full_name":  "PyTorch ReLu+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
-    #TORS = { "full_name":  "PyTorch ReLu+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
-    #TOTA = { "full_name":  "PyTorch Tanh+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
-    #TOTS = { "full_name":  "PyTorch Tanh+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
-    #TOSA = { "full_name":  "PyTorch Sigm+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
-    #TOSS = { "full_name":  "PyTorch Sigm+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TORS = { "full_name":  "PyTorch ReLu+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TOTA = { "full_name":  "PyTorch Tanh+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TOTS = { "full_name":  "PyTorch Tanh+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TOSA = { "full_name":  "PyTorch Sigm+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
+    TOSS = { "full_name":  "PyTorch Sigm+SGD", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
     KERA = { "full_name": "Keras MLP Classifier", "search_params": AlgorithmGridSearchParams.KERA, "rfe_compatible": False, "lib": Library.KERAS}
     FUTV = { "full_name":  "FUT Voting Classifier", "search_params": AlgorithmGridSearchParams.FUTV, "rfe_compatible": False, "lib": Library.SCIKIT}
     FUTS = { "full_name":  "FUT Stacking Classifier", "search_params": AlgorithmGridSearchParams.FUTS, "rfe_compatible": False, "lib": Library.SCIKIT}
@@ -512,13 +417,6 @@ class Algorithm(MetaEnum):
         if isinstance(self.value, dict):
             return self.value.get("limit")
         
-        return None
-
-    @property
-    def detector(self):
-        if isinstance(self.value, dict):
-            return self.value.get("detector")
-
         return None
 
     @property
@@ -558,11 +456,6 @@ class Algorithm(MetaEnum):
         algorithms.sort(key=lambda algotuple: algotuple[0].name)
         return algorithms
 
-    @classmethod
-    def get_robust_algorithms(cls) -> list:
-        """ This list needs to be extended if we add more robust algorithms"""
-        return [Algorithm.RTCL, Algorithm.RLRN, Algorithm.RCNT]
-
     def get_compound_name(self, prepros: Preprocess)->str:
         return f"{self.name}-{prepros.name}"
 
@@ -575,18 +468,10 @@ class Algorithm(MetaEnum):
 
     def do_DUMY(self, max_iterations: int, size: int)-> DummyClassifier:
         return DummyClassifier()
-    
+
     def do_SRF1(self, max_iterations: int, size: int)-> StackingClassifier:
         estimators = [ \
-                ('rfor',RobustForest()),\
-                ('bfor',BalancedRandomForestClassifier())\
-                ]
-        return StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
-
-    def do_SRF2(self, max_iterations: int, size: int)-> StackingClassifier:
-        estimators = [ \
                 ('for', RandomForestClassifier()),\
-                ('rfor',RobustForest()),\
                 ('bfor',BalancedRandomForestClassifier())\
                 ]
         return StackingClassifier(estimators=estimators, final_estimator=LogisticRegression())
@@ -602,15 +487,6 @@ class Algorithm(MetaEnum):
 
     def do_EAEC(self, max_iterations: int, size: int)-> EasyEnsembleClassifier:
         return EasyEnsembleClassifier()
-
-    def do_RTCL(self, max_iterations: int, size: int)-> RobustForest:
-        return RobustForest()
-
-    def do_RLRN(self, max_iterations: int, size: int)-> JBGRobustLogisticRegression:
-        return JBGRobustLogisticRegression()
-
-    def do_RCNT(self, max_iterations: int, size: int)-> JBGRobustCentroid:
-        return JBGRobustCentroid()
 
     def do_LRN(self, max_iterations: int, size: int)-> LogisticRegression:
         return LogisticRegression(max_iter=max_iterations)
@@ -699,78 +575,6 @@ class Algorithm(MetaEnum):
 
     def do_GPC(self, max_iterations: int, size: int)-> GaussianProcessClassifier:
         return GaussianProcessClassifier(max_iter_predict=max_iterations)
-
-    def do_WBGK(self, max_iterations: int, size: int)-> WeightedBagging:
-        return self.call_WB(self.detector)
-
-    def do_WBGM(self, max_iterations: int, size: int)-> WeightedBagging: 
-        return self.call_WB(self.detector)
-
-    def do_WRFD(self, max_iterations: int, size: int)-> WeightedBagging:
-        return self.call_WB(self.detector)
-
-    def do_WPCD(self, max_iterations: int, size: int)-> WeightedBagging: 
-        return self.call_WB(self.detector)
-
-    def do_WFKD(self, max_iterations: int, size: int)-> WeightedBagging: 
-        return self.call_WB(self.detector)
-
-    def do_WINH(self, max_iterations: int, size: int)-> WeightedBagging: 
-        return self.call_WB(self.detector)
-    
-    def call_WB(self, detector) -> WeightedBagging:
-        return WeightedBagging(classifier=BaggingClassifier(), detector=detector.call_detector())
-    
-    def do_CSTK(self, max_iterations: int, size: int)-> Costing:
-        return self.call_CST(self.detector)
-
-    def do_CSTM(self, max_iterations: int, size: int)-> Costing: 
-        return self.call_CST(self.detector)
-
-    def do_CRFD(self, max_iterations: int, size: int)-> Costing:
-        return self.call_CST(self.detector)
-
-    def do_CPCD(self, max_iterations: int, size: int)-> Costing: 
-        return self.call_CST(self.detector)
-
-    def do_CFKD(self, max_iterations: int, size: int)-> Costing:
-        return self.call_CST(self.detector)
-
-    def do_CINH(self, max_iterations: int, size: int)-> Costing:
-        return self.call_CST(self.detector)
-    
-    def call_CST(self, detector) -> Costing:
-        return Costing(classifier=BaggingClassifier(), detector=detector.call_detector())
-
-    def do_CLRF(self, max_iterations: int, size: int)-> CLNI:
-        return self.call_CLNI(self.detector)
-    
-    def do_CLCP(self, max_iterations: int, size: int)-> CLNI:
-        return self.call_CLNI(self.detector)
-    
-    def do_CLFK(self, max_iterations: int, size: int)-> CLNI:
-        return self.call_CLNI(self.detector)
-
-    def do_CLIH(self, max_iterations: int, size: int)-> CLNI:
-        return self.call_CLNI(self.detector)
-    
-    def call_CLNI(self, detector) -> Costing:
-        return CLNI(classifier=SVC(), detector=detector.call_detector())
-
-    def do_FRFD(self, max_iterations: int, size: int)-> Filter:
-        return self.call_FLT(self.detector)
-    
-    def do_FPCD(self, max_iterations: int, size: int)-> Filter:
-        return self.call_FLT(self.detector)
-    
-    def do_FFKD(self, max_iterations: int, size: int)-> Filter:
-        return self.call_FLT(self.detector)
-
-    def do_FINH(self, max_iterations: int, size: int)-> Filter:
-        return self.call_FLT(self.detector)
-    
-    def call_FLT(self, detector) -> Filter:
-        return Filter(classifier=SVC(), detector=detector.call_detector())
     
     def do_VOTG(self, max_iterations: int, size: int) -> Filter:
         clf1 = LinearSVC()

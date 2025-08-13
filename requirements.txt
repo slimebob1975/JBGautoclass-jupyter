@@ -10,7 +10,6 @@ psutil
 pyodbc
 pytest
 python-dotenv
-scikit_clean==0.1.2 # Needs to use https://github.com/slimebob1975/scikit-clean
 scikit_learn
 scipy
 stop_words
