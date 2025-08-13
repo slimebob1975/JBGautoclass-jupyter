@@ -1,7 +1,7 @@
 # ===================== CONFIG (edit these) ==================================
 # Base folders
-$TempDir   = 'C:\...'
-$DevRoot   = 'C:\...'
+$TempDir   = 'C:\temp'
+$DevRoot   = 'C:\...\'
 
 # Base Python interpreter
 $BasePython = 'C:\...\python.exe'
@@ -12,6 +12,7 @@ $ProjAuto  = Join-Path $DevRoot 'JBGautoclass'
 # Virtual environment
 $VenvName  = 'ai_venv'
 $VenvDir   = Join-Path $TempDir $VenvName
+$VenvRequirements = '.\requirements_fallback.txt' 
 
 # Executables inside the venv (once created)
 $Py        = Join-Path $VenvDir 'Scripts\python.exe'
@@ -60,7 +61,7 @@ if (-not (Test-Path $Py)) {
 # --- Machine learning notebook setup ---
 Invoke-InDir -Path $ProjAuto -ScriptBlock {
     git.exe pull
-    & $Pip install -r .\requirements.txt
+    & $Pip install -r $VenvRequirements
 }
 
 Invoke-InDir -Path $ProjAuto -ScriptBlock {
