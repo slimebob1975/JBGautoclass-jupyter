@@ -1383,18 +1383,18 @@ class ModelHandler:
         # it to dense numpy arrays.
         try:
             cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
-                scoring=scorer_mechanism, fit_params=fit_params, error_score='raise') 
+                scoring=scorer_mechanism, params=fit_params, error_score='raise') 
         except Exception as ex:
             #print("cross_val_score Exception 1:", str(ex))
             try:
                 cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
-                    dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, \
+                    dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, params=fit_params, \
                     error_score='raise') 
             except Exception as ex:
                 #print("cross_val_score Exception 2:",str(ex))
                 try:
                     cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
-                        cv=kfold, scoring=scorer_mechanism, fit_params=fit_params, error_score='raise')
+                        cv=kfold, scoring=scorer_mechanism, params=fit_params, error_score='raise')
                 except Exception as ex:
                     #print("cross_val_score Exception 3:",str(ex))
                     raise ModelException(f"Unexpected error in cross_val_score: {str(ex)}") from ex

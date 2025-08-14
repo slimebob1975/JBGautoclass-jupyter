@@ -3,16 +3,13 @@
 $TempDir   = 'C:\temp'
 $DevRoot   = 'C:\...\'
 
-# Base Python interpreter
+# Base Python interpreter -- an anaconda based variant is recommended!
 $BasePython = 'C:\...\python.exe'
-
-# Projects
-$ProjAuto  = Join-Path $DevRoot 'JBGautoclass'
 
 # Virtual environment
 $VenvName  = 'ai_venv'
 $VenvDir   = Join-Path $TempDir $VenvName
-$VenvRequirements = '.\requirements_fallback.txt' 
+$VenvRequirements = '.\requirements.txt' 
 
 # Executables inside the venv (once created)
 $Py        = Join-Path $VenvDir 'Scripts\python.exe'
@@ -59,18 +56,18 @@ if (-not (Test-Path $Py)) {
 & $Py -m pip install --upgrade pip
 
 # --- Machine learning notebook setup ---
-Invoke-InDir -Path $ProjAuto -ScriptBlock {
+Invoke-InDir -Path $DevRoot -ScriptBlock {
     git.exe pull
     & $Pip install -r $VenvRequirements
 }
 
-Invoke-InDir -Path $ProjAuto -ScriptBlock {
+Invoke-InDir -Path $DevRoot -ScriptBlock {
     & $Pip install --upgrade ipykernel jupyterlab voila
     & $Py  -m ipykernel install --user --name=$KernelName --display-name $KernelDisplay
 }
 
 # --- Launch Voilà ---
-Invoke-InDir -Path $ProjAuto -ScriptBlock {
+Invoke-InDir -Path $DevRoot -ScriptBlock {
     & $Voila .\$Notebook --port $VoilaPort
 }
 
