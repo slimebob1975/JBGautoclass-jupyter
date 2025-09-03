@@ -18,7 +18,7 @@ sys.path.append(src_dir)
 from dotenv import load_dotenv
 
 from JBGExceptions import DataLayerException
-from JBGLogger import JBGLogger
+from JBGStreamedLogger import JBGLogger
 from AutomaticClassifier import AutomaticClassifier as autoclass
 from Config import Config
 from SQLDataLayer import DataLayer

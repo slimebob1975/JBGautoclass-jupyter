@@ -4,7 +4,7 @@ from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
-from JBGLogger import JBGLogger
+from JBGStreamedLogger import JBGLogger
 import sys
 
 def compute_posneg_rates(TN: int, FP: int, FN: int, TP: int):

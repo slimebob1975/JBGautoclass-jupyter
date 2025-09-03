@@ -728,7 +728,7 @@ class DataLayer(DataLayerBase):
 
 # Main method
 def main():
-    from JBGLogger import JBGLogger
+    from JBGStreamedLogger import JBGLogger
 
     # python SQLDataLayer.py -f .\config\test_iris.py
     config = Cf.load_config_from_module(sys.argv)

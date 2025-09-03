@@ -303,30 +303,107 @@ class TaskRunner:
         return {}
     
     def send_completetion_email__task(self) -> dict:
-        
-        # Import the email modules we'll need
+        """
+        Sends a completion email with both a text/plain part (fallback)
+        and a text/html part (tables render correctly).
+        """
+        import smtplib
         from email.message import EmailMessage
 
-        # Set content
-        message = f"Your last JBG classification task \"{self.config.name}\" has been completed!\n\nSincerely yours,\nJBG"
+        # ---- Build bodies ----
+        subject = "JBG classification"
+        greeting_text = (
+            f'Your last JBG classification task "{self.config.name}" has been completed!\n\n'
+            "Sincerely yours,\nJBG\n\n"
+        )
+
+        # Plain-text body: greeting + plain log
+        text_log = ""
+        try:
+            # Prefer the dedicated plain-text buffer if you added it
+            text_log = self.logger.get_log_output()
+        except AttributeError:
+            # Fallback: strip tags from HTML buffer if needed
+            import re
+            html = getattr(self.logger, "get_log_output_html", lambda: "")()
+            text_log = re.sub(r"<[^>]+>", "", html)
+
+        text_body = greeting_text + (text_log or "")
+
+        # HTML body: greeting + HTML log inside an HTML scaffold
+        html_log = getattr(self.logger, "get_log_output_html", lambda: "")()
+        if html_log and not html_log.lstrip().startswith("<"):
+            # If someone fed us plain text, wrap in <pre>
+            html_log = f"<pre>{html_log}</pre>"
+
+        html_body = f"""\
+            <!doctype html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }}
+                table {{ border-collapse: collapse; border: 1px solid #ccc; }}
+                th, td {{ border: 1px solid #ccc; padding: 4px 6px; }}
+                th {{ text-align: center; }}
+                td {{ vertical-align: top; }}
+                h3 {{ margin: 12px 0 6px; }}
+                pre {{ white-space: pre-wrap; }}
+                </style>
+            </head>
+            <body>
+                <p>Your last JBG classification task "<strong>{self.config.name}</strong>" has been completed!</p>
+                {html_log}
+                <p>Sincerely yours,<br>JBG</p>
+            </body>
+            </html>"""
+
+        # ---- Build message ----
         msg = EmailMessage()
-        msg.set_content(message)
+        msg["Subject"] = subject
+        msg["From"] = "no-reply@jbg.se"
 
-        # me == the sender's email address
-        # you == the recipient's email address
-        msg['Subject'] = "JBG classification"
-        msg['From'] = "no-reply@jbg.se"
-        msg['To'] = self.config.mail.notification_email
+        # Support single email or list/tuple
+        recipients = self.config.mail.notification_email
+        if isinstance(recipients, (list, tuple)):
+            msg["To"] = ", ".join(recipients)
+            dest = recipients
+        else:
+            msg["To"] = recipients
+            dest = [recipients]
 
-        # Send the message via our own SMTP server.
-        if Helpers.is_valid_email(msg['To']):
-            try:
-                s = smtplib.SMTP(self.config.mail.smtp_server)
+        # Set plain text, then add HTML alternative
+        msg.set_content(text_body)                 # text/plain
+        msg.add_alternative(html_body, subtype="html")  # text/html
+
+        # ---- Send ----
+        try:
+            # Optional: validate each recipient if you want
+            valid_dest = []
+            for r in dest:
+                if Helpers.is_valid_email(r):
+                    valid_dest.append(r)
+            if not valid_dest:
+                self.logger.print_info("Error sending completion mail: no valid recipient(s).")
+                return {}
+
+            host = self.config.mail.smtp_server
+            port = getattr(self.config.mail, "smtp_port", 25)
+            use_starttls = getattr(self.config.mail, "use_starttls", port in (587,))
+            username = getattr(self.config.mail, "username", None)
+            password = getattr(self.config.mail, "password", None)
+
+            with smtplib.SMTP(host, port) as s:
+                s.ehlo()
+                if use_starttls:
+                    s.starttls()
+                    s.ehlo()
+                if username and password:
+                    s.login(username, password)
                 s.send_message(msg)
-                s.quit()
-            except Exception as e:
-                self.logger.print_info("Error sending completion mail:", str(e))
-            
+        except Exception as e:
+            self.logger.print_info("Error sending completion mail:", str(e))
+
         return {}
 
 
