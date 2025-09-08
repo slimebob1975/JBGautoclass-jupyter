@@ -6,6 +6,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
 from JBGStreamedLogger import JBGLogger
 import sys
+from sklearn.base import clone
+from sklearn.model_selection import StratifiedKFold
+from joblib import Parallel, delayed
 
 def compute_posneg_rates(TN: int, FP: int, FN: int, TP: int):
 
@@ -84,6 +87,228 @@ def compute_dark_number_non_linear(real: pd.Series, predicted: pd.Series, pred_p
     dark_number = alpha * (1 - TNr**(1 / root_degree)) * (2 - TPr**(1 / root_degree))
     
     return alpha if use_alpha else 1.0, dark_number
+
+def estimate_corr_crossfit_serial(
+    base_pipeline,
+    X: pd.DataFrame,
+    y: pd.Series,
+    flip_rate: float = 0.20,
+    R: int = 10,
+    K: int = 5,
+    threshold: float = 0.5,
+    prior: str = "jeffreys",      # "jeffreys" or "laplace"
+    corr_cap: float = 50.0,
+    random_state: int | None = 42
+) -> tuple[float, tuple[float, float]]:
+    """
+    Estimate correction factor 'corr' by flipping a share of positives to negative,
+    training on the manipulated labels, and measuring how many flipped items the model
+    still predicts as positive. Repeats with different random seeds and stratified folds.
+
+    corr = 1 / p_hat, with a small-sample prior and an upper cap for numerical stability.
+    Returns (corr_mean, (p5, p95)) where (p5, p95) is a 5–95% interval across R repeats.
+
+    Parameters
+    ----------
+    base_pipeline : sklearn/imbalanced-learn Pipeline (unfitted or fitted)
+        We will CLONE this pipeline and refit inside the routine so your original model
+        remains untouched.
+    X, y : pd.DataFrame / pd.Series
+        Original training data and labels (binary: 1 = positive, 0 = negative).
+    flip_rate : float
+        Fraction of positive labels to flip to 0 in each training fold.
+    R : int
+        Number of repetitions with new random flips.
+    K : int
+        Outer stratified folds; flips are applied within each training fold.
+    threshold : float
+        Decision threshold for "detected" hidden positives.
+    prior : {"jeffreys", "laplace"}
+        Small-sample shrinkage prior for p = k/n.
+    corr_cap : float
+        Upper cap for corr to avoid instability when detections are extremely few.
+    random_state : int | None
+        Controls reproducibility of flips and folds when provided.
+
+    Notes
+    -----
+    - For each repetition and fold, we flip a random subset of the positives *in the training split*,
+      fit a CLONE of the supplied pipeline on the flipped labels, and then make predictions on the
+      training split to count detections among the flipped items.
+    - To guard against optimistic bias from in-sample evaluation, we (a) keep flip_rate small,
+      (b) aggregate across K-folds and R repeats, and (c) shrink p with a prior.
+    - If you prefer stricter out-of-fold counting, you can adapt this template to add an inner
+      split that holds out a slice of the flipped training items for counting.
+    """
+
+    rng = np.random.default_rng(random_state)
+    y = pd.Series(y).astype(int)
+    X = pd.DataFrame(X)
+
+    # Sanity: ensure binary {0,1}
+    uniq = sorted(pd.unique(y))
+    if not (len(uniq) == 2 and uniq[0] in (0, 1) and uniq[1] in (0, 1)):
+        raise ValueError("estimate_corr_crossfit expects binary labels encoded as 0/1.")
+
+    # Helper for prior-adjusted p
+    def shrink_p(k: int, n: int) -> float:
+        if prior == "jeffreys":
+            return (k + 0.5) / (n + 1.0)
+        elif prior == "laplace":
+            return (k + 1.0) / (n + 2.0)
+        else:
+            raise ValueError("prior must be 'jeffreys' or 'laplace'")
+
+    corr_values = []
+
+    for r in range(R):
+        # New fold split each repetition for stability
+        skf = StratifiedKFold(n_splits=K, shuffle=True, random_state=None if random_state is None else (random_state + r))
+
+        total_k = 0  # detections among flipped
+        total_n = 0  # number flipped
+
+        for train_idx, _ in skf.split(X, y):
+            Xtr = X.iloc[train_idx]
+            ytr = y.iloc[train_idx].copy()
+
+            pos_idx = np.flatnonzero(ytr.values == 1)
+            if pos_idx.size == 0:
+                continue
+
+            n_flip = max(1, int(round(flip_rate * pos_idx.size)))
+            flipped_local_idx = rng.choice(pos_idx, size=n_flip, replace=False)
+
+            ytr_flipped = ytr.copy()
+            ytr_flipped.iloc[flipped_local_idx] = 0  # hide positives as negatives
+
+            # Fit a fresh clone of the pipeline
+            pipe = clone(base_pipeline)
+            try:
+                pipe.fit(Xtr, ytr_flipped)
+            except TypeError:
+                pipe.fit(Xtr.to_numpy(), ytr_flipped.to_numpy())
+
+            # Predict on the *training split* and count recovered hidden positives
+            try:
+                proba = pipe.predict_proba(Xtr.iloc[flipped_local_idx])[:, 1]
+            except TypeError:
+                proba = pipe.predict_proba(Xtr.iloc[flipped_local_idx].to_numpy())[:, 1]
+
+            detected = int((proba >= threshold).sum())
+            total_k += detected
+            total_n += n_flip
+
+        if total_n == 0:
+            # No flips (degenerate), fall back to corr=1
+            corr_values.append(1.0)
+            continue
+
+        p_hat = shrink_p(total_k, total_n)
+        corr_r = min(1.0 / max(p_hat, 1e-12), corr_cap)
+        corr_values.append(float(corr_r))
+
+    corr_values = np.array(corr_values, dtype=float)
+    corr_mean = float(np.mean(corr_values))
+    lo, hi = np.percentile(corr_values, [5, 95]).tolist()
+
+    return corr_mean, (lo, hi)
+
+def estimate_corr_crossfit(
+    base_pipeline,
+    X: pd.DataFrame,
+    y: pd.Series,
+    flip_rate: float = 0.20,
+    R: int = 10,
+    K: int = 5,
+    threshold: float = 0.5,
+    prior: str = "jeffreys",
+    corr_cap: float = 50.0,
+    random_state: int | None = 42,
+    n_jobs: int = 1,                  
+):
+    """
+    Som tidigare, men med n_jobs för parallell körning över R on n_jobs > 1.
+    Returnerar (corr_mean, (p5, p95)).
+    """
+    if n_jobs == 1:
+        return estimate_corr_crossfit_serial(base_pipeline, X, y, flip_rate, R, K, threshold, prior, corr_cap, random_state)
+    else: 
+        y = pd.Series(y).astype(int)
+        X = pd.DataFrame(X)
+
+        uniq = sorted(pd.unique(y))
+        if not (len(uniq) == 2 and set(uniq) <= {0, 1}):
+            raise ValueError("estimate_corr_crossfit expects binary labels encoded as 0/1.")
+
+        def shrink_p(k: int, n: int) -> float:
+            if prior == "jeffreys":
+                return (k + 0.5) / (n + 1.0)
+            elif prior == "laplace":
+                return (k + 1.0) / (n + 2.0)
+            else:
+                raise ValueError("prior must be 'jeffreys' or 'laplace'")
+
+        # --- En repetition som fristående jobb (kan köras parallellt) ---
+        def one_repeat(r_seed: int) -> float:
+            rng = np.random.default_rng(r_seed)
+            skf = StratifiedKFold(n_splits=K, shuffle=True, random_state=r_seed)
+
+            total_k = 0
+            total_n = 0
+
+            for train_idx, _ in skf.split(X, y):
+                Xtr = X.iloc[train_idx]
+                ytr = y.iloc[train_idx].copy()
+
+                pos_idx = np.flatnonzero(ytr.values == 1)
+                if pos_idx.size == 0:
+                    continue
+
+                n_flip = max(1, int(round(flip_rate * pos_idx.size)))
+                flipped_local_idx = rng.choice(pos_idx, size=n_flip, replace=False)
+
+                ytr_flipped = ytr.copy()
+                ytr_flipped.iloc[flipped_local_idx] = 0
+
+                pipe = clone(base_pipeline)
+                try:
+                    pipe.fit(Xtr, ytr_flipped)
+                except TypeError:
+                    pipe.fit(Xtr.to_numpy(), ytr_flipped.to_numpy())
+
+                try:
+                    proba = pipe.predict_proba(Xtr.iloc[flipped_local_idx])[:, 1]
+                except TypeError:
+                    proba = pipe.predict_proba(Xtr.iloc[flipped_local_idx].to_numpy())[:, 1]
+
+                detected = int((proba >= threshold).sum())
+                total_k += detected
+                total_n += n_flip
+
+            if total_n == 0:
+                return 1.0
+
+            p_hat = shrink_p(total_k, total_n)
+            corr_r = min(1.0 / max(p_hat, 1e-12), corr_cap)
+            return float(corr_r)
+
+        # --- Parallell körning över R upprepningar ---
+        # Skapa deterministiska seeds per repetition om random_state är satt
+        if random_state is None:
+            seeds = [None] * R
+        else:
+            rng_master = np.random.default_rng(random_state)
+            seeds = rng_master.integers(0, 2**32 - 1, size=R).tolist()
+
+        corr_values = Parallel(n_jobs=n_jobs, prefer="processes")(
+            delayed(one_repeat)(s) for s in seeds
+        )
+
+        corr_values = np.asarray(corr_values, dtype=float)
+        corr_mean = float(np.mean(corr_values))
+        lo, hi = np.percentile(corr_values, [5, 95]).tolist()
+        return corr_mean, (lo, hi)
 
 # Unified interface for calculating dark numbers
 def compute_dark_numbers(real_target: pd.Series, pred_target: pd.Series, prob_pred: pd.Series, \

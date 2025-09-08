@@ -264,10 +264,13 @@ class TaskRunner:
             return {}
 
         self.logger.print_task_header(title="Calculating mispredictions")
+        self.logger.print_progress(message="Calculating most mispredicted")
             
         self.ph.most_mispredicted(self.dh.X_original, trained_model, cross_trained_model, self.dh.X, self.dh.Y)
 
         self.ph.evaluate_mispredictions(self.config.get_output_filepath("misplaced"))
+        
+        self.logger.print_progress(message="Get dark numbers")
 
         self.ph.get_dark_numbers(X = self.dh.X, Y = self.dh.Y, type = "all", models = [trained_model, cross_trained_model], \
                                  model_names = ["Retrained on all data", "Cross-trained on training data"])
