@@ -29,7 +29,8 @@ from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estima
 from JBGExceptions import (DatasetException, MissingScorerException, ModelException, HandlerException, ModelInitializationException, 
     UnstableModelException, PipelineException)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
-from JBGDarkNumbers import compute_dark_numbers, estimate_corr_crossfit
+from JBGDarkNumbers import DarkNumberCalculator
+from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 import Helpers
 
 GIVE_EXCEPTION_TRACEBACK = False
@@ -1032,6 +1033,12 @@ class ModelHandler:
                 self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
             return result
     
+    # An adapter for fit functions that do not accept n_job parameters
+    @staticmethod
+    def fit_with_n_jobs(estimator, X, y, n_jobs=None):
+        """Adapter for execute_n_job so estimators without n_jobs work safely."""
+        return estimator.fit(X, y)
+    
     # While more code, this should (hopefully) be easier to read
     def should_run_computation(self, current_reduction: Reduction, current_algorithm: Algorithm) -> bool:
         # Some algorithms and RFE do not get along
@@ -1814,9 +1821,24 @@ class PredictionsHandler:
             
             # Predict probabilities for current predictions
             Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(X)], index=Y.index)
+            
+            # Find correction numbers for each label and the current model
+            corrs = {}
+            mh = self.handler.get_handler("model")
+            for label in labels:
+                corr_estimator = DarkNumberCorrectionFactorEstimator(
+                    model, 
+                    flip_fraction=0.2, 
+                    n_jobs=-1,
+                    predict_mode='predict',
+                    positive_class=label,
+                    sample_size=0.2
+                )
+                mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y)
+                corrs[label] = corr_estimator.score()
 
             # Compute and update the dark numbers matrix
-            self._update_dark_numbers(model_name, Y, Y_pred, Y_prob_pred, type)
+            self._update_dark_numbers(model_name, Y, Y_pred, Y_prob_pred, type, corrs)
 
             # Combine models processed so far to get worst case scenario by replacing wrong predictions with
             # the currently worst one
@@ -1831,7 +1853,7 @@ class PredictionsHandler:
             self._update_confusion_matrix("Combined", Y, Y_pred_worst, labels)
 
             # Compute and update the dark numbers matrix
-            self._update_dark_numbers("Combined", Y, Y_pred_worst, Y_prob_pred_worst, type)
+            self._update_dark_numbers("Combined", Y, Y_pred_worst, Y_prob_pred_worst, type, corrs)
     
         return None
     
@@ -1851,10 +1873,10 @@ class PredictionsHandler:
 
         return None
 
-    def _update_dark_numbers_old(self, model_name, Y, Y_pred, Y_prob_pred, type):
+    def _update_dark_numbers(self, model_name, Y, Y_pred, Y_prob_pred, type, corrs = None):
         
         # Compute dark numbers
-        model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)
+        model_dark_numbers = DarkNumberCalculator().compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type, corrs=corrs)
         
         # Put together the results for the dark numbers
         model_name_col = pd.Series([model_name]+["" for i in range(model_dark_numbers.shape[0]-1)], name="Model type")
@@ -1863,143 +1885,6 @@ class PredictionsHandler:
             self.dark_numbers = pd.concat([model_name_col, model_dark_numbers.copy(deep=True)], axis = 1)
         else:
             self.dark_numbers = pd.concat([self.dark_numbers, pd.concat([model_name_col, model_dark_numbers], axis=1)], axis=0)
-
-        return None
-    
-    def _update_dark_numbers_serial(self, model_name, Y, Y_pred, Y_prob_pred, type, apply_corr: bool = True):
-        # Compute dark numbers (existing)
-        model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)
-
-        # Estimate corr on the original data for this model and apply it
-        if apply_corr:
-            # We estimate corr using the SAME pipeline structure but need X (features) and y (binary).
-            # Recreate the binary target for each class row as compute_dark_numbers does internally:
-            # - For each row produced by compute_dark_numbers (one per class/target), we estimate corr
-            #   on a binary version of Y (that class vs rest), then scale that row's dark_number.
-            model_dark_numbers = model_dark_numbers.copy(deep=True)
-            scaled_dark_numbers = []
-
-            # We re-predict probabilities per class once outside the loop for efficiency
-            # (already computed as Y_prob_pred), and we reuse the fitted model held by caller.
-            # To estimate corr, we need X. In this method we only have Y, Y_pred, etc.
-            # So call-side must pass X (feature matrix) too; we retrieve it from outer scope.
-            # For minimal changes, pull X and the current model pipeline from the handler.
-            X_full = self.handler.get_handler("dataset").X  # original training+validation features
-            current_pipeline = self.handler.get_handler("model").model.pipeline
-
-            for i in range(model_dark_numbers.shape[0]):
-                target_class = model_dark_numbers.iloc[i]["target"]
-
-                # Build binary labels 1=target_class else 0
-                y_bin = pd.Series((Y == target_class).astype(int), index=Y.index)
-
-                try:
-                    corr_mean, _ = estimate_corr_crossfit(
-                        base_pipeline=current_pipeline,
-                        X=X_full,
-                        y=y_bin,
-                        flip_rate=0.20,
-                        R=8,
-                        K=5,
-                        threshold=0.5,
-                        prior="jeffreys",
-                        corr_cap=50.0,
-                        random_state=42
-                    )
-                except Exception:
-                    # If anything fails (e.g., non-binary edge case), fallback to corr=1.0
-                    corr_mean = 1.0
-
-                row = model_dark_numbers.iloc[i].to_dict()
-                row["corr"] = float(corr_mean)
-                row["dark_number"] = float(row["dark_number"]) * float(corr_mean)
-                scaled_dark_numbers.append(row)
-
-            model_dark_numbers = pd.DataFrame(scaled_dark_numbers, columns=list(model_dark_numbers.columns) + ["corr"])
-
-        # Put together the results for the dark numbers (existing)
-        model_name_col = pd.Series([model_name] + [""] * (model_dark_numbers.shape[0] - 1), name="Model type")
-
-        if self.dark_numbers.empty:
-            self.dark_numbers = pd.concat([model_name_col, model_dark_numbers.copy(deep=True)], axis=1)
-        else:
-            self.dark_numbers = pd.concat([self.dark_numbers, pd.concat([model_name_col, model_dark_numbers], axis=1)], axis=0)
-
-        return None
-
-    def _update_dark_numbers(self, model_name, Y, Y_pred, Y_prob_pred, type):
-        """
-        Uppdaterar self.dark_numbers för ett givet modellnamn.
-        - Beräknar dark numbers (befintlig logik)
-        - Skattar korrigeringsfaktor 'corr' exakt EN gång per klass (target)
-        och återanvänder för samtliga rader/typer som tillhör samma target.
-        - Skalar 'dark_number' med 'corr' och lägger till en kolumn 'corr'
-        - Lägger 'dark_number' sist i tabellen
-        """
-        import pandas as pd
-        from JBGDarkNumbers import compute_dark_numbers
-        from JBGDarkNumbers import estimate_corr_crossfit  # parallell variant som stöder n_jobs
-
-        # 1) Beräkna dark numbers (som tidigare)
-        model_dark_numbers = compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type)
-
-        # 2) Förbered X och pipeline
-        mh = self.handler.get_handler("model")
-        dh = self.handler.get_handler("dataset")
-        X_full = dh.X
-        current_pipeline = mh.model.pipeline
-
-        # 3) Skatta corr EN gång per target
-        corr_map = {}
-        unique_targets = pd.Series(model_dark_numbers["target"]).unique().tolist()
-
-        for target_class in unique_targets:
-            # Binär målvariabel: 1 = aktuell klass, 0 = övriga
-            y_bin = (Y == target_class).astype(int)
-
-            try:
-                corr_mean, _ = mh.execute_n_job(
-                    estimate_corr_crossfit,
-                    base_pipeline=current_pipeline,
-                    X=X_full,
-                    y=y_bin,
-                    flip_rate=0.20,
-                    R=8,
-                    K=5,
-                    threshold=0.5,
-                    prior="jeffreys",
-                    corr_cap=50.0,
-                    random_state=42
-                )
-            except Exception as ex:
-                self.handler.logger.print_warning(
-                    f"Kunde inte beräkna corr för target={target_class}: {ex}"
-                )
-                corr_mean = 1.0
-
-            corr_map[target_class] = float(corr_mean)
-
-        # 4) Lägg till corr-kolumn genom mapping, skala dark_number, och flytta dark_number sist
-        model_dark_numbers = model_dark_numbers.copy(deep=True)
-        model_dark_numbers["corr"] = model_dark_numbers["target"].map(corr_map).astype(float)
-        model_dark_numbers["dark_number"] = model_dark_numbers["dark_number"].astype(float) * model_dark_numbers["corr"].astype(float)
-
-        cols = [c for c in model_dark_numbers.columns if c != "dark_number"] + ["dark_number"]
-        model_dark_numbers = model_dark_numbers[cols]
-
-        # 5) Sätt samman resultatet med modellnamn (som tidigare)
-        model_name_col = pd.Series(
-            [model_name] + [""] * (model_dark_numbers.shape[0] - 1),
-            name="Model type"
-        )
-
-        if self.dark_numbers.empty:
-            self.dark_numbers = pd.concat([model_name_col, model_dark_numbers.copy(deep=True)], axis=1)
-        else:
-            self.dark_numbers = pd.concat(
-                [self.dark_numbers, pd.concat([model_name_col, model_dark_numbers], axis=1)],
-                axis=0
-            )
 
         return None
 

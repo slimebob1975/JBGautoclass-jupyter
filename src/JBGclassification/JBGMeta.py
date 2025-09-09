@@ -289,9 +289,8 @@ class AlgorithmGridSearchParams(MetaEnum):
     PCN = {"parameters": {'penalty': ('l2', 'l1', 'elasticnet'), 'alpha': (1e-3, 1e-4, 1e-5), 
            'class_weight': ('balanced', None)}}
     PAC = {"parameters": {'class_weight': ('balanced', None)}}
-    #RFCL = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
-    #        'max_features': ('sqrt', 'log2'), 'class_weight': ('balanced', 'balanced_subsample', None)}}
-    RFCL = {"parameters": {}}
+    RFCL = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
+            'max_features': ('sqrt', 'log2'), 'class_weight': ('balanced', 'balanced_subsample', None)}}
     LSVC = {"parameters": {'penalty': ('l1', 'l2'), 'loss': ('hinge', 'squared_hinge'), 'dual': (True, False), 
             'class_weight': ('balanced', None)}} 
     SLSV = {"parameters": {}}
