@@ -1828,7 +1828,9 @@ class PredictionsHandler:
             for label in labels:
                 corr_estimator = DarkNumberCorrectionFactorEstimator(
                     model, 
-                    flip_fraction=0.2, 
+                    flip_fraction=0.1, 
+                    n_splits=10, 
+                    n_repeats=3, 
                     n_jobs=-1,
                     predict_mode='predict',
                     positive_class=label,
