@@ -32,6 +32,7 @@ from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 import Helpers
+from sklearn.base import clone
 
 GIVE_EXCEPTION_TRACEBACK = False
 DEBUG = True
@@ -1797,7 +1798,7 @@ class PredictionsHandler:
     # Dark number stuffs
     def get_dark_numbers(self, X: pd.DataFrame, Y: pd.DataFrame, type: str = "all", models: list = [None], \
                          model_names: list = [None], combine_models=True) -> None:
-
+        
         # These DataFrames contain the results
         self.dark_numbers = pd.DataFrame()
         self.dark_numb_conf_matrix = pd.DataFrame()
@@ -1810,6 +1811,27 @@ class PredictionsHandler:
         # Use these as labels
         labels = np.sort(Y.unique())
         
+        # Find correction numbers for each label and a retrained model
+        corrs = {}
+        mh = self.handler.get_handler("model")
+        for label in labels:
+            try:
+                corr_estimator = DarkNumberCorrectionFactorEstimator(
+                    estimator=clone(models[0]), 
+                    flip_fraction=0.2, 
+                    n_splits=5, 
+                    n_repeats=2, 
+                    n_jobs=-1,
+                    predict_mode='predict',
+                    positive_class=label,
+                    sample_size=1.0 
+                )
+                mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y)
+                corrs[label] = corr_estimator.score()
+            except Exception as ex:
+                self.handler.logger.print_warning(f"Correction number calculation for label {label} failed. Using 1.0 as fallback. Reason: {str(ex)}")
+                corrs[label] = 1.0
+        
         # Compute dark number for all models
         for model, model_name in zip(models, model_names):
 
@@ -1821,23 +1843,6 @@ class PredictionsHandler:
             
             # Predict probabilities for current predictions
             Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(X)], index=Y.index)
-            
-            # Find correction numbers for each label and the current model
-            corrs = {}
-            mh = self.handler.get_handler("model")
-            for label in labels:
-                corr_estimator = DarkNumberCorrectionFactorEstimator(
-                    model, 
-                    flip_fraction=0.1, 
-                    n_splits=10, 
-                    n_repeats=3, 
-                    n_jobs=-1,
-                    predict_mode='predict',
-                    positive_class=label,
-                    sample_size=0.2
-                )
-                mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y)
-                corrs[label] = corr_estimator.score()
 
             # Compute and update the dark numbers matrix
             self._update_dark_numbers(model_name, Y, Y_pred, Y_prob_pred, type, corrs)
