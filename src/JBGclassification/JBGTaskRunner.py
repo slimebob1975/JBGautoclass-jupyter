@@ -272,8 +272,8 @@ class TaskRunner:
         
         self.logger.print_progress(message="Get dark numbers")
 
-        self.ph.get_dark_numbers(X = self.dh.X, Y = self.dh.Y, type = "all", models = [trained_model, cross_trained_model], \
-                                 model_names = ["Retrained on all data", "Cross-trained on training data"])
+        self.ph.get_dark_numbers(X = self.dh.X, Y = self.dh.Y, type = "all", models = [cross_trained_model, trained_model], \
+                                 model_names = ["Cross-trained on training data", "Retrained on all data"])
 
         self.ph.evaluate_dark_numbers(self.config.get_output_filepath("dark_numbers"),
                                       self.config.get_output_filepath("dark_numb_conf_matrix"))
@@ -314,7 +314,7 @@ class TaskRunner:
         from email.message import EmailMessage
 
         # ---- Build bodies ----
-        subject = "JBG classification"
+        subject = f"JBG classification for task '{self.config.name}' has completed"
         greeting_text = (
             f'Your last JBG classification task "{self.config.name}" has been completed!\n\n'
             "Sincerely yours,\nJBG\n\n"

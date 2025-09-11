@@ -33,6 +33,7 @@ from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 import Helpers
 from sklearn.base import clone
+from joblib import cpu_count
 
 GIVE_EXCEPTION_TRACEBACK = False
 DEBUG = True
@@ -1816,11 +1817,19 @@ class PredictionsHandler:
         mh = self.handler.get_handler("model")
         for label in labels:
             try:
+                n_splits, n_repeats = self._auto_n_splits_and_repeats(
+                    n_jobs_desired=-1,
+                    min_n_splits=5,
+                    min_n_repeats=2,
+                    max_multiplier=3
+                )
+                if DEBUG:
+                    self.handler.logger.print_info(f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator")
                 corr_estimator = DarkNumberCorrectionFactorEstimator(
                     estimator=clone(models[0]), 
                     flip_fraction=0.2, 
-                    n_splits=5, 
-                    n_repeats=2, 
+                    n_splits=n_splits, 
+                    n_repeats=n_repeats, 
                     n_jobs=-1,
                     predict_mode='predict',
                     positive_class=label,
@@ -1863,6 +1872,31 @@ class PredictionsHandler:
             self._update_dark_numbers("Combined", Y, Y_pred_worst, Y_prob_pred_worst, type, corrs)
     
         return None
+
+    def _auto_n_splits_and_repeats(self, n_jobs_desired=None, min_n_splits=1, min_n_repeats=1, max_multiplier=3):
+        """
+        Försök hitta en (n_splits, n_repeats) så att n_splits * n_repeats är en multipel av n_jobs (cores),
+        med tillåtna min- och maxgränser.
+        """
+        cores = cpu_count() if n_jobs_desired in (None, -1) else n_jobs_desired
+
+        # Försök först hitta exakt matchning: n_splits * n_repeats == cores
+        for s in range(min_n_splits, cores + 1):
+            for r in range(min_n_repeats, cores + 1):
+                if s * r == cores:
+                    return s, r
+
+        # Om det inte går, tillåt multipler upp till max_multiplier × cores
+        for multiplier in range(2, max_multiplier + 1):
+            target = cores * multiplier
+            for s in range(min_n_splits, target + 1):
+                for r in range(min_n_repeats, target + 1):
+                    if s * r == target:
+                        return s, r
+
+        # Sista fallback – returnera något fungerande
+        return max(min_n_splits, 1), max(min_n_repeats, 1)
+
     
     def _update_confusion_matrix(self, model_name, Y, Y_pred, labels):
 
