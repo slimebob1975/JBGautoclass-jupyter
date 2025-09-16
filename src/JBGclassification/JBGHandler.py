@@ -1819,7 +1819,7 @@ class PredictionsHandler:
             try:
                 n_splits, n_repeats = self._auto_n_splits_and_repeats(
                     n_jobs_desired=-1,
-                    min_n_splits=5,
+                    min_n_splits=4,
                     min_n_repeats=2,
                     max_multiplier=3
                 )
