@@ -7,7 +7,7 @@ from sklearn.preprocessing import FunctionTransformer
 from sklearn.datasets import make_classification
 from sklearn.neural_network import MLPClassifier
 import argparse
-from .JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
+from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 
 class DarkNumberCorrectionFactorRegressor(BaseEstimator):
     def __init__(
@@ -145,9 +145,9 @@ def main():
         n_samples=args.n_samples,
         n_features=args.n_features,
         n_informative=10,
-        n_redundant=5,
+        n_redundant=2,
         n_classes=2,
-        weights=[0.5, 0.5],
+        weights=[0.05, 0.95],
         random_state=args.random_state
     )
 
@@ -168,7 +168,23 @@ def main():
 
     print("[INFO] Estimating correction factor using extrapolated regression...")
     reg.fit(X, y)
-    print(f"[RESULT] Estimated correction factor at sample_size=1.0: {reg.score():.4f}")
+    extrapolated_score = reg.score()
+    print(f"[RESULT] Estimated correction factor at sample_size=1.0: {extrapolated_score:.6f}")
+
+    print("[INFO] Estimating true correction factor using full dataset...")
+    true_estimator = DarkNumberCorrectionFactorEstimator(
+        estimator=clone(clf),
+        flip_fraction=args.flip_fraction,
+        n_splits=args.n_splits,
+        n_repeats=args.n_repeats,
+        n_jobs=args.n_jobs,
+        predict_mode=args.predict_mode,
+        random_state=args.random_state,
+        positive_class=args.positive_class,
+        sample_size=1.0
+    )
+    true_estimator.fit(X, y)
+    print(f"[RESULT] Actual correction factor from full data: {true_estimator.score():.6f}")
 
     if args.plot:
         reg.plot()
