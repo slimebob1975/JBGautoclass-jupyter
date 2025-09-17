@@ -182,8 +182,8 @@ def main():
         X, y = make_classification(
             n_samples=args.n_samples,
             n_features=args.n_features,
-            n_informative=8,
-            n_redundant=5,
+            n_informative=int(args.n_features*0.9),
+            n_redundant=args.n_features - int(args.n_features*0.9),
             n_classes=2,
             weights=[0.05, 0.95],
             random_state=args.random_state
