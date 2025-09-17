@@ -140,7 +140,7 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         plt.figure(figsize=(8, 5))
         plt.plot(X_sample, y_sample, 'o', label='Samples')
         plt.plot(xs, ys, '-', label='Regression fit')
-        plt.axhline(1.0, color='red', linestyle='--', label='Extrapolation @ 1.0')
+        plt.axvline(1.0, color='red', linestyle='--', label='Extrapolation @ 1.0')
         plt.axhline(self.correction_factor_, color='green', linestyle='--', label='Computed corr(1.0)')
         plt.xlabel('Sample Size Fraction')
         plt.ylabel('Correction Factor')
