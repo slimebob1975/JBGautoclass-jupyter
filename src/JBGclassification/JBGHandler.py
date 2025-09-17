@@ -31,6 +31,7 @@ from JBGExceptions import (DatasetException, MissingScorerException, ModelExcept
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
+from JBGDarkNumberCorrectionRegressor import DarkNumberCorrectionFactorRegressor
 import Helpers
 from sklearn.base import clone
 from joblib import cpu_count
@@ -1798,7 +1799,7 @@ class PredictionsHandler:
     
     # Dark number stuffs
     def get_dark_numbers(self, X: pd.DataFrame, Y: pd.DataFrame, type: str = "all", models: list = [None], \
-                         model_names: list = [None], combine_models=True) -> None:
+                         model_names: list = [None], combine_models=True, random_state=42) -> None:
         
         # These DataFrames contain the results
         self.dark_numbers = pd.DataFrame()
@@ -1825,18 +1826,38 @@ class PredictionsHandler:
                 )
                 if DEBUG:
                     self.handler.logger.print_info(f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator")
-                corr_estimator = DarkNumberCorrectionFactorEstimator(
-                    estimator=clone(models[0]), 
-                    flip_fraction=0.2, 
-                    n_splits=n_splits, 
-                    n_repeats=n_repeats, 
-                    n_jobs=-1,
-                    predict_mode='predict',
-                    positive_class=label,
-                    sample_size=1.0 
-                )
-                mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y)
-                corrs[label] = corr_estimator.score()
+                try:
+                    corr_estimator = DarkNumberCorrectionFactorEstimator(
+                        estimator=clone(models[0]), 
+                        flip_fraction=0.2, 
+                        n_splits=n_splits, 
+                        n_repeats=n_repeats, 
+                        n_jobs=-1,
+                        predict_mode='predict',
+                        random_state=random_state,
+                        positive_class=label,
+                        sample_size=1.0 
+                    )
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y)
+                    corrs[label] = corr_estimator.score()
+                except Exception as ex:
+                    self.hander.logger.print_warning(f"Correction number estimator failed: {str(ex)}". Fallback: using regressor.)
+                    corr_regressor = DarkNumberCorrectionFactorRegressor(
+                        estimator=clone(models[0]),
+                        sample_size_list=[0.1, 0.2, 0.3, 0.4, 0.5],
+                        flip_fraction=0.2,
+                        n_splits=n_splits,
+                        n_repeats=n_repeats,
+                        n_jobs=-1,
+                        predict_mode='predict',
+                        random_state=random_state,
+                        positive_class=label,
+                        type='log'
+                    )
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y) 
+                    if DEBUG:
+                        self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_}")
+                    corrs[label] = corr_regressor.score()
             except Exception as ex:
                 self.handler.logger.print_warning(f"Correction number calculation for label {label} failed. Using 1.0 as fallback. Reason: {str(ex)}")
                 corrs[label] = 1.0
