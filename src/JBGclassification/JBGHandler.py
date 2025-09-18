@@ -1840,8 +1840,9 @@ class PredictionsHandler:
                     )
                     mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y)
                     corrs[label] = corr_estimator.score()
+                    raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
                 except Exception as ex:
-                    self.hander.logger.print_warning(f"Correction number estimator failed: {str(ex)}". Fallback: using regressor.)
+                    self.handler.logger.print_warning(f"Correction number estimator failed: {str(ex)}. Fallback: using regressor.")
                     corr_regressor = DarkNumberCorrectionFactorRegressor(
                         estimator=clone(models[0]),
                         sample_size_list=[0.1, 0.2, 0.3, 0.4, 0.5],
@@ -1852,12 +1853,12 @@ class PredictionsHandler:
                         predict_mode='predict',
                         random_state=random_state,
                         positive_class=label,
-                        type='log'
+                        type='logbounded'
                     )
                     mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y) 
-                    if DEBUG:
-                        self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_}")
                     corrs[label] = corr_regressor.score()
+                    if DEBUG:
+                        self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_} with result {corrs[label]}")
             except Exception as ex:
                 self.handler.logger.print_warning(f"Correction number calculation for label {label} failed. Using 1.0 as fallback. Reason: {str(ex)}")
                 corrs[label] = 1.0

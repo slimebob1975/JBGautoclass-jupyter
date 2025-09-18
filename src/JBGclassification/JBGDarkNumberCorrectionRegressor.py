@@ -5,7 +5,7 @@ from numpy.polynomial.polynomial import Polynomial
 from scipy.optimize import curve_fit
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import FunctionTransformer
-from sklearn.datasets import make_classification, fetch_openml
+from sklearn.datasets import make_classification, fetch_openml, load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 import argparse
@@ -82,29 +82,13 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
             self.correction_factor_ = float(model.predict(log_transformer.transform([[1.0]])))
         
         elif self.type == 'logbounded':
-
-            X_flat = X_samples.flatten()
-
-            # Logarithmic function bounded below by 1.0
-            def log_func(x, a, b, c):
-                return np.maximum(1.0, a * np.log(b * x + 1) + c)
-
-            try:
-                popt, _ = curve_fit(
-                    log_func,
-                    X_flat,
-                    y_corrs,
-                    p0=(1.0, 1.0, 0.0),
-                    bounds=([-np.inf, 1e-6, -np.inf], [np.inf, np.inf, np.inf]),
-                    maxfev=5000
-                )
-                self.model_ = (log_func, popt)
-                self.correction_factor_ = float(log_func(1.0, *popt))
-            except RuntimeError as e:
-                print(f"[WARNING] Curve fitting failed: {str(e)}. Falling back to max(y_corrs)")
-                self.correction_factor_ = max(max(y_corrs), 1.0)
-                self.model_ = None
-
+            log_transformer = FunctionTransformer(np.log1p, validate=True)
+            X_log = log_transformer.transform(X_samples)
+            model = LinearRegression()
+            model.fit(X_log, y_corrs)
+            self.model_ = (model, log_transformer)
+            pred = float(model.predict(log_transformer.transform([[1.0]])))
+            self.correction_factor_ = max(pred, 1.0)  # <-- Clamp here
         else:
             raise ValueError("Unsupported type. Choose from 'poly', 'linear', or 'log'.")
 
@@ -132,8 +116,9 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
             model, transformer = self.model_
             ys = model.predict(transformer.transform(xs.reshape(-1, 1)))
         elif self.type == 'logbounded':
-            func, popt = self.model_
-            ys = func(xs, *popt)
+            model, transformer = self.model_
+            ys_raw = model.predict(transformer.transform(xs.reshape(-1, 1)))
+            ys = np.maximum(ys_raw, 1.0)
         else:
             raise ValueError("Unsupported type.")
 
@@ -193,10 +178,12 @@ def main():
         n_used_samples = min(args.n_samples, len(y_fetch))
         
         # Stratified sampling       
-        X, _, y, _ = train_test_split(X_fetch, y_fetch, train_size=n_used_samples, stratify=y, random_state=args.random_state)
+        X, _, y, _ = train_test_split(X_fetch, y_fetch, train_size=n_used_samples, stratify=y_fetch, random_state=args.random_state)
 
+    # Prepare classifier
     clf = MLPClassifier(random_state=args.random_state, max_iter=2000, early_stopping=True)
 
+    # Prepare regressor
     reg = DarkNumberCorrectionFactorRegressor(
         estimator=clf,
         sample_size_list=sample_size_list,
