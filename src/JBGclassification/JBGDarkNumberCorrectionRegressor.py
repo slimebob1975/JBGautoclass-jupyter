@@ -42,24 +42,15 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         self.sample_results_ = None
 
     def fit(self, X, y):
-        estimator = DarkNumberCorrectionFactorEstimator(
-            estimator=clone(self.estimator),
-            flip_fraction=self.flip_fraction,
-            n_splits=self.n_splits,
-            n_repeats=self.n_repeats,
-            n_jobs=self.n_jobs,
-            predict_mode=self.predict_mode,
-            random_state=self.random_state,
-            positive_class=self.positive_class,
-            sample_size=self.sample_size_list  # List passed directly
-        )
-        estimator.fit(X, y)
 
-        sample_results = list(zip(estimator.sample_size_used_, estimator.score()))
-        self.sample_results_ = sample_results
+        # Sort ascending to handle smallest memory case first
+        sample_sizes = sorted(self.sample_size_list, reverse=False)
+        
+        # Run with recovery
+        self.sample_results_ = self._fit_sample_size_block(X, y, sample_sizes)
 
-        X_samples = np.array([r[0] for r in sample_results]).reshape(-1, 1)
-        y_corrs = np.array([r[1] for r in sample_results])
+        X_samples = np.array([r[0] for r in self.sample_results_]).reshape(-1, 1)
+        y_corrs = np.array([r[1] for r in self.sample_results_])
 
         # Fit regression model
         if self.type == 'poly':
@@ -80,7 +71,7 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
             model.fit(X_log, y_corrs)
             self.model_ = (model, log_transformer)
             self.correction_factor_ = float(model.predict(log_transformer.transform([[1.0]])))
-        
+
         elif self.type == 'logbounded':
             log_transformer = FunctionTransformer(np.log1p, validate=True)
             X_log = log_transformer.transform(X_samples)
@@ -88,11 +79,37 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
             model.fit(X_log, y_corrs)
             self.model_ = (model, log_transformer)
             pred = float(model.predict(log_transformer.transform([[1.0]])))
-            self.correction_factor_ = max(pred, 1.0)  # <-- Clamp here
+            self.correction_factor_ = max(pred, 1.0)
+
         else:
-            raise ValueError("Unsupported type. Choose from 'poly', 'linear', or 'log'.")
+            raise ValueError("Unsupported type. Choose from 'poly', 'linear', 'log', or 'logbounded'.")
 
         return self
+    
+    def _fit_sample_size_block(self, X, y, sample_sizes):
+        results = []
+        for s in sample_sizes:
+            try:
+                print(f"[DEBUG] Using n_jobs={self.n_jobs} for sample size {s}")
+                estimator = DarkNumberCorrectionFactorEstimator(
+                    estimator=clone(self.estimator),
+                    flip_fraction=self.flip_fraction,
+                    n_splits=self.n_splits,
+                    n_repeats=self.n_repeats,
+                    n_jobs=self.n_jobs,
+                    predict_mode=self.predict_mode,
+                    random_state=self.random_state,
+                    positive_class=self.positive_class,
+                    sample_size=s
+                )
+                estimator.fit(X, y)
+                results.append((s, estimator.score()))
+            except MemoryError as e:
+                print(f"[WARNING] MemoryError at sample size {s}. Reducing n_jobs and retrying remaining...")
+                self.n_jobs = max(1, self.n_jobs // 2)
+                remaining = sample_sizes[sample_sizes.index(s):]
+                return results + self._fit_sample_size_block(X, y, remaining)
+        return results
 
     def score(self, X=None, y=None):
         return self.correction_factor_
