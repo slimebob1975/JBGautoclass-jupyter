@@ -1817,6 +1817,8 @@ class PredictionsHandler:
         corrs = {}
         mh = self.handler.get_handler("model")
         for label in labels:
+            if DEBUG:
+                self.handler.logger.print_info(f"[DEBUG] Considering label: {label} among labels: {labels} for corr_estimator")
             try:
                 n_splits, n_repeats = self._auto_n_splits_and_repeats(
                     n_jobs_desired=-1,
@@ -1840,7 +1842,7 @@ class PredictionsHandler:
                     )
                     mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y)
                     corrs[label] = corr_estimator.score()
-                    raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
+                    #raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
                 except Exception as ex:
                     self.handler.logger.print_warning(f"Correction number estimator failed: {str(ex)}. Fallback: using regressor.")
                     corr_regressor = DarkNumberCorrectionFactorRegressor(
