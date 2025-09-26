@@ -34,7 +34,7 @@ from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 from JBGDarkNumberCorrectionRegressor import DarkNumberCorrectionFactorRegressor
 import Helpers
 from sklearn.base import clone
-from joblib import cpu_count
+from joblib import cpu_count, Parallel, delayed
 
 GIVE_EXCEPTION_TRACEBACK = False
 DEBUG = True
@@ -338,7 +338,7 @@ class DatasetHandler:
         if self.handler.config.should_train():
             self.handler.logger.investigate_dataset(self.dataset, class_column) # Returns True if the investigation/printing was not suppressed
         
-    def validate_dataset(self, data: list, column_names: list, class_column: str) -> pd.DataFrame:
+    def validate_dataset_old(self, data: list, column_names: list, class_column: str) -> pd.DataFrame:
         dataset = pd.DataFrame(data, columns = column_names)
         
         # Make sure the class column is a categorical variable by setting it as string
@@ -372,6 +372,43 @@ class DatasetHandler:
         
         self.handler.logger.end_inline_progress(progress_key)
         return dataset
+    
+    def validate_dataset(self, data: list, column_names: list, class_column: str) -> pd.DataFrame:
+        dataset = pd.DataFrame(data, columns=column_names)
+
+        try:
+            dataset.astype({class_column: 'str'}, copy=False)
+        except Exception as e:
+            self.handler.logger.print_dragon(exception=e)
+            raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
+
+        number_data_columns = len(dataset.columns) - 1
+        column_number = 0
+        progress_key = "validate_dataset"
+        self.handler.logger.start_inline_progress(progress_key, "Validation progress", number_data_columns, "Percent data checked of fetched")
+
+        try:
+            # Parallelize over columns (use threads here since we do not want to pickle this environment)
+            results = Parallel(n_jobs=-1, backend="threading")(
+                delayed(self.validate_column)(key, column)
+                for key, column in dataset.items()
+                if key != class_column
+            )
+
+            # Assign back to dataset
+            for (key, _), validated_col in zip(dataset.items(), results):
+                if key != class_column:
+                    dataset[key] = validated_col
+                    column_number += 1
+                    self.handler.logger.update_inline_progress(progress_key, column_number, "Data checked of fetched")
+
+        except Exception as ex:
+            self.handler.logger.print_dragon(exception=ex)
+            raise DatasetException(f"Something went wrong in inconsistency check: {ex}")
+
+        self.handler.logger.end_inline_progress(progress_key)
+        return dataset
+
 
     def validate_column(self, key: str, column: pd.Series) -> pd.Series:
         
