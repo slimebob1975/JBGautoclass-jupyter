@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 import argparse
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
+from pickle import PicklingError
 
 class DarkNumberCorrectionFactorRegressor(BaseEstimator):
     def __init__(
@@ -40,6 +41,7 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         self.correction_factor_ = None
         self.model_ = None
         self.sample_results_ = None
+        self._force_threads = False   # once triggered, all runs use threads
 
     def fit(self, X, y):
 
@@ -90,7 +92,7 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         results = []
         for s in sample_sizes:
             try:
-                print(f"[DEBUG] Using n_jobs={self.n_jobs} for sample size {s}")
+                print(f"[DEBUG] Using n_jobs={self.n_jobs}, force_threads={self._force_threads} for sample size {s}")
                 estimator = DarkNumberCorrectionFactorEstimator(
                     estimator=clone(self.estimator),
                     flip_fraction=self.flip_fraction,
@@ -102,15 +104,25 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
                     positive_class=self.positive_class,
                     sample_size=s
                 )
+                # Propagate force_threads flag
+                estimator._force_threads = self._force_threads
                 estimator.fit(X, y)
                 results.append((s, estimator.score()))
+
             except MemoryError as e:
                 print(f"[WARNING] MemoryError at sample size {s}. Reducing n_jobs and retrying remaining...")
                 self.n_jobs = max(1, self.n_jobs // 2)
                 remaining = sample_sizes[sample_sizes.index(s):]
                 return results + self._fit_sample_size_block(X, y, remaining)
-        return results
 
+            except (PicklingError, AttributeError, TypeError) as e:
+                print(f"[WARNING] Pickling error at sample size {s}: {e}. Forcing threads globally for remaining fits.")
+                self._force_threads = True
+                remaining = sample_sizes[sample_sizes.index(s):]
+                return results + self._fit_sample_size_block(X, y, remaining)
+
+        return results
+    
     def score(self, X=None, y=None):
         return self.correction_factor_
 

@@ -7,21 +7,63 @@ import argparse
 from sklearn.neural_network import MLPClassifier
 from typing import Union, List
 
+import numpy as np
+from sklearn.base import BaseEstimator, clone
+from sklearn.model_selection import StratifiedKFold, train_test_split
+from joblib import Parallel, delayed
+from pickle import PicklingError
+
 DEBUG = True
 
+def evaluate_split(estimator, X, y, train_idx, repeat_idx,
+                   flip_fraction, positive_class, predict_mode, random_state):
+    """
+    Top-level evaluation function for Parallel.
+    """
+    rng = np.random.default_rng(random_state + repeat_idx if random_state is not None else None)
+    X_train, y_train = X[train_idx], y[train_idx]
+    y_train_flipped = y_train.copy()
+
+    pos_indices = np.where(y_train == positive_class)[0]
+    n_flip = int(len(pos_indices) * flip_fraction)
+    if n_flip == 0:
+        return 0.0
+
+    flip_indices = rng.choice(pos_indices, size=n_flip, replace=False)
+
+    other_class = [c for c in np.unique(y_train) if c != positive_class]
+    if not other_class:
+        raise ValueError("Cannot find a negative class different from the positive_class.")
+    y_train_flipped[flip_indices] = other_class[0]
+
+    model = clone(estimator)
+    model.fit(X_train, y_train_flipped)
+
+    X_flipped = X_train[flip_indices]
+    if predict_mode == 'predict':
+        y_pred = model.predict(X_flipped)
+        reidentified = np.sum(y_pred == positive_class)
+    elif predict_mode == 'predict_proba':
+        class_index = list(model.classes_).index(positive_class)
+        y_proba = model.predict_proba(X_flipped)[:, class_index]
+        reidentified = np.sum(y_proba)
+    else:
+        raise ValueError("predict_mode must be 'predict' or 'predict_proba'")
+
+    return reidentified / n_flip
+
+
 class DarkNumberCorrectionFactorEstimator(BaseEstimator):
-    def __init__(
-        self, 
-        estimator, 
-        flip_fraction: float = 0.1, 
-        n_splits: int = 10, 
-        n_repeats: int = 3, 
-        n_jobs: int = None,
-        predict_mode: str = "predict",
-        random_state: int = 42,
-        positive_class: int = 1,
-        sample_size: float = 0.1
-    ):
+    def __init__(self,
+                 estimator,
+                 flip_fraction: float = 0.1,
+                 n_splits: int = 10,
+                 n_repeats: int = 3,
+                 n_jobs: int = None,
+                 predict_mode: str = "predict",
+                 random_state: int = 42,
+                 positive_class: int = 1,
+                 sample_size: float = 0.1):
         self.estimator = estimator
         self.flip_fraction = flip_fraction
         self.n_splits = n_splits
@@ -34,77 +76,28 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         self.correction_factor_ = None
 
     @staticmethod
-    def _compute_min_sample_size(
-        y,
-        flip_fraction: float,
-        n_splits: int,
-        positive_class: int,
-        min_flips: int = 3,
-        min_pos_per_fold: int = 2
-    ) ->  int:
-        """
-        Estimate a safe minimum sample size.
-        """
-
-        # Count positives in full data
+    def _compute_min_sample_size(y,
+                                 flip_fraction: float,
+                                 n_splits: int,
+                                 positive_class: int,
+                                 min_flips: int = 3,
+                                 min_pos_per_fold: int = 2) -> int:
         total_positives = np.sum(y == positive_class)
-
-        # Estimate how many samples are needed to get enough positives after subsampling
-        # Want at least min_flips flipped → solve: pos * flip_frac ≥ min_flips
         min_pos_required = int(np.ceil(min_flips / flip_fraction))
-
-        # Also require that each fold gets min_pos_per_fold positives
         min_pos_for_cv = n_splits * min_pos_per_fold
-
-        # Take max of both requirements
         required_positives = max(min_pos_required, min_pos_for_cv)
 
-        # Estimate total dataset size needed to expect that many positives
         pos_ratio = total_positives / len(y) if len(y) > 0 else 0
         if pos_ratio == 0:
             raise ValueError("No positive examples in data.")
 
-        estimated_sample_size = int(np.ceil(required_positives / pos_ratio))
-        return estimated_sample_size
-
-    def _evaluate_split(self, X, y, train_idx, repeat_idx):
-        rng = np.random.default_rng(self.random_state + repeat_idx if self.random_state is not None else None)
-        X_train, y_train = X[train_idx], y[train_idx]
-        y_train_flipped = y_train.copy()
-
-        pos_indices = np.where(y_train == self.positive_class)[0]
-        n_flip = int(len(pos_indices) * self.flip_fraction)
-        if n_flip == 0:
-            return 0.0
-
-        flip_indices = rng.choice(pos_indices, size=n_flip, replace=False)
-
-        other_class = [c for c in np.unique(y_train) if c != self.positive_class]
-        if not other_class:
-            raise ValueError("Cannot find a negative class different from the positive_class.")
-        y_train_flipped[flip_indices] = other_class[0]
-
-        model = clone(self.estimator)
-        model.fit(X_train, y_train_flipped)
-
-        X_flipped = X_train[flip_indices]
-        if self.predict_mode == 'predict':
-            y_pred = model.predict(X_flipped)
-            reidentified = np.sum(y_pred == self.positive_class)
-        elif self.predict_mode == 'predict_proba':
-            class_index = list(model.classes_).index(self.positive_class)
-            y_proba = model.predict_proba(X_flipped)[:, class_index]
-            reidentified = np.sum(y_proba)
-        else:
-            raise ValueError("predict_mode must be 'predict' or 'predict_proba'")
-
-        return reidentified / n_flip
+        return int(np.ceil(required_positives / pos_ratio))
 
     def fit(self, X, y):
         X = np.asarray(X)
         y = np.asarray(y)
 
-         # Set the smallest possible samples size
+        # Check minimum sample requirement
         min_sample_needed = self._compute_min_sample_size(
             y,
             flip_fraction=self.flip_fraction,
@@ -113,16 +106,13 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         )
 
         n_samples = X.shape[0]
-
         effective_size = min(n_samples, int(n_samples * self.sample_size))
         if effective_size < min_sample_needed:
             if DEBUG:
-                print(f"[Warning] Sample size: {self.sample_size} gives effetive size: {effective_size}, which is less than required: {min_sample_needed}! Skipping.")
+                print(f"[Warning] Sample size {self.sample_size} gives effective size {effective_size}, "
+                      f"less than required {min_sample_needed}. Skipping.")
             self.correction_factor_ = 1.0
             return self
-
-        if DEBUG:
-            print(f"Sample size: {self.sample_size}, minimum sample needed: {min_sample_needed}, effective size: {effective_size}")
 
         if effective_size < n_samples:
             X_sub, _, y_sub, _ = train_test_split(
@@ -132,33 +122,51 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                 random_state=self.random_state
             )
             if DEBUG:
-                print(f"[DEBUG] Subsampled to {len(X_sub)} rows using stratified sampling (sample_size={self.sample_size}).")
+                print(f"[DEBUG] Subsampled to {len(X_sub)} rows (sample_size={self.sample_size}).")
         else:
             X_sub, y_sub = X, y
 
-        skf = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
-        if DEBUG:
-            print(f"[DEBUG] Running with estimator with n_jobs={self.n_jobs}")
+        skf = StratifiedKFold(n_splits=self.n_splits,
+                              shuffle=True,
+                              random_state=self.random_state)
 
-        results = Parallel(
-            n_jobs=self.n_jobs,
-            prefer='processes',
-            max_nbytes=None
-        )(
-            delayed(self._evaluate_split)(X_sub, y_sub, train_idx, repeat_idx)
+        tasks = (
+            delayed(evaluate_split)(
+                self.estimator, X_sub, y_sub, train_idx, repeat_idx,
+                self.flip_fraction, self.positive_class,
+                self.predict_mode, self.random_state
+            )
             for repeat_idx in range(self.n_repeats)
             for train_idx, _ in skf.split(X_sub, y_sub)
         )
 
+        # Try processes first, fallback to threads
+        try:
+            if DEBUG:
+                print(f"[DEBUG] Running Parallel with processes (n_jobs={self.n_jobs})")
+            results = Parallel(
+                n_jobs=self.n_jobs,
+                prefer="processes",
+                max_nbytes=None
+            )(tasks)
+        except (PicklingError, AttributeError, TypeError) as e:
+            if DEBUG:
+                print(f"[WARNING] Falling back to threads due to pickling error: {e}")
+            results = Parallel(
+                n_jobs=self.n_jobs,
+                prefer="threads"
+            )(tasks)
+
         mean_r = np.mean(results)
         self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
         if DEBUG:
-            print(f"[DEBUG] Refound for sample_size={self.sample_size}: {results} leading to correction factor: {self.correction_factor_}")
+            print(f"[DEBUG] Correction factor: {self.correction_factor_} from results {results}")
 
         return self
 
     def score(self, X=None, y=None):
         return self.correction_factor_
+
 
 def main():
     parser = argparse.ArgumentParser(description="Test dark number correction factor estimator.")
