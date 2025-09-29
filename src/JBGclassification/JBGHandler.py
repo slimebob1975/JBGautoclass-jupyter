@@ -34,7 +34,7 @@ from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 from JBGDarkNumberCorrectionRegressor import DarkNumberCorrectionFactorRegressor
 import Helpers
 from sklearn.base import clone
-from joblib import cpu_count, Parallel, delayed
+from joblib import cpu_count, Parallel, delayed, parallel_backend
 
 GIVE_EXCEPTION_TRACEBACK = False
 DEBUG = True
@@ -1047,7 +1047,7 @@ class ModelHandler:
         
 
     # Help function for running other functions in parallel
-    def execute_n_job(self, func: function, *args: tuple, **kwargs: dict) -> Any:
+    def execute_n_job_old(self, func: function, *args: tuple, **kwargs: dict) -> Any:
             n_jobs = psutil.cpu_count()
             if DEBUG:
                 self.handler.logger.print_info(f"Starting parallel execution of function {func.__name__} with n_jobs = {n_jobs}")
@@ -1072,6 +1072,46 @@ class ModelHandler:
                 end_time = time.time()
                 self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
             return result
+    
+
+    def execute_n_job(self, func: function, *args: tuple, **kwargs: dict):
+        """
+        Execute a function with n_jobs parallelism.
+        Defaults to threading backend for robustness, but allows override.
+        Falls back to processes if threading fails.
+        """
+        n_jobs = psutil.cpu_count(logical=True)  # logical cores by default
+        backend = kwargs.pop("backend", "threading")  # default to threads
+
+        if self.handler.config.debug:
+            self.handler.logger.print_info(
+                f"Starting parallel execution of {func.__name__} with n_jobs={n_jobs}, backend={backend}"
+            )
+
+        while n_jobs > 0:
+            try:
+                with parallel_backend(backend):
+                    return func(*args, **kwargs, n_jobs=n_jobs)
+
+            except MemoryError as ex:
+                self.handler.logger.print_warning(
+                    f"MemoryError with n_jobs={n_jobs}. Reducing workers by half..."
+                )
+                n_jobs //= 2
+                if n_jobs == 0:
+                    raise
+
+            except Exception as ex:
+                if backend == "threading":
+                    # If threading failed for non-memory reasons, try processes
+                    self.handler.logger.print_warning(
+                        f"Threading backend failed with {type(ex).__name__}: {ex}. Falling back to processes."
+                    )
+                    backend = "loky"
+                else:
+                    # Already on processes, re-raise
+                    raise
+
     
     # An adapter for fit functions that do not accept n_job parameters
     @staticmethod
