@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.base import BaseEstimator, clone
 from numpy.polynomial.polynomial import Polynomial
+from sklearn.ensemble import AdaBoostClassifier, RandomForestClassifier, VotingClassifier
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.datasets import make_classification, fetch_openml
@@ -202,7 +203,14 @@ def main():
         )
 
     # Prepare base classifier
-    clf = MLPClassifier(random_state=args.random_state, max_iter=2000, early_stopping=True)
+    def get_clf():
+        clf1 = MLPClassifier(max_iter=2000, early_stopping=True, random_state=args.random_state)
+        clf2 = RandomForestClassifier()
+        clf3 = AdaBoostClassifier()
+        estimators=[('mlpc', clf1), ('rfcl', clf2), ('abc', clf3)]
+        return VotingClassifier(estimators=estimators, voting = 'soft')
+    
+    clf = get_clf()
 
     # Prepare regressor
     reg = DarkNumberCorrectionFactorRegressor(
