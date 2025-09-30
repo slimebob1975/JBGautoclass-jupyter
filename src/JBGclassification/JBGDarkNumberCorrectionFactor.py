@@ -1,12 +1,3 @@
-from sklearn.model_selection import StratifiedKFold, train_test_split
-import numpy as np
-from sklearn.base import BaseEstimator, clone
-from joblib import Parallel, delayed
-from sklearn.datasets import make_classification
-import argparse
-from sklearn.neural_network import MLPClassifier
-from typing import Union, List
-
 import numpy as np
 from sklearn.base import BaseEstimator, clone
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -14,6 +5,9 @@ from joblib import Parallel, delayed
 from pickle import PicklingError
 
 DEBUG = True
+BACKEND_PROCESSES = "processes"
+BACKEND_THREADS = "threads"
+
 
 def evaluate_split(estimator, X, y, train_idx, repeat_idx,
                    flip_fraction, positive_class, predict_mode, random_state):
@@ -63,7 +57,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                  predict_mode: str = "predict",
                  random_state: int = 42,
                  positive_class: int = 1,
-                 sample_size: float = 0.1):
+                 sample_size: float = 0.1,
+                 parallel_backend: str = BACKEND_THREADS):   # default threads
         self.estimator = estimator
         self.flip_fraction = flip_fraction
         self.n_splits = n_splits
@@ -74,6 +69,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         self.positive_class = positive_class
         self.sample_size = sample_size
         self.correction_factor_ = None
+        self._parallel_backend = parallel_backend
 
     @staticmethod
     def _compute_min_sample_size(y,
@@ -130,7 +126,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                               shuffle=True,
                               random_state=self.random_state)
 
-        tasks = (
+        # Build tasks once
+        tasks = [
             delayed(evaluate_split)(
                 self.estimator, X_sub, y_sub, train_idx, repeat_idx,
                 self.flip_fraction, self.positive_class,
@@ -138,24 +135,10 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
             )
             for repeat_idx in range(self.n_repeats)
             for train_idx, _ in skf.split(X_sub, y_sub)
-        )
+        ]
 
-        # Try processes first, fallback to threads
-        try:
-            if DEBUG:
-                print(f"[DEBUG] Running Parallel with processes (n_jobs={self.n_jobs})")
-            results = Parallel(
-                n_jobs=self.n_jobs,
-                prefer="processes",
-                max_nbytes=None
-            )(tasks)
-        except (PicklingError, AttributeError, TypeError) as e:
-            if DEBUG:
-                print(f"[WARNING] Falling back to threads due to pickling error: {e}")
-            results = Parallel(
-                n_jobs=self.n_jobs,
-                prefer="threads"
-            )(tasks)
+        # Try running tasks with retry logic
+        results = self._run_parallel(tasks)
 
         mean_r = np.mean(results)
         self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
@@ -164,57 +147,41 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
 
         return self
 
+    def _run_parallel(self, tasks):
+        """
+        Run tasks with retry logic, reusing the same task list.
+        """
+        while True:
+            try:
+                if DEBUG:
+                    print(f"[DEBUG] Running Parallel with backend={self._parallel_backend}, n_jobs={self.n_jobs}")
+                return Parallel(
+                    n_jobs=self.n_jobs,
+                    prefer=self._parallel_backend,
+                    pre_dispatch="2*n_jobs",
+                    batch_size="auto",
+                    max_nbytes=None
+                )(tasks)
+
+            except (SystemError, MemoryError) as e:
+                if DEBUG:
+                    print(f"[DEBUG] Parallel failed with {type(e).__name__}: {e}.")
+                if self.n_jobs and self.n_jobs > 1:
+                    self.n_jobs = max(1, self.n_jobs // 2)
+                    if DEBUG:
+                        print(f"[DEBUG] Retrying with n_jobs={self.n_jobs}")
+                else:
+                    raise
+
+            except (PicklingError, AttributeError, TypeError) as e:
+                if DEBUG:
+                    print(f"[WARNING] Pickling/backend error: {e}")
+                if self._parallel_backend == BACKEND_PROCESSES:
+                    self._parallel_backend = BACKEND_THREADS
+                    if DEBUG:
+                        print(f"[DEBUG] Switching backend to threads and retrying")
+                else:
+                    raise
+
     def score(self, X=None, y=None):
         return self.correction_factor_
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Test dark number correction factor estimator.")
-    parser.add_argument('--n_samples', type=int, default=1000)
-    parser.add_argument('--n_features', type=int, default=20)
-    parser.add_argument('--flip_fraction', type=float, default=0.1)
-    parser.add_argument('--n_splits', type=int, default=5)
-    parser.add_argument('--n_repeats', type=int, default=3)
-    parser.add_argument('--n_jobs', type=int, default=1)
-    parser.add_argument('--predict_mode', type=str, default='predict', choices=['predict', 'predict_proba'])
-    parser.add_argument('--random_state', type=int, default=42)
-    parser.add_argument('--positive_class', type=int, default=1)
-    parser.add_argument('--sample_size', type=float, default='0.2', help="Sample size as float")
-
-    # Parse in arguments
-    args = parser.parse_args()
-    
-    # Parse single float or comma-separated list
-    sample_size = float(args.sample_size)
-    
-    print("[INFO] Generating synthetic dataset...")
-    X, y = make_classification(
-        n_samples=args.n_samples,
-        n_features=args.n_features,
-        n_informative=8,
-        n_redundant=5,
-        n_classes=2,
-        weights=[0.05, 0.95],
-        random_state=args.random_state
-    )
-
-    clf = MLPClassifier(random_state=args.random_state, max_iter=2000, early_stopping=True)
-
-    estimator = DarkNumberCorrectionFactorEstimator(
-        estimator=clf,
-        flip_fraction=args.flip_fraction,
-        n_splits=args.n_splits,
-        n_repeats=args.n_repeats,
-        n_jobs=args.n_jobs,
-        predict_mode=args.predict_mode,
-        random_state=args.random_state,
-        positive_class=args.positive_class,
-        sample_size=sample_size
-    )
-
-    print(f"[INFO] Estimating correction factor for class {args.positive_class}...")
-    estimator.fit(X, y)
-    print(f"[RESULT] Estimated correction factor for sample size {args.sample_size}: {estimator.score():.4f}")
-
-if __name__ == "__main__":
-    main()

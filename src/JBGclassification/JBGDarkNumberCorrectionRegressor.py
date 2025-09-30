@@ -2,15 +2,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.base import BaseEstimator, clone
 from numpy.polynomial.polynomial import Polynomial
-from scipy.optimize import curve_fit
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import FunctionTransformer
-from sklearn.datasets import make_classification, fetch_openml, load_iris
+from sklearn.datasets import make_classification, fetch_openml
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 import argparse
+
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
-from pickle import PicklingError
+
 
 class DarkNumberCorrectionFactorRegressor(BaseEstimator):
     def __init__(
@@ -24,7 +24,7 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         predict_mode='predict',
         random_state=None,
         positive_class=1,
-        type='poly',  # 'poly', 'linear', 'log'
+        type='poly',  # 'poly', 'linear', 'log', 'logbounded'
         poly_degree=2
     ):
         self.estimator = estimator
@@ -41,14 +41,12 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         self.correction_factor_ = None
         self.model_ = None
         self.sample_results_ = None
-        self._force_threads = False   # once triggered, all runs use threads
 
     def fit(self, X, y):
-
         # Sort ascending to handle smallest memory case first
         sample_sizes = sorted(self.sample_size_list, reverse=False)
-        
-        # Run with recovery
+
+        # Run estimator for each sample size
         self.sample_results_ = self._fit_sample_size_block(X, y, sample_sizes)
 
         X_samples = np.array([r[0] for r in self.sample_results_]).reshape(-1, 1)
@@ -58,13 +56,13 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         if self.type == 'poly':
             coeffs = Polynomial.fit(X_samples.flatten(), y_corrs, deg=self.poly_degree).convert().coef
             self.model_ = Polynomial(coeffs)
-            self.correction_factor_ = float(self.model_(1.0))
+            self.correction_factor_ = self.model_(1.0).item()
 
         elif self.type == 'linear':
             model = LinearRegression()
             model.fit(X_samples, y_corrs)
             self.model_ = model
-            self.correction_factor_ = float(model.predict([[1.0]]))
+            self.correction_factor_ = model.predict([[1.0]]).item()
 
         elif self.type == 'log':
             log_transformer = FunctionTransformer(np.log1p, validate=True)
@@ -72,7 +70,7 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
             model = LinearRegression()
             model.fit(X_log, y_corrs)
             self.model_ = (model, log_transformer)
-            self.correction_factor_ = float(model.predict(log_transformer.transform([[1.0]])))
+            self.correction_factor_ = model.predict(log_transformer.transform([[1.0]])).item()
 
         elif self.type == 'logbounded':
             log_transformer = FunctionTransformer(np.log1p, validate=True)
@@ -80,49 +78,33 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
             model = LinearRegression()
             model.fit(X_log, y_corrs)
             self.model_ = (model, log_transformer)
-            pred = float(model.predict(log_transformer.transform([[1.0]])))
+            pred = model.predict(log_transformer.transform([[1.0]])).item()
             self.correction_factor_ = max(pred, 1.0)
 
         else:
             raise ValueError("Unsupported type. Choose from 'poly', 'linear', 'log', or 'logbounded'.")
 
         return self
-    
+
     def _fit_sample_size_block(self, X, y, sample_sizes):
         results = []
         for s in sample_sizes:
-            try:
-                print(f"[DEBUG] Using n_jobs={self.n_jobs}, force_threads={self._force_threads} for sample size {s}")
-                estimator = DarkNumberCorrectionFactorEstimator(
-                    estimator=clone(self.estimator),
-                    flip_fraction=self.flip_fraction,
-                    n_splits=self.n_splits,
-                    n_repeats=self.n_repeats,
-                    n_jobs=self.n_jobs,
-                    predict_mode=self.predict_mode,
-                    random_state=self.random_state,
-                    positive_class=self.positive_class,
-                    sample_size=s
-                )
-                # Propagate force_threads flag
-                estimator._force_threads = self._force_threads
-                estimator.fit(X, y)
-                results.append((s, estimator.score()))
-
-            except MemoryError as e:
-                print(f"[WARNING] MemoryError at sample size {s}. Reducing n_jobs and retrying remaining...")
-                self.n_jobs = max(1, self.n_jobs // 2)
-                remaining = sample_sizes[sample_sizes.index(s):]
-                return results + self._fit_sample_size_block(X, y, remaining)
-
-            except (PicklingError, AttributeError, TypeError) as e:
-                print(f"[WARNING] Pickling error at sample size {s}: {e}. Forcing threads globally for remaining fits.")
-                self._force_threads = True
-                remaining = sample_sizes[sample_sizes.index(s):]
-                return results + self._fit_sample_size_block(X, y, remaining)
-
+            print(f"[DEBUG] Running estimator for sample size {s} with n_jobs={self.n_jobs}")
+            estimator = DarkNumberCorrectionFactorEstimator(
+                estimator=clone(self.estimator),
+                flip_fraction=self.flip_fraction,
+                n_splits=self.n_splits,
+                n_repeats=self.n_repeats,
+                n_jobs=self.n_jobs,
+                predict_mode=self.predict_mode,
+                random_state=self.random_state,
+                positive_class=self.positive_class,
+                sample_size=s
+            )
+            estimator.fit(X, y)
+            results.append((s, estimator.score()))
         return results
-    
+
     def score(self, X=None, y=None):
         return self.correction_factor_
 
@@ -164,7 +146,6 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         plt.tight_layout()
         plt.show()
 
-
 def main():
     parser = argparse.ArgumentParser(description="Estimate correction factor using regression extrapolation.")
     parser.add_argument('--dataset', type=str, default='synthetic', choices=['synthetic', 'adult'])
@@ -189,27 +170,38 @@ def main():
 
     args = parser.parse_args()
 
+    # Parse sample sizes
     sample_size_list = [float(s.strip()) for s in args.sample_size_list.split(',')]
 
+    # Load dataset
     if args.dataset == 'synthetic':
         print("[INFO] Generating synthetic dataset...")
         X, y = make_classification(
             n_samples=args.n_samples,
             n_features=args.n_features,
-            n_informative=int(args.n_features*0.9),
-            n_redundant=args.n_features - int(args.n_features*0.9),
+            n_informative=int(args.n_features * 0.6),   # 60% informative
+            n_redundant=int(args.n_features * 0.2),     # 20% redundant
+            n_repeated=0,
             n_classes=2,
-            weights=[0.05, 0.95],
+            n_clusters_per_class=2,                     # more realistic distributions
+            weights=[0.2, 0.8],                         # 20% positives (not too rare)
+            class_sep=1.0,                              # controls class overlap
+            flip_y=0.01,                                # small noise to avoid perfect separability
             random_state=args.random_state
         )
     elif args.dataset == 'adult':
+        print("[INFO] Fetching 'adult' dataset from OpenML...")
         X_fetch, y_fetch = fetch_openml(name='adult', version=2, return_X_y=True, as_frame=True)
         n_used_samples = min(args.n_samples, len(y_fetch))
-        
-        # Stratified sampling       
-        X, _, y, _ = train_test_split(X_fetch, y_fetch, train_size=n_used_samples, stratify=y_fetch, random_state=args.random_state)
+        # Stratified sampling
+        X, _, y, _ = train_test_split(
+            X_fetch, y_fetch,
+            train_size=n_used_samples,
+            stratify=y_fetch,
+            random_state=args.random_state
+        )
 
-    # Prepare classifier
+    # Prepare base classifier
     clf = MLPClassifier(random_state=args.random_state, max_iter=2000, early_stopping=True)
 
     # Prepare regressor
@@ -227,12 +219,14 @@ def main():
         poly_degree=args.poly_degree
     )
 
-    print("[INFO] Estimating correction factor using extrapolated regression...")
+    # Run regression extrapolation
+    print("[INFO] Estimating correction factor via regression...")
     reg.fit(X, y)
     extrapolated_score = reg.score()
     print(f"[RESULT] Estimated correction factor at sample_size=1.0: {extrapolated_score:.6f}")
 
-    print("[INFO] Estimating true correction factor using full dataset...")
+    # Run full dataset baseline
+    print("[INFO] Estimating actual correction factor using full dataset...")
     true_estimator = DarkNumberCorrectionFactorEstimator(
         estimator=clone(clf),
         flip_fraction=args.flip_fraction,
@@ -247,6 +241,7 @@ def main():
     true_estimator.fit(X, y)
     print(f"[RESULT] Actual correction factor from full data: {true_estimator.score():.6f}")
 
+    # Optionally plot
     if args.plot:
         reg.plot()
 
