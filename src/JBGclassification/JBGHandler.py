@@ -37,7 +37,7 @@ from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend
 
 GIVE_EXCEPTION_TRACEBACK = False
-DEBUG = True
+DEBUG = False
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -410,10 +410,65 @@ class DatasetHandler:
         return dataset
 
 
-    def validate_column(self, key: str, column: pd.Series) -> pd.Series:
+    def validate_column_old(self, key: str, column: pd.Series) -> pd.Series:
         
         column_is_text = self.handler.config.column_is_text(key)
         return column.apply(self.sanitize_value, convert_dtype = True, args = (column_is_text,))
+    
+    # Vectorized column validaton
+    def validate_column(self, key: str, column: pd.Series) -> pd.Series:
+        
+        is_text = self.handler.config.column_is_text(key)
+        if is_text:
+            # Vectorized string conversion for text columns
+            return column.astype(str).fillna("?")
+
+        # Treat "", "nan", "None", "NaT" as missing; keep original missing mask
+        s = column.copy()
+        s_str = s.astype(str)
+        missing = s.isna() | s_str.str.strip().isin(["", "nan", "None", "NaT", "<NA>"])
+
+        # Helper: standardize decimal representation for numeric parsing
+        # - remove spaces (often thousands separators)
+        # - replace comma decimal with dot
+        s_std = (
+            s_str.str.replace(" ", "", regex=False)
+                .str.replace(",", ".", regex=False)
+        )
+
+        # 1) Try FLOAT
+        s_float = pd.to_numeric(s_std, errors="coerce")
+        # Accept float if we didn't create new NaNs beyond original missings
+        if (s_float.notna() | missing).all():
+            return s_float
+
+        # 2) Try strict INTEGER (only if all non-missing are integer-looking)
+        int_like = s_std.str.match(r"^[+-]?\d+$", na=False)
+        if (int_like | missing).all():
+            s_int = pd.to_numeric(s_std.where(int_like, np.nan), errors="coerce")
+            # Use nullable Int64 so missing values are supported
+            if (s_int.notna() | missing).all():
+                return s_int.astype("Int64")
+
+        # 3) Try ISO date → ordinal integers (YYYY-MM-DD optionally with time)
+        # Heuristic: at least 90% of non-missing values match the date shape
+        iso_mask = s_str.str.match(
+            r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?)?$",
+            na=False,
+        )
+        non_missing_count = (~missing).sum()
+        if non_missing_count > 0 and iso_mask[~missing].mean() >= 0.90:
+            dt = pd.to_datetime(s_str, errors="coerce", utc=False)
+            # Only accept if parse didn’t introduce new NaNs on non-missing rows
+            if (dt.notna() | missing).all():
+                # Convert to ordinal ints (days since 0001-01-01), like your old path
+                # (This mirrors the previous sanitize_value → datetime.toordinal()) :contentReference[oaicite:2]{index=2}
+                ords = dt.map(lambda x: x.toordinal() if pd.notna(x) else pd.NA)
+                return ords.astype("Int64")
+
+        # 4) Final fallback: keep the numeric (float) attempt with NaNs
+        return s_float
+
         
     def shuffle_dataset(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """ Impossible to test, due to random being random """

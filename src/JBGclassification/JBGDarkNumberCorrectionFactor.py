@@ -4,7 +4,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from joblib import Parallel, delayed
 from pickle import PicklingError
 
-DEBUG = True
+DEBUG = False
 BACKEND_PROCESSES = "processes"
 BACKEND_THREADS = "threads"
 

@@ -9,9 +9,7 @@ from sklearn.datasets import make_classification, fetch_openml
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 import argparse
-
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
-
 
 class DarkNumberCorrectionFactorRegressor(BaseEstimator):
     def __init__(
