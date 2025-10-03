@@ -18,7 +18,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, make_scorer, f1_score
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
-                                     train_test_split, GridSearchCV)
+                                     train_test_split, GridSearchCV, ParameterGrid)
 from tensorflow import keras
 from imblearn.pipeline import Pipeline
 from stop_words import get_stop_words
@@ -1028,9 +1028,25 @@ class ModelHandler:
             # Create correct scoring mechanism
             scorer = self.handler.config.get_scoring_mechanism()
 
+            # Compute how many independent jobs we really have
+            n_param_combos = len(ParameterGrid(search_params))
+            total_jobs = n_param_combos * n_splits
+
+            # Limit jobs to CPU cores
+            max_cores = psutil.cpu_count(logical=True)
+            n_jobs_desired = min(total_jobs, max_cores)
+
             # Create search grid and fit model
             search_verbosity = 4 if self.handler.config.io.verbose else 0
-            search = self.execute_n_job(GridSearchCV, model, search_params, scoring=scorer, cv=kfold, refit=True, verbose=search_verbosity)
+            search = self.execute_n_job(
+                GridSearchCV, 
+                model, 
+                search_params, 
+                scoring=scorer, 
+                cv=kfold, 
+                refit=True, 
+                verbose=search_verbosity,
+                n_jobs_desired=n_jobs_desired)
             try:
                 search.fit(X, Y)
             except TypeError:
@@ -1102,7 +1118,7 @@ class ModelHandler:
         
 
     # Help function for running other functions in parallel
-    def execute_n_job(self, func: function, *args: tuple, **kwargs: dict) -> Any:
+    def execute_n_job_old(self, func: function, *args: tuple, **kwargs: dict) -> Any:
             n_jobs = psutil.cpu_count()
             if DEBUG:
                 self.handler.logger.print_info(f"Starting parallel execution of function {func.__name__} with n_jobs = {n_jobs}")
@@ -1128,6 +1144,36 @@ class ModelHandler:
                 self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
             return result
     
+
+    def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
+        """
+        Execute a function with parallelism adapted to available cores.
+        - n_jobs_desired: number of independent tasks (e.g. k folds).
+        If None, defaults to all cores.
+        - Caps n_jobs at available CPU cores.
+        """
+        max_cores = psutil.cpu_count(logical=True)
+
+        if n_jobs_desired is None or n_jobs_desired < 0:
+            n_jobs = max_cores
+        else:
+            n_jobs = min(n_jobs_desired, max_cores)
+
+        if self.handler.config.debug:
+            self.handler.logger.print_info(
+                f"Starting {func.__name__} with n_jobs={n_jobs} (desired={n_jobs_desired}, max_cores={max_cores})"
+            )
+
+        try:
+            return func(*args, **kwargs, n_jobs=n_jobs)
+        except MemoryError as ex:
+            self.handler.logger.print_warning(
+                f"MemoryError with n_jobs={n_jobs}. Retrying with fewer workers..."
+            )
+            if n_jobs > 1:
+                return func(*args, **kwargs, n_jobs=max(1, n_jobs // 2))
+            else:
+                raise
     
     # An adapter for fit functions that do not accept n_job parameters
     @staticmethod
@@ -1493,7 +1539,7 @@ class ModelHandler:
         # it to dense numpy arrays.
         try:
             cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
-                scoring=scorer_mechanism, params=fit_params, error_score='raise') 
+                scoring=scorer_mechanism, n_jobs_desired=kfold.get_n_splits(), params=fit_params, error_score='raise') 
         except Exception as ex:
             #print("cross_val_score Exception 1:", str(ex))
             try:
@@ -1919,6 +1965,7 @@ class PredictionsHandler:
                     min_n_repeats=2,
                     max_multiplier=3
                 )
+                total_jobs = min(n_splits * n_repeats, psutil.cpu_count(logical=True))
                 if DEBUG:
                     self.handler.logger.print_info(f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator")
                 try:
@@ -1927,7 +1974,7 @@ class PredictionsHandler:
                         flip_fraction=0.2, 
                         n_splits=n_splits, 
                         n_repeats=n_repeats, 
-                        n_jobs=-1,
+                        n_jobs=total_jobs,
                         predict_mode='predict',
                         random_state=random_state,
                         positive_class=label,
@@ -1944,7 +1991,7 @@ class PredictionsHandler:
                         flip_fraction=0.2,
                         n_splits=n_splits,
                         n_repeats=n_repeats,
-                        n_jobs=-1,
+                        n_jobs=total_jobs,
                         predict_mode='predict',
                         random_state=random_state,
                         positive_class=label,
