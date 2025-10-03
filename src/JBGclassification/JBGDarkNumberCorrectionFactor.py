@@ -4,7 +4,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from joblib import Parallel, delayed
 from pickle import PicklingError
 
-DEBUG = False
+DEBUG = True
 BACKEND_PROCESSES = "processes"
 BACKEND_THREADS = "threads"
 
@@ -58,7 +58,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                  random_state: int = 42,
                  positive_class: int = 1,
                  sample_size: float = 0.1,
-                 parallel_backend: str = BACKEND_THREADS):   # default threads
+                 parallel_backend: str = BACKEND_PROCESSES):   
         self.estimator = estimator
         self.flip_fraction = flip_fraction
         self.n_splits = n_splits
@@ -180,6 +180,10 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                     self._parallel_backend = BACKEND_THREADS
                     if DEBUG:
                         print(f"[DEBUG] Switching backend to threads and retrying")
+                elif self._parallel_backend == BACKEND_THREADS:
+                    self._parallel_backend = BACKEND_PROCESSES
+                    if DEBUG:
+                        print(f"[DEBUG] Switching backend to processes and retrying")
                 else:
                     raise
 
