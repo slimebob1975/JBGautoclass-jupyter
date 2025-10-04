@@ -1160,7 +1160,7 @@ class ModelHandler:
         if n_jobs_desired is None or n_jobs_desired < 0:
             n_jobs = max_cores
         else:
-            n_jobs = min(n_jobs_desired, max_cores)
+            n_jobs = min(n_jobs_desired, min(max_cores, self.STANDARD_K_FOLDS))
 
         while True:
             if self.handler.config.debug:
