@@ -1145,13 +1145,14 @@ class ModelHandler:
                 self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
             return result
 
-    def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
+    def execute_n_job(self, func, *args, n_jobs_desired=None, backend_desired="loky", **kwargs):
         """
         Execute a function with parallelism adapted to available cores.
         - n_jobs_desired: number of independent tasks (e.g. k folds).
         If None, defaults to all cores.
         - Caps n_jobs at available CPU cores.
-        - Switches to threads if pickling fails.
+        - Scale down n_jobs on key exceptions.
+        - TODO: Switches to backend threads if pickling fails.
         """
 
         max_cores = psutil.cpu_count(logical=True)
@@ -1161,33 +1162,25 @@ class ModelHandler:
         else:
             n_jobs = min(n_jobs_desired, max_cores)
 
-        backend = "loky"   # joblib default for processes
-
         while True:
             if self.handler.config.debug:
                 self.handler.logger.print_info(
-                    f"Starting {func.__name__} with n_jobs={n_jobs} (desired={n_jobs_desired}, max_cores={max_cores}, backend={backend})"
+                    f"Starting {func.__name__} with n_jobs={n_jobs} (desired={n_jobs_desired}, max_cores={max_cores}, backend={backend_desired})"
                 )
 
             try:
-                with parallel_backend(backend):
+                with parallel_backend(backend_desired):
                     result = func(*args, **kwargs, n_jobs=n_jobs)
 
-            except (MemoryError, SystemError) as ex:
+            except (MemoryError, SystemError, PicklingError) as ex:
                 if n_jobs == 1:
                     raise MemoryError(
                         f"n_jobs=1 but not enough memory for {func.__name__}"
                     ) from ex
                 n_jobs = max(1, n_jobs // 2)
                 self.handler.logger.print_warning(
-                    f"MemoryError/SystemError with {func.__name__}, retrying with n_jobs={n_jobs}"
+                    f"MemoryError/SystemError/PicklingError with {func.__name__}, retrying with n_jobs={n_jobs}. Reason: {str(ex)}"
                 )
-
-            except (PicklingError, AttributeError) as ex:
-                self.handler.logger.print_warning(
-                    f"Serialization issue ({type(ex).__name__}) with {func.__name__}, retrying with threads"
-                )
-                backend = "threads"   # retry with shared-memory backend
 
             except Exception as ex:
                 raise Exception(
