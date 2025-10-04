@@ -34,7 +34,8 @@ from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 from JBGDarkNumberCorrectionRegressor import DarkNumberCorrectionFactorRegressor
 import Helpers
 from sklearn.base import clone
-from joblib import cpu_count, Parallel, delayed, parallel_backend
+from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
+from pickle import PicklingError
 
 GIVE_EXCEPTION_TRACEBACK = False
 DEBUG = False
@@ -1143,7 +1144,6 @@ class ModelHandler:
                 end_time = time.time()
                 self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
             return result
-    
 
     def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
         """
@@ -1151,7 +1151,9 @@ class ModelHandler:
         - n_jobs_desired: number of independent tasks (e.g. k folds).
         If None, defaults to all cores.
         - Caps n_jobs at available CPU cores.
+        - Switches to threads if pickling fails.
         """
+
         max_cores = psutil.cpu_count(logical=True)
 
         if n_jobs_desired is None or n_jobs_desired < 0:
@@ -1159,21 +1161,44 @@ class ModelHandler:
         else:
             n_jobs = min(n_jobs_desired, max_cores)
 
-        if self.handler.config.debug:
-            self.handler.logger.print_info(
-                f"Starting {func.__name__} with n_jobs={n_jobs} (desired={n_jobs_desired}, max_cores={max_cores})"
-            )
+        backend = "loky"   # joblib default for processes
 
-        try:
-            return func(*args, **kwargs, n_jobs=n_jobs)
-        except MemoryError as ex:
-            self.handler.logger.print_warning(
-                f"MemoryError with n_jobs={n_jobs}. Retrying with fewer workers..."
-            )
-            if n_jobs > 1:
-                return func(*args, **kwargs, n_jobs=max(1, n_jobs // 2))
+        while True:
+            if self.handler.config.debug:
+                self.handler.logger.print_info(
+                    f"Starting {func.__name__} with n_jobs={n_jobs} (desired={n_jobs_desired}, max_cores={max_cores}, backend={backend})"
+                )
+
+            try:
+                with parallel_backend(backend):
+                    result = func(*args, **kwargs, n_jobs=n_jobs)
+
+            except (MemoryError, SystemError) as ex:
+                if n_jobs == 1:
+                    raise MemoryError(
+                        f"n_jobs=1 but not enough memory for {func.__name__}"
+                    ) from ex
+                n_jobs = max(1, n_jobs // 2)
+                self.handler.logger.print_warning(
+                    f"MemoryError/SystemError with {func.__name__}, retrying with n_jobs={n_jobs}"
+                )
+
+            except (PicklingError, AttributeError) as ex:
+                self.handler.logger.print_warning(
+                    f"Serialization issue ({type(ex).__name__}) with {func.__name__}, retrying with threads"
+                )
+                backend = "threads"   # retry with shared-memory backend
+
+            except Exception as ex:
+                raise Exception(
+                    f"Could not call {func.__name__} with args {args} and kwargs {kwargs}: {ex}"
+                ) from ex
+
             else:
-                raise
+                break
+
+        return result
+
     
     # An adapter for fit functions that do not accept n_job parameters
     @staticmethod
@@ -1537,22 +1562,23 @@ class ModelHandler:
         # We want to executed the job with as many threads as possible, but as a final alternative use
         # only one. Exception typically arises when input data is sparse, and a possible remedy to convert 
         # it to dense numpy arrays.
+        n_jobs_desired = kfold.get_n_splits()
         try:
-            cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
-                scoring=scorer_mechanism, n_jobs_desired=kfold.get_n_splits(), params=fit_params, error_score='raise') 
-        except Exception as ex:
-            #print("cross_val_score Exception 1:", str(ex))
-            try:
-                cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
-                    dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, params=fit_params, \
+            cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
+                    dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, \
                     error_score='raise') 
+        except TypeError as ex:
+            self.handler.logger.print_warning(f"TypeError in parallel call of cross_val_score: {str(ex)}. Trying without NumPy conversion.")
+            try:
+                cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
+                    scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, error_score='raise') 
             except Exception as ex:
-                #print("cross_val_score Exception 2:",str(ex))
+                self.handler.logger.print_warning(f"Could not execute cross_val_score in parallell: {str(ex)}")
                 try:
+                    self.handler.logger.print_info("Doing cross validation without parallelization.")
                     cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
-                        cv=kfold, scoring=scorer_mechanism, params=fit_params, error_score='raise')
+                        cv=kfold, scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, error_score='raise')
                 except Exception as ex:
-                    #print("cross_val_score Exception 3:",str(ex))
                     raise ModelException(f"Unexpected error in cross_val_score: {str(ex)}") from ex
         
         return cv_results
