@@ -36,6 +36,7 @@ import Helpers
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
 from pickle import PicklingError
+import inspect
 
 GIVE_EXCEPTION_TRACEBACK = False
 DEBUG = False
@@ -1047,6 +1048,7 @@ class ModelHandler:
                 cv=kfold, 
                 refit=True, 
                 verbose=search_verbosity,
+                error_score='raise',
                 n_jobs_desired=n_jobs_desired)
             try:
                 search.fit(X, Y)
@@ -1145,7 +1147,7 @@ class ModelHandler:
                 self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
             return result
 
-    def execute_n_job(self, func, *args, n_jobs_desired=None, backend_desired="loky", **kwargs):
+    def execute_n_job_new(self, func, *args, n_jobs_desired=None, backend_desired="loky", **kwargs):
         """
         Execute a function with parallelism adapted to available cores.
         - n_jobs_desired: number of independent tasks (e.g. k folds).
@@ -1181,6 +1183,86 @@ class ModelHandler:
                 self.handler.logger.print_warning(
                     f"MemoryError/SystemError/PicklingError with {func.__name__}, retrying with n_jobs={n_jobs}. Reason: {str(ex)}"
                 )
+
+            except Exception as ex:
+                raise Exception(
+                    f"Could not call {func.__name__} with args {args} and kwargs {kwargs}: {ex}"
+                ) from ex
+
+            else:
+                break
+
+        return result
+
+    def execute_n_job(self, func, *args, n_jobs_desired=None, backend_desired="loky", **kwargs):
+        """
+        Execute a function with parallelism adapted to available cores.
+        - Automatically scales n_jobs.
+        - Switches to threads if pickling fails.
+        - Injects random_state=42 if applicable and missing.
+        """
+
+        max_cores = psutil.cpu_count(logical=True)
+        backend = backend_desired
+
+        if n_jobs_desired is None or n_jobs_desired < 0:
+            n_jobs = max_cores
+        else:
+            n_jobs = min(n_jobs_desired, max_cores)
+
+        # --- Helper: inject random_state if missing ---
+        def ensure_random_state(target_func, func_args, func_kwargs):
+            sig = inspect.signature(target_func)
+            if "random_state" in sig.parameters and "random_state" not in func_kwargs:
+                func_kwargs["random_state"] = 42
+                if self.handler.config.debug:
+                    self.handler.logger.print_info(
+                        f"Added random_state=42 to {target_func.__name__} (parameter)"
+                    )
+            else:
+                # Try to find estimator argument with random_state attribute
+                for a in func_args:
+                    if hasattr(a, "random_state"):
+                        if getattr(a, "random_state", None) is None:
+                            setattr(a, "random_state", 42)
+                            if self.handler.config.debug:
+                                self.handler.logger.print_info(
+                                    f"Added random_state=42 to estimator of type {type(a).__name__}"
+                                )
+            return func_args, func_kwargs
+
+        args, kwargs = ensure_random_state(func, args, kwargs)
+
+        while True:
+            if self.handler.config.debug:
+                self.handler.logger.print_info(
+                    f"Starting {func.__name__} with n_jobs={n_jobs} "
+                    f"(desired={n_jobs_desired}, max_cores={max_cores}, backend={backend})"
+                )
+
+            try:
+                with parallel_backend(backend):
+                    result = func(*args, **kwargs, n_jobs=n_jobs)
+
+            except (MemoryError, SystemError) as ex:
+                if n_jobs == 1:
+                    raise MemoryError(
+                        f"n_jobs=1 but not enough memory for {func.__name__}"
+                    ) from ex
+                n_jobs = max(1, n_jobs // 2)
+                self.handler.logger.print_warning(
+                    f"Memory/SystemError in {func.__name__}, retrying with n_jobs={n_jobs}"
+                )
+
+            except (PicklingError, AttributeError, TypeError) as ex:
+                if backend != "threads":
+                    self.handler.logger.print_warning(
+                        f"Serialization issue ({type(ex).__name__}) with {func.__name__}, retrying with threads"
+                    )
+                    backend = "threads"
+                    continue
+                else:
+                    raise
 
             except Exception as ex:
                 raise Exception(
