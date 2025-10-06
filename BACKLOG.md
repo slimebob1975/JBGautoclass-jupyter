@@ -1,7 +1,7 @@
 # Backlog – JBGLangImprover
 
 ## Known issues
-- [ ] Conversion problem float64 to int 64 when running SMOTE with MLPC in GridSearchCV
+- [ ] Sometimes: Conversion problem float64 to int 64 when running SMOTE with MLPC in GridSearchCV
  
 ## Planned improvments
 - [ ] 
