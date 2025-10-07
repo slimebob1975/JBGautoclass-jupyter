@@ -8,6 +8,9 @@ DEBUG = True
 BACKEND_PROCESSES = "processes"
 BACKEND_THREADS = "threads"
 
+class NaNValueError(Exception):
+    """Raised when a NaN value is encountered."""
+    pass
 
 def evaluate_split(estimator, X, y, train_idx, repeat_idx,
                    flip_fraction, positive_class, predict_mode, random_state):
@@ -140,12 +143,16 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         # Try running tasks with retry logic
         results = self._run_parallel(tasks)
 
-        mean_r = np.mean(results)
-        self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
-        if DEBUG:
-            print(f"[DEBUG] Correction factor: {self.correction_factor_} from results {results}")
+        # If result contains NaN values, raise ValueError
+        if np.isnan(results).any():
+            raise NaNValueError("Result contains NaN values, which is not allowed.")
+        else:
+            mean_r = np.mean(results)
+            self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
+            if DEBUG:
+                print(f"[DEBUG] Correction factor: {self.correction_factor_} from results {results}")
 
-        return self
+            return self
 
     def _run_parallel(self, tasks):
         """
@@ -172,20 +179,24 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                         print(f"[DEBUG] Retrying with n_jobs={self.n_jobs}")
                 else:
                     raise
-
             except (PicklingError, AttributeError, TypeError) as e:
                 if DEBUG:
                     print(f"[WARNING] Pickling/backend error: {e}")
                 if self._parallel_backend == BACKEND_PROCESSES:
                     self._parallel_backend = BACKEND_THREADS
                     if DEBUG:
-                        print(f"[DEBUG] Switching backend to threads and retrying")
-                elif self._parallel_backend == BACKEND_THREADS:
-                    self._parallel_backend = BACKEND_PROCESSES
-                    if DEBUG:
-                        print(f"[DEBUG] Switching backend to processes and retrying")
+                        print(f"[DEBUG] Switching backend to threads and retrying. Reason: {str(e)}")
                 else:
                     raise
+            except NaNValueError as e:
+                if self._parallel_backend == BACKEND_THREADS:
+                    self._parallel_backend = BACKEND_PROCESSES
+                    if DEBUG:
+                        print(f"[DEBUG] Switching backend to processes and retrying. Reason: {str(e)}")
+                else:
+                    raise
+            else:
+                raise
 
     def score(self, X=None, y=None):
         return self.correction_factor_
