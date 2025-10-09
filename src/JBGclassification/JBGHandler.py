@@ -1051,9 +1051,9 @@ class ModelHandler:
                 error_score='raise',
                 n_jobs_desired=n_jobs_desired)
             try:
-                search.fit(X, Y)
-            except TypeError:
                 search.fit(X.to_numpy(), Y.to_numpy())
+            except TypeError:
+                search.fit(X, Y)
             except Exception as e:
                 self.handler.logger.print_dragon(exception=e)
                 raise ModelException(f"Something went wrong on grid search training of picked model: {str(e)}")                
