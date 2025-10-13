@@ -316,10 +316,10 @@ class AlgorithmGridSearchParams(MetaEnum):
     HIST = {"parameters": {'learning_rate': [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2],
         'max_depth' : [25, 50, 75], 'l2_regularization': [0.0, 0.1, 1.5] }} 
     MLPC = {"parameters": {'activation': ('identity', 'logistic', 'tanh', 'relu'), 'solver': ('lbfgs', 'sgd', 'adam')}}
-    MLP2 = {"parameter" : {
+    MLP2 = {"parameters" : {
         'hidden_layer_sizes': [(50,), (100,), (50, 50), (100, 50), (100, 100)],
-        'activation': ['relu', 'tanh'],
-        'solver': ['adam', 'sgd'],
+        'activation': ('relu', 'tanh'),
+        'solver': ('adam', 'sgd'),
         'alpha': [1e-5, 1e-4, 1e-3, 1e-2],
         'learning_rate': ['constant', 'adaptive'],
         'learning_rate_init': [0.001, 0.01, 0.1],
