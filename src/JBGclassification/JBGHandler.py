@@ -39,7 +39,7 @@ from pickle import PicklingError
 import inspect
 
 GIVE_EXCEPTION_TRACEBACK = False
-DEBUG = False
+DEBUG = True
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -1169,7 +1169,7 @@ class ModelHandler:
                 self.handler.logger.print_info(
                     f"Starting {func.__name__} with n_jobs={n_jobs} (desired={n_jobs_desired}, max_cores={max_cores}, backend={backend_desired})"
                 )
-
+                start_time = time.time()
             try:
                 with parallel_backend(backend_desired):
                     result = func(*args, **kwargs, n_jobs=n_jobs)
@@ -1190,6 +1190,8 @@ class ModelHandler:
                 ) from ex
 
             else:
+                end_time = time.time()
+                self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
                 break
 
         return result
@@ -2001,7 +2003,7 @@ class PredictionsHandler:
                         sample_size=1.0,
                         logger=self.handler.logger 
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y, n_jobs_desired=n_splits)
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y, n_jobs_desired=-1)
                     corrs[label] = corr_estimator.score()
                     #raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
                 except Exception as ex:
@@ -2019,7 +2021,7 @@ class PredictionsHandler:
                         type='logbounded',
                         logger=self.handler.logger
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y, n_jobs_desired=n_splits) 
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y, n_jobs_desired=-1) 
                     corrs[label] = corr_regressor.score()
                     if DEBUG:
                         self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_} with result {corrs[label]}")

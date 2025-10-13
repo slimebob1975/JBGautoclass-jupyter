@@ -316,6 +316,17 @@ class AlgorithmGridSearchParams(MetaEnum):
     HIST = {"parameters": {'learning_rate': [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2],
         'max_depth' : [25, 50, 75], 'l2_regularization': [0.0, 0.1, 1.5] }} 
     MLPC = {"parameters": {'activation': ('identity', 'logistic', 'tanh', 'relu'), 'solver': ('lbfgs', 'sgd', 'adam')}}
+    MLP2 = {"parameter" : {
+        'hidden_layer_sizes': [(50,), (100,), (50, 50), (100, 50), (100, 100)],
+        'activation': ['relu', 'tanh'],
+        'solver': ['adam', 'sgd'],
+        'alpha': [1e-5, 1e-4, 1e-3, 1e-2],
+        'learning_rate': ['constant', 'adaptive'],
+        'learning_rate_init': [0.001, 0.01, 0.1],
+        'batch_size': [32, 64, 128],
+        'max_iter': [200, 500],
+        }
+    }
     GPC =  {"parameters": {'warm_start': (True, False), 'multi_class': ('one_vs_rest', 'one_vs_one')}}
     VOTG = {"parameters": {'voting': ('hard', 'soft')}}
     PYNN = {"parameters": {'activation': ('relu', 'tanh', 'sigmoid'), 'optimizer': ('adam', 'sgd'), \
@@ -323,12 +334,12 @@ class AlgorithmGridSearchParams(MetaEnum):
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
     KERA = {"parameters": {'verbose': [1], 'epochs': [10, 50, 100, 200], 'optimizer': ["adam", "rmsprop"], \
                            'optimizer__learning_rate': [0.001, 0.01, 0.1]}}
-    #FUTV = {"parameters": \
-    #    {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-    #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
-    #    {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
-    #    }
-    FUTV = {"parameters": {}}
+    FUTV = {"parameters": \
+        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
+        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
+        {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
+        }
+    #FUTV = {"parameters": {}}
     FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
         {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
         {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
@@ -396,6 +407,7 @@ class Algorithm(MetaEnum):
     GBC = { "full_name": "Gradient Boosting Classifier", "search_params": AlgorithmGridSearchParams.GBC, "rfe_compatible": True, "lib": Library.SCIKIT}
     HIST = { "full_name": "Histogram-based Gradient B. Classifier", "search_params": AlgorithmGridSearchParams.HIST, "rfe_compatible": False, "lib": Library.SCIKIT}
     MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC, "rfe_compatible": False, "lib": Library.SCIKIT}
+    MLP2 = { "full_name": "Multi Layered Peceptron (2)", "search_params": AlgorithmGridSearchParams.MLP2, "rfe_compatible": False, "lib": Library.SCIKIT}
     GPC = { "full_name": "Gaussian Process Classifier", "search_params": AlgorithmGridSearchParams.GPC, "rfe_compatible": False, "lib": Library.SCIKIT}
     VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False, "lib": Library.SCIKIT}
     TORA = { "full_name":  "PyTorch ReLu+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
@@ -572,6 +584,9 @@ class Algorithm(MetaEnum):
 
     def do_MLPC(self, max_iterations: int, size: int)-> MLPClassifier:
         return MLPClassifier(max_iter=max_iterations)
+
+    def do_MLP2(self, max_iterations: int, size: int)-> MLPClassifier:
+        return MLPClassifier()
 
     def do_GPC(self, max_iterations: int, size: int)-> GaussianProcessClassifier:
         return GaussianProcessClassifier(max_iter_predict=max_iterations)
