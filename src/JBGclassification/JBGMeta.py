@@ -317,14 +317,12 @@ class AlgorithmGridSearchParams(MetaEnum):
         'max_depth' : [25, 50, 75], 'l2_regularization': [0.0, 0.1, 1.5] }} 
     MLPC = {"parameters": {'activation': ('identity', 'logistic', 'tanh', 'relu'), 'solver': ('lbfgs', 'sgd', 'adam')}}
     MLP2 = {"parameters" : {
-        'hidden_layer_sizes': [(50,), (100,), (50, 50), (100, 50), (100, 100)],
-        'activation': ('relu', 'tanh'),
-        'solver': ('adam', 'sgd'),
-        'alpha': [1e-5, 1e-4, 1e-3, 1e-2],
-        'learning_rate': ['constant', 'adaptive'],
-        'learning_rate_init': [0.001, 0.01, 0.1],
-        'batch_size': [32, 64, 128],
-        'max_iter': [200, 500],
+            'hidden_layer_sizes': [(50,), (100,), (100, 50)],
+            'activation': ['relu', 'tanh'],
+            'solver': ['adam'],
+            'alpha': [1e-4, 1e-3],
+            'learning_rate': ['constant', 'adaptive'],
+            'learning_rate_init': [0.001, 0.01],
         }
     }
     GPC =  {"parameters": {'warm_start': (True, False), 'multi_class': ('one_vs_rest', 'one_vs_one')}}
@@ -586,7 +584,7 @@ class Algorithm(MetaEnum):
         return MLPClassifier(max_iter=max_iterations)
 
     def do_MLP2(self, max_iterations: int, size: int)-> MLPClassifier:
-        return MLPClassifier()
+        return MLPClassifier(max_iter=max_iterations)
 
     def do_GPC(self, max_iterations: int, size: int)-> GaussianProcessClassifier:
         return GaussianProcessClassifier(max_iter_predict=max_iterations)
