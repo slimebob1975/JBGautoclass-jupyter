@@ -1998,9 +1998,10 @@ class PredictionsHandler:
                         predict_mode='predict',
                         random_state=random_state,
                         positive_class=label,
-                        sample_size=1.0 
+                        sample_size=1.0,
+                        logger=self.handler.logger 
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y)
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y, n_jobs_desired=n_splits)
                     corrs[label] = corr_estimator.score()
                     #raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
                 except Exception as ex:
@@ -2015,9 +2016,10 @@ class PredictionsHandler:
                         predict_mode='predict',
                         random_state=random_state,
                         positive_class=label,
-                        type='logbounded'
+                        type='logbounded',
+                        logger=self.handler.logger
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y) 
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y, n_jobs_desired=n_splits) 
                     corrs[label] = corr_regressor.score()
                     if DEBUG:
                         self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_} with result {corrs[label]}")

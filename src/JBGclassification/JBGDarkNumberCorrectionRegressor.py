@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 import argparse
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
+from JBGLogger import JBGLogger
 
 class DarkNumberCorrectionFactorRegressor(BaseEstimator):
     def __init__(
@@ -24,7 +25,8 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         random_state=None,
         positive_class=1,
         type='poly',  # 'poly', 'linear', 'log', 'logbounded'
-        poly_degree=2
+        poly_degree=2,
+        logger: JBGLogger = None
     ):
         self.estimator = estimator
         self.sample_size_list = sample_size_list
@@ -40,6 +42,7 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         self.correction_factor_ = None
         self.model_ = None
         self.sample_results_ = None
+        self.logger = logger
 
     def fit(self, X, y):
         # Sort ascending to handle smallest memory case first
@@ -88,7 +91,8 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
     def _fit_sample_size_block(self, X, y, sample_sizes):
         results = []
         for s in sample_sizes:
-            print(f"[DEBUG] Running estimator for sample size {s} with n_jobs={self.n_jobs}")
+            if self.logger:
+                self.logger.print_info(f"[DEBUG] Running estimator for sample size {s} with n_jobs={self.n_jobs}")
             estimator = DarkNumberCorrectionFactorEstimator(
                 estimator=clone(self.estimator),
                 flip_fraction=self.flip_fraction,
@@ -98,7 +102,8 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
                 predict_mode=self.predict_mode,
                 random_state=self.random_state,
                 positive_class=self.positive_class,
-                sample_size=s
+                sample_size=s,
+                logger = self.logger
             )
             estimator.fit(X, y)
             results.append((s, estimator.score()))
@@ -222,17 +227,18 @@ def main():
         random_state=args.random_state,
         positive_class=args.positive_class,
         type=args.type,
-        poly_degree=args.poly_degree
+        poly_degree=args.poly_degree,
+        logger = JBGLogger(quiet=False, in_terminal=True)
     )
 
     # Run regression extrapolation
-    print("[INFO] Estimating correction factor via regression...")
+    reg.logger.print_info("[INFO] Estimating correction factor via regression...")
     reg.fit(X, y)
     extrapolated_score = reg.score()
-    print(f"[RESULT] Estimated correction factor at sample_size=1.0: {extrapolated_score:.6f}")
+    reg.logger.print_info(f"[RESULT] Estimated correction factor at sample_size=1.0: {extrapolated_score:.6f}")
 
     # Run full dataset baseline
-    print("[INFO] Estimating actual correction factor using full dataset...")
+    reg.logger.print_info("[INFO] Estimating actual correction factor using full dataset...")
     true_estimator = DarkNumberCorrectionFactorEstimator(
         estimator=clone(clf),
         flip_fraction=args.flip_fraction,
@@ -242,10 +248,11 @@ def main():
         predict_mode=args.predict_mode,
         random_state=args.random_state,
         positive_class=args.positive_class,
-        sample_size=1.0
+        sample_size=1.0,
+        logger = reg.logger
     )
     true_estimator.fit(X, y)
-    print(f"[RESULT] Actual correction factor from full data: {true_estimator.score():.6f}")
+    reg.logger.print_info(f"[RESULT] Actual correction factor from full data: {true_estimator.score():.6f}")
 
     # Optionally plot
     if args.plot:

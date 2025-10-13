@@ -3,6 +3,7 @@ from sklearn.base import BaseEstimator, clone
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from joblib import Parallel, delayed
 from pickle import PicklingError
+from JBGLogger import JBGLogger
 
 DEBUG = True
 BACKEND_PROCESSES = "processes"
@@ -61,7 +62,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                  random_state: int = 42,
                  positive_class: int = 1,
                  sample_size: float = 0.1,
-                 parallel_backend: str = BACKEND_PROCESSES):   
+                 parallel_backend: str = BACKEND_PROCESSES,
+                 logger: JBGLogger = None):   
         self.estimator = estimator
         self.flip_fraction = flip_fraction
         self.n_splits = n_splits
@@ -73,6 +75,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         self.sample_size = sample_size
         self.correction_factor_ = None
         self._parallel_backend = parallel_backend
+        self.logger = logger
 
     @staticmethod
     def _compute_min_sample_size(y,
@@ -108,7 +111,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         effective_size = min(n_samples, int(n_samples * self.sample_size))
         if effective_size < min_sample_needed:
             if DEBUG:
-                print(f"[Warning] Sample size {self.sample_size} gives effective size {effective_size}, "
+                self.logger.print_info(f"[Warning] Sample size {self.sample_size} gives effective size {effective_size}, "
                       f"less than required {min_sample_needed}. Skipping.")
             self.correction_factor_ = 1.0
             return self
@@ -121,7 +124,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                 random_state=self.random_state
             )
             if DEBUG:
-                print(f"[DEBUG] Subsampled to {len(X_sub)} rows (sample_size={self.sample_size}).")
+                self.logger.print_info(f"[DEBUG] Subsampled to {len(X_sub)} rows (sample_size={self.sample_size}).")
         else:
             X_sub, y_sub = X, y
 
@@ -150,7 +153,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
             mean_r = np.mean(results)
             self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
             if DEBUG:
-                print(f"[DEBUG] Correction factor: {self.correction_factor_} from results {results}")
+                self.logger.print_info(f"[DEBUG] Correction factor: {self.correction_factor_} from results {results}")
 
             return self
 
@@ -161,7 +164,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         while True:
             try:
                 if DEBUG:
-                    print(f"[DEBUG] Running Parallel with backend={self._parallel_backend}, n_jobs={self.n_jobs}")
+                    self.logger.print_info(f"[DEBUG] Running Parallel with backend={self._parallel_backend}, n_jobs={self.n_jobs}")
                 return Parallel(
                     n_jobs=self.n_jobs,
                     prefer=self._parallel_backend,
@@ -170,29 +173,29 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                     max_nbytes=None
                 )(tasks)
 
-            except (SystemError, MemoryError) as e:
+            except (SystemError, MemoryError, PicklingError) as e:
                 if DEBUG:
-                    print(f"[DEBUG] Parallel failed with {type(e).__name__}: {e}.")
+                    self.logger.print_info(f"[DEBUG] Parallel failed with {type(e).__name__}: {e}.")
                 if self.n_jobs and self.n_jobs > 1:
                     self.n_jobs = max(1, self.n_jobs // 2)
                     if DEBUG:
-                        print(f"[DEBUG] Retrying with n_jobs={self.n_jobs}")
+                        self.logger.print_info(f"[DEBUG] Retrying with n_jobs={self.n_jobs}")
                 else:
                     raise
-            except (PicklingError, AttributeError, TypeError) as e:
+            except (AttributeError, TypeError) as e:
                 if DEBUG:
-                    print(f"[WARNING] Pickling/backend error: {e}")
+                    self.logger.print_info(f"[WARNING] Pickling/backend error: {e}")
                 if self._parallel_backend == BACKEND_PROCESSES:
                     self._parallel_backend = BACKEND_THREADS
                     if DEBUG:
-                        print(f"[DEBUG] Switching backend to threads and retrying. Reason: {str(e)}")
+                        self.logger.print_info(f"[DEBUG] Switching backend to threads and retrying. Reason: {str(e)}")
                 else:
                     raise
             except NaNValueError as e:
                 if self._parallel_backend == BACKEND_THREADS:
                     self._parallel_backend = BACKEND_PROCESSES
                     if DEBUG:
-                        print(f"[DEBUG] Switching backend to processes and retrying. Reason: {str(e)}")
+                        self.logger.print_info(f"[DEBUG] Switching backend to processes and retrying. Reason: {str(e)}")
                 else:
                     raise
             else:
