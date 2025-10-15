@@ -405,7 +405,7 @@ class Algorithm(MetaEnum):
     GBC = { "full_name": "Gradient Boosting Classifier", "search_params": AlgorithmGridSearchParams.GBC, "rfe_compatible": True, "lib": Library.SCIKIT}
     HIST = { "full_name": "Histogram-based Gradient B. Classifier", "search_params": AlgorithmGridSearchParams.HIST, "rfe_compatible": False, "lib": Library.SCIKIT}
     MLPC = { "full_name": "Multi Layered Peceptron", "search_params": AlgorithmGridSearchParams.MLPC, "rfe_compatible": False, "lib": Library.SCIKIT}
-    MLP2 = { "full_name": "Multi Layered Peceptron (2)", "search_params": AlgorithmGridSearchParams.MLP2, "rfe_compatible": False, "lib": Library.SCIKIT}
+    MLP2 = { "full_name": "Multi Layered Peceptron Light", "search_params": AlgorithmGridSearchParams.MLP2, "rfe_compatible": False, "lib": Library.SCIKIT}
     GPC = { "full_name": "Gaussian Process Classifier", "search_params": AlgorithmGridSearchParams.GPC, "rfe_compatible": False, "lib": Library.SCIKIT}
     VOTG = { "full_name":  "Voting Classifier", "search_params": AlgorithmGridSearchParams.VOTG, "rfe_compatible": False, "lib": Library.SCIKIT}
     TORA = { "full_name":  "PyTorch ReLu+Adam", "search_params": AlgorithmGridSearchParams.PYNN, "rfe_compatible": False, "lib": Library.TORCH}
@@ -584,7 +584,7 @@ class Algorithm(MetaEnum):
         return MLPClassifier(max_iter=max_iterations)
 
     def do_MLP2(self, max_iterations: int, size: int)-> MLPClassifier:
-        return MLPClassifier(max_iter=max_iterations)
+        return MLPClassifier(max_iter=500)
 
     def do_GPC(self, max_iterations: int, size: int)-> GaussianProcessClassifier:
         return GaussianProcessClassifier(max_iter_predict=max_iterations)
