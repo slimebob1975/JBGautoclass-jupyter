@@ -74,7 +74,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         self.positive_class = positive_class
         self.sample_size = sample_size
         self.correction_factor_ = None
-        self._parallel_backend = parallel_backend
+        self.parallel_backend = parallel_backend
         self.logger = logger
 
     @staticmethod
@@ -164,10 +164,10 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         while True:
             try:
                 if DEBUG:
-                    self.logger.print_info(f"[DEBUG] Running Parallel with backend={self._parallel_backend}, n_jobs={self.n_jobs}")
+                    self.logger.print_info(f"[DEBUG] Running Parallel with backend={self.parallel_backend}, n_jobs={self.n_jobs}")
                 return Parallel(
                     n_jobs=self.n_jobs,
-                    prefer=self._parallel_backend,
+                    prefer=self.parallel_backend,
                     pre_dispatch="2*n_jobs",
                     batch_size="auto",
                     max_nbytes=None
@@ -185,15 +185,15 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
             except (AttributeError, TypeError) as e:
                 if DEBUG:
                     self.logger.print_info(f"[WARNING] Pickling/backend error: {e}")
-                if self._parallel_backend == BACKEND_PROCESSES:
-                    self._parallel_backend = BACKEND_THREADS
+                if self.parallel_backend == BACKEND_PROCESSES:
+                    self.parallel_backend = BACKEND_THREADS
                     if DEBUG:
                         self.logger.print_info(f"[DEBUG] Switching backend to threads and retrying. Reason: {str(e)}")
                 else:
                     raise
             except NaNValueError as e:
-                if self._parallel_backend == BACKEND_THREADS:
-                    self._parallel_backend = BACKEND_PROCESSES
+                if self.parallel_backend == BACKEND_THREADS:
+                    self.parallel_backend = BACKEND_PROCESSES
                     if DEBUG:
                         self.logger.print_info(f"[DEBUG] Switching backend to processes and retrying. Reason: {str(e)}")
                 else:

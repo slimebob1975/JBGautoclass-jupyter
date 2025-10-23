@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
 from typing import Callable, Protocol, Union, Any
+import os
 
 import langdetect
 import numpy as np
@@ -228,9 +229,12 @@ class JBGHandler:
     datalayer: DataLayer
     config: Config
     logger: Logger
-    
     handlers: dict = field(default_factory=dict, init=False)
-    
+    STANDARD_DESIRED_N_JOBS: int = field(init=False)
+
+    def __post_init__(self):
+        self.STANDARD_DESIRED_N_JOBS = int(os.environ.get("DEFAULT_N_JOBS_DESIRED", "-1"))
+   
     # This is defined this way so that VS code can find the different methods
     def add_handler(self, name: str) -> Union[DatasetHandler, ModelHandler, PredictionsHandler]:
         """ Returns the newly created handler"""
@@ -391,7 +395,7 @@ class DatasetHandler:
 
         try:
             # Parallelize over columns (use threads here since we do not want to pickle this environment)
-            results = Parallel(n_jobs=-1, backend="threading")(
+            results = Parallel(n_jobs=self.handler.STANDARD_DESIRED_N_JOBS, backend="threading")(
                 delayed(self.validate_column)(key, column)
                 for key, column in dataset.items()
                 if key != class_column
@@ -1036,7 +1040,7 @@ class ModelHandler:
 
             # Limit jobs to CPU cores
             max_cores = psutil.cpu_count(logical=True)
-            n_jobs_desired = min(total_jobs, max_cores)
+            n_jobs_desired = min(total_jobs, max_cores, self.handler.STANDARD_DESIRED_N_JOBS)
 
             # Create search grid and fit model
             search_verbosity = 4 if self.handler.config.io.verbose else 0
@@ -1119,40 +1123,12 @@ class ModelHandler:
                 score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy())[:, 1], multi_class='ovo')
         return score
         
-
-    # Help function for running other functions in parallel
-    def execute_n_job_old(self, func: function, *args: tuple, **kwargs: dict) -> Any:
-            n_jobs = psutil.cpu_count()
-            if DEBUG:
-                self.handler.logger.print_info(f"Starting parallel execution of function {func.__name__} with n_jobs = {n_jobs}")
-                start_time = time.time()
-            success = False
-            result = None
-            while not success:
-                try:
-                    result = func(*args, **kwargs, n_jobs=n_jobs)
-                except MemoryError as ex:
-                    if n_jobs == 1:
-                        raise MemoryError(f"n_jobs is 1 but not enough memory for {func.__name__}") from ex
-                    new_njobs = max(int(n_jobs / 2), 1)
-                    self.handler.logger.print_warning(f"MemoryError in {func.__name__}, scaling down n_jobs from {n_jobs} to {new_njobs}")
-                    n_jobs = new_njobs
-                except Exception as ex:
-                    raise Exception(f"Could not call function {func.__name__} with supplied positional arguments " + \
-                                    f"{str(ex)} and keyword arguments {str(kwargs)}") from ex
-                else:
-                    success = True
-            if DEBUG:
-                end_time = time.time()
-                self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
-            return result
-
     def execute_n_job(self, func, *args, n_jobs_desired=None, backend_desired="loky", **kwargs):
         """
         Execute a function with parallelism adapted to available cores.
         - n_jobs_desired: number of independent tasks (e.g. k folds).
         If None, defaults to all cores.
-        - Caps n_jobs at available CPU cores.
+        - Caps n_jobs at available CPU cores and environment variable
         - Scale down n_jobs on key exceptions.
         - TODO: Switches to backend threads if pickling fails, but beware of NaN results from inconsistencies
         """
@@ -1162,7 +1138,7 @@ class ModelHandler:
         if n_jobs_desired is None or n_jobs_desired < 0:
             n_jobs = max_cores
         else:
-            n_jobs = min(n_jobs_desired, max_cores)
+            n_jobs = min(n_jobs_desired, max_cores, self.handler.STANDARD_DESIRED_N_JOBS)
 
         while True:
             if self.handler.config.debug:
@@ -1558,7 +1534,7 @@ class ModelHandler:
         # We want to executed the job with as many threads as possible, but as a final alternative use
         # only one. Exception typically arises when input data is sparse, and a possible remedy to convert 
         # it to dense numpy arrays.
-        n_jobs_desired = kfold.get_n_splits()
+        n_jobs_desired = min(kfold.get_n_splits(), self.handler.STANDARD_DESIRED_N_JOBS)
         try:
             cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
                     dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, \
@@ -1987,7 +1963,7 @@ class PredictionsHandler:
                     min_n_repeats=2,
                     max_multiplier=3
                 )
-                total_jobs = min(n_splits * n_repeats, psutil.cpu_count(logical=True))
+                total_jobs = min(n_splits * n_repeats, psutil.cpu_count(logical=True), self.handler.STANDARD_DESIRED_N_JOBS)
                 if DEBUG:
                     self.handler.logger.print_info(f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator")
                 try:
@@ -2003,7 +1979,7 @@ class PredictionsHandler:
                         sample_size=1.0,
                         logger=self.handler.logger 
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y, n_jobs_desired=-1)
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS)
                     corrs[label] = corr_estimator.score()
                     #raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
                 except Exception as ex:
@@ -2021,7 +1997,7 @@ class PredictionsHandler:
                         type='logbounded',
                         logger=self.handler.logger
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y, n_jobs_desired=-1) 
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS) 
                     corrs[label] = corr_regressor.score()
                     if DEBUG:
                         self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_} with result {corrs[label]}")
