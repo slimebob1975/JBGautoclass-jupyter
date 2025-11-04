@@ -1,0 +1,529 @@
+;Preprocessor;Feature Reduction;Algorithm (Library);Components;Mean cv;Stdev.;Test data;Elapsed Time;Exception
+0;MAX;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;1,935333251953125;
+1;MAX;NOR;MLPC - Multi Layered Peceptron (Scikit Learn);4;1,0;0,0;1,0;2,9280476570129395;
+2;MAX;PCA;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;1,9374444484710693;
+3;MAX;PCA;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;2,483107805252075;
+4;MIX;NOR;KNN - K-Neighbors Classifier (Scikit Learn);4;1,0;0,0;1,0;2,491338014602661;
+5;MIX;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;1,93400239944458;
+6;MIX;PCA;KNN - K-Neighbors Classifier (Scikit Learn);4;1,0;0,0;1,0;2,493955135345459;
+7;MIX;PCA;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;1,9305000305175781;
+8;MIX;PCA;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;2,4607038497924805;
+9;NOS;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;1,9241437911987305;
+10;NRM;NOR;FUTS - FUT Stacking Classifier (Scikit Learn);4;1,0;0,0;1,0;7,054856300354004;
+11;NRM;PCA;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;1,9373304843902588;
+12;STA;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;1,936206579208374;
+13;STA;NOR;MLPC - Multi Layered Peceptron (Scikit Learn);4;1,0;0,0;1,0;2,8602893352508545;
+14;STA;PCA;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;2,010397434234619;
+15;STA;PCA;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;1,0;0,0;1,0;2,481236219406128;
+16;NOS;NOR;MLPC - Multi Layered Peceptron (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;2,8831512928009033;
+17;NRM;NOR;BARF - Balanced Random Forest (Imbalanced Learn);4;0,9979166666666666;0,006250000000000011;1,0;2,0214412212371826;
+18;NRM;NOR;FUTV - FUT Voting Classifier (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;2,7738091945648193;
+19;NRM;NOR;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;2,106171131134033;
+20;NRM;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;1,9187397956848145;
+21;NRM;NOR;RFCL - Random Forest Classifier (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;2,7047600746154785;
+22;NRM;NOR;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;5,47662353515625;
+23;NRM;PCA;FUTV - FUT Voting Classifier (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;2,8427748680114746;
+24;NRM;PCA;NCT - Nearest Centroid (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;2,478787422180176;
+25;STA;PCA;ETC - Extra Trees Classifier (Scikit Learn);4;0,9979166666666666;0,006250000000000011;1,0;0,24991178512573242;
+26;NRM;PCA;ETC - Extra Trees Classifier (Scikit Learn);4;0,9972222222222221;0,008333333333333304;1,0;0,2505834102630615;
+27;NRM;NOR;KNN - K-Neighbors Classifier (Scikit Learn);4;0,996875;0,006669921080659224;1,0;2,4859912395477295;
+28;NRM;PCA;KNN - K-Neighbors Classifier (Scikit Learn);4;0,996875;0,006669921080659224;1,0;2,4738247394561768;
+29;NRM;NOR;MLPC - Multi Layered Peceptron (Scikit Learn);4;0,9958333333333333;0,01249999999999999;1,0;2,9458730220794678;
+30;NRM;NOR;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,9958333333333332;0,008333333333333349;1,0;1,3680896759033203;
+31;NRM;PCA;FUTS - FUT Stacking Classifier (Scikit Learn);4;0,9958333333333332;0,008333333333333349;1,0;7,452770471572876;
+32;NRM;NOR;ABC - Ada Boost Classifier (Scikit Learn);4;0,9954861111111111;0,007291666666666666;1,0;2,631549835205078;
+33;NRM;NOR;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;0,99375;0,01333984216131843;1,0;0,24225091934204102;
+34;NRM;PCA;GNB - Gaussian Naive Bayes (Scikit Learn);4;0,99375;0,01875;1,0;0,06924605369567871;
+35;NRM;NOR;RUBC - RUS Boost Classifier (Imbalanced Learn);4;0,9934027777777779;0,010808598900189849;1,0;2,196889638900757;
+36;NRM;PCA;ABC - Ada Boost Classifier (Scikit Learn);4;0,9930555555555556;0,014231876063832753;1,0;2,646214485168457;
+37;NRM;PCA;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,9930555555555556;0,014231876063832753;1,0;2,8821189403533936;
+38;NRM;PCA;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;0,992361111111111;0,011805555555555526;1,0;5,508298635482788;
+39;NRM;PCA;RFCL - Random Forest Classifier (Scikit Learn);4;0,9916666666666666;0,012753033105699271;1,0;2,7091686725616455;
+40;NRM;NOR;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;0,9916666666666666;0,019094065395649337;1,0;2,016028642654419;
+41;NRM;NOR;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;0,9916666666666666;0,025000000000000012;1,0;2,508112907409668;
+42;NRM;PCA;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;0,9916666666666666;0,025000000000000012;1,0;0,21146655082702637;
+43;NRM;PCA;RUBC - RUS Boost Classifier (Imbalanced Learn);4;0,9909722222222221;0,014583333333333314;1,0;2,204615592956543;
+44;NRM;PCA;BGC - Bagging Classifier (Scikit Learn);4;0,9892361111111111;0,022845533541105516;1,0;0,14187836647033691;
+45;NRM;PCA;BARF - Balanced Random Forest (Imbalanced Learn);4;0,9888888888888889;0,011040356316378211;1,0;2,0193042755126953;
+46;NOS;PCA;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;0,9888888888888889;0,025458753860865786;1,0;0,21157336235046387;
+47;NRM;PCA;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;0,9875;0,025192162704468137;1,0;2,046783447265625;
+48;NRM;PCA;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,986111111111111;0,027777777777777724;1,0;2,1264538764953613;
+49;NRM;PCA;DTC - Decision Tree Classifier (Scikit Learn);4;0,9541666666666666;0,05253966755382706;1,0;2,5810964107513428;
+50;MAX;NOR;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;1,0;30,79540467262268;
+51;NOS;NOR;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;1,0;31,928943395614624;
+52;NRM;NOR;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;1,0;31,595566511154175;
+53;NRM;PCA;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;1,0;31,809941053390503;
+54;STA;NOR;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;1,0;30,46049427986145;
+55;MAX;NOR;KNN - K-Neighbors Classifier (Scikit Learn);4;1,0;0,0;0,9979423868312757;2,5129528045654297;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+56;MAX;PCA;KNN - K-Neighbors Classifier (Scikit Learn);4;1,0;0,0;0,9979423868312757;2,4965274333953857;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+57;MIX;PCA;ABC - Ada Boost Classifier (Scikit Learn);4;0,996875;0,009375;0,9979423868312757;2,635265827178955;
+58;STA;NOR;MNB - Multinomial Naive Bayes (Scikit Learn);4;0,9909722222222224;0,016374758503543856;0,9979423868312757;1,962216854095459;
+59;STA;NOR;KNN - K-Neighbors Classifier (Scikit Learn);4;0,9909722222222221;0,015850989181268486;0,9979423868312757;2,4891796112060547;
+60;STA;PCA;KNN - K-Neighbors Classifier (Scikit Learn);4;0,9881944444444445;0,021074987368740992;0,9979423868312757;2,5888404846191406;
+61;NOS;PCA;ABC - Ada Boost Classifier (Scikit Learn);4;0,9840277777777778;0,027083333333333296;0,9979423868312757;2,620685577392578;
+62;MAX;NOR;BARF - Balanced Random Forest (Imbalanced Learn);4;1,0;0,0;0,9958847736625515;2,05977201461792;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+63;MAX;NOR;ETC - Extra Trees Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;0,22250938415527344;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+64;MAX;NOR;FUTS - FUT Stacking Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;6,49129581451416;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+65;MAX;NOR;FUTV - FUT Voting Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,6612536907196045;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+66;MAX;NOR;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,5275673866271973;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+67;MIX;NOR;BARF - Balanced Random Forest (Imbalanced Learn);4;1,0;0,0;0,9958847736625515;1,9928374290466309;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+68;MIX;NOR;ETC - Extra Trees Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;0,23773550987243652;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+69;MIX;NOR;FUTS - FUT Stacking Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;6,3620688915252686;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+70;MIX;NOR;FUTV - FUT Voting Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,650552272796631;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+71;MIX;NOR;MLPC - Multi Layered Peceptron (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,8606154918670654;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+72;MIX;NOR;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,460880994796753;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+73;MIX;NOR;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;1,0;0,0;0,9958847736625515;5,409194469451904;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+74;MIX;PCA;ETC - Extra Trees Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;0,24781179428100586;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+75;MIX;PCA;FUTS - FUT Stacking Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;6,284467697143555;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+76;MIX;PCA;FUTV - FUT Voting Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,6363515853881836;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+77;MIX;PCA;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;1,0;0,0;0,9958847736625515;5,47314977645874;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+78;NOS;NOR;BARF - Balanced Random Forest (Imbalanced Learn);4;1,0;0,0;0,9958847736625515;2,0083343982696533;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+79;NOS;NOR;ETC - Extra Trees Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;0,21418476104736328;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+80;NOS;NOR;FUTS - FUT Stacking Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;6,177674055099487;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+81;NOS;NOR;FUTV - FUT Voting Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,642669200897217;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+82;NOS;NOR;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,4934639930725098;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+83;NOS;NOR;RFCL - Random Forest Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,7114315032958984;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+84;NRM;NOR;ETC - Extra Trees Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;0,2389695644378662;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+85;STA;NOR;ETC - Extra Trees Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;0,23482179641723633;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+86;STA;NOR;FUTS - FUT Stacking Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;6,126079082489014;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+87;STA;NOR;FUTV - FUT Voting Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,6263418197631836;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+88;STA;NOR;LRN - Logistic Regression (Scikit Learn);4;1,0;0,0;0,9958847736625515;1,763343095779419;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+89;STA;NOR;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,4724714756011963;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+90;STA;PCA;FUTS - FUT Stacking Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;5,750799655914307;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+91;STA;PCA;FUTV - FUT Voting Classifier (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,5501396656036377;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+92;STA;PCA;LRN - Logistic Regression (Scikit Learn);4;1,0;0,0;0,9958847736625515;1,816375732421875;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+93;STA;PCA;MLPC - Multi Layered Peceptron (Scikit Learn);4;1,0;0,0;0,9958847736625515;2,807525634765625;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+94;MIX;NOR;RFCL - Random Forest Classifier (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9958847736625515;2,7008590698242188;
+95;NOS;NOR;LRN - Logistic Regression (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9958847736625515;1,7656481266021729;
+96;NOS;PCA;LDA - Linear Discriminant Analysis (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9958847736625515;1,9335992336273193;
+97;NRM;PCA;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9958847736625515;2,457911491394043;
+98;MIX;PCA;RFCL - Random Forest Classifier (Scikit Learn);4;0,9965277777777779;0,00711593803191639;0,9958847736625515;2,7197365760803223;
+99;MAX;PCA;RUBC - RUS Boost Classifier (Imbalanced Learn);4;0,9958333333333333;0,01249999999999999;0,9958847736625515;2,216611623764038;
+100;MIX;PCA;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,9958333333333333;0,01249999999999999;0,9958847736625515;2,9106948375701904;
+101;MIX;PCA;RUBC - RUS Boost Classifier (Imbalanced Learn);4;0,9958333333333333;0,01249999999999999;0,9958847736625515;2,2107009887695312;
+102;NOS;PCA;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;0,9958333333333333;0,01249999999999999;0,9958847736625515;2,4787395000457764;
+103;NRM;NOR;NCT - Nearest Centroid (Scikit Learn);4;0,9958333333333332;0,008333333333333349;0,9958847736625515;1,7728536128997803;
+104;NOS;NOR;GPC - Gaussian Process Classifier (Scikit Learn);4;0,9951388888888889;0,009845449221359583;0,9958847736625515;0,09989690780639648;
+105;NOS;PCA;GPC - Gaussian Process Classifier (Scikit Learn);4;0,9951388888888889;0,009845449221359583;0,9958847736625515;0,10092926025390625;
+106;STA;PCA;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,9951388888888889;0,009845449221359583;0,9958847736625515;2,15533447265625;
+107;MAX;PCA;BGC - Bagging Classifier (Scikit Learn);4;0,99375;0,01875;0,9958847736625515;0,1183626651763916;
+108;STA;PCA;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;0,9930555555555556;0,014231876063832753;0,9958847736625515;0,2348313331604004;
+109;MAX;PCA;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;0,9930555555555556;0,02083333333333329;0,9958847736625515;0,2232809066772461;
+110;NOS;PCA;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;0,992361111111111;0,011805555555555526;0,9958847736625515;2,000574827194214;
+111;MAX;PCA;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,9916666666666666;0,025000000000000012;0,9958847736625515;2,8957085609436035;
+112;NOS;PCA;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,9909722222222221;0,013906239162847738;0,9958847736625515;2,122530460357666;
+113;NOS;PCA;FUTV - FUT Voting Classifier (Scikit Learn);4;0,9909722222222221;0,01702451482240457;0,9958847736625515;2,5264699459075928;
+114;NOS;PCA;FUTS - FUT Stacking Classifier (Scikit Learn);4;0,9895833333333333;0,01790805133087173;0,9958847736625515;5,583709001541138;
+115;NOS;PCA;ETC - Extra Trees Classifier (Scikit Learn);4;0,9883680555555555;0,019395554857371555;0,9958847736625515;0,23290038108825684;
+116;NOS;PCA;RUBC - RUS Boost Classifier (Imbalanced Learn);4;0,9881944444444445;0,020138888888888873;0,9958847736625515;2,204023838043213;
+117;STA;PCA;RFCL - Random Forest Classifier (Scikit Learn);4;0,9878472222222221;0,02461362305339903;0,9958847736625515;2,7115836143493652;
+118;MAX;PCA;ABC - Ada Boost Classifier (Scikit Learn);4;0,986111111111111;0,028463752127665578;0,9958847736625515;2,6250057220458984;
+119;NOS;PCA;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;0,986111111111111;0,033448873829978604;0,9958847736625515;5,46015739440918;
+120;MAX;PCA;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,9847222222222222;0,034274896331258534;0,9958847736625515;2,1036272048950195;
+121;MIX;PCA;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;0,984375;0,03133668532602359;0,9958847736625515;2,002375841140747;
+122;MIX;PCA;BGC - Bagging Classifier (Scikit Learn);4;0,984375;0,03133668532602359;0,9958847736625515;0,12270402908325195;
+123;STA;PCA;BGC - Bagging Classifier (Scikit Learn);4;0,984375;0,03133668532602359;0,9958847736625515;0,10365986824035645;
+124;STA;PCA;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;0,9840277777777778;0,02401613398026472;0,9958847736625515;5,4830522537231445;
+125;NOS;PCA;BARF - Balanced Random Forest (Imbalanced Learn);4;0,9840277777777778;0,03152655406337824;0,9958847736625515;2,0708792209625244;
+126;MAX;NOR;RFCL - Random Forest Classifier (Scikit Learn);4;1,0;0,0;0,9948559670781894;2,706960678100586;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+127;MIX;PCA;BARF - Balanced Random Forest (Imbalanced Learn);4;0,9984375;0,0046875;0,9948559670781894;2,0605504512786865;
+128;STA;NOR;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;1,0;0,0;0,9938271604938271;2,0084829330444336;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+129;STA;NOR;GPC - Gaussian Process Classifier (Scikit Learn);4;1,0;0,0;0,9938271604938271;0,08167076110839844;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+130;STA;PCA;GPC - Gaussian Process Classifier (Scikit Learn);4;1,0;0,0;0,9938271604938271;0,11570000648498535;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+131;NOS;NOR;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9938271604938271;5,452637672424316;
+132;STA;PCA;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,9954861111111111;0,009827063679225635;0,9938271604938271;2,8808114528656006;
+133;NOS;PCA;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,9868055555555555;0,019752031462955393;0,9938271604938271;2,876387596130371;
+134;NOS;NOR;MNB - Multinomial Naive Bayes (Scikit Learn);4;0,9858796296296297;0,016226835341038786;0,9938271604938271;1,9946355819702148;
+135;MAX;NOR;GNB - Gaussian Naive Bayes (Scikit Learn);4;1,0;0,0;0,9917695473251028;0,06776094436645508;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+136;MAX;PCA;FUTS - FUT Stacking Classifier (Scikit Learn);4;1,0;0,0;0,9917695473251028;6,907590389251709;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+137;MAX;PCA;GNB - Gaussian Naive Bayes (Scikit Learn);4;1,0;0,0;0,9917695473251028;0,0802605152130127;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+138;MAX;PCA;MLPC - Multi Layered Peceptron (Scikit Learn);4;1,0;0,0;0,9917695473251028;2,9062306880950928;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+139;MAX;PCA;NCT - Nearest Centroid (Scikit Learn);4;1,0;0,0;0,9917695473251028;2,4917383193969727;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+140;MIX;NOR;GNB - Gaussian Naive Bayes (Scikit Learn);4;1,0;0,0;0,9917695473251028;0,05481886863708496;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+141;MIX;PCA;MLPC - Multi Layered Peceptron (Scikit Learn);4;1,0;0,0;0,9917695473251028;2,847888946533203;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+142;NOS;NOR;GNB - Gaussian Naive Bayes (Scikit Learn);4;1,0;0,0;0,9917695473251028;0,06563663482666016;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+143;STA;NOR;GNB - Gaussian Naive Bayes (Scikit Learn);4;1,0;0,0;0,9917695473251028;0,05714821815490723;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+144;NOS;PCA;LRN - Logistic Regression (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9917695473251028;1,7717952728271484;
+145;NRM;NOR;GNB - Gaussian Naive Bayes (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9917695473251028;0,08229279518127441;
+146;NRM;PCA;MLPC - Multi Layered Peceptron (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9917695473251028;3,027928113937378;
+147;MIX;PCA;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;0,9944444444444445;0,016666666666666642;0,9917695473251028;0,21226239204406738;
+148;STA;PCA;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;0,9927083333333334;0,021874999999999988;0,9917695473251028;2,004690170288086;
+149;NOS;PCA;MLPC - Multi Layered Peceptron (Scikit Learn);4;0,992361111111111;0,017137448165629298;0,9917695473251028;2,730074405670166;
+150;STA;PCA;ABC - Ada Boost Classifier (Scikit Learn);4;0,990625;0,015376104045475347;0,9917695473251028;2,6500563621520996;
+151;MIX;PCA;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,9871527777777779;0,02598605172509398;0,9917695473251028;2,0782530307769775;
+152;MAX;NOR;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;1,0;0,0;0,9897119341563786;5,429321050643921;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+153;STA;PCA;RUBC - RUS Boost Classifier (Imbalanced Learn);4;0,992013888888889;0,012427451505675879;0,9897119341563786;2,208361864089966;
+154;STA;PCA;BARF - Balanced Random Forest (Imbalanced Learn);4;0,986111111111111;0,018373272993504098;0,9897119341563786;2,029494047164917;
+155;MAX;PCA;ETC - Extra Trees Classifier (Scikit Learn);4;1,0;0,0;0,9876543209876543;0,24384140968322754;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+156;MAX;PCA;FUTV - FUT Voting Classifier (Scikit Learn);4;1,0;0,0;0,9876543209876543;2,6844937801361084;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+157;NOS;NOR;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,9930555555555556;0,01075828707279837;0,9876543209876543;1,9178290367126465;
+158;NOS;PCA;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,9930555555555556;0,01075828707279837;0,9876543209876543;1,9271295070648193;
+159;STA;NOR;BARF - Balanced Random Forest (Imbalanced Learn);4;1,0;0,0;0,9855967078189302;2,03008770942688;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+160;MAX;NOR;GPC - Gaussian Process Classifier (Scikit Learn);4;1,0;0,0;0,9835390946502057;0,10676717758178711;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+161;MAX;NOR;NCT - Nearest Centroid (Scikit Learn);4;1,0;0,0;0,9835390946502057;1,757739543914795;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+162;MAX;PCA;BARF - Balanced Random Forest (Imbalanced Learn);4;1,0;0,0;0,9835390946502057;2,0192670822143555;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+163;MAX;PCA;GPC - Gaussian Process Classifier (Scikit Learn);4;1,0;0,0;0,9835390946502057;0,09392285346984863;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+164;MAX;PCA;RFCL - Random Forest Classifier (Scikit Learn);4;1,0;0,0;0,9835390946502057;2,689472198486328;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+165;MAX;PCA;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;1,0;0,0;0,9835390946502057;5,4066162109375;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+166;MIX;NOR;NCT - Nearest Centroid (Scikit Learn);4;1,0;0,0;0,9835390946502057;1,7658517360687256;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+167;NOS;NOR;NCT - Nearest Centroid (Scikit Learn);4;1,0;0,0;0,9835390946502057;1,7625606060028076;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+168;STA;NOR;NCT - Nearest Centroid (Scikit Learn);4;1,0;0,0;0,9835390946502057;1,7795135974884033;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+169;MAX;NOR;LRN - Logistic Regression (Scikit Learn);4;1,0;0,0;0,9814814814814815;1,7335712909698486;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+170;NOS;PCA;RFCL - Random Forest Classifier (Scikit Learn);4;0,9868055555555555;0,025316286296608596;0,9814814814814815;2,7102904319763184;
+171;MAX;PCA;LRN - Logistic Regression (Scikit Learn);4;1,0;0,0;0,9794238683127571;1,7630958557128906;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+172;MIX;PCA;NCT - Nearest Centroid (Scikit Learn);4;0,9979166666666666;0,006250000000000011;0,9794238683127571;2,4593355655670166;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+173;MIX;PCA;GNB - Gaussian Naive Bayes (Scikit Learn);4;0,9972222222222221;0,008333333333333304;0,9794238683127571;0,0678553581237793;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+174;MIX;NOR;RUBC - RUS Boost Classifier (Imbalanced Learn);4;0,9958333333333333;0,01249999999999999;0,9794238683127571;2,219435214996338;
+175;STA;PCA;GNB - Gaussian Naive Bayes (Scikit Learn);4;0,992361111111111;0,017137448165629236;0,9794238683127571;0,07399392127990723;
+176;NOS;PCA;GNB - Gaussian Naive Bayes (Scikit Learn);4;0,9847222222222222;0,021695137988629605;0,9794238683127571;0,06720781326293945;
+177;STA;NOR;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;1,0;0,0;0,977366255144033;5,421968221664429;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+178;MIX;NOR;GPC - Gaussian Process Classifier (Scikit Learn);4;0,9909722222222221;0,014583333333333314;0,977366255144033;0,07764029502868652;
+179;MIX;PCA;GPC - Gaussian Process Classifier (Scikit Learn);4;0,9909722222222221;0,014583333333333314;0,977366255144033;0,09224343299865723;
+180;MIX;NOR;LRN - Logistic Regression (Scikit Learn);4;0,9895833333333334;0,017908051330871675;0,977366255144033;1,78489351272583;
+181;STA;NOR;CNB - Complement Naive Bayes (Scikit Learn);4;0,959837962962963;0,02709445996513805;0,9753086419753086;0,055611371994018555;
+182;NOS;PCA;NCT - Nearest Centroid (Scikit Learn);4;0,9847222222222222;0,017786456215091215;0,9753086419753085;2,4781763553619385;
+183;STA;NOR;RFCL - Random Forest Classifier (Scikit Learn);4;1,0;0,0;0,9742798353909464;2,713731288909912;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+184;MIX;PCA;LRN - Logistic Regression (Scikit Learn);4;0,9881944444444445;0,019654127358451234;0,9732510288065844;1,7742364406585693;
+185;MAX;PCA;DTC - Decision Tree Classifier (Scikit Learn);4;0,9854166666666666;0,02953634766407881;0,9722222222222223;2,566600799560547;
+186;NRM;NOR;DTC - Decision Tree Classifier (Scikit Learn);4;0,9604166666666666;0,04315065661918329;0,9722222222222223;0,06815099716186523;
+187;NOS;PCA;DTC - Decision Tree Classifier (Scikit Learn);4;0,95;0,05448623679425844;0,9722222222222223;2,4975738525390625;
+188;STA;PCA;NCT - Nearest Centroid (Scikit Learn);4;0,9951388888888889;0,009845449221359583;0,9711934156378601;2,4791505336761475;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+189;NRM;NOR;LRN - Logistic Regression (Scikit Learn);4;0,9061342592592594;0,025423211816646522;0,9711934156378601;1,7945926189422607;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+190;MAX;PCA;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;1,0;0,0;0,9701646090534979;2,0068163871765137;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+191;NOS;NOR;KNN - K-Neighbors Classifier (Scikit Learn);4;0,9961805555555555;0,005902777777777795;0,9701646090534979;2,47839093208313;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+192;MIX;NOR;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;0,99375;0,01875;0,9701646090534979;2,0217864513397217;
+193;MIX;NOR;BGC - Bagging Classifier (Scikit Learn);4;0,99375;0,01875;0,9701646090534979;0,11118507385253906;
+194;NOS;NOR;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;0,99375;0,01875;0,9701646090534979;2,0241401195526123;
+195;NOS;NOR;BGC - Bagging Classifier (Scikit Learn);4;0,99375;0,01875;0,9701646090534979;0,08916258811950684;
+196;NOS;PCA;KNN - K-Neighbors Classifier (Scikit Learn);4;0,9927083333333334;0,011871750692554679;0,9701646090534979;2,472464084625244;
+197;NRM;NOR;BGC - Bagging Classifier (Scikit Learn);4;0,9833333333333332;0,029166666666666674;0,9701646090534979;0,09462857246398926;
+198;NOS;PCA;BGC - Bagging Classifier (Scikit Learn);4;0,9909722222222221;0,017024514822404573;0,9681069958847738;0,111663818359375;
+199;MAX;NOR;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;1,0;0,0;0,9670781893004116;0,19674277305603027;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+200;MIX;NOR;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;1,0;0,0;0,9670781893004116;0,17720890045166016;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+201;NOS;NOR;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;1,0;0,0;0,9670781893004116;0,16452980041503906;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+202;STA;NOR;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;1,0;0,0;0,9670781893004116;0,19476652145385742;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+203;NRM;PCA;LRN - Logistic Regression (Scikit Learn);4;0,9004629629629631;0,027104099351317537;0,9670781893004116;1,764021396636963;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+204;MAX;PCA;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;0,9670781893004116;32,56151533126831;
+205;MAX;NOR;RUBC - RUS Boost Classifier (Imbalanced Learn);4;1,0;0,0;0,9629629629629629;2,220928430557251;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+206;STA;NOR;RUBC - RUS Boost Classifier (Imbalanced Learn);4;1,0;0,0;0,9629629629629629;2,2209811210632324;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+207;NOS;NOR;RUBC - RUS Boost Classifier (Imbalanced Learn);4;0,9958333333333333;0,01249999999999999;0,9629629629629629;2,2054216861724854;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+208;NOS;NOR;CNB - Complement Naive Bayes (Scikit Learn);4;0,931712962962963;0,03227486121839514;0,9629629629629629;0,045136213302612305;
+209;MIX;NOR;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,9916666666666666;0,025000000000000012;0,9609053497942387;1,3361530303955078;
+210;NOS;NOR;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,9916666666666666;0,025000000000000012;0,9609053497942387;1,3115308284759521;
+211;STA;PCA;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,9588477366255144;27,1203510761261;
+212;STA;PCA;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,9784722222222222;0,04125374094521986;0,9578189300411523;1,9356846809387207;
+213;STA;NOR;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,9777777777777776;0,04707903126855083;0,9578189300411523;1,9366581439971924;
+214;MIX;PCA;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;0,9506172839506174;31,63394522666931;
+215;NOS;PCA;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,9465020576131687;27,220957040786743;
+216;MAX;NOR;ABC - Ada Boost Classifier (Scikit Learn);4;1,0;0,0;0,9444444444444443;2,6452035903930664;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+217;MAX;NOR;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;1,0;0,0;0,9444444444444443;2,0105226039886475;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+218;MAX;NOR;BGC - Bagging Classifier (Scikit Learn);4;1,0;0,0;0,9444444444444443;0,10417938232421875;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+219;MAX;NOR;DTC - Decision Tree Classifier (Scikit Learn);4;1,0;0,0;0,9444444444444443;0,07161712646484375;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+220;MAX;NOR;GBC - Gradient Boosting Classifier (Scikit Learn);4;1,0;0,0;0,9444444444444443;2,0623488426208496;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+221;STA;NOR;ABC - Ada Boost Classifier (Scikit Learn);4;1,0;0,0;0,9444444444444443;2,6275858879089355;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+222;STA;NOR;BGC - Bagging Classifier (Scikit Learn);4;1,0;0,0;0,9444444444444443;0,10664510726928711;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+223;STA;NOR;DTC - Decision Tree Classifier (Scikit Learn);4;1,0;0,0;0,9444444444444443;0,05905294418334961;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+224;STA;NOR;GBC - Gradient Boosting Classifier (Scikit Learn);4;1,0;0,0;0,9444444444444443;2,0322623252868652;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+225;MIX;NOR;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,9958333333333333;0,01249999999999999;0,9444444444444443;1,9895679950714111;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+226;NOS;NOR;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,9958333333333333;0,01249999999999999;0,9444444444444443;2,0451691150665283;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+227;MIX;NOR;DTC - Decision Tree Classifier (Scikit Learn);4;0,99375;0,01875;0,9444444444444443;0,07677197456359863;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+228;NOS;NOR;DTC - Decision Tree Classifier (Scikit Learn);4;0,99375;0,01875;0,9444444444444443;0,05709528923034668;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+229;MIX;NOR;ABC - Ada Boost Classifier (Scikit Learn);4;0,9916666666666666;0,025000000000000012;0,9444444444444443;2,6277709007263184;
+230;NOS;NOR;ABC - Ada Boost Classifier (Scikit Learn);4;0,9916666666666666;0,025000000000000012;0,9444444444444443;2,643425941467285;
+231;MIX;PCA;DTC - Decision Tree Classifier (Scikit Learn);4;0,9791666666666666;0,04269562819149834;0,9444444444444443;2,57987117767334;
+232;STA;PCA;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,8993055555555556;0,08739767189191142;0,9423868312757202;0,06798076629638672;
+233;STA;PCA;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;0,9423868312757202;32,160500049591064;
+234;MIX;NOR;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;0,9403292181069959;31,631409645080566;
+235;NRM;PCA;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,9003472222222222;0,06349189341150611;0,9320987654320988;0,08167624473571777;
+236;NOS;PCA;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;0,9320987654320988;31,061477184295654;
+237;MAX;NOR;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;1,0;0,0;0,9259259259259259;1,3341469764709473;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+238;STA;NOR;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;1,0;0,0;0,9259259259259259;1,3276116847991943;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+239;NOS;PCA;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,9259259259259259;28,475268840789795;
+240;MIX;PCA;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,8929398148148149;0,07823637465902532;0,9197530864197531;0,07124209403991699;
+241;NOS;PCA;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,9197530864197531;26,126525402069092;
+242;STA;PCA;DTC - Decision Tree Classifier (Scikit Learn);4;0,9645833333333332;0,03614448244353641;0,9166666666666666;2,4924652576446533;
+243;MAX;PCA;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,9061342592592592;0,06005918523681462;0,9074074074074074;0,07715010643005371;
+244;NOS;PCA;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,8798611111111111;0,07123050415532813;0,9012345679012346;0,07486510276794434;
+245;MAX;NOR;CNB - Complement Naive Bayes (Scikit Learn);4;0,875925925925926;0,023164346184521987;0,8847736625514404;0,06615710258483887;
+246;MIX;NOR;CNB - Complement Naive Bayes (Scikit Learn);4;0,8664351851851851;0,018527197040521977;0,8806584362139919;0,07543277740478516;
+247;STA;PCA;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,8806584362139919;27,318636894226074;
+248;NOS;PCA;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,874485596707819;27,551235914230347;
+249;NRM;NOR;GPC - Gaussian Process Classifier (Scikit Learn);4;0,8511574074074074;0,016540805634212827;0,8724279835390947;0,10613393783569336;
+250;NRM;PCA;GPC - Gaussian Process Classifier (Scikit Learn);4;0,8501157407407407;0,015981026156553935;0,8683127572016461;0,09479331970214844;
+251;STA;NOR;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,8415637860082305;26,88601303100586;
+252;NRM;NOR;CNB - Complement Naive Bayes (Scikit Learn);4;0,8392361111111111;0,011831059053750571;0,8353909465020576;0,07880401611328125;
+253;MAX;NOR;MNB - Multinomial Naive Bayes (Scikit Learn);4;0,8333333333333334;0,0;0,8353909465020576;1,9693984985351562;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+254;NRM;NOR;MNB - Multinomial Naive Bayes (Scikit Learn);4;0,834375;0,003124999999999989;0,8333333333333334;1,9666881561279297;
+255;MIX;NOR;MNB - Multinomial Naive Bayes (Scikit Learn);4;0,8269675925925928;0,008204541017799669;0,8251028806584362;1,96144700050354;
+256;STA;PCA;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,8106995884773663;27,616760969161987;
+257;NOS;NOR;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,8024691358024691;26,257277250289917;
+258;MIX;NOR;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,7901234567901234;26,192349672317505;
+259;MIX;NOR;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,7551440329218106;27,50181746482849;
+260;BIN;NOR;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,7530864197530865;26,6150381565094;
+261;MAX;PCA;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,7530864197530865;27,6623272895813;
+262;MIX;PCA;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,7469135802469135;26,92980694770813;
+263;NOS;NOR;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,7222222222222222;27,19262170791626;
+264;MAX;PCA;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,7160493827160493;27,75167417526245;
+265;STA;PCA;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,7160493827160493;28,441786766052246;
+266;NRM;NOR;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,7119341563786009;28,76046586036682;
+267;MIX;NOR;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,5666666666666667;0,06712803318663652;0,6769547325102879;0,0712890625;
+268;MAX;NOR;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,6728395061728395;26,432131052017212;
+269;MAX;NOR;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,6666666666666667;1,1102230246251565e-16;0,6666666666666666;1,9307608604431152;
+270;MAX;PCA;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,6666666666666667;1,1102230246251565e-16;0,6666666666666666;1,93556547164917;
+271;BIN;PCA;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,6666666666666666;26,661917209625244;
+272;NOS;NOR;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,6666666666666666;24,816051483154297;
+273;MIX;NOR;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,6792824074074073;0,030139075566924856;0,6574074074074074;1,9296865463256836;
+274;MIX;PCA;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,6792824074074073;0,030139075566924856;0,6574074074074074;1,9277417659759521;
+275;STA;NOR;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,6502057613168725;26,825031518936157;
+276;STA;NOR;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,6460905349794239;25,35062289237976;
+277;MIX;PCA;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,6440329218106996;28,149249792099;
+278;BIN;NOR;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,6378600823045267;26,66635274887085;
+279;NRM;NOR;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,6378600823045267;26,289414644241333;
+280;MAX;PCA;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,6255144032921811;26,903754711151123;
+281;NRM;NOR;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,6152263374485597;28,271706581115723;
+282;NRM;PCA;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,602880658436214;27,98997712135315;
+283;NRM;NOR;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,5843621399176956;27,526549339294434;
+284;STA;NOR;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,5843621399176955;28,438892602920532;
+285;BIN;NOR;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,5823045267489712;25,62121319770813;
+286;MAX;NOR;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,5740740740740741;25,736417055130005;
+287;MIX;PCA;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,5699588477366255;27,979983806610107;
+288;MIX;NOR;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,565843621399177;26,585448026657104;
+289;STA;PCA;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,565843621399177;27,514645099639893;
+290;STA;NOR;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,5637860082304527;26,597335815429688;
+291;BIN;PCA;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,5596707818930041;26,993978023529053;
+292;MIX;NOR;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,5576131687242798;27,22613286972046;
+293;NRM;PCA;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,5308641975308642;26,915807962417603;
+294;NOS;NOR;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,5288065843621399;27,644438982009888;
+295;NRM;NOR;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,5288065843621399;26,650058031082153;
+296;MIX;NOR;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,5061728395061729;26,011044025421143;
+297;BIN;NOR;ABC - Ada Boost Classifier (Scikit Learn);4;0,5;0,0;0,5;3,1969709396362305;
+298;BIN;NOR;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;0,5;0,0;0,5;2,0853641033172607;
+299;BIN;NOR;BARF - Balanced Random Forest (Imbalanced Learn);4;0,5;0,0;0,5;1,9855494499206543;
+300;BIN;NOR;BGC - Bagging Classifier (Scikit Learn);4;0,5;0,0;0,5;0,11985254287719727;
+301;BIN;NOR;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,5;0,0;0,5;0,0674583911895752;
+302;BIN;NOR;CNB - Complement Naive Bayes (Scikit Learn);4;0,5;0,0;0,5;0,07481503486633301;
+303;BIN;NOR;DTC - Decision Tree Classifier (Scikit Learn);4;0,5;0,0;0,5;0,07713198661804199;
+304;BIN;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,05669903755187988;
+305;BIN;NOR;ETC - Extra Trees Classifier (Scikit Learn);4;0,5;0,0;0,5;0,2206568717956543;
+306;BIN;NOR;FUTS - FUT Stacking Classifier (Scikit Learn);4;0,5;0,0;0,5;5,236874341964722;
+307;BIN;NOR;GBC - Gradient Boosting Classifier (Scikit Learn);4;0,5;0,0;0,5;2,1312191486358643;
+308;BIN;NOR;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;0,5;0,0;0,5;3,4739725589752197;
+309;BIN;NOR;KNN - K-Neighbors Classifier (Scikit Learn);4;0,5;0,0;0,5;2,504014253616333;
+310;BIN;NOR;LRN - Logistic Regression (Scikit Learn);4;0,5;0,0;0,5;2,489462375640869;
+311;BIN;NOR;MNB - Multinomial Naive Bayes (Scikit Learn);4;0,5;0,0;0,5;1,920945405960083;
+312;BIN;NOR;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,5;0,0;0,5;2,484912395477295;
+313;BIN;NOR;RFCL - Random Forest Classifier (Scikit Learn);4;0,5;0,0;0,5;2,6870458126068115;
+314;BIN;NOR;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;0,5;0,0;0,5;5,411529779434204;
+315;BIN;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;2,4688663482666016;
+316;MAX;NOR;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,5;0,0;0,5;0,0713951587677002;
+317;MAX;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,06810522079467773;
+318;MAX;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;1,9252729415893555;
+319;MIX;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,08181595802307129;
+320;MIX;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;1,9233450889587402;
+321;NOS;NOR;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,5;0,0;0,5;0,056122541427612305;
+322;NOS;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,04255223274230957;
+323;NOS;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;1,9250690937042236;
+324;NRM;NOR;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,5;0,0;0,5;0,05913853645324707;
+325;NRM;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,07569646835327148;
+326;NRM;NOR;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,5;0,0;0,5;1,9283487796783447;
+327;NRM;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;1,9386579990386963;
+328;NRM;PCA;RADN - Radius Neighbors Classifier (Scikit Learn);4;0,5;0,0;0,5;1,9363632202148438;
+329;STA;NOR;BNB - Bernoulli Naive Bayes (Scikit Learn);4;0,5;0,0;0,5;0,06818246841430664;
+330;STA;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,07789111137390137;
+331;STA;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;1,9236769676208496;
+332;BIN;NOR;MLPC - Multi Layered Peceptron (Scikit Learn);4;0,475;0,03404902964480905;0,5;2,511202573776245;
+333;BIN;NOR;GPC - Gaussian Process Classifier (Scikit Learn);4;0,4624999999999999;0,07734253217958806;0,5;2,535942792892456;
+334;BIN;NOR;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;0,5;35,90466928482056;
+335;BIN;NOR;RUBC - RUS Boost Classifier (Imbalanced Learn);4;N/A;N/A;0,5;5,973816871643066;
+336;BIN;PCA;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,49382716049382713;26,807066202163696;
+337;MAX;PCA;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,48765432098765427;28,09558868408203;
+338;BIN;PCA;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,48559670781893005;27,814085721969604;
+339;MAX;NOR;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,48353909465020584;26,94187879562378;
+340;NRM;PCA;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,4835390946502058;25,36457633972168;
+341;MIX;PCA;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,48148148148148145;27,00071620941162;
+342;BIN;NOR;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,47736625514403297;26,96595311164856;
+343;BIN;PCA;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,4732510288065844;25,847489595413208;
+344;BIN;NOR;FUTV - FUT Voting Classifier (Scikit Learn);4;0,48680555555555555;0,026434536542603162;0,47222222222222215;2,4071359634399414;
+345;MAX;NOR;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,4711934156378601;27,930561304092407;
+346;MAX;NOR;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,46913580246913583;27,940504789352417;
+347;NRM;NOR;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,4670781893004115;27,001189947128296;
+348;NOS;NOR;TOTA - PyTorch Tanh+Adam (PyTorch);4;N/A;N/A;0,46296296296296297;26,706223726272583;
+349;STA;PCA;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,46090534979423864;27,407181978225708;
+350;NOS;NOR;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,45267489711934156;26,765337705612183;
+351;MIX;PCA;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,4506172839506173;26,638825178146362;
+352;NRM;PCA;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,44855967078189307;27,375819444656372;
+353;NOS;PCA;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,44032921810699593;27,637953758239746;
+354;MAX;PCA;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,43209876543209874;27,23863434791565;
+355;MIX;NOR;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,4259259259259259;26,759469032287598;
+356;BIN;PCA;TORS - PyTorch ReLu+SGD (PyTorch);4;N/A;N/A;0,4218106995884774;27,351732969284058;
+357;NRM;PCA;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,4156378600823045;26,223907709121704;
+358;STA;NOR;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,40534979423868317;27,53192663192749;
+359;MAX;PCA;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,37448559670781895;27,742067575454712;
+360;BIN;NOR;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,34567901234567905;27,306742191314697;
+361;NOS;PCA;TOSS - PyTorch Sigm+SGD (PyTorch);4;N/A;N/A;0,3209876543209877;26,691080570220947;
+362;MAX;NOR;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,31893004115226337;28,41122841835022;
+363;MIX;PCA;TORA - PyTorch ReLu+Adam (PyTorch);4;N/A;N/A;0,3148148148148148;26,11697745323181;
+364;NRM;PCA;TOSA - PyTorch Sigm+Adam (PyTorch);4;N/A;N/A;0,3148148148148148;27,28381323814392;
+365;BIN;NOR;TOTS - PyTorch Tanh+SGD (PyTorch);4;N/A;N/A;0,31275720164609055;27,736743688583374;
+366;BIN;NOR;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;0,5;0,0;N/A;0,8419778347015381;ValueError: BaseClassifier in AdaBoostClassifier ensemble is worse than random, ensemble can not be fit.
+367;BIN;NOR;GNB - Gaussian Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;4,317052602767944;ValueError: Input contains NaN.
+368;BIN;NOR;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;20,35572052001953;ValueError: Cannot convert '4' to a shape.
+369;BIN;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;N/A;N/A;N/A;5,973919868469238;IndexError: index 0 is out of bounds for axis 0 with size 0
+370;BIN;NOR;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;5,96826171875;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+371;BIN;NOR;NCT - Nearest Centroid (Scikit Learn);4;N/A;N/A;N/A;4,068246126174927;ValueError: All features have zero variance. Division by zero.
+372;BIN;NOR;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;6,258195638656616;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+373;BIN;NOR;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,20431923866272;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+374;BIN;NOR;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;N/A;N/A;N/A;6,147111177444458;ValueError: Input contains NaN.
+375;BIN;NOR;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;5,9517130851745605;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+376;BIN;NOR;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;6,108425140380859;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+377;BIN;NOR;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,136054277420044;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+378;BIN;NOR;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,854653596878052;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+379;BIN;NOR;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,231984853744507;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+380;BIN;NOR;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,513080596923828;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+381;BIN;PCA;ABC - Ada Boost Classifier (Scikit Learn);4;N/A;N/A;N/A;6,016931772232056;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by AdaBoostClassifier.
+382;BIN;PCA;BABC - Balanced Bagging Classifier (Imbalanced Learn);4;N/A;N/A;N/A;6,207168340682983;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by BalancedBaggingClassifier.
+383;BIN;PCA;BARF - Balanced Random Forest (Imbalanced Learn);4;N/A;N/A;N/A;6,153504848480225;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by BalancedRandomForestClassifier.
+384;BIN;PCA;BGC - Bagging Classifier (Scikit Learn);4;N/A;N/A;N/A;6,216926097869873;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by BaggingClassifier.
+385;BIN;PCA;BNB - Bernoulli Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;6,207172632217407;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by BernoulliNB.
+386;BIN;PCA;CNB - Complement Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;6,191921710968018;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by ComplementNB.
+387;BIN;PCA;DTC - Decision Tree Classifier (Scikit Learn);4;N/A;N/A;N/A;6,112825393676758;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by DecisionTreeClassifier.
+388;BIN;PCA;EAEC - Easy Ensamble Classifier (Imbalanced Learn);4;N/A;N/A;N/A;5,909601449966431;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by EasyEnsembleClassifier.
+389;BIN;PCA;ETC - Extra Trees Classifier (Scikit Learn);4;N/A;N/A;N/A;6,137963533401489;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by ExtraTreesClassifier.
+390;BIN;PCA;FLAX - Flax Neural Network (Flax/Jax);4;N/A;N/A;N/A;25,689984798431396;ZeroDivisionError: division by zero
+391;BIN;PCA;FUTS - FUT Stacking Classifier (Scikit Learn);4;N/A;N/A;N/A;6,181799411773682;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by MLPClassifier.
+392;BIN;PCA;FUTV - FUT Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,148034334182739;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by MLPClassifier.
+393;BIN;PCA;GBC - Gradient Boosting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,2294886112213135;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by GradientBoostingClassifier.
+394;BIN;PCA;GNB - Gaussian Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;6,097629070281982;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by GaussianNB.
+395;BIN;PCA;GPC - Gaussian Process Classifier (Scikit Learn);4;N/A;N/A;N/A;6,042792320251465;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by GaussianProcessClassifier.
+396;BIN;PCA;HIST - Histogram-based Gradient B. Classifier (Scikit Learn);4;N/A;N/A;N/A;6,021514654159546;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by HistGradientBoostingClassifier.
+397;BIN;PCA;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;22,92306089401245;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required.
+398;BIN;PCA;KNN - K-Neighbors Classifier (Scikit Learn);4;N/A;N/A;N/A;6,178937911987305;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by KNeighborsClassifier.
+399;BIN;PCA;LDA - Linear Discriminant Analysis (Scikit Learn);4;N/A;N/A;N/A;6,128044843673706;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by LinearDiscriminantAnalysis.
+400;BIN;PCA;LRN - Logistic Regression (Scikit Learn);4;N/A;N/A;N/A;6,215502977371216;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by LogisticRegression.
+401;BIN;PCA;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;6,162433862686157;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by LinearSVC.
+402;BIN;PCA;MLPC - Multi Layered Peceptron (Scikit Learn);4;N/A;N/A;N/A;6,105322360992432;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by MLPClassifier.
+403;BIN;PCA;MNB - Multinomial Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;6,026024103164673;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by MultinomialNB.
+404;BIN;PCA;NCT - Nearest Centroid (Scikit Learn);4;N/A;N/A;N/A;6,05539083480835;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by NearestCentroid.
+405;BIN;PCA;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;6,231541156768799;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by PassiveAggressiveClassifier.
+406;BIN;PCA;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,149202823638916;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by Perceptron.
+407;BIN;PCA;QDA - Quadratic Discriminant Analysis (Scikit Learn);4;N/A;N/A;N/A;5,957200765609741;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by QuadraticDiscriminantAnalysis.
+408;BIN;PCA;RADN - Radius Neighbors Classifier (Scikit Learn);4;N/A;N/A;N/A;6,232256174087524;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by RadiusNeighborsClassifier.
+409;BIN;PCA;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;6,206027984619141;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by RidgeClassifier.
+410;BIN;PCA;RFCL - Random Forest Classifier (Scikit Learn);4;N/A;N/A;N/A;6,018026828765869;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by RandomForestClassifier.
+411;BIN;PCA;RUBC - RUS Boost Classifier (Imbalanced Learn);4;N/A;N/A;N/A;6,205604314804077;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by RUSBoostClassifier.
+412;BIN;PCA;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;6,119588851928711;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by SGDClassifier.
+413;BIN;PCA;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,085137128829956;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by LinearSVC.
+414;BIN;PCA;SRF1 - Stacked Random Forests 1 (Scikit Learn);4;N/A;N/A;N/A;6,239412307739258;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by RandomForestClassifier.
+415;BIN;PCA;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;6,156574249267578;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by SelfTrainingClassifier.
+416;BIN;PCA;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,166001796722412;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by SVC.
+417;BIN;PCA;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,1344075202941895;ValueError: Found array with 0 feature(s) (shape=(108, 0)) while a minimum of 1 is required by LinearSVC.
+418;MAX;NOR;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;21,39223837852478;ValueError: Cannot convert '4' to a shape.
+419;MAX;NOR;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,203052520751953;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+420;MAX;NOR;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;4,30263090133667;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+421;MAX;NOR;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,277198314666748;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+422;MAX;NOR;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;4,0646891593933105;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+423;MAX;NOR;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;4,136952877044678;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+424;MAX;NOR;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,267105579376221;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+425;MAX;NOR;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;6,002371549606323;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+426;MAX;NOR;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,103644609451294;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+427;MAX;NOR;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,713901519775391;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+428;MAX;PCA;CNB - Complement Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;4,395944118499756;ValueError: Negative values in data passed to ComplementNB (input X).
+429;MAX;PCA;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;21,085484743118286;ValueError: Cannot convert '3' to a shape.
+430;MAX;PCA;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,093029737472534;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+431;MAX;PCA;MNB - Multinomial Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;5,848138809204102;ValueError: Negative values in data passed to MultinomialNB (input X).
+432;MAX;PCA;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;5,948031187057495;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+433;MAX;PCA;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,189752817153931;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+434;MAX;PCA;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;4,095629930496216;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+435;MAX;PCA;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;4,130279064178467;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+436;MAX;PCA;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,071972370147705;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+437;MAX;PCA;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,982637882232666;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+438;MAX;PCA;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,176753759384155;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+439;MAX;PCA;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,757784605026245;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+440;MIX;NOR;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;20,853775024414062;ValueError: Cannot convert '4' to a shape.
+441;MIX;NOR;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,145374059677124;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+442;MIX;NOR;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;4,292476654052734;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+443;MIX;NOR;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,108224153518677;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+444;MIX;NOR;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;3,908036470413208;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+445;MIX;NOR;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;4,020135164260864;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+446;MIX;NOR;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,0904011726379395;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+447;MIX;NOR;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,964306831359863;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+448;MIX;NOR;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,202710866928101;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+449;MIX;NOR;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,60795783996582;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+450;MIX;PCA;CNB - Complement Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;4,209468603134155;ValueError: Negative values in data passed to ComplementNB (input X).
+451;MIX;PCA;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;21,266287565231323;ValueError: Cannot convert '3' to a shape.
+452;MIX;PCA;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,113757610321045;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+453;MIX;PCA;MNB - Multinomial Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;5,927958965301514;ValueError: Negative values in data passed to MultinomialNB (input X).
+454;MIX;PCA;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;5,722309827804565;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+455;MIX;PCA;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,075617074966431;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+456;MIX;PCA;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;4,031917095184326;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+457;MIX;PCA;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;3,956913948059082;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+458;MIX;PCA;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,154016494750977;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+459;MIX;PCA;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,902525424957275;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+460;MIX;PCA;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,019375801086426;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+461;MIX;PCA;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,589559316635132;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+462;NOS;NOR;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;20,023545742034912;ValueError: Cannot convert '4' to a shape.
+463;NOS;NOR;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,175736427307129;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+464;NOS;NOR;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;4,28358793258667;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+465;NOS;NOR;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,223384857177734;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+466;NOS;NOR;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;3,971273899078369;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+467;NOS;NOR;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;4,133699178695679;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+468;NOS;NOR;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,233758449554443;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+469;NOS;NOR;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,915217161178589;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+470;NOS;NOR;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;5,959305286407471;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+471;NOS;NOR;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,797725677490234;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+472;NOS;PCA;CNB - Complement Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;4,307600736618042;ValueError: Negative values in data passed to ComplementNB (input X).
+473;NOS;PCA;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;21,559780836105347;ValueError: Cannot convert '3' to a shape.
+474;NOS;PCA;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,191334247589111;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+475;NOS;PCA;MNB - Multinomial Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;5,79664945602417;ValueError: Negative values in data passed to MultinomialNB (input X).
+476;NOS;PCA;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;5,9236979484558105;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+477;NOS;PCA;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,189096212387085;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+478;NOS;PCA;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;3,954667329788208;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+479;NOS;PCA;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;3,9671807289123535;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+480;NOS;PCA;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,2099878787994385;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+481;NOS;PCA;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,892147541046143;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+482;NOS;PCA;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,0761024951934814;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+483;NOS;PCA;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,7700159549713135;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+484;NRM;NOR;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;20,84175419807434;ValueError: Cannot convert '4' to a shape.
+485;NRM;NOR;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,124353408813477;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+486;NRM;NOR;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;4,149429559707642;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+487;NRM;NOR;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,2330482006073;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+488;NRM;NOR;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;3,7530651092529297;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+489;NRM;NOR;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;3,997262954711914;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+490;NRM;NOR;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,1387364864349365;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+491;NRM;NOR;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,841361999511719;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+492;NRM;NOR;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,193509817123413;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+493;NRM;NOR;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,653509855270386;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+494;NRM;PCA;CNB - Complement Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;4,118837833404541;ValueError: Negative values in data passed to ComplementNB (input X).
+495;NRM;PCA;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;21,310325860977173;ValueError: Cannot convert '3' to a shape.
+496;NRM;PCA;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,096354007720947;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+497;NRM;PCA;MNB - Multinomial Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;5,879280090332031;ValueError: Negative values in data passed to MultinomialNB (input X).
+498;NRM;PCA;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;5,873788595199585;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+499;NRM;PCA;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,024171352386475;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+500;NRM;PCA;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;4,010199546813965;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+501;NRM;PCA;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;4,170764923095703;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+502;NRM;PCA;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,08143162727356;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+503;NRM;PCA;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,93757963180542;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+504;NRM;PCA;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,068650722503662;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+505;NRM;PCA;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,709504127502441;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+506;STA;NOR;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;20,88985013961792;ValueError: Cannot convert '4' to a shape.
+507;STA;NOR;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,226339340209961;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+508;STA;NOR;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;4,367887258529663;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+509;STA;NOR;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,193017959594727;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+510;STA;NOR;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;4,062516927719116;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+511;STA;NOR;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;4,208224534988403;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+512;STA;NOR;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,411208152770996;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+513;STA;NOR;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,7772417068481445;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+514;STA;NOR;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,19277286529541;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+515;STA;NOR;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,649356126785278;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+516;STA;PCA;CNB - Complement Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;4,181500434875488;ValueError: Negative values in data passed to ComplementNB (input X).
+517;STA;PCA;KERA - Keras MLP Classifier (Keras/Tensorflow);4;N/A;N/A;N/A;21,47880220413208;ValueError: Cannot convert '3' to a shape.
+518;STA;PCA;LSVC - Linear Support Vector (Scikit Learn);4;N/A;N/A;N/A;4,306700944900513;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+519;STA;PCA;MNB - Multinomial Naive Bayes (Scikit Learn);4;N/A;N/A;N/A;5,891297101974487;ValueError: Negative values in data passed to MultinomialNB (input X).
+520;STA;PCA;PAC - Passive Aggressive Classifier (Scikit Learn);4;N/A;N/A;N/A;5,75811243057251;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+521;STA;PCA;PCN - Perceptron (Scikit Learn);4;N/A;N/A;N/A;6,180707216262817;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+522;STA;PCA;REC - Ridge Classifier (Scikit Learn);4;N/A;N/A;N/A;4,081058025360107;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+523;STA;PCA;SGDE - Stochastic Gradient Descent (Scikit Learn);4;N/A;N/A;N/A;3,9276998043060303;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+524;STA;PCA;SLSV - Stacked Linear SVC (Scikit Learn);4;N/A;N/A;N/A;6,234502792358398;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+525;STA;PCA;STCL - Self Training Classifier (Scikit Learn);4;N/A;N/A;N/A;5,971260070800781;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+526;STA;PCA;SVC - Support Vector Classification (Scikit Learn);4;N/A;N/A;N/A;6,138906002044678;AttributeError: This 'Pipeline' has no attribute 'predict_proba'
+527;STA;PCA;VOTG - Voting Classifier (Scikit Learn);4;N/A;N/A;N/A;6,677248477935791;AttributeError: This 'Pipeline' has no attribute 'predict_proba'

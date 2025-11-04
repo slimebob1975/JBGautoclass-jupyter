@@ -1,0 +1,2 @@
+id;P(Iris-setosa);P(Iris-versicolor);P(Iris-virginica);Actual;Predicted;Model;sepal-length;sepal-width;petal-length;petal-width
+71;4,2102778146882556e-27;0,2718376518941342;0,7281623481058659;Iris-versicolor;Iris-virginica;cross trained;5,9;3,2;4,8;1,8

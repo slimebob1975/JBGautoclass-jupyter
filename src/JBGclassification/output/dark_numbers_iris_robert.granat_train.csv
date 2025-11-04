@@ -1,0 +1,46 @@
+;Model type;type;target;alphas;dark_number
+0;Retrained on all data;base;Iris-versicolor;1.0;0,0
+1;;base;Iris-setosa;1.0;0,0
+2;;base;Iris-virginica;1.0;0,010869565217391353
+3;;single_alpha;Iris-versicolor;1.0;0,0
+4;;single_alpha;Iris-setosa;1.0;0,0
+5;;single_alpha;Iris-virginica;0.6861524470671269;0,0074581787724688035
+6;;separated_alpha;Iris-versicolor;[1, np.float64(0.6861524470671269)];0,0
+7;;separated_alpha;Iris-setosa;[1, 1];0,0
+8;;separated_alpha;Iris-virginica;[np.float64(0.6861524470671269), 1];0,0074581787724688035
+9;;non_linear;Iris-versicolor;1.0;0,0
+10;;non_linear;Iris-setosa;1.0;0,0
+11;;non_linear;Iris-virginica;1.0;0,0036363957513840806
+12;;non_linear_alpha;Iris-versicolor;1;0,0
+13;;non_linear_alpha;Iris-setosa;1;0,0
+14;;non_linear_alpha;Iris-virginica;0.6861524470671269;0,0024951218433166902
+0;Cross-trained on training data;base;Iris-versicolor;1.0;0,0
+1;;base;Iris-setosa;1.0;0,0
+2;;base;Iris-virginica;1.0;0,010869565217391353
+3;;single_alpha;Iris-versicolor;1.0;0,0
+4;;single_alpha;Iris-setosa;1.0;0,0
+5;;single_alpha;Iris-virginica;0.7281623481058659;0,007914808131585535
+6;;separated_alpha;Iris-versicolor;[1, np.float64(0.7281623481058659)];0,0
+7;;separated_alpha;Iris-setosa;[1, 1];0,0
+8;;separated_alpha;Iris-virginica;[np.float64(0.7281623481058659), 1];0,007914808131585535
+9;;non_linear;Iris-versicolor;1.0;0,0
+10;;non_linear;Iris-setosa;1.0;0,0
+11;;non_linear;Iris-virginica;1.0;0,0036363957513840806
+12;;non_linear_alpha;Iris-versicolor;1;0,0
+13;;non_linear_alpha;Iris-setosa;1;0,0
+14;;non_linear_alpha;Iris-virginica;0.7281623481058659;0,0026478864689700268
+0;Combined;base;Iris-versicolor;1.0;0,0
+1;;base;Iris-setosa;1.0;0,0
+2;;base;Iris-virginica;1.0;0,010869565217391353
+3;;single_alpha;Iris-versicolor;1.0;0,0
+4;;single_alpha;Iris-setosa;1.0;0,0
+5;;single_alpha;Iris-virginica;0.7281623481058659;0,007914808131585535
+6;;separated_alpha;Iris-versicolor;[1, np.float64(0.7281623481058659)];0,0
+7;;separated_alpha;Iris-setosa;[1, 1];0,0
+8;;separated_alpha;Iris-virginica;[np.float64(0.7281623481058659), 1];0,007914808131585535
+9;;non_linear;Iris-versicolor;1.0;0,0
+10;;non_linear;Iris-setosa;1.0;0,0
+11;;non_linear;Iris-virginica;1.0;0,0036363957513840806
+12;;non_linear_alpha;Iris-versicolor;1;0,0
+13;;non_linear_alpha;Iris-setosa;1;0,0
+14;;non_linear_alpha;Iris-virginica;0.7281623481058659;0,0026478864689700268
