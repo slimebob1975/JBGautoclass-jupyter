@@ -40,7 +40,7 @@ from pickle import PicklingError
 import inspect
 
 GIVE_EXCEPTION_TRACEBACK = False
-DEBUG = True
+DEBUG = False
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""

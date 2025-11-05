@@ -5,7 +5,7 @@ from joblib import Parallel, delayed
 from pickle import PicklingError
 from JBGLogger import JBGLogger
 
-DEBUG = True
+DEBUG = False
 BACKEND_PROCESSES = "processes"
 BACKEND_THREADS = "threads"
 
