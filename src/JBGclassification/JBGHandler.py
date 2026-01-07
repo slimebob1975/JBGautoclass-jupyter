@@ -40,7 +40,7 @@ from pickle import PicklingError
 import inspect
 
 GIVE_EXCEPTION_TRACEBACK = False
-DEBUG = False
+DEBUG = True
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -1167,7 +1167,8 @@ class ModelHandler:
 
             else:
                 end_time = time.time()
-                self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
+                if self.handler.config.debug:
+                    self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
                 break
 
         return result
@@ -1986,7 +1987,7 @@ class PredictionsHandler:
                     self.handler.logger.print_warning(f"Correction number estimator failed: {str(ex)}. Fallback: using regressor.")
                     corr_regressor = DarkNumberCorrectionFactorRegressor(
                         estimator=clone(models[0]),
-                        sample_size_list=[0.1, 0.2, 0.3, 0.4, 0.5],
+                        sample_size_list=[0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
                         flip_fraction=0.2,
                         n_splits=n_splits,
                         n_repeats=n_repeats,
