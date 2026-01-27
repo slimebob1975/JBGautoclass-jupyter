@@ -273,8 +273,14 @@ class AlgorithmGridSearchParams(MetaEnum):
     RTCL = {"parameters": {'method': ('simple', 'weighted'), 'K': [5, 10, 15], 'n_estimators': (50,100,150)}}
     RLRN = {"parameters": {'PN': [0.1, 0.2, 0.5, 0.10], 'NP': [0.1, 0.2, 0.5, 0.10], 'C': [0.1, 1, 10]}}
     RCNT = {"parameters": {}}
-    LRN = {"parameters": {'penalty':('l1', 'l2', 'elasticnet', 'none'), 'tol': [1e-3, 1e-4, 1e-5], 'C': [0.1, 1, 10],
-           'class_weight': ('balanced', None)}}
+    LRN = {"parameters": {
+            "solver": ["lbfgs"],
+            "penalty": ["l2", None],
+            "tol": [1e-3, 1e-4, 1e-5],
+            "C": [0.1, 1, 10],
+            "class_weight": ["balanced", None],
+        }
+    }
     KNN = {"parameters": {'n_neighbors': (5, 10, 15), 'weights': ('uniform', 'distance'), 
            'algorithm': ('ball_tree', 'kd_tree', 'brute'), 'p': (1, 2)}}
     RADN = {"parameters": {'radius': np.arange(0.5, 1.5, 0.1), 'weights': ('uniform','distance'), 'outlier_label': ('most_frequent', None)}}
