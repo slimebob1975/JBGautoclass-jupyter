@@ -231,6 +231,44 @@ class DataLayer(DataLayerBase):
 
         # Return 
         return count
+    
+    def get_column_uniqueness_stats(self, data_catalog: str, data_table: str, column: str) -> dict:
+        """
+        Returns row-count, non-null count, and distinct count for a column.
+        Column qualifies as a unique key if nonnull == total and distinct == total.
+        """
+        try:
+            endQuery = f"[{period_to_brackets(data_catalog)}].[{period_to_brackets(data_table)}]"
+            # Bracket kolumnnamn; antag att column kommer från INFORMATION_SCHEMA och är ett rent namn.
+            query = (
+                "SELECT "
+                "COUNT(*) AS total, "
+                f"COUNT([{column}]) AS nonnull, "
+                f"COUNT(DISTINCT [{column}]) AS distinct_count "
+                f"FROM {endQuery}"
+            )
+            row = self.get_data_list_from_query(query)[0]
+            total, nonnull, distinct_count = row[0], row[1], row[2]
+            return {"total": int(total), "nonnull": int(nonnull), "distinct": int(distinct_count)}
+        except Exception as e:
+            self.logger.print_dragon(e)
+            raise DataLayerException(f"Uniqueness stats failed for column '{column}': {str(e)}")
+        
+    def get_unique_int_id_columns(self, data_catalog: str, data_table: str, int_columns: list[str]) -> list[str]:
+        """
+        Filters int_columns to those that have exactly one unique, non-null value per row.
+        """
+        try:
+            total_rows = self.count_data_rows(data_catalog, data_table)  # använder get_count-endQuery :contentReference[oaicite:1]{index=1}
+            ok = []
+            for col in int_columns:
+                stats = self.get_column_uniqueness_stats(data_catalog, data_table, col)
+                if stats["total"] == total_rows and stats["nonnull"] == total_rows and stats["distinct"] == total_rows:
+                    ok.append(col)
+            return ok
+        except Exception as e:
+            self.logger.print_dragon(e)
+            raise DataLayerException(f"Finding unique id columns failed: {str(e)}")
 
     def get_class_distribution_query(self) -> str:
         """ Builds the query for class=>rows """

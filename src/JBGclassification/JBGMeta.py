@@ -307,7 +307,13 @@ class AlgorithmGridSearchParams(MetaEnum):
     SVC = {"parameters": {'C': [1, 10, 100, 1000], 'gamma': ['scale', 'auto'], 'max_iter': [-1],
                           'kernel': ['linear', 'rbf', 'poly', 'sigmoid'], 'class_weight': ('balanced', None)}}
     STCL = {"parameters": {}}
-    LDA = {"parameters": {'solver': ('svd','lsqr','eigen'), 'shrinkage': ('auto', None), 'tol': [1e-3, 1e-4, 1e-5]}}
+    LDA = {"parameters": [
+        # shrinkage not supported with svd -> force shrinkage=None
+        {"solver": ["svd"], "shrinkage": [None], "tol": [1e-3, 1e-4, 1e-5]},
+        # shrinkage supported with lsqr/eigen
+        {"solver": ["lsqr", "eigen"], "shrinkage": ["auto", None], "tol": [1e-3, 1e-4, 1e-5]},
+    ]}
+
     QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
     BGC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
             'max_features': (0.5, 1.0, 2.0), 'warm_start': (True, False)}}

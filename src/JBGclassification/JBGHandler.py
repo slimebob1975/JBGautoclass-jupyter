@@ -1818,7 +1818,7 @@ class PredictionsHandler:
     
     # Function for finding the n most mispredicted data rows
     # TODO: Clean up a bit more
-    def most_mispredicted(self, X_original: pd.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pd.DataFrame, Y: pd.Series) -> None:
+    def most_mispredicted_old(self, X_original: pd.DataFrame, full_pipe: Pipeline, ct_pipe: Pipeline, X: pd.DataFrame, Y: pd.Series) -> None:
         
         # Calculate predictions for both total model and cross trained model
         self.num_mispredicted = 0
@@ -1934,6 +1934,178 @@ class PredictionsHandler:
         self.X_most_mispredicted = self.X_mispredicted.head(self.LIMIT_MISPREDICTED)
         
         return
+    
+    # Function for finding the n most mispredicted data rows
+    def most_mispredicted(
+        self,
+        X_original: pd.DataFrame,
+        full_pipe: Pipeline,
+        ct_pipe: Pipeline,
+        X: pd.DataFrame,
+        Y: pd.Series
+    ) -> None:
+        """
+        Compute mispredicted rows and the 'most mispredicted' subset.
+
+        Robust implementation:
+        - Uses positional indexing (iloc) to avoid problems with duplicate indices.
+        - Builds an index-aligned boolean mask (pd.Series) instead of a python list.
+        - Stores model labels/predictions in dtype=object Series.
+        - Uses position-based boolean filtering (iloc[mask_array]) to avoid mask-length mismatch.
+        """
+
+        # Reset state
+        self.num_mispredicted = 0
+        self.model = self.NO_MODEL
+
+        n = len(Y)
+        if n == 0:
+            self.X_most_mispredicted = pd.DataFrame()
+            self.X_mispredicted = pd.DataFrame()
+            return
+
+        # Make predictions for both models (try DataFrame first, fall back to numpy)
+        try:
+            y_pred_ct = ct_pipe.predict(X)
+            y_pred_ft = full_pipe.predict(X)
+        except TypeError:
+            y_pred_ct = ct_pipe.predict(X.to_numpy())
+            y_pred_ft = full_pipe.predict(X.to_numpy())
+
+        # Wrap predictions as Series aligned to Y.index (positional operations will use iloc anyway)
+        Y_pred_ct = pd.Series(y_pred_ct, index=Y.index)
+        Y_pred_ft = pd.Series(y_pred_ft, index=Y.index)
+        ct_model = self.CROSS_TRAINED_MODEL
+        ft_model = self.RETRAINED_MODEL
+
+        # Print accuracy for both models
+        for Y_pred_what, what_model in [(Y_pred_ct, ct_model), (Y_pred_ft, ft_model)]:
+            self.handler.logger.print_key_value_pair(
+                f"Accuracy score for {what_model} model",
+                accuracy_score(Y, Y_pred_what),
+                print_always=True,
+            )
+
+        # Build mask + per-row "chosen predicted" + per-row "responsible model"
+        # Note: positional iteration avoids .loc[i] returning multiple rows when indices are duplicated.
+        mask_arr = np.zeros(n, dtype=bool)
+        chosen_pred_arr = np.empty(n, dtype=object)
+        model_arr = np.empty(n, dtype=object)
+
+        for pos in range(n):
+            y_true = Y.iloc[pos]
+            y_ct = Y_pred_ct.iloc[pos]
+            y_ft = Y_pred_ft.iloc[pos]
+
+            mismatch_ct = (y_true != y_ct)
+            mismatch_ft = (y_true != y_ft)
+
+            is_misp = bool(mismatch_ct or mismatch_ft)
+            mask_arr[pos] = is_misp
+
+            # CT precedence if both are wrong
+            if mismatch_ct:
+                chosen_pred_arr[pos] = y_ct
+                model_arr[pos] = ct_model
+            elif mismatch_ft:
+                chosen_pred_arr[pos] = y_ft
+                model_arr[pos] = ft_model
+            else:
+                chosen_pred_arr[pos] = y_true
+                model_arr[pos] = self.NO_MODEL
+
+        X_not = pd.Series(mask_arr, index=Y.index)
+        Y_not = pd.Series(chosen_pred_arr, index=Y.index, dtype="object")
+        model_not = pd.Series(model_arr, index=Y.index, dtype="object")
+
+        # Update counts / model summary
+        self.num_mispredicted = int(mask_arr.sum())
+        if self.num_mispredicted > 0:
+            self.model = str(model_not.iloc[mask_arr].value_counts())
+        else:
+            self.X_most_mispredicted = pd.DataFrame()
+            self.X_mispredicted = pd.DataFrame()
+            return
+
+        # Subset of mispredicted rows (position-based boolean selection)
+        X_misp_feat = X.iloc[mask_arr]
+
+        # Predict probabilities for the mispredicted subset and select per-row probabilities
+        could_predict_proba = False
+        Y_prob = None
+
+        try:
+            try:
+                prob_ct = ct_pipe.predict_proba(X_misp_feat)
+                prob_ft = full_pipe.predict_proba(X_misp_feat)
+            except TypeError:
+                prob_ct = ct_pipe.predict_proba(X_misp_feat.to_numpy())
+                prob_ft = full_pipe.predict_proba(X_misp_feat.to_numpy())
+
+            prob_ct = np.asarray(prob_ct)
+            prob_ft = np.asarray(prob_ft)
+
+            # Ensure 2D
+            prob_ct = np.atleast_2d(prob_ct)
+            prob_ft = np.atleast_2d(prob_ft)
+
+            # Pick per-row from CT or FT depending on model_not (CT precedence already encoded)
+            model_misp = model_not.iloc[mask_arr].to_numpy()
+            out = []
+            for i_row, mname in enumerate(model_misp):
+                out.append(prob_ct[i_row, :] if mname == ct_model else prob_ft[i_row, :])
+            Y_prob = np.asarray(out)
+            Y_prob = np.atleast_2d(Y_prob)
+
+            could_predict_proba = True
+
+        except Exception as e:
+            self.handler.logger.print_key_value_pair("Could not predict probabilities for most mispredicted", e)
+            could_predict_proba = False
+
+        # Re-insert original data columns into mispredicted data and add metadata columns
+        self.X_mispredicted = X_original.iloc[mask_arr].copy()
+
+        # Insert Actual/Predicted/Model (position-based to avoid duplicate-index weirdness)
+        self.X_mispredicted.insert(0, "Actual", Y.iloc[mask_arr].to_numpy())
+        self.X_mispredicted.insert(1, "Predicted", Y_not.iloc[mask_arr].to_numpy())
+        self.X_mispredicted.insert(2, "Model", model_not.iloc[mask_arr].to_numpy())
+
+        # Determine class labels for probability columns
+        try:
+            the_classes = ct_pipe.classes_
+        except AttributeError as e:
+            self.handler.logger.print_key_value_pair(
+                "No classes_ attribute in model, using original classes as fallback",
+                e,
+            )
+            the_classes = [y for y in set(Y) if y is not None]
+
+        # If no probabilities: insert N/A columns and return a random sample
+        if not could_predict_proba:
+            for item in the_classes:
+                self.X_mispredicted.insert(0, f"P({item})", "N/A")
+            n_limit = min(self.LIMIT_MISPREDICTED, self.X_mispredicted.shape[0])
+            self.X_most_mispredicted = self.X_mispredicted.sample(n=n_limit)
+            return
+
+        # Add probability columns and sort by max probability
+        Y_prob = np.atleast_2d(Y_prob)
+        Y_prob_max = np.amax(Y_prob, axis=1)
+
+        # Insert probability columns in reverse order to keep original left-to-right behavior
+        for i in reversed(range(Y_prob.shape[1])):
+            self.X_mispredicted.insert(0, f"P({the_classes[i]})", Y_prob[:, i])
+
+        self.X_mispredicted.insert(0, "__Sort__", Y_prob_max)
+
+        self.X_mispredicted = self.X_mispredicted.sort_values("__Sort__", ascending=False)
+        self.X_mispredicted = self.X_mispredicted.drop("__Sort__", axis=1)
+
+        # Keep only the top N
+        self.X_most_mispredicted = self.X_mispredicted.head(self.LIMIT_MISPREDICTED)
+        return
+
     
     # Dark number stuffs
     def get_dark_numbers(self, X: pd.DataFrame, Y: pd.DataFrame, type: str = "all", models: list = [None], \

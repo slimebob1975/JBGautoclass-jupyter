@@ -8,6 +8,7 @@ import shutil
 from typing import Iterable
 import re
 from pathlib import Path
+from typing import Any, Mapping, Union
 
 import numpy as np
 import pandas
@@ -242,13 +243,38 @@ def count_value_distr_as_dict(list: Iterable) -> dict:
     else:
         raise ValueError("Input must be an iterable")
 
-def add_prefix_to_dict_keys(prefix: str, the_dict: dict):
+def add_prefix_to_dict_keys_simple(prefix: str, the_dict: dict):
     new_dict = {}
     for key in the_dict.keys():
         new_dict[prefix + DOUBLE_UNDERSCORE + key] = the_dict[key]
     return new_dict
 
-def add_missing_prefix_double_underscore_to_dict_keys(prefix: str, the_dict: dict):
+def add_prefix_to_dict_keys(prefix: str, the_dict: Union[Mapping[str, Any], list[Mapping[str, Any]]]):
+    """
+    Adds '<prefix>__' to each key.
+    Accepts either:
+      - a dict-like mapping (returns dict)
+      - a list of dict-like mappings (returns list of dicts)
+    """
+    def _prefix_one(d: Mapping[str, Any]) -> dict[str, Any]:
+        return {prefix + DOUBLE_UNDERSCORE + str(k): v for k, v in d.items()}
+
+    if the_dict is None:
+        return None
+
+    if isinstance(the_dict, list):
+        # Validate list items are dict-like
+        if not all(hasattr(d, "items") for d in the_dict):
+            raise TypeError("add_prefix_to_dict_keys: list must contain dict-like items")
+        return [_prefix_one(d) for d in the_dict]
+
+    if hasattr(the_dict, "items"):
+        return _prefix_one(the_dict)
+
+    raise TypeError("add_prefix_to_dict_keys: expected a dict-like mapping or a list of dict-like mappings")
+
+
+def add_missing_prefix_double_underscore_to_dict_keys_simple(prefix: str, the_dict: dict):
     new_dict = {}
     for key in the_dict.keys():
         if key.find(DOUBLE_UNDERSCORE) == -1:
@@ -256,6 +282,31 @@ def add_missing_prefix_double_underscore_to_dict_keys(prefix: str, the_dict: dic
         else:
             new_dict[key] = the_dict[key]
     return new_dict
+
+def add_missing_prefix_double_underscore_to_dict_keys(prefix: str, the_dict: Union[Mapping[str, Any], list[Mapping[str, Any]]]):
+    def _prefix_missing_one(d: Mapping[str, Any]) -> dict[str, Any]:
+        new_dict = {}
+        for key, val in d.items():
+            key = str(key)
+            if DOUBLE_UNDERSCORE not in key:
+                new_dict[prefix + DOUBLE_UNDERSCORE + key] = val
+            else:
+                new_dict[key] = val
+        return new_dict
+
+    if the_dict is None:
+        return None
+
+    if isinstance(the_dict, list):
+        if not all(hasattr(d, "items") for d in the_dict):
+            raise TypeError("add_missing_prefix_double_underscore_to_dict_keys: list must contain dict-like items")
+        return [_prefix_missing_one(d) for d in the_dict]
+
+    if hasattr(the_dict, "items"):
+        return _prefix_missing_one(the_dict)
+
+    raise TypeError("add_missing_prefix_double_underscore_to_dict_keys: expected a dict-like mapping or a list of dict-like mappings")
+
 
 def bytes_to_suffix(nbytes):
     suffixes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
