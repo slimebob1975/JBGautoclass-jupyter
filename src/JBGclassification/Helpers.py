@@ -200,7 +200,7 @@ def get_datetime(val) -> datetime:
     return None
 
 # Convert dataset to unreadable hex code
-def do_hex_base64_encode_on_data(X):
+def do_hex_base64_encode_on_data_old(X):
 
     XX = X.copy()
 
@@ -211,6 +211,61 @@ def do_hex_base64_encode_on_data(X):
             x[...] = xhex 
 
     return XX
+
+def do_hex_base64_encode_on_data(X):
+    """
+    Convert all elements in X to a whitespace-tokenized hex(base64()) encoding.
+    Robust against read-only views coming from pandas / sklearn by forcing a writable copy.
+
+    Accepts:
+      - numpy arrays
+      - pandas DataFrame / Series
+      - python sequences (list of strings, etc.)
+    Returns:
+      - same high-level type as input (DataFrame/Series preserved), otherwise numpy ndarray
+    """
+    import numpy as np
+    import pandas as pd
+
+    # Preserve pandas containers
+    if isinstance(X, pd.DataFrame):
+        arr = X.to_numpy(dtype=object, copy=True)
+        # Ensure writable even if backend returns a readonly view
+        arr.setflags(write=True)
+
+        with np.nditer(arr, op_flags=["readwrite"], flags=["refs_ok"]) as it:
+            for x in it:
+                xval = str(x.item())
+                xhex = cipher_encode_string(xval)
+                x[...] = xhex
+
+        return pd.DataFrame(arr, index=X.index, columns=X.columns)
+
+    if isinstance(X, pd.Series):
+        arr = X.to_numpy(dtype=object, copy=True)
+        arr.setflags(write=True)
+
+        with np.nditer(arr, op_flags=["readwrite"], flags=["refs_ok"]) as it:
+            for x in it:
+                xval = str(x.item())
+                xhex = cipher_encode_string(xval)
+                x[...] = xhex
+
+        return pd.Series(arr, index=X.index, name=X.name)
+
+    # Everything else -> numpy ndarray
+    # np.array(..., copy=True) guarantees new memory; dtype=object allows string assignment.
+    arr = np.array(X, dtype=object, copy=True)
+    arr.setflags(write=True)
+
+    with np.nditer(arr, op_flags=["readwrite"], flags=["refs_ok"]) as it:
+        for x in it:
+            xval = str(x.item())
+            xhex = cipher_encode_string(xval)
+            x[...] = xhex
+
+    return arr
+
 
 def cipher_encode_string(a):
 

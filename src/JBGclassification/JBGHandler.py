@@ -17,6 +17,7 @@ import pandas as pd
 from lexicalrichness import LexicalRichness
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
+from sklearn.impute import SimpleImputer
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, make_scorer, f1_score
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split, GridSearchCV, ParameterGrid)
@@ -634,6 +635,23 @@ class DatasetHandler:
         
         self.handler.logger.print_key_value_pair("Data rows with known class label", self.X.shape[0])
         self.handler.logger.print_key_value_pair("Data rows with unknown class label", num_un_pred)
+
+        # --- Drop columns that are globally all-NaN (before split) ---
+        all_nan_cols = self.X.columns[self.X.isna().all()]
+
+        if len(all_nan_cols) > 0:
+            drop_cols = list(all_nan_cols)
+            self.handler.logger.print_warning(
+                f"Dropping globally all-NaN columns before split: {drop_cols}"
+            )
+
+            # Drop from training+validation base matrix
+            self.X = self.X.drop(columns=drop_cols)
+
+            # Keep prediction matrix consistent (if present)
+            if self.X_prediction is not None:
+                self.X_prediction = self.X_prediction.drop(columns=drop_cols, errors="ignore")
+    
         # Original training+validation data are stored for later reference
         self.X_original = self.X.copy(deep=True)
         self.Y_original = self.Y.copy(deep=True)
@@ -940,6 +958,19 @@ class ModelHandler:
         return Model()
 
     def train_model(self, dh: DatasetHandler, cross_validation_filepath: str) -> None:
+        
+        # --- Extra säkerhetsbälte: NaN-kontroll före pipeline/SMOTE ---
+        try:
+            X_np = dh.X_train.to_numpy(dtype=float, copy=False)
+            if np.isnan(X_np).any():
+                self.handler.logger.print_warning(
+                    "Notice! NaN detected in training data before pipeline construction. "
+                    "This can break oversampling and/or undersampling if not handled by an imputer."
+                )
+        except Exception:
+            # Om dtype=float misslyckas (objektkolumner), gör inget – bara undvik krasch
+            pass
+        # ------------------------------------------------------------
         try:
             self.model = self.get_model_from(dh, cross_validation_filepath)
         except ModelException as ex:
@@ -1142,9 +1173,9 @@ class ModelHandler:
 
         while True:
             if self.handler.config.debug:
-                self.handler.logger.print_info(
-                    f"Starting {func.__name__} with n_jobs={n_jobs} (desired={n_jobs_desired}, max_cores={max_cores}, backend={backend_desired})"
-                )
+                #self.handler.logger.print_info(
+                #    f"Starting {func.__name__} with n_jobs={n_jobs} (desired={n_jobs_desired}, max_cores={max_cores}, backend={backend_desired})"
+                #)
                 start_time = time.time()
             try:
                 with parallel_backend(backend_desired):
@@ -1168,7 +1199,8 @@ class ModelHandler:
             else:
                 end_time = time.time()
                 if self.handler.config.debug:
-                    self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
+                    #self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
+                    pass
                 break
 
         return result
@@ -1478,6 +1510,11 @@ class ModelHandler:
             # Finally, put oversampling and undersampling techniques before everything else
             steps.insert(0, (oversampler.name, oversampler.get_callable_oversampler()))
             steps.insert(1, (undersampler.name, undersampler.get_callable_undersampler()))
+
+            # The oversampling or undersampling techniques may require some imputation of NaN values
+            if oversampler or undersampler:
+                imputer = SimpleImputer(strategy="constant", fill_value=0, keep_empty_features=True) 
+                steps.insert(0, ("IMP", imputer))
             
             # Check that all steps in pipeline implements "fit"
             steps = [step for step in steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] 
