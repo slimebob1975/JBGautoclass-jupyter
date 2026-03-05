@@ -54,7 +54,7 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from Types import Detecter, Estimator, Transform
 
-PCA_VARIANCE_EXPLAINED = 0.999
+PCA_VARIANCE_EXPLAINED = 0.95
 LOWER_LIMIT_REDUCTION = 100
 NON_LINEAR_REDUCTION_COMPONENTS = 2
 
@@ -903,15 +903,18 @@ class Reduction(MetaEnum):
         return RFE(estimator=LinearSVC(), n_features_to_select=num_selected_features)
     
     def get_PCA(self, num_samples: int, num_features: int, num_selected_features: int = None):
-        if num_selected_features is not None:
-            components = num_selected_features
-        elif num_samples >= num_features:
-            components = 'mle'
-        else:
-            components = None
-            #components = PCA_VARIANCE_EXPLAINED
         
-        return PCA(n_components=components)
+        def choose_n_components(n_samples: int, 
+                                n_features: int, 
+                                n_components: int, 
+                                variance_target: float = PCA_VARIANCE_EXPLAINED):
+            
+            if n_components is not None:
+                return int(n_components)
+            
+            return float(variance_target)
+        
+        return PCA(n_components=choose_n_components(num_samples, num_features, num_selected_features))
     
     def do_PCA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
 

@@ -1,2 +1,13 @@
 ;Preprocessor;Feature Reduction;Algorithm (Library);Components;Mean cv;Stdev.;Test data;Elapsed Time;Exception
-0;STA;PCA;MLP2 - Multi Layered Peceptron Light (Scikit Learn);4;0,9972222222222221;0,008333333333333304;1,0;7,059556245803833;
+0;MAX;NOR;MLP2 - Multi Layered Peceptron Light (Scikit Learn);4;1,0;0,0;1,0;5,6418633460998535;
+1;MIX;PCA;MLP2 - Multi Layered Peceptron Light (Scikit Learn);4;0,9961805555555555;0,011458333333333293;1,0;0,45282936096191406;
+2;STA;PCA;MLP2 - Multi Layered Peceptron Light (Scikit Learn);4;0,9961805555555555;0,011458333333333293;1,0;0,4194035530090332;
+3;MAX;PCA;MLP2 - Multi Layered Peceptron Light (Scikit Learn);4;0,9944444444444445;0,016666666666666642;1,0;0,41605186462402344;
+4;MIX;NOR;MLP2 - Multi Layered Peceptron Light (Scikit Learn);4;1,0;0,0;0,9958847736625515;0,410449743270874;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
+5;STA;NOR;MLP2 - Multi Layered Peceptron Light (Scikit Learn);4;0,9972222222222221;0,008333333333333304;0,9958847736625515;0,40174174308776855;
+6;MAX;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;6,862233638763428;
+7;MAX;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;4,687255620956421;
+8;MIX;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,05811190605163574;
+9;MIX;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,07411456108093262;
+10;STA;NOR;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,08315730094909668;
+11;STA;PCA;DUMY - Dummy Classifier (Scikit Learn);4;0,5;0,0;0,5;0,07265877723693848;

@@ -144,6 +144,7 @@ class EventHandler:
         """
         self.widgets.update_class_summary()
         self.widgets.update_id_column() # Event.name "options"
+        self.widgets.update_data_columns()
 
     def id_column(self, change: Bunch) -> None:
         """ Handler for id_column
