@@ -865,6 +865,19 @@ class Model:
         
 
 @dataclass
+class _SpotCheckState:
+    best_num_components: int
+    best_rfe_feature_selection: int
+    best_cv_score: float = 0.0
+    best_stdev: float = 1.0
+    best_test_score: float = 0.0
+    trained_pipeline: Pipeline = None
+    best_algorithm: Algorithm = None
+    best_preprocessor: Preprocess = None
+    best_reduction: Reduction = None
+
+
+@dataclass
 class ModelHandler:
     handler: JBGHandler
     model: Model = field(init=False)
@@ -1260,232 +1273,246 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
-    def spot_check_machine_learning_models(self, dh: DatasetHandler,  cross_validation_filepath: str, k: int=10) -> Model:
-        
-        # Save standard progress text
-        standardProgressText = "Check and train algorithms for best model"
-        self.handler.logger.print_info("Spot-checking ML algorithms")
-        
-        # Prepare a list of feature reduction transforms to loop over
-        reductions = self.handler.config.get_callable_reductions(*dh.X.shape)
-        
-        # Prepare list of algorithms to loop over
-        algorithms = self.handler.config.get_callable_algorithms(
-            size=dh.X.shape[0], 
-            max_iterations=self.handler.config.get_max_iterations()
+    def _create_spot_check_kfold(self, k: int) -> StratifiedKFold:
+        try:
+            return StratifiedKFold(n_splits=k, random_state=1, shuffle=True)
+        except Exception as ex:
+            self.handler.logger.print_dragon(exception=ex)
+            raise ModelException(f"StratifiedKfold raised an exception with message: {ex}")
+
+    @staticmethod
+    def _format_algorithm_name(algorithm: Algorithm) -> str:
+        return f"{algorithm.name} - {algorithm.full_name} ({algorithm.lib.full_name})"
+
+    def _build_spot_check_result(self, preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
+                                 components: int, cv_score: float, cv_stdev: float, test_score: float,
+                                 elapsed_time: float, failure: str) -> list:
+        return [
+            preprocessor.name,
+            reduction.name,
+            self._format_algorithm_name(algorithm),
+            components,
+            cv_score,
+            cv_stdev,
+            test_score,
+            elapsed_time,
+            failure,
+        ]
+
+    def _evaluate_spot_check_candidate(self, dh: DatasetHandler, preprocessor: Preprocess,
+                                       preprocessor_callable: Transform, reduction: Reduction,
+                                       reduction_callable: Transform, algorithm: Algorithm,
+                                       algorithm_callable: Estimator, oversampler: Oversampling,
+                                       undersampler: Undersampling, kfold: StratifiedKFold,
+                                       state: _SpotCheckState) -> tuple[list[list], bool]:
+        skip_reason = self.get_preflight_skip_reason(
+            preprocessor, preprocessor_callable, reduction, algorithm, dh.X_train
         )
+        if skip_reason:
+            failure = f"SKIPPED: {skip_reason}"
+            self.handler.logger.print_info(
+                f"SKIPPED {preprocessor.name}-{reduction.name}-{algorithm.name}: {skip_reason}"
+            )
+            return [self._build_spot_check_result(
+                preprocessor=preprocessor,
+                reduction=reduction,
+                algorithm=algorithm,
+                components=dh.X_train.shape[1],
+                cv_score=np.nan,
+                cv_stdev=np.nan,
+                test_score=np.nan,
+                elapsed_time=0.0,
+                failure=failure,
+            )], False
 
-        # Prepare list of preprocessors
+        max_features_selection = dh.X.shape[1]
+        min_features_selection = 0 if reduction == Reduction.RFE else max_features_selection
+        num_components = max_features_selection
+        rfe_score = 0.0
+        num_features = max_features_selection
+        first_feature_selection = True
+        candidate_results = []
+        candidate_success = False
+
+        while first_feature_selection or min_features_selection < max_features_selection:
+            if not first_feature_selection:
+                num_features = ceil((min_features_selection + max_features_selection) / 2)
+                if num_features == max_features_selection:
+                    break
+            else:
+                first_feature_selection = False
+                num_features = max_features_selection
+
+            t0 = time.time()
+
+            try:
+                current_pipeline, cv_results, failure = self.create_pipeline_and_cv(
+                    reduction, algorithm, preprocessor, reduction_callable, algorithm_callable,
+                    preprocessor_callable, oversampler, undersampler, kfold, dh, num_features
+                )
+
+                if dh.X_validation is not None and dh.Y_validation is not None:
+                    current_pipeline, tmp_test_score, failure = \
+                        self.train_and_evaluate_picked_model(current_pipeline, dh)
+                else:
+                    tmp_test_score = 0.0
+
+                num_components = self.get_components_from_pipeline(
+                    reduction, current_pipeline, num_features
+                )
+            except ModelException as ex:
+                self.handler.logger.print_warning(f"ModelException: {str(ex)}")
+                break
+            except Exception as ex:
+                self.handler.logger.print_warning(f"Exception: {str(ex)}")
+
+            elapsed_time = time.time() - t0
+            temp_cv_score = cv_results.mean()
+            temp_cv_stdev = cv_results.std()
+
+            if temp_cv_score >= rfe_score:
+                rfe_score = temp_cv_score
+                max_features_selection = num_features
+            else:
+                min_features_selection = num_features
+
+            try:
+                if self.is_best_run_yet(
+                    temp_cv_score, temp_cv_stdev, state.best_cv_score, state.best_stdev,
+                    tmp_test_score, state.best_test_score
+                ):
+                    state.trained_pipeline = current_pipeline
+                    state.best_reduction = reduction
+                    state.best_algorithm = algorithm
+                    state.best_preprocessor = preprocessor
+                    state.best_cv_score = temp_cv_score
+                    state.best_stdev = temp_cv_stdev
+                    state.best_test_score = tmp_test_score
+                    state.best_rfe_feature_selection = num_features
+                    state.best_num_components = num_components
+            except UnstableModelException as ex:
+                if not failure:
+                    failure = f"{','.join(ex.args)}"
+            else:
+                candidate_success = True
+
+            candidate_results.append(self._build_spot_check_result(
+                preprocessor=preprocessor,
+                reduction=reduction,
+                algorithm=algorithm,
+                components=min(num_components, num_features),
+                cv_score=temp_cv_score,
+                cv_stdev=temp_cv_stdev,
+                test_score=tmp_test_score,
+                elapsed_time=elapsed_time,
+                failure=failure,
+            ))
+
+        return candidate_results, candidate_success
+
+    def _apply_spot_check_state(self, state: _SpotCheckState, feature_selection: Reduction) -> Model:
+        updates = {
+            "feature_selection": feature_selection,
+            "algorithm": state.best_algorithm,
+            "preprocessor": state.best_preprocessor,
+            "num_selected_features": state.best_rfe_feature_selection,
+        }
+        self.handler.config.update_attributes(type="mode", updates=updates)
+
+        best_model = self.model
+        best_model.preprocess = state.best_preprocessor
+        best_model.reduction = state.best_reduction
+        best_model.algorithm = state.best_algorithm
+        best_model.pipeline = state.trained_pipeline
+        best_model.n_features_out = state.best_num_components
+        return best_model
+
+    # Spot Check Algorithms.
+    # We do an extensive search of the best algorithm in comparison with the best
+    # preprocessing.
+    def spot_check_machine_learning_models(self, dh: DatasetHandler, cross_validation_filepath: str, k: int = 10) -> Model:
+        standard_progress_text = "Check and train algorithms for best model"
+        self.handler.logger.print_info("Spot-checking ML algorithms")
+
+        reductions = self.handler.config.get_callable_reductions(*dh.X.shape)
+        algorithms = self.handler.config.get_callable_algorithms(
+            size=dh.X.shape[0],
+            max_iterations=self.handler.config.get_max_iterations(),
+        )
         preprocessors = self.handler.config.get_callable_preprocessors()
-
-        # Prepare over- and undersampling methods
         oversampler = self.handler.config.mode.oversampler
         undersampler = self.handler.config.mode.undersampler
 
-        # Prepare some guidance
         progress_key = "training_model"
         number_of_tries = len(algorithms) * len(reductions) * len(preprocessors)
-        
         self.handler.logger.start_inline_progress(
-            progress_key, 
-            "Checking & Training models", 
-            number_of_tries, 
-            "Percent models checked")
-        
-        # Evaluate each model in turn in combination with all reduction and preprocessing methods
-        best_cv_score = 0.0
-        best_stdev = 1.0
-        best_test_score = 0.0
-        trained_pipeline = None
-        best_algorithm = None
-        best_preprocessor = None
-        best_reduction = None
-        best_num_components = dh.X_train.shape[1]
-        
-        # Store evaluation results in a list of lists
-        listOfResults = []
-        
-        # Make evaluation of model
-        try:
-            kfold = StratifiedKFold(n_splits=k, random_state=1, shuffle=True)
-        except Exception as e:
-            self.handler.logger.print_dragon(exception=e)
-            raise ModelException(f"StratifiedKfold raised an exception with message: {e}")
-        
-        # Due to the stochastic nature of the algorithms, make sure we do some repetitions until successful cross validation training
+            progress_key,
+            "Checking & Training models",
+            number_of_tries,
+            "Percent models checked",
+        )
+
+        state = _SpotCheckState(
+            best_num_components=dh.X_train.shape[1],
+            best_rfe_feature_selection=dh.X_train.shape[1],
+        )
+        list_of_results = []
+        kfold = self._create_spot_check_kfold(k)
+
         success = False
         repetitions = 0
         while repetitions < self.SPOT_CHECK_REPETITIONS and not success:
             if repetitions > 0:
                 self.handler.logger.reset_inline_progress(progress_key)
                 self.handler.logger.print_warning("All algorithms failed. Restarting spot check.")
-            
+
             repetitions += 1
-            tries = -1 # Starting on negative number with ensure the first update will give 0 percent progress
-        
-            # Loop over pre-processing methods
+            tries = -1
+
             for preprocessor, preprocessor_callable in preprocessors:
-                
-                # Loop over feature reduction transforms
                 for reduction, reduction_callable in reductions:
+                    # Preserve the existing configuration behavior for each reduction round.
+                    state.best_rfe_feature_selection = dh.X.shape[1]
+                    first_rfe_round = reduction == Reduction.RFE
 
-                    # For RFE only
-                    best_rfe_feature_selection = dh.X.shape[1]
-                    first_rfe_round = True if reduction == Reduction.RFE else False
-
-                    # Loop over the algorithms
                     for algorithm, algorithm_callable in algorithms:
-                        
-                        # Keep track so we can update the progress bar correctly
-                        tries += 1        
-                        
-                        # Some combinations of REF and algorithms are error prone and should be skipped
+                        tries += 1
                         if not self.should_run_computation(reduction, algorithm):
                             continue
 
-                        # Divide data in training and test parts according to settings X -> X_train, X_validation etc...
                         dh.split_dataset_for_training_and_validation()
-                        
-                        # Update progressbar percent and label
-                        self.handler.logger.print_progress(message=f"{standardProgressText} ({preprocessor.name}-{reduction.name}-{algorithm.name})")
+                        self.handler.logger.print_progress(
+                            message=f"{standard_progress_text} ({preprocessor.name}-{reduction.name}-{algorithm.name})"
+                        )
                         if not first_rfe_round:
-                            self.handler.logger.update_inline_progress(progress_key, tries, "Percent models checked")
+                            self.handler.logger.update_inline_progress(
+                                progress_key, tries, "Percent models checked"
+                            )
                         else:
                             first_rfe_round = False
 
-                        # Avoid expensive and noisy training when preprocessing has removed all signal.
-                        skip_reason = self.get_preflight_skip_reason(
-                            preprocessor, preprocessor_callable, reduction, algorithm, dh.X_train
+                        candidate_results, candidate_success = self._evaluate_spot_check_candidate(
+                            dh=dh,
+                            preprocessor=preprocessor,
+                            preprocessor_callable=preprocessor_callable,
+                            reduction=reduction,
+                            reduction_callable=reduction_callable,
+                            algorithm=algorithm,
+                            algorithm_callable=algorithm_callable,
+                            oversampler=oversampler,
+                            undersampler=undersampler,
+                            kfold=kfold,
+                            state=state,
                         )
-                        if skip_reason:
-                            failure = f"SKIPPED: {skip_reason}"
-                            self.handler.logger.print_info(
-                                f"SKIPPED {preprocessor.name}-{reduction.name}-{algorithm.name}: {skip_reason}"
-                            )
-                            listOfResults.append([
-                                preprocessor.name,
-                                reduction.name,
-                                str(algorithm.name) + " - " + str(algorithm.full_name) + " (" + str(algorithm.lib.full_name) + ")",
-                                dh.X_train.shape[1],
-                                np.nan,
-                                np.nan,
-                                np.nan,
-                                0.0,
-                                failure])
-                            continue
+                        list_of_results.extend(candidate_results)
+                        if candidate_success:
+                            success = True
 
-                        # Add RFE feature selection if selected, i.e., the option of reducing the number of variables recursively.
-                        # With RFE, we make a binary search for the optimal number of features.
-                        max_features_selection = dh.X.shape[1]
-                        min_features_selection = 0 if reduction == Reduction.RFE else max_features_selection
-                        num_components = max_features_selection
-                        
-                        # Loop over feature selections span: break this loop when min and max reach the same value
-                        rfe_score = 0.0                                             # Save the best values so far.
-                        num_features = max_features_selection                       # Start with all features.
-                        first_feature_selection = True                              # Make special first round: use all features
-                        
-                        while first_feature_selection or min_features_selection < max_features_selection:
-                            
-                            # Update limits for binary search, and end loop if needed
-                            if not first_feature_selection:
-                                num_features = ceil((min_features_selection+max_features_selection) / 2)
-                                if num_features == max_features_selection:          
-                                    break
-                            else:
-                                first_feature_selection = False
-                                num_features = max_features_selection
+        best_model = self._apply_spot_check_state(state, feature_selection=reduction)
 
-                            # Calculate the time for this setting
-                            t0 = time.time()
-                            
-                            try:
-                                # Create pipeline and cross validate
-                                current_pipeline, cv_results, failure = \
-                                    self.create_pipeline_and_cv(reduction, algorithm, preprocessor, reduction_callable, \
-                                        algorithm_callable, preprocessor_callable, oversampler, undersampler, \
-                                            kfold, dh, num_features)
-                                
-                                # Train and evaluate on test data
-                                if dh.X_validation is not None and dh.Y_validation is not None:
-                                    current_pipeline, tmp_test_score, failure = \
-                                        self.train_and_evaluate_picked_model(current_pipeline, dh)
-                                else:
-                                    tmp_test_score = 0.0
-
-                                # Get used number of features after reduction (components)
-                                num_components = self.get_components_from_pipeline(reduction, current_pipeline, num_features)
-                            except ModelException as ex:
-                                # If any exceptions happen, continue to next step in the loop
-                                self.handler.logger.print_warning(f"ModelException: {str(ex)}")
-                                break
-                            except Exception as ex:
-                                self.handler.logger.print_warning(f"Exception: {str(ex)}")
-
-                            # Stop the stopwatch
-                            t = time.time() - t0
-
-                            # For current settings, calculate score
-                            temp_cv_score = cv_results.mean()
-                            temp_cv_stdev = cv_results.std()
-
-                            # Evaluate if feature selection changed accuracy or not. 
-                            # Notice: Better or same score with less variables are both seen as an improvement,
-                            # since the chance of finding an improvement increases when number of variables decrease
-                            if  temp_cv_score >= rfe_score:
-                                rfe_score = temp_cv_score
-                                max_features_selection = num_features   # We need to reduce more features
-                            else:
-                                min_features_selection = num_features   # We have reduced too much already  
-
-                            # Save result if it is the overall best (inside RFE-while)
-                            # Notice the difference from above, here we demand a better score.
-                            try:
-                                if self.is_best_run_yet(temp_cv_score, temp_cv_stdev, best_cv_score, best_stdev, \
-                                                        tmp_test_score, best_test_score):
-                                    trained_pipeline = current_pipeline
-                                    best_reduction = reduction
-                                    best_algorithm = algorithm
-                                    best_preprocessor = preprocessor
-                                    best_cv_score = temp_cv_score
-                                    best_stdev = temp_cv_stdev
-                                    best_test_score = tmp_test_score
-                                    best_rfe_feature_selection = num_features
-                                    best_num_components = num_components
-                            except UnstableModelException as ex:
-                                if not failure:
-                                    failure = f"{','.join(ex.args)}"
-                            else:
-                                success = True
-
-                            listOfResults.append([ 
-                                preprocessor.name,
-                                reduction.name,
-                                str(algorithm.name) + " - " + str(algorithm.full_name) + " (" + str(algorithm.lib.full_name) + ")",
-                                min(num_components, num_features),
-                                temp_cv_score,
-                                temp_cv_stdev,
-                                tmp_test_score,
-                                t,
-                                failure])
-                    
-        updates = {"feature_selection": reduction, "algorithm": best_algorithm, \
-            "preprocessor" : best_preprocessor, "num_selected_features": best_rfe_feature_selection}
-        self.handler.config.update_attributes(type="mode", updates=updates)
-        
-        best_model = self.model
-        best_model.preprocess = best_preprocessor
-        best_model.reduction = best_reduction
-        best_model.algorithm = best_algorithm
-        best_model.pipeline = trained_pipeline
-        best_model.n_features_out = best_num_components
-        
-        # Prepare and print a pandas Dataframe for storing test evaluation results
         self.handler.logger.clear_last_printed_result_line()
-        self.handler.logger.print_test_performance(listOfResults, cross_validation_filepath)
-        
+        self.handler.logger.print_test_performance(list_of_results, cross_validation_filepath)
         self.handler.logger.end_inline_progress(progress_key)
-        # Return best model for start making predictions
         return best_model
 
     def calculate_current_features(self, current_score: float, best_score: float, num_features: int, max_features: int, min_features: int):

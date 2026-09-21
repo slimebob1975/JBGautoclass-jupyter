@@ -7,6 +7,7 @@ from conftest import get_fixture_path
 from JBGExceptions import DatasetException, HandlerException
 
 from JBGHandler import JBGHandler, DatasetHandler, Model
+from JBGMeta import Algorithm, Preprocess, Reduction
 
 # One class per class in the module
 class TestHandler():
@@ -519,6 +520,38 @@ class TestModelHandler():
         )
 
         assert reason is None
+
+    def test_spot_check_result_schema(self, default_model_handler):
+        result = default_model_handler._build_spot_check_result(
+            preprocessor=Preprocess.NOS,
+            reduction=Reduction.NOR,
+            algorithm=Algorithm.DUMY,
+            components=4,
+            cv_score=0.8,
+            cv_stdev=0.1,
+            test_score=0.75,
+            elapsed_time=1.25,
+            failure="",
+        )
+
+        assert result == [
+            Preprocess.NOS.name,
+            Reduction.NOR.name,
+            f"{Algorithm.DUMY.name} - {Algorithm.DUMY.full_name} ({Algorithm.DUMY.lib.full_name})",
+            4,
+            0.8,
+            0.1,
+            0.75,
+            1.25,
+            "",
+        ]
+
+    def test_spot_check_kfold_configuration(self, default_model_handler):
+        kfold = default_model_handler._create_spot_check_kfold(7)
+
+        assert kfold.n_splits == 7
+        assert kfold.shuffle is True
+        assert kfold.random_state == 1
 
     # Series of functions calling each other
     # train_model calls get_model_from
