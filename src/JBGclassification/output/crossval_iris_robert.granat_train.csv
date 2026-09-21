@@ -1,6 +1,0 @@
-;Preprocessor;Feature Reduction;Algorithm (Library);Components;Mean cv;Stdev.;Test data;Elapsed Time;Exception
-0;NOS;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9629629629629629;6,603388786315918;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
-1;NOS;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9629629629629629;5,325184106826782;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
-2;NOS;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9629629629629629;4,699870824813843;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
-3;NOS;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9629629629629629;0,06108903884887695;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev
-4;NOS;NOR;LDA - Linear Discriminant Analysis (Scikit Learn);4;1,0;0,0;0,9629629629629629;0,0350346565246582;UnstableModelException: Performance metric difference for cross evaluation and final test exceeds 2*stdev

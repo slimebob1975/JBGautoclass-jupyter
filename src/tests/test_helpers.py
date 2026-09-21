@@ -1,6 +1,8 @@
 from decimal import Decimal
 from datetime import datetime
 
+import pandas
+
 import Helpers
 
 # Since this is a series of functions, seems fitting to not put the tests into a class
@@ -164,3 +166,11 @@ def test_get_datetime():
 
     # Testdata for Validation
     # airline_tweets_mini, breast_cancer, creditcard_fraud, stroke_data och stars är alla vettiga testset
+
+def test_save_matrix_as_csv_creates_parent_directory(tmp_path):
+    matrix = pandas.DataFrame({"value": [1, 2]})
+    filepath = tmp_path / "output" / "csvs" / "result.csv"
+
+    Helpers.save_matrix_as_csv(matrix, filepath)
+
+    assert filepath.is_file()

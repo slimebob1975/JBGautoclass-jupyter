@@ -41,7 +41,7 @@ from pickle import PicklingError
 import inspect
 
 GIVE_EXCEPTION_TRACEBACK = False
-DEBUG = True
+DARK_NUMBER_DEBUG_LOGGING = False
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -2276,7 +2276,7 @@ class PredictionsHandler:
         corrs = {}
         mh = self.handler.get_handler("model")
         for label in labels:
-            if DEBUG:
+            if DARK_NUMBER_DEBUG_LOGGING:
                 self.handler.logger.print_info(f"[DEBUG] Considering label: {label} among labels: {labels} for corr_estimator")
             try:
                 n_splits, n_repeats = self._auto_n_splits_and_repeats(
@@ -2286,7 +2286,7 @@ class PredictionsHandler:
                     max_multiplier=3
                 )
                 total_jobs = min(n_splits * n_repeats, psutil.cpu_count(logical=True), self.handler.STANDARD_DESIRED_N_JOBS)
-                if DEBUG:
+                if DARK_NUMBER_DEBUG_LOGGING:
                     self.handler.logger.print_info(f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator")
                 try:
                     corr_estimator = DarkNumberCorrectionFactorEstimator(
@@ -2321,7 +2321,7 @@ class PredictionsHandler:
                     )
                     mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS) 
                     corrs[label] = corr_regressor.score()
-                    if DEBUG:
+                    if DARK_NUMBER_DEBUG_LOGGING:
                         self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_} with result {corrs[label]}")
             except Exception as ex:
                 self.handler.logger.print_warning(f"Correction number calculation for label {label} failed. Using 1.0 as fallback. Reason: {str(ex)}")

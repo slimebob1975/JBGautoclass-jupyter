@@ -5,7 +5,7 @@ from joblib import Parallel, delayed
 from pickle import PicklingError
 from JBGLogger import JBGLogger
 
-DEBUG = True
+DEBUG_LOGGING = False
 BACKEND_PROCESSES = "processes"
 BACKEND_THREADS = "threads"
 
@@ -110,9 +110,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         n_samples = X.shape[0]
         effective_size = min(n_samples, int(n_samples * self.sample_size))
         if effective_size < min_sample_needed:
-            if DEBUG:
-                self.logger.print_info(f"[Warning] Sample size {self.sample_size} gives effective size {effective_size}, "
-                      f"less than required {min_sample_needed}. Skipping.")
+            self.logger.print_info(f"[Warning] Sample size {self.sample_size} gives effective size {effective_size}, "
+                  f"less than required {min_sample_needed}. Skipping.")
             self.correction_factor_ = 1.0
             return self
 
@@ -123,7 +122,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                 stratify=y,
                 random_state=self.random_state
             )
-            if DEBUG:
+            if DEBUG_LOGGING:
                 self.logger.print_info(f"[DEBUG] Subsampled to {len(X_sub)} rows (sample_size={self.sample_size}).")
         else:
             X_sub, y_sub = X, y
@@ -152,7 +151,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         else:
             mean_r = np.mean(results)
             self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
-            if DEBUG:
+            if DEBUG_LOGGING:
                 self.logger.print_info(f"[DEBUG] Correction factor: {self.correction_factor_} from results {results}")
 
             return self
@@ -163,7 +162,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         """
         while True:
             try:
-                if DEBUG:
+                if DEBUG_LOGGING:
                     self.logger.print_info(f"[DEBUG] Running Parallel with backend={self.parallel_backend}, n_jobs={self.n_jobs}")
                 return Parallel(
                     n_jobs=self.n_jobs,
@@ -174,27 +173,26 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                 )(tasks)
 
             except (SystemError, MemoryError, PicklingError) as e:
-                if DEBUG:
+                if DEBUG_LOGGING:
                     self.logger.print_info(f"[DEBUG] Parallel failed with {type(e).__name__}: {e}.")
                 if self.n_jobs and self.n_jobs > 1:
                     self.n_jobs = max(1, self.n_jobs // 2)
-                    if DEBUG:
+                    if DEBUG_LOGGING:
                         self.logger.print_info(f"[DEBUG] Retrying with n_jobs={self.n_jobs}")
                 else:
                     raise
             except (AttributeError, TypeError) as e:
-                if DEBUG:
-                    self.logger.print_info(f"[WARNING] Pickling/backend error: {e}")
+                self.logger.print_info(f"[WARNING] Pickling/backend error: {e}")
                 if self.parallel_backend == BACKEND_PROCESSES:
                     self.parallel_backend = BACKEND_THREADS
-                    if DEBUG:
+                    if DEBUG_LOGGING:
                         self.logger.print_info(f"[DEBUG] Switching backend to threads and retrying. Reason: {str(e)}")
                 else:
                     raise
             except NaNValueError as e:
                 if self.parallel_backend == BACKEND_THREADS:
                     self.parallel_backend = BACKEND_PROCESSES
-                    if DEBUG:
+                    if DEBUG_LOGGING:
                         self.logger.print_info(f"[DEBUG] Switching backend to processes and retrying. Reason: {str(e)}")
                 else:
                     raise

@@ -12,6 +12,8 @@ import argparse
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 from JBGLogger import JBGLogger
 
+DEBUG_LOGGING = False
+
 class DarkNumberCorrectionFactorRegressor(BaseEstimator):
     def __init__(
         self,
@@ -91,7 +93,7 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
     def _fit_sample_size_block(self, X, y, sample_sizes):
         results = []
         for s in sample_sizes:
-            if self.logger:
+            if self.logger and DEBUG_LOGGING:
                 self.logger.print_info(f"[DEBUG] Running estimator for sample size {s} with n_jobs={self.n_jobs}")
             estimator = DarkNumberCorrectionFactorEstimator(
                 estimator=clone(self.estimator),

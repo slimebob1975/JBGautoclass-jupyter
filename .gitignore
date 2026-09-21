@@ -4,6 +4,7 @@ __pycache__
 autoclassconfig_*.py
 src/*/config/test_*.py
 src/*/output/*.csv
+src/*/output/csvs/
 src/*/output/nn_checkpoints/*
 src/*/model/*
 .env

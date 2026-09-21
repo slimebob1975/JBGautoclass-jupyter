@@ -556,13 +556,12 @@ class Config:
         return f"{type_dict['prefix']}{shared_parts}.{type_dict['suffix']}"
 
     def get_output_filepath(self, type: str, pwd: Path = None) -> str:
-        """ Simplifies the path/names of output files """
+        """ Simplifies the path/names of generated CSV output files. """
         if pwd is None:
             pwd = self.script_path
-        
 
-        output_path = pwd / Path("output")
-        
+        output_path = pwd / Path("output") / Path("csvs")
+
         return output_path / Path(self.get_filename(type))
     
     @property

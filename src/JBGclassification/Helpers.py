@@ -52,7 +52,8 @@ def recreate_dir(dir: str) -> None:
 
 
 def save_matrix_as_csv(matrix: pandas.DataFrame, filepath: str, index_label: str = None) -> None:
-    """ Unifies any matrices saved to CSV """
+    """ Unifies any matrices saved to CSV. """
+    Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     matrix.to_csv(
         path_or_buf = filepath,
         sep = ';',

@@ -322,3 +322,10 @@ class TestConfig:
 
 
 
+
+    def test_output_csv_files_are_grouped_in_csvs_directory(self, valid_iris_config, tmp_path):
+        for output_type in ("cross_validation", "misplaced", "dark_numbers", "dark_numb_conf_matrix"):
+            output_filepath = valid_iris_config.get_output_filepath(output_type, pwd=tmp_path)
+
+            assert output_filepath.parent == tmp_path / "output" / "csvs"
+            assert output_filepath.suffix == ".csv"
