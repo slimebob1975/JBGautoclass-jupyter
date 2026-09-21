@@ -14,7 +14,8 @@ def main(model_name: str):
         "N_Features"
     ]
     try:
-        unpacked = dill.load(open(filename, 'rb'))
+        with open(filename, 'rb') as infile:
+            unpacked = dill.load(infile)
     except Exception as e:
         print(f"Something went wrong on loading model: {e}")
     

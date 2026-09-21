@@ -716,7 +716,8 @@ class Config:
     @classmethod
     def load_config_from_model_file(cls: Type[T], filename: str, config: T = None) -> T:
         try:
-            file_values = dill.load(open(filename, 'rb'))
+            with open(filename, 'rb') as infile:
+                file_values = dill.load(infile)
             saved_config = file_values[0]
         except Exception as e:
             raise ConfigException(f"Something went wrong on loading model from file: {e}")

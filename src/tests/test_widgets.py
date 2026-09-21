@@ -57,10 +57,12 @@ def loaded_widgets(widgets) -> Widgets:
 
 @pytest.fixture
 def widget_parameters() -> dict:
-    logo = open(get_logo_path(), "rb")
+    with open(get_logo_path(), "rb") as logo:
+        logo_data = logo.read()
+
     return {
         "logo": {
-            "value": logo.read(),
+            "value": logo_data,
             "format": "png"
         },
         "welcome": {
@@ -71,7 +73,7 @@ def widget_parameters() -> dict:
                 "value": "default",
                 "placeholder": "Project name",
                 "description": "Project name:",
-                "description_tooltip": "Enter a distinct project name for the model"
+                "tooltip": "Enter a distinct project name for the model"
             }
         },
         "data_catalogs_dropdown": {
@@ -80,14 +82,14 @@ def widget_parameters() -> dict:
                 "value": "N/A",
                 "disabled": True,
                 "description": "Catalogs:",
-                "description_tooltip": "These are the catalogs of choice"
+                "tooltip": "These are the catalogs of choice"
             },
             "post__load": {
                 "options": ("catalog", "catalog2", "catalog3"),
                 "value": "catalog",
                 "disabled": False,
                 "description": "Catalogs:",
-                "description_tooltip": "These are the catalogs of choice"
+                "tooltip": "These are the catalogs of choice"
             }
         },
         "data_tables_dropdown": {
@@ -96,7 +98,7 @@ def widget_parameters() -> dict:
                 "value": "N/A",
                 "disabled": True,
                 "description": "Tables:",
-                "description_tooltip": "These are the tables of choice"
+                "tooltip": "These are the tables of choice"
             }
         },
         "models_dropdown": {
@@ -105,14 +107,14 @@ def widget_parameters() -> dict:
                 "value": "N/A",
                 "description": "Models:",
                 "disabled": True,
-                "description_tooltip": "You can train a new model or use a previously trained one"
+                "tooltip": "You can train a new model or use a previously trained one"
             },
             "post__load": {
                 "options": ("config-save.sav", "model-save.sav"),
                 "value": "config-save.sav",
                 "description": "Models:",
                 "disabled": True,
-                "description_tooltip": "You can train a new model or use a previously trained one"
+                "tooltip": "You can train a new model or use a previously trained one"
             }
         },
         "class_column": {
@@ -121,7 +123,7 @@ def widget_parameters() -> dict:
                 "value": "N/A",
                 "disabled": True,
                 "description": "Class:",
-                "description_tooltip": "Pick the column to use as class label"
+                "tooltip": "Pick the column to use as class label"
             }
         },
         "id_column": {
@@ -130,7 +132,7 @@ def widget_parameters() -> dict:
                 "value": "N/A",
                 "disabled": True,
                 "description": "Unique id:",
-                "description_tooltip": "Pick the column to use as unique identifier"
+                "tooltip": "Pick the column to use as unique identifier"
             }
         },
         "data_columns": {
@@ -139,7 +141,7 @@ def widget_parameters() -> dict:
                 "value": (),
                 "disabled": True,
                 "description": "Data columns:",
-                "description_tooltip": "Pick the columns with the data to be used in the classification"
+                "tooltip": "Pick the columns with the data to be used in the classification"
             }
         },
         "text_columns": {
@@ -148,7 +150,7 @@ def widget_parameters() -> dict:
                 "value": (),
                 "disabled": True,
                 "description": "Is text:",
-                "description_tooltip": "Mark the data columns to be interpreted as text (some are marked by default from their SQL datatype)"
+                "tooltip": "Mark the data columns to be interpreted as text (some are marked by default from their SQL datatype)"
             }
         },
         "class_summary": {
@@ -169,7 +171,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Mode: Train",
-                "description_tooltip": "A new model will be trained"
+                "tooltip": "A new model will be trained"
             }
         },
         "predict_checkbox": {
@@ -178,7 +180,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Mode: Predict",
-                "description_tooltip": "The model of choice will be used to make predictions"
+                "tooltip": "The model of choice will be used to make predictions"
             }
         },
         "mispredicted_checkbox": {
@@ -187,7 +189,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Mode: Display mispredictions",
-                "description_tooltip": "The classifier will display mispredicted training data for manual inspection and correction"
+                "tooltip": "The classifier will display mispredicted training data for manual inspection and correction"
             }
         },
         "algorithm_dropdown": {
@@ -195,7 +197,7 @@ def widget_parameters() -> dict:
                 "value": ("DUMY",),
                 "description": "Algorithm:",
                 "disabled": True,
-                "description_tooltip": "Pick which algorithms to use"
+                "tooltip": "Pick which algorithms to use"
             },
         },
         "preprocess_dropdown": {
@@ -203,7 +205,7 @@ def widget_parameters() -> dict:
                 "value": ("NOS",),
                 "description": "Preprocess:",
                 "disabled": True,
-                "description_tooltip": "Pick which data preprocessors to use"
+                "tooltip": "Pick which data preprocessors to use"
             },
         },
         "scoremetric_dropdown": {
@@ -211,7 +213,7 @@ def widget_parameters() -> dict:
                 "value": "accuracy",
                 "description": "Score metric:",
                 "disabled": True,
-                "description_tooltip": "Pick by which method algorithm performances are measured and compared"
+                "tooltip": "Pick by which method algorithm performances are measured and compared"
             },
         },
         "reduction_dropdown": {
@@ -219,7 +221,7 @@ def widget_parameters() -> dict:
                 "value": ("NOR",),
                 "description": "Reduction:",
                 "disabled": True,
-                "description_tooltip": "Pick by which methods the number of features (variables) are reduced"
+                "tooltip": "Pick by which methods the number of features (variables) are reduced"
             },
         },
         "oversampler_checkbox": {
@@ -228,7 +230,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "oversampler",
-                "description_tooltip": "Use oversampler (synthetic minority oversampling technique) for training data"
+                "tooltip": "Use oversampler (synthetic minority oversampling technique) for training data"
             }
         },
         "undersample_checkbox": {
@@ -237,7 +239,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Undersampling",
-                "description_tooltip": "Use undersampling of majority training data"
+                "tooltip": "Use undersampling of majority training data"
             }
         },
         "testdata_slider": {
@@ -252,7 +254,7 @@ def widget_parameters() -> dict:
                 "readout": True,
                 "readout_format": "d",
                 "description": "Testdata (%):",
-                "description_tooltip": "Set how large evaluation size of training data will be"
+                "tooltip": "Set how large evaluation size of training data will be"
             }
         },
         "iterations_slider": {
@@ -267,7 +269,7 @@ def widget_parameters() -> dict:
                 "readout": True,
                 "readout_format": "d",
                 "description": "Max.iter:",
-                "description_tooltip": "Set how many iterations to use at most"
+                "tooltip": "Set how many iterations to use at most"
             }
         },
         "encryption_checkbox": {
@@ -276,7 +278,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Text: Encryption",
-                "description_tooltip": "Use encryption on text"
+                "tooltip": "Use encryption on text"
             }
         },
         "categorize_checkbox": {
@@ -285,7 +287,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Text: Categorize",
-                "description_tooltip": "Use categorization on text"
+                "tooltip": "Use categorization on text"
             }
         },
         "categorize_columns": {
@@ -294,7 +296,7 @@ def widget_parameters() -> dict:
                 "value": (),
                 "disabled": True,
                 "description": "Categorize:",
-                "description_tooltip": "Mark text columns to force them to be categorized (text columns with up to 30 distinct values will be if checkbox is checked)"
+                "tooltip": "Mark text columns to force them to be categorized (text columns with up to 30 distinct values will be if checkbox is checked)"
             }
         },
         "filter_checkbox": {
@@ -303,7 +305,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Text: Filter",
-                "description_tooltip": "Use Better Tooltip"
+                "tooltip": "Use Better Tooltip"
             }
         },
         "ngram_range": {
@@ -318,7 +320,7 @@ def widget_parameters() -> dict:
                 "readout": True,
                 "readout_format": "d",
                 "description": "Doc.freq. (%):",
-                "description_tooltip": "Set document frequency limit for filtering of stop words"
+                "tooltip": "Set document frequency limit for filtering of stop words"
             }
         },
         "data_limit": {
@@ -326,7 +328,7 @@ def widget_parameters() -> dict:
                 "value": 0,
                 "disabled": True,
                 "description": "Data limit:",
-                "description_tooltip": "During debugging or testing, limiting the number of data rows can be beneficial"
+                "tooltip": "During debugging or testing, limiting the number of data rows can be beneficial"
             }
         },
         "show_info_checkbox": {
@@ -335,7 +337,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Show info",
-                "description_tooltip": "Show detailed printout in output"
+                "tooltip": "Show detailed printout in output"
             }
         },
         "num_variables": {
@@ -343,7 +345,7 @@ def widget_parameters() -> dict:
                 "value": 0,
                 "disabled": True,
                 "description": "Variables:",
-                "description_tooltip": "The number of variables used is shown in this box"
+                "tooltip": "The number of variables used is shown in this box"
             }
         },
         "start_button": {
@@ -363,7 +365,7 @@ def widget_parameters() -> dict:
                 "description": "Progress:",
                 "bar_style": "info",
                 "orientation": "horizontal",
-                "description_tooltip": "The computational process is shown here"
+                "tooltip": "The computational process is shown here"
             }
         },
         "progress_label": {
@@ -377,7 +379,7 @@ def widget_parameters() -> dict:
         "mispredicted_gridbox": {
             "type": "GridBox",
             "params": {
-                "description_tooltip": "Mispredicted elements will be editable here if there are any"
+                "tooltip": "Mispredicted elements will be editable here if there are any"
 
             },
             "layout": {
@@ -426,7 +428,7 @@ class TestWidgets:
         assert project.value == widget_parameters["project"]["pre__load"]["value"]
         assert project.placeholder == widget_parameters["project"]["pre__load"]["placeholder"]
         assert project.description == widget_parameters["project"]["pre__load"]["description"]
-        assert project.description_tooltip == widget_parameters["project"]["pre__load"]["description_tooltip"]
+        assert project.tooltip == widget_parameters["project"]["pre__load"]["tooltip"]
 
         # Data Catalogs, Dropdown
         data_catalogs_dropdown = widgets.data_catalogs_dropdown
@@ -435,7 +437,7 @@ class TestWidgets:
         assert data_catalogs_dropdown.value == widget_parameters["data_catalogs_dropdown"]["pre__load"]["value"]
         assert data_catalogs_dropdown.disabled == widget_parameters["data_catalogs_dropdown"]["pre__load"]["disabled"]
         assert data_catalogs_dropdown.description == widget_parameters["data_catalogs_dropdown"]["pre__load"]["description"]
-        assert data_catalogs_dropdown.description_tooltip == widget_parameters["data_catalogs_dropdown"]["pre__load"]["description_tooltip"]
+        assert data_catalogs_dropdown.tooltip == widget_parameters["data_catalogs_dropdown"]["pre__load"]["tooltip"]
         
         # Data Tables, Dropdown
         data_tables_dropdown = widgets.data_tables_dropdown
@@ -444,7 +446,7 @@ class TestWidgets:
         assert data_tables_dropdown.value == widget_parameters["data_tables_dropdown"]["pre__load"]["value"]
         assert data_tables_dropdown.disabled == widget_parameters["data_tables_dropdown"]["pre__load"]["disabled"]
         assert data_tables_dropdown.description == widget_parameters["data_tables_dropdown"]["pre__load"]["description"]
-        assert data_tables_dropdown.description_tooltip == widget_parameters["data_tables_dropdown"]["pre__load"]["description_tooltip"]
+        assert data_tables_dropdown.tooltip == widget_parameters["data_tables_dropdown"]["pre__load"]["tooltip"]
 
         # Models, Dropdown
         models_dropdown = widgets.models_dropdown
@@ -453,7 +455,7 @@ class TestWidgets:
         assert models_dropdown.value == widget_parameters["models_dropdown"]["pre__load"]["value"]
         assert models_dropdown.disabled == widget_parameters["models_dropdown"]["pre__load"]["disabled"]
         assert models_dropdown.description == widget_parameters["models_dropdown"]["pre__load"]["description"]
-        assert models_dropdown.description_tooltip == widget_parameters["models_dropdown"]["pre__load"]["description_tooltip"]
+        assert models_dropdown.tooltip == widget_parameters["models_dropdown"]["pre__load"]["tooltip"]
         
         # Class column, RadioButton
         class_column = widgets.class_column
@@ -462,7 +464,7 @@ class TestWidgets:
         assert class_column.value == widget_parameters["class_column"]["pre__load"]["value"]
         assert class_column.disabled == widget_parameters["class_column"]["pre__load"]["disabled"]
         assert class_column.description == widget_parameters["class_column"]["pre__load"]["description"]
-        assert class_column.description_tooltip == widget_parameters["class_column"]["pre__load"]["description_tooltip"]
+        assert class_column.tooltip == widget_parameters["class_column"]["pre__load"]["tooltip"]
         
         # ID column, RadioButton
         id_column = widgets.id_column
@@ -471,7 +473,7 @@ class TestWidgets:
         assert id_column.value == widget_parameters["id_column"]["pre__load"]["value"]
         assert id_column.disabled == widget_parameters["id_column"]["pre__load"]["disabled"]
         assert id_column.description == widget_parameters["id_column"]["pre__load"]["description"]
-        assert id_column.description_tooltip == widget_parameters["id_column"]["pre__load"]["description_tooltip"]
+        assert id_column.tooltip == widget_parameters["id_column"]["pre__load"]["tooltip"]
         
         # Data Columns, SelectMultiple
         data_columns = widgets.data_columns
@@ -480,7 +482,7 @@ class TestWidgets:
         assert data_columns.value == widget_parameters["data_columns"]["pre__load"]["value"]
         assert data_columns.disabled == widget_parameters["data_columns"]["pre__load"]["disabled"]
         assert data_columns.description == widget_parameters["data_columns"]["pre__load"]["description"]
-        assert data_columns.description_tooltip == widget_parameters["data_columns"]["pre__load"]["description_tooltip"]
+        assert data_columns.tooltip == widget_parameters["data_columns"]["pre__load"]["tooltip"]
         
         # Text Columns, SelectMultiple
         text_columns = widgets.text_columns
@@ -489,7 +491,7 @@ class TestWidgets:
         assert text_columns.value == widget_parameters["text_columns"]["pre__load"]["value"]
         assert text_columns.disabled == widget_parameters["text_columns"]["pre__load"]["disabled"]
         assert text_columns.description == widget_parameters["text_columns"]["pre__load"]["description"]
-        assert text_columns.description_tooltip == widget_parameters["text_columns"]["pre__load"]["description_tooltip"]
+        assert text_columns.tooltip == widget_parameters["text_columns"]["pre__load"]["tooltip"]
         
         # class summary, html
         class_summary = widgets.class_summary
@@ -512,7 +514,7 @@ class TestWidgets:
         assert train_checkbox.disabled == widget_parameters["train_checkbox"]["pre__load"]["disabled"]
         assert train_checkbox.indent == widget_parameters["train_checkbox"]["pre__load"]["indent"]
         assert train_checkbox.description == widget_parameters["train_checkbox"]["pre__load"]["description"]
-        assert train_checkbox.description_tooltip == widget_parameters["train_checkbox"]["pre__load"]["description_tooltip"]
+        assert train_checkbox.tooltip == widget_parameters["train_checkbox"]["pre__load"]["tooltip"]
        
         # Predict Checkbox
         predict_checkbox = widgets.predict_checkbox
@@ -521,7 +523,7 @@ class TestWidgets:
         assert predict_checkbox.disabled == widget_parameters["predict_checkbox"]["pre__load"]["disabled"]
         assert predict_checkbox.indent == widget_parameters["predict_checkbox"]["pre__load"]["indent"]
         assert predict_checkbox.description == widget_parameters["predict_checkbox"]["pre__load"]["description"]
-        assert predict_checkbox.description_tooltip == widget_parameters["predict_checkbox"]["pre__load"]["description_tooltip"]
+        assert predict_checkbox.tooltip == widget_parameters["predict_checkbox"]["pre__load"]["tooltip"]
        
         # Mispredicted Checkbox
         mispredicted_checkbox = widgets.mispredicted_checkbox
@@ -530,7 +532,7 @@ class TestWidgets:
         assert mispredicted_checkbox.disabled == widget_parameters["mispredicted_checkbox"]["pre__load"]["disabled"]
         assert mispredicted_checkbox.indent == widget_parameters["mispredicted_checkbox"]["pre__load"]["indent"]
         assert mispredicted_checkbox.description == widget_parameters["mispredicted_checkbox"]["pre__load"]["description"]
-        assert mispredicted_checkbox.description_tooltip == widget_parameters["mispredicted_checkbox"]["pre__load"]["description_tooltip"]
+        assert mispredicted_checkbox.tooltip == widget_parameters["mispredicted_checkbox"]["pre__load"]["tooltip"]
        
         # Algorithm, SelectMultiple
         algorithm_dropdown = widgets.algorithm_dropdown
@@ -539,7 +541,7 @@ class TestWidgets:
         assert algorithm_dropdown.value == widget_parameters["algorithm_dropdown"]["pre__load"]["value"]
         assert algorithm_dropdown.disabled == widget_parameters["algorithm_dropdown"]["pre__load"]["disabled"]
         assert algorithm_dropdown.description == widget_parameters["algorithm_dropdown"]["pre__load"]["description"]
-        assert algorithm_dropdown.description_tooltip == widget_parameters["algorithm_dropdown"]["pre__load"]["description_tooltip"]
+        assert algorithm_dropdown.tooltip == widget_parameters["algorithm_dropdown"]["pre__load"]["tooltip"]
         
         # Preprocess, SelectMultiple
         preprocess_dropdown = widgets.preprocess_dropdown
@@ -548,7 +550,7 @@ class TestWidgets:
         assert preprocess_dropdown.value == widget_parameters["preprocess_dropdown"]["pre__load"]["value"]
         assert preprocess_dropdown.disabled == widget_parameters["preprocess_dropdown"]["pre__load"]["disabled"]
         assert preprocess_dropdown.description == widget_parameters["preprocess_dropdown"]["pre__load"]["description"]
-        assert preprocess_dropdown.description_tooltip == widget_parameters["preprocess_dropdown"]["pre__load"]["description_tooltip"]
+        assert preprocess_dropdown.tooltip == widget_parameters["preprocess_dropdown"]["pre__load"]["tooltip"]
         
         # Score Metric, Dropdown
         scoremetric_dropdown = widgets.scoremetric_dropdown
@@ -557,7 +559,7 @@ class TestWidgets:
         assert scoremetric_dropdown.value == widget_parameters["scoremetric_dropdown"]["pre__load"]["value"]
         assert scoremetric_dropdown.disabled == widget_parameters["scoremetric_dropdown"]["pre__load"]["disabled"]
         assert scoremetric_dropdown.description == widget_parameters["scoremetric_dropdown"]["pre__load"]["description"]
-        assert scoremetric_dropdown.description_tooltip == widget_parameters["scoremetric_dropdown"]["pre__load"]["description_tooltip"]
+        assert scoremetric_dropdown.tooltip == widget_parameters["scoremetric_dropdown"]["pre__load"]["tooltip"]
         
         # Reduction, SelectMultiple
         reduction_dropdown = widgets.reduction_dropdown
@@ -566,7 +568,7 @@ class TestWidgets:
         assert reduction_dropdown.value == widget_parameters["reduction_dropdown"]["pre__load"]["value"]
         assert reduction_dropdown.disabled == widget_parameters["reduction_dropdown"]["pre__load"]["disabled"]
         assert reduction_dropdown.description == widget_parameters["reduction_dropdown"]["pre__load"]["description"]
-        assert reduction_dropdown.description_tooltip == widget_parameters["reduction_dropdown"]["pre__load"]["description_tooltip"]
+        assert reduction_dropdown.tooltip == widget_parameters["reduction_dropdown"]["pre__load"]["tooltip"]
 
         # oversampler Checkbox
         oversampler_checkbox = widgets.oversampler_checkbox
@@ -575,7 +577,7 @@ class TestWidgets:
         assert oversampler_checkbox.disabled == widget_parameters["oversampler_checkbox"]["pre__load"]["disabled"]
         assert oversampler_checkbox.indent == widget_parameters["oversampler_checkbox"]["pre__load"]["indent"]
         assert oversampler_checkbox.description == widget_parameters["oversampler_checkbox"]["pre__load"]["description"]
-        assert oversampler_checkbox.description_tooltip == widget_parameters["oversampler_checkbox"]["pre__load"]["description_tooltip"]
+        assert oversampler_checkbox.tooltip == widget_parameters["oversampler_checkbox"]["pre__load"]["tooltip"]
        
 
         # undersampler Checkbox
@@ -585,7 +587,7 @@ class TestWidgets:
         assert undersample_checkbox.disabled == widget_parameters["undersample_checkbox"]["pre__load"]["disabled"]
         assert undersample_checkbox.indent == widget_parameters["undersample_checkbox"]["pre__load"]["indent"]
         assert undersample_checkbox.description == widget_parameters["undersample_checkbox"]["pre__load"]["description"]
-        assert undersample_checkbox.description_tooltip == widget_parameters["undersample_checkbox"]["pre__load"]["description_tooltip"]
+        assert undersample_checkbox.tooltip == widget_parameters["undersample_checkbox"]["pre__load"]["tooltip"]
         
         # Testdata Slider
         testdata_slider = widgets.testdata_slider
@@ -600,7 +602,7 @@ class TestWidgets:
         assert testdata_slider.readout == widget_parameters["testdata_slider"]["pre__load"]["readout"]
         assert testdata_slider.readout_format == widget_parameters["testdata_slider"]["pre__load"]["readout_format"]
         assert testdata_slider.description == widget_parameters["testdata_slider"]["pre__load"]["description"]
-        assert testdata_slider.description_tooltip == widget_parameters["testdata_slider"]["pre__load"]["description_tooltip"]
+        assert testdata_slider.tooltip == widget_parameters["testdata_slider"]["pre__load"]["tooltip"]
        
         # Iterations Slider
         iterations_slider = widgets.iterations_slider
@@ -615,7 +617,7 @@ class TestWidgets:
         assert iterations_slider.readout == widget_parameters["iterations_slider"]["pre__load"]["readout"]
         assert iterations_slider.readout_format == widget_parameters["iterations_slider"]["pre__load"]["readout_format"]
         assert iterations_slider.description == widget_parameters["iterations_slider"]["pre__load"]["description"]
-        assert iterations_slider.description_tooltip == widget_parameters["iterations_slider"]["pre__load"]["description_tooltip"]
+        assert iterations_slider.tooltip == widget_parameters["iterations_slider"]["pre__load"]["tooltip"]
        
         # Encryption Checkbox
         encryption_checkbox = widgets.encryption_checkbox
@@ -624,7 +626,7 @@ class TestWidgets:
         assert encryption_checkbox.disabled == widget_parameters["encryption_checkbox"]["pre__load"]["disabled"]
         assert encryption_checkbox.indent == widget_parameters["encryption_checkbox"]["pre__load"]["indent"]
         assert encryption_checkbox.description == widget_parameters["encryption_checkbox"]["pre__load"]["description"]
-        assert encryption_checkbox.description_tooltip == widget_parameters["encryption_checkbox"]["pre__load"]["description_tooltip"]
+        assert encryption_checkbox.tooltip == widget_parameters["encryption_checkbox"]["pre__load"]["tooltip"]
        
         # Categorize Checkbox
         categorize_checkbox = widgets.categorize_checkbox
@@ -633,7 +635,7 @@ class TestWidgets:
         assert categorize_checkbox.disabled == widget_parameters["categorize_checkbox"]["pre__load"]["disabled"]
         assert categorize_checkbox.indent == widget_parameters["categorize_checkbox"]["pre__load"]["indent"]
         assert categorize_checkbox.description == widget_parameters["categorize_checkbox"]["pre__load"]["description"]
-        assert categorize_checkbox.description_tooltip == widget_parameters["categorize_checkbox"]["pre__load"]["description_tooltip"]
+        assert categorize_checkbox.tooltip == widget_parameters["categorize_checkbox"]["pre__load"]["tooltip"]
 
         # Categorize Columns, SelectMultiple
         categorize_columns = widgets.categorize_columns
@@ -642,7 +644,7 @@ class TestWidgets:
         assert categorize_columns.value == widget_parameters["categorize_columns"]["pre__load"]["value"]
         assert categorize_columns.disabled == widget_parameters["categorize_columns"]["pre__load"]["disabled"]
         assert categorize_columns.description == widget_parameters["categorize_columns"]["pre__load"]["description"]
-        assert categorize_columns.description_tooltip == widget_parameters["categorize_columns"]["pre__load"]["description_tooltip"]
+        assert categorize_columns.tooltip == widget_parameters["categorize_columns"]["pre__load"]["tooltip"]
         
         # Filter Checkbox
         filter_checkbox = widgets.filter_checkbox
@@ -651,7 +653,7 @@ class TestWidgets:
         assert filter_checkbox.disabled == widget_parameters["filter_checkbox"]["pre__load"]["disabled"]
         assert filter_checkbox.indent == widget_parameters["filter_checkbox"]["pre__load"]["indent"]
         assert filter_checkbox.description == widget_parameters["filter_checkbox"]["pre__load"]["description"]
-        assert filter_checkbox.description_tooltip == widget_parameters["filter_checkbox"]["pre__load"]["description_tooltip"]
+        assert filter_checkbox.tooltip == widget_parameters["filter_checkbox"]["pre__load"]["tooltip"]
 
         # Filter Slider
         ngram_range = widgets.ngram_range
@@ -666,7 +668,7 @@ class TestWidgets:
         assert ngram_range.readout == widget_parameters["ngram_range"]["pre__load"]["readout"]
         assert ngram_range.readout_format == widget_parameters["ngram_range"]["pre__load"]["readout_format"]
         assert ngram_range.description == widget_parameters["ngram_range"]["pre__load"]["description"]
-        assert ngram_range.description_tooltip == widget_parameters["ngram_range"]["pre__load"]["description_tooltip"]
+        assert ngram_range.tooltip == widget_parameters["ngram_range"]["pre__load"]["tooltip"]
        
         # Num Rows IntText
         data_limit = widgets.data_limit
@@ -674,7 +676,7 @@ class TestWidgets:
         assert data_limit.value == widget_parameters["data_limit"]["pre__load"]["value"]
         assert data_limit.disabled == widget_parameters["data_limit"]["pre__load"]["disabled"]
         assert data_limit.description == widget_parameters["data_limit"]["pre__load"]["description"]
-        assert data_limit.description_tooltip == widget_parameters["data_limit"]["pre__load"]["description_tooltip"]
+        assert data_limit.tooltip == widget_parameters["data_limit"]["pre__load"]["tooltip"]
 
         # Show Info Checkbox
         show_info_checkbox = widgets.show_info_checkbox
@@ -683,7 +685,7 @@ class TestWidgets:
         assert show_info_checkbox.disabled == widget_parameters["show_info_checkbox"]["pre__load"]["disabled"]
         assert show_info_checkbox.indent == widget_parameters["show_info_checkbox"]["pre__load"]["indent"]
         assert show_info_checkbox.description == widget_parameters["show_info_checkbox"]["pre__load"]["description"]
-        assert show_info_checkbox.description_tooltip == widget_parameters["show_info_checkbox"]["pre__load"]["description_tooltip"]
+        assert show_info_checkbox.tooltip == widget_parameters["show_info_checkbox"]["pre__load"]["tooltip"]
 
         # Num Variables IntText
         num_variables = widgets.num_variables
@@ -691,7 +693,7 @@ class TestWidgets:
         assert num_variables.value == widget_parameters["num_variables"]["pre__load"]["value"]
         assert num_variables.disabled == widget_parameters["num_variables"]["pre__load"]["disabled"]
         assert num_variables.description == widget_parameters["num_variables"]["pre__load"]["description"]
-        assert num_variables.description_tooltip == widget_parameters["num_variables"]["pre__load"]["description_tooltip"]
+        assert num_variables.tooltip == widget_parameters["num_variables"]["pre__load"]["tooltip"]
 
         # Start Button
         start_button = widgets.start_button
@@ -711,7 +713,7 @@ class TestWidgets:
         assert progress_bar.bar_style == widget_parameters["progress_bar"]["pre__load"]["bar_style"]
         assert progress_bar.orientation == widget_parameters["progress_bar"]["pre__load"]["orientation"]
         assert progress_bar.description == widget_parameters["progress_bar"]["pre__load"]["description"]
-        assert progress_bar.description_tooltip == widget_parameters["progress_bar"]["pre__load"]["description_tooltip"]
+        assert progress_bar.tooltip == widget_parameters["progress_bar"]["pre__load"]["tooltip"]
         
         # Progress Label, HTML
         progress_label = widgets.progress_label

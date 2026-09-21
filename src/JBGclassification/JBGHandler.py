@@ -350,7 +350,7 @@ class DatasetHandler:
         
         # Make sure the class column is a categorical variable by setting it as string
         try:
-            dataset.astype({class_column: 'str'}, copy=False)
+            dataset.astype({class_column: 'str'})
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
@@ -384,7 +384,7 @@ class DatasetHandler:
         dataset = pd.DataFrame(data, columns=column_names)
 
         try:
-            dataset.astype({class_column: 'str'}, copy=False)
+            dataset.astype({class_column: 'str'})
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
@@ -509,7 +509,7 @@ class DatasetHandler:
             
         
         try:
-            dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True, verify_integrity=False)
+            dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True)
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not set index for dataset: {e}")
@@ -608,7 +608,7 @@ class DatasetHandler:
     def concat_with_index(self, X: pd.DataFrame, concat: pd.DataFrame, index: pd.Int64Index) -> pd.DataFrame:
         """ The try/except ensures that the dataframe added has the right number of rows """
         try:
-            concat.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+            concat.set_index(index, drop=False, append=False, inplace=True)
         except ValueError:
             return X
         
@@ -900,8 +900,9 @@ class ModelHandler:
         # Load model from file, but handle Keras models differently since their algorithm was
         # replaced by a path to model training information
         try:
-            config, text_converter, (oversampler, undersampler, preprocess, reduction, algorithm), pipeline, \
-                keras_name, n_features = dill.load(open(filename, 'rb'))
+            with open(filename, 'rb') as infile:
+                config, text_converter, (oversampler, undersampler, preprocess, reduction, algorithm), pipeline, \
+                    keras_name, n_features = dill.load(infile)
                         
             # Handle Keras models differently
             if (keras_name is not None):
@@ -1086,9 +1087,9 @@ class ModelHandler:
                 error_score='raise',
                 n_jobs_desired=n_jobs_desired)
             try:
-                search.fit(X.to_numpy(), Y.to_numpy())
-            except TypeError:
                 search.fit(X, Y)
+            except TypeError:
+                search.fit(X.to_numpy(), Y.to_numpy())
             except Exception as e:
                 self.handler.logger.print_dragon(exception=e)
                 raise ModelException(f"Something went wrong on grid search training of picked model: {str(e)}")                
@@ -1614,7 +1615,8 @@ class ModelHandler:
                 ]   
                 
                 # Save the data minus the KERAS model
-                dill.dump(data, open(filename,'wb'))
+                with open(filename, 'wb') as outfile:
+                    dill.dump(data, outfile)
 
                 # Save the KERAS model separately
                 self.model.pipeline.steps[-1][-1].model_.save(str(filename) + "." + keras_name)
@@ -1632,7 +1634,8 @@ class ModelHandler:
                 ]   
                 
                 # Save the data
-                dill.dump(data, open(filename,'wb'))
+                with open(filename, 'wb') as outfile:
+                    dill.dump(data, outfile)
 
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on saving {self.model.algorithm.lib.get_full_name()} model to file: {e}")

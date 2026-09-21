@@ -29,39 +29,43 @@ class GUIHandler:
     # Constructor
     def __init__(self):
 
-        settings = None
-        settings_file = os.path.join(os.getcwd(), "settings.json")
-        if os.path.isfile(settings_file):
-            with open(settings_file) as f:
-                settings = json.load(f)
+        # Start persistent logging before constructing the GUI so startup warnings
+        # and direct stdout/stderr output are captured as well.
+        self.logger = JBGLogger(False) # Quiet is set to false here
 
-        self.widgets = Widgets(src_path=Path(src_dir), GUIhandler=self, settings=settings)
-        
-        # This datalayer object is the one working with the classifier data
-        self.classifier_datalayer = None
+        with self.logger.capture_console_output():
+            settings = None
+            settings_file = os.path.join(os.getcwd(), "settings.json")
+            if os.path.isfile(settings_file):
+                with open(settings_file) as f:
+                    settings = json.load(f)
 
-        # This datalayer object only works with the GUI
-        self.gui_datalayer = None 
-        
-        self.logger = JBGLogger(False, self.widgets.progress) # Quiet is set to false here
-        
-        config = Config(
-            connection=Config.Connection(
-            odbc_driver=os.environ.get("DEFAULT_ODBC_DRIVER"),
-            host=os.environ.get("DEFAULT_HOST"),
-            class_catalog=os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
-            class_table=os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
-            data_catalog=os.environ.get("DEFAULT_DATA_CATALOG"),
-            data_table=os.environ.get("DEFAULT_DATA_TABLE"),
-            sql_username="",
-            sql_password="",
-            trusted_connection=False
+            self.widgets = Widgets(src_path=Path(src_dir), GUIhandler=self, settings=settings)
+            self.logger.set_progress_widgets(self.widgets.progress)
+
+            # This datalayer object is the one working with the classifier data
+            self.classifier_datalayer = None
+
+            # This datalayer object only works with the GUI
+            self.gui_datalayer = None
+
+            config = Config(
+                connection=Config.Connection(
+                odbc_driver=os.environ.get("DEFAULT_ODBC_DRIVER"),
+                host=os.environ.get("DEFAULT_HOST"),
+                class_catalog=os.environ.get("DEFAULT_CLASSIFICATION_CATALOG"),
+                class_table=os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
+                data_catalog=os.environ.get("DEFAULT_DATA_CATALOG"),
+                data_table=os.environ.get("DEFAULT_DATA_TABLE"),
+                sql_username="",
+                sql_password="",
+                trusted_connection=False
+                )
             )
-        )
-        self.gui_datalayer = DataLayer(config=config, logger=self.logger)
-        
-        self.widgets.load_contents()
-        
+            self.gui_datalayer = DataLayer(config=config, logger=self.logger)
+
+            self.widgets.load_contents()
+
     @property
     def datalayer(self) -> DataLayer:
         """ This returns the GUI datalayer """
@@ -77,6 +81,7 @@ class GUIHandler:
     def get_class_distribution(self, data_settings: dict, current_class: str) -> dict:
         """ Widgets does not need to know about Classifier Datalayer """
         datalayer = self.get_classifier_datalayer(data_settings=data_settings)
+        distribution = {}
         try:
             distribution = datalayer.count_class_distribution()
         except DataLayerException as e:
@@ -135,16 +140,16 @@ class GUIHandler:
         self.get_classifier_datalayer(config_params = config_params)
 
         self.logger.set_enable_quiet(not config_params["io"].verbose)
-        the_classifier = autoclass(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
         
         result = {"mispredicted": None} # Fullösning för nu
-        with output:
+        with output, self.logger.capture_console_output():
+            the_classifier = autoclass(config=self.classifier_datalayer.get_config(), logger=self.logger, datalayer=self.classifier_datalayer)
             result = the_classifier.run()
             if not result:
                 self.logger.print_info("No data was fetched from database!")
             
         
-        if result["mispredicted"] is not None:
+        if result and result["mispredicted"] is not None:
             self.widgets.handle_mispredicted(**result)    
         
         self.widgets.set_rerun()

@@ -21,7 +21,7 @@
                 "value": "default",
                 "placeholder": "Project name",
                 "description": "Project:",
-                "description_tooltip": "Enter a distinct project name for the model"
+                "tooltip": "Enter a distinct project name for the model"
             }
         },
         "sql_username": {
@@ -31,7 +31,7 @@
                 "disabled": false,
                 "placeholder": "Enter username",
                 "description": "SQL user:",
-                "description_tooltip": "Enter your SQL username for logging into the database",
+                "tooltip": "Enter your SQL username for logging into the database",
                 "continuous_update": false
             }
         },
@@ -42,7 +42,7 @@
                 "disabled": false,
                 "placeholder": "Enter password",
                 "description": "Password:",
-                "description_tooltip": "Enter your SQL password for login to the database",
+                "tooltip": "Enter your SQL password for login to the database",
                 "continuous_update": false
             }
         },
@@ -53,7 +53,7 @@
                 "value": "N/A",
                 "disabled": true,
                 "description": "Catalogs:",
-                "description_tooltip": "These are the catalogs of choice"
+                "tooltip": "These are the catalogs of choice"
             }
         },
         "data_tables_dropdown": {
@@ -63,7 +63,7 @@
                 "value": "N/A",
                 "disabled": true,
                 "description": "Tables:",
-                "description_tooltip": "These are the tables of choice"
+                "tooltip": "These are the tables of choice"
             }
         },
         "models_dropdown": {
@@ -73,7 +73,7 @@
                 "value": "N/A",
                 "description": "Models:",
                 "disabled": true,
-                "description_tooltip": "You can train a new model or use a previously trained one"
+                "tooltip": "You can train a new model or use a previously trained one"
             }
         },
         "class_column": {
@@ -83,7 +83,7 @@
                 "value": "N/A",
                 "disabled": true,
                 "description": "Class:",
-                "description_tooltip": "Pick the column to use as class label"
+                "tooltip": "Pick the column to use as class label"
             }
         },
         "id_column": {
@@ -93,7 +93,7 @@
                 "value": "N/A",
                 "disabled": true,
                 "description": "Unique id:",
-                "description_tooltip": "Pick the column to use as unique identifier"
+                "tooltip": "Pick the column to use as unique identifier"
             }
         },
         "data_columns": {
@@ -103,7 +103,7 @@
                 "value": [],
                 "disabled": true,
                 "description": "Data:",
-                "description_tooltip": "Pick the columns with the data to be used in the classification"
+                "tooltip": "Pick the columns with the data to be used in the classification"
             }
         },
         "text_columns": {
@@ -112,7 +112,7 @@
                 "options": ["N/A"],
                 "disabled": true,
                 "description": "Is text:",
-                "description_tooltip": "Mark the data columns to be interpreted as text (some are marked by default from their SQL datatype)"
+                "tooltip": "Mark the data columns to be interpreted as text (some are marked by default from their SQL datatype)"
             }
         },
         "class_summary": {
@@ -138,7 +138,7 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Mode: Train",
-                "description_tooltip": "A new model will be trained"
+                "tooltip": "A new model will be trained"
             }
         },
         "predict_checkbox": {
@@ -148,7 +148,7 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Mode: Predict",
-                "description_tooltip": "The model of choice will be used to make predictions"
+                "tooltip": "The model of choice will be used to make predictions"
             }
         },
         "mispredicted_checkbox": {
@@ -158,7 +158,7 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Mode: Display mispredictions",
-                "description_tooltip": "The classifier will display mispredicted training data for manual inspection and correction"
+                "tooltip": "The classifier will display mispredicted training data for manual inspection and correction"
             }
         },
         "metas_checkbox": {
@@ -168,7 +168,7 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Mode: Pass on meta data",
-                "description_tooltip": "The classifier will pass on non-selected data columns as meta information when making new predictions"
+                "tooltip": "The classifier will pass on non-selected data columns as meta information when making new predictions"
             }
         },
         "algorithm_dropdown": {
@@ -177,7 +177,7 @@
                 "value": ["DUMY"],
                 "description": "Algorithm:",
                 "disabled": true,
-                "description_tooltip": "Pick which algorithms to use"
+                "tooltip": "Pick which algorithms to use"
             }
         },
         "preprocess_dropdown": {
@@ -186,7 +186,7 @@
                 "value": ["NOS"],
                 "description": "Preprocess:",
                 "disabled": true,
-                "description_tooltip": "Pick which data preprocessors to use"
+                "tooltip": "Pick which data preprocessors to use"
             }
         },
         "scoremetric_dropdown": {
@@ -195,7 +195,7 @@
                 "value": "accuracy",
                 "description": "Score metric:",
                 "disabled": true,
-                "description_tooltip": "Pick by which method algorithm performances are measured and compared"
+                "tooltip": "Pick by which method algorithm performances are measured and compared"
             }
         },
         "reduction_dropdown": {
@@ -204,7 +204,7 @@
                 "value": ["NOR"],
                 "description": "Reduction:",
                 "disabled": true,
-                "description_tooltip": "Pick by which methods the number of features (variables) are reduced"
+                "tooltip": "Pick by which methods the number of features (variables) are reduced"
             }
         },
         "oversampler_dropdown": {
@@ -213,7 +213,7 @@
                 "value": "NOG",
                 "disabled": true,
                 "description": "Oversampler:",
-                "description_tooltip": "Use oversampling techniques for training data"
+                "tooltip": "Use oversampling techniques for training data"
             }
         },
         "undersampler_dropdown": {
@@ -222,7 +222,7 @@
                 "value": "NUG",
                 "disabled": true,
                 "description": "Undersampl.:",
-                "description_tooltip": "Use undersampling techniques for training data"
+                "tooltip": "Use undersampling techniques for training data"
             }
         },
         "testdata_slider": {
@@ -238,7 +238,7 @@
                 "readout": true,
                 "readout_format": "d",
                 "description": "Testdata (%):",
-                "description_tooltip": "Set how large evaluation size of training data will be"
+                "tooltip": "Set how large evaluation size of training data will be"
             }
         },
         "iterations_slider": {
@@ -254,7 +254,7 @@
                 "readout": true,
                 "readout_format": "d",
                 "description": "Max.iter:",
-                "description_tooltip": "Set how many iterations to use at most"
+                "tooltip": "Set how many iterations to use at most"
             }
         },
         "encryption_checkbox": {
@@ -264,7 +264,7 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Text: Encryption",
-                "description_tooltip": "Use encryption on text"
+                "tooltip": "Use encryption on text"
             }
         },
         "categorize_checkbox": {
@@ -274,7 +274,7 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Text: Categorize",
-                "description_tooltip": "Use categorization on text"
+                "tooltip": "Use categorization on text"
             }
         },
         "categorize_columns": {
@@ -284,7 +284,7 @@
                 "value": [],
                 "disabled": true,
                 "description": "Categorize:",
-                "description_tooltip": "Mark text columns to force them to be categorized (text columns with up to 30 distinct values will be if checkbox is checked)"
+                "tooltip": "Mark text columns to force them to be categorized (text columns with up to 30 distinct values will be if checkbox is checked)"
             }
         },
         "filter_checkbox": {
@@ -294,7 +294,7 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Text: Filter",
-                "description_tooltip": "Filter stop words from non-categorical text variables"
+                "tooltip": "Filter stop words from non-categorical text variables"
             }
         },
         "ngram_range_dropdown": {
@@ -303,7 +303,7 @@
                 "value": "UNI_GRAM",
                 "disabled": true,
                 "description": "Text: Ngrams",
-                "description_tooltip": "Defines the range of n-grams (word sequences) to extract from non-categorical text variables."
+                "tooltip": "Defines the range of n-grams (word sequences) to extract from non-categorical text variables."
             }
         },
         "data_limit": {
@@ -312,7 +312,7 @@
                 "value": 0,
                 "disabled": true,
                 "description": "Data limit:",
-                "description_tooltip": "During debugging or testing, limiting the number of data rows can be beneficial"
+                "tooltip": "During debugging or testing, limiting the number of data rows can be beneficial"
             }
         },
         "show_info_checkbox": {
@@ -322,7 +322,7 @@
                 "disabled": true,
                 "indent": true,
                 "description": "Show info",
-                "description_tooltip": "Show detailed printout in output"
+                "tooltip": "Show detailed printout in output"
             }
         },
         "num_variables": {
@@ -331,7 +331,7 @@
                 "value": 0,
                 "disabled": true,
                 "description": "Variables:",
-                "description_tooltip": "The number of variables used is shown in this box"
+                "tooltip": "The number of variables used is shown in this box"
             }
         },
         "start_button": {
@@ -353,7 +353,7 @@
                 "description": "Progress:",
                 "bar_style": "info",
                 "orientation": "horizontal",
-                "description_tooltip": "The computational process is shown here"
+                "tooltip": "The computational process is shown here"
             }
         },
         "progress_label": {

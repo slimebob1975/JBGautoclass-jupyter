@@ -9,6 +9,7 @@ import IPython.display
 import ipywidgets as widgets
 
 from Helpers import html_wrapper, print_html, save_matrix_as_csv
+from JBGLogFile import TeeStream, TimestampedLogFile, capture_console_output, normalize_log_level
 
 # Using Protocol to simplify imports
 class Config(Protocol):
@@ -22,7 +23,7 @@ class JBGLogger(terminal.Logger):
     # * verbose = show verbose errors, warnings and info
     # * quiet = don't show info
 
-    def __init__(self, quiet: bool = True, progress: tuple = None, in_terminal: bool = False):
+    def __init__(self, quiet: bool = True, progress: tuple = None, in_terminal: bool = False, log_dir=None, log_filename: str = None):
         # Setup any widgets to report to
         self.widgets = {}
         if progress is not None:
@@ -30,9 +31,30 @@ class JBGLogger(terminal.Logger):
             self.widgets["progress_label"] = progress[1]
 
         self.in_terminal = in_terminal
-        terminal.Logger.__init__(self, quiet=quiet)
+        self.log_file = TimestampedLogFile(log_dir=log_dir, filename=log_filename)
+        self.stream = TeeStream(sys.stdout, self.log_file)
+        terminal.Logger.__init__(self, quiet=quiet, stream=self.stream)
         self.inline_bars = {}
     
+    def get_log_filename(self) -> str:
+        """Returns the path to the persistent log file."""
+        return str(self.log_file.path)
+
+    def capture_console_output(self):
+        """Capture direct print/stderr output while preserving console output."""
+        return capture_console_output(self.log_file)
+
+    def writeln(self, level, *args):
+        """Write terminal output while preserving the requested log level."""
+        if self.stream is None:
+            return
+        message = " ".join(str(arg) for arg in args) + "\n"
+        normalized_level = normalize_log_level(level)
+        if normalized_level == "INFO":
+            self.stream.write(message)
+        else:
+            self.stream.write(f"[{normalized_level}] {message}")
+
     def initiate_progress(self, number_of_tasks: int):
         """ Initiate the progress counter """
         self.progress = 0
@@ -70,6 +92,7 @@ class JBGLogger(terminal.Logger):
             self.print_unformatted(title)
         
         self.print_unformatted("Execution started at: {0:>30s} \n".format(str(date_now)))
+        self.print_key_value_pair("Log file", self.get_log_filename(), print_always=True)
 
         self.print_config_settings(config)
 
@@ -332,10 +355,10 @@ class JBGLogger(terminal.Logger):
             return self
 
         result = '\t'.join([str(x) for x in result])
-        print(f"{result}", end=ending)
+        print(f"{result}", end=ending, file=self.stream)
         
     def clear_last_printed_result_line(self):
-        print(" "*200, end='\r')
+        print(" "*200, end='\r', file=self.stream)
 
     # This is to avoid the annoying "info:" in front of all lines. Debug/warning/Error should still use the normal
     def print_unformatted(self, *args, **kwargs) -> None:
@@ -370,7 +393,7 @@ class JBGLogger(terminal.Logger):
             bar_style= "",
             style={"bar_color": "#C0C0C0"},
             orientation= "horizontal",
-            description_tooltip= tooltip
+            tooltip=tooltip
         )
 
         self.inline_bars[key]["percent_label"] = widgets.HTML("0%")
@@ -412,7 +435,7 @@ class JBGLogger(terminal.Logger):
         percent = round(100.0*float_percent)
             
         if self.in_terminal:
-            print(f"{terminal_text}: {percent} %", end='\r')
+            print(f"{terminal_text}: {percent} %", end='\r', file=self.stream)
             return
 
         self.inline_bars[key]["percent_label"].value = f"{percent}%"
@@ -423,7 +446,7 @@ class JBGLogger(terminal.Logger):
         if self._enable_quiet:
             return
         if self.in_terminal:
-            print("\n") # terminal progress uses \r, so this is important to end it
+            print("\n", file=self.stream) # terminal progress uses \r, so this is important to end it
             return
 
         if set_100:
@@ -466,8 +489,8 @@ class JBGLogger(terminal.Logger):
         pd.set_option('display.precision', precision)
         IPython.display.display(matrix)
 
-        if (self.in_terminal):
-            print("\n")
+        if self.in_terminal:
+            print("\n", file=self.stream)
 
     # Makes sure the GUI isn't left hanging if exceptions crash the program
     def abort_cleanly(self, message: str) -> None:

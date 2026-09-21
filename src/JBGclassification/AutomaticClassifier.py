@@ -16,9 +16,6 @@
 import os
 import sys
 
-from sklearn.exceptions import ConvergenceWarning, FitFailedWarning
-from scipy.sparse import SparseEfficiencyWarning
-
 sys.path.append(os.path.dirname(os.path.realpath(__file__)))
     
 # General imports
@@ -31,17 +28,6 @@ import SQLDataLayer
 import JBGLogger
 import JBGTaskRunner
 from JBGHandler import JBGHandler
-
-import warnings
-# Sklearn issue a lot of warnings sometimes, we suppress them here
-warnings.filterwarnings("ignore", category=DeprecationWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=FitFailedWarning)
-warnings.filterwarnings("ignore", category=ConvergenceWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=RuntimeWarning)
-warnings.filterwarnings("ignore", category=SparseEfficiencyWarning)
-#warnings.filterwarnings("ignore", category=ResourceWarning)
 
 class AutomaticClassifier:
 
@@ -135,11 +121,11 @@ def main(argv):
     
     datalayer = SQLDataLayer.DataLayer(config=config, logger=logger)
     # Use the loaded configuration module argument
-    # or create a classifier object with only standard settings
-    myClassifier = AutomaticClassifier(config=config, logger=logger, datalayer=datalayer)
-
-    # Run the classifier
-    myClassifier.run()
+    # or create a classifier object with only standard settings.
+    # Construct and run it while persisting stdout/stderr and warnings.
+    with logger.capture_console_output():
+        myClassifier = AutomaticClassifier(config=config, logger=logger, datalayer=datalayer)
+        myClassifier.run()
 
 # Start main
 if __name__ == "__main__":

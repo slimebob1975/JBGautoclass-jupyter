@@ -9,23 +9,10 @@ import IPython.display
 import ipywidgets as widgets
 from io import StringIO
 from Helpers import html_wrapper, print_html, save_matrix_as_csv
+from JBGLogFile import TeeStream, TimestampedLogFile, capture_console_output, normalize_log_level
 import re
 
 _TAG_RE = re.compile(r"<[^>]+>")
-
-# Helper class to duplicate output to both terminal and buffer
-class TeeStream:
-    def __init__(self, *streams):
-        self.streams = streams
-
-    def write(self, data):
-        for s in self.streams:
-            s.write(data)
-            s.flush()
-
-    def flush(self):
-        for s in self.streams:
-            s.flush()
 
 # Using Protocol to simplify imports
 class Config(Protocol):
@@ -34,7 +21,7 @@ class Config(Protocol):
 
 
 class JBGLogger(terminal.Logger):
-    def __init__(self, quiet: bool = True, progress: tuple = None, in_terminal: bool = False):
+    def __init__(self, quiet: bool = True, progress: tuple = None, in_terminal: bool = False, log_dir=None, log_filename: str = None):
         self.widgets = {}
         if progress is not None:
             self.widgets["progress_bar"] = progress[0]
@@ -43,13 +30,29 @@ class JBGLogger(terminal.Logger):
         self.in_terminal = in_terminal
         self.inline_bars = {}
 
-        # 🔄 Create internal buffer and tee to terminal
+        # Create internal email buffers and a persistent session log.
         self._log_buffer = StringIO()      # plain-text log
         self._log_buffer_html = StringIO() # HTML log (tables render well in email)
-        self.stream = TeeStream(sys.stdout, self._log_buffer)
+        self.log_file = TimestampedLogFile(log_dir=log_dir, filename=log_filename)
+        self.stream = TeeStream(sys.stdout, self._log_buffer, self.log_file)
 
         # Call parent constructor with custom stream
         super().__init__(quiet=quiet, stream=self.stream)
+
+    def get_log_filename(self) -> str:
+        """Returns the path to the persistent log file."""
+        return str(self.log_file.path)
+
+    def set_progress_widgets(self, progress: tuple = None) -> None:
+        """Attach or replace the GUI progress widgets after logger creation."""
+        if progress is None:
+            return
+        self.widgets["progress_bar"] = progress[0]
+        self.widgets["progress_label"] = progress[1]
+
+    def capture_console_output(self):
+        """Capture direct print/stderr output while preserving notebook output."""
+        return capture_console_output(self.log_file)
 
     def get_log_output(self) -> str:
         """Plain-text log suitable for text-only emails."""
@@ -60,11 +63,15 @@ class JBGLogger(terminal.Logger):
         return self._log_buffer_html.getvalue()
     
     def writeln(self, level, *args):
-        """Override terminal.Logger.writeln to ensure use of self.stream"""
+        """Override terminal.Logger.writeln and preserve the requested log level."""
         if self.stream is None:
             return
         message = " ".join(str(arg) for arg in args) + "\n"
-        self.stream.write(message)
+        normalized_level = normalize_log_level(level)
+        if normalized_level == "INFO":
+            self.stream.write(message)
+        else:
+            self.stream.write(f"[{normalized_level}] {message}")
     
     def get_log_output(self) -> str:
         """Returns all collected log output"""
@@ -107,6 +114,7 @@ class JBGLogger(terminal.Logger):
             self.print_unformatted(title)
         
         self.print_unformatted("Execution started at: {0:>30s} \n".format(str(date_now)))
+        self.print_key_value_pair("Log file", self.get_log_filename(), print_always=True)
 
         self.print_config_settings(config)
 
@@ -221,8 +229,10 @@ class JBGLogger(terminal.Logger):
         rich = html_function(raw) if html_function else raw
         print_html(rich, **kwargs)  # shows nicely in Jupyter
 
-        # Log a plain-text version for the email buffer:
-        self._log_buffer.write(self._strip_html(raw) + "\n")
+        # Log a plain-text version for the email buffer and persistent file:
+        plain = self._strip_html(raw)
+        self._log_buffer.write(plain + "\n")
+        self.log_file.write_message(plain)
         return self
 
     def print_prediction_report(self, 
@@ -261,6 +271,7 @@ class JBGLogger(terminal.Logger):
             return self.error(*args)
 
         print_html(*args, **kwargs)
+        self.log_file.write_message(*args, level="ERROR")
 
         return self
         
@@ -270,6 +281,7 @@ class JBGLogger(terminal.Logger):
             return self.warn(*args)
 
         print_html(*args, **kwargs)
+        self.log_file.write_message(*args, level="WARNING")
 
         return self
 
@@ -388,6 +400,7 @@ class JBGLogger(terminal.Logger):
             return self.writeln('unformatted', *args)
 
         print_html(*args, **kwargs)
+        self.log_file.write_message(*args)
 
         return self
 
@@ -412,7 +425,7 @@ class JBGLogger(terminal.Logger):
             bar_style= "",
             style={"bar_color": "#C0C0C0"},
             orientation= "horizontal",
-            description_tooltip= tooltip
+            tooltip=tooltip
         )
 
         self.inline_bars[key]["percent_label"] = widgets.HTML("0%")
@@ -523,6 +536,7 @@ class JBGLogger(terminal.Logger):
 
         # Write directly to internal buffers (avoid stdout duplication)
         self._log_buffer.write(f"{title}\n{text_snapshot}\n\n")
+        self.log_file.write_message(text_snapshot, level="TABLE")
         if hasattr(self, "_log_buffer_html"):
             self._log_buffer_html.write(f"<h3>{title}</h3>\n{html_snapshot}\n")
 

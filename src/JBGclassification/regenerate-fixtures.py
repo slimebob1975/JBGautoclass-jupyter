@@ -96,7 +96,8 @@ def save_model_to_file(filename, config):
             "n_features_out": 4
         }
         
-        dill.dump(list(data.values()), open(filename,'wb'))
+        with open(filename, 'wb') as outfile:
+            dill.dump(list(data.values()), outfile)
     except Exception as e:
         print(f"Something went wrong on saving model to file: {e}")
 

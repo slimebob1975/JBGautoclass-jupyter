@@ -18,7 +18,8 @@ DOUBLE_UNDERSCORE = "__"
 EMAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
 def create_download_link(filename, title = "Click here to download file: "):  
-    data = open(filename, "rb").read()
+    with open(filename, "rb") as infile:
+        data = infile.read()
     b64 = base64.b64encode(data)
     payload = b64.decode()
     html = '<a download="{filename}" href="data:text/csv;base64,{payload}" target="_blank">{title}</a>'

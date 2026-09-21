@@ -135,7 +135,7 @@ class MetaEnum(enum.Enum):
         return None
 
     def get_function(self, **kwargs):
-        return self.call_function(self, 'get', **kwargs)
+        return self.call_function('get', **kwargs)
 
     def __eq__(self, other: MetaEnum) -> bool:
         """

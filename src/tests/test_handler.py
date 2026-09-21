@@ -202,14 +202,14 @@ class TestDatasetHandler():
 
         # 1. Empty first dataframe, it is equal to the 2nd
         expected_dataset = pandas.DataFrame(data_concat)
-        expected_dataset.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        expected_dataset.set_index(index, drop=False, append=False, inplace=True)
 
         concatted = default_dataset_handler.concat_with_index(X, concat, index)
         pandas.testing.assert_frame_equal(concatted, expected_dataset)
         
         # 2. Empty second dataframe, it is equal to the 1st
         expected_dataset = pandas.DataFrame(data_concat)
-        expected_dataset.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        expected_dataset.set_index(index, drop=False, append=False, inplace=True)
         
         concatted = default_dataset_handler.concat_with_index(concat, X, index)
         pandas.testing.assert_frame_equal(concatted, expected_dataset)
@@ -239,10 +239,10 @@ class TestDatasetHandler():
         ]
 
         expected_dataset3 = pandas.DataFrame(data, columns=["name", "test_class", "age"])
-        expected_dataset3.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        expected_dataset3.set_index(index, drop=False, append=False, inplace=True)
         
         # The concatted dataframes need to share the index
-        X3.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        X3.set_index(index, drop=False, append=False, inplace=True)
         
         concatted3 = default_dataset_handler.concat_with_index(X3, concat3, index)
         pandas.testing.assert_frame_equal(concatted3, expected_dataset3, check_like=True)
@@ -272,7 +272,7 @@ class TestDatasetHandler():
         ]
         expected_columns = ["status", "age", "code", "binarised"]
         expected_dataframe = pandas.DataFrame(expected_data, columns = expected_columns)
-        expected_dataframe.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        expected_dataframe.set_index(index, drop=False, append=False, inplace=True)
 
         actual_dataframe = default_dataset_handler.create_X([text, numerical, binary], index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)
@@ -283,7 +283,7 @@ class TestDatasetHandler():
         ]
         expected_columns = ["status", "binarised"]
         expected_dataframe = pandas.DataFrame(expected_data, columns = expected_columns)
-        expected_dataframe.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        expected_dataframe.set_index(index, drop=False, append=False, inplace=True)
 
         actual_dataframe = default_dataset_handler.create_X([text, binary],  index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)
@@ -294,7 +294,7 @@ class TestDatasetHandler():
         ]
         expected_columns = ["age", "code", "binarised"]
         expected_dataframe = pandas.DataFrame(expected_data, columns = expected_columns)
-        expected_dataframe.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        expected_dataframe.set_index(index, drop=False, append=False, inplace=True)
 
         actual_dataframe = default_dataset_handler.create_X([numerical, binary], index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)
@@ -305,7 +305,7 @@ class TestDatasetHandler():
         ]
         expected_columns = ["status", "age", "code"]
         expected_dataframe = pandas.DataFrame(expected_data, columns = expected_columns)
-        expected_dataframe.set_index(index, drop=False, append=False, inplace=True, verify_integrity=False)
+        expected_dataframe.set_index(index, drop=False, append=False, inplace=True)
 
         actual_dataframe = default_dataset_handler.create_X([text, numerical], index=index)
         pandas.testing.assert_frame_equal(actual_dataframe, expected_dataframe, check_like=True)

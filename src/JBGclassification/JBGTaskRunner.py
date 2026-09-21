@@ -147,8 +147,6 @@ class TaskRunner:
         
         raise ModelException(f"No trained model exists at {model_path}")
         
-        raise ModelException("User must choose either to train a new model or use an old one for predictions")
-        
     
     def fetch_data__task(self) -> dict:
         """ 

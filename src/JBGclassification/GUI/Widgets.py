@@ -1081,10 +1081,11 @@ class Widgets:
         name = sys._getframe(  ).f_code.co_name # Current function name
 
         if name not in self.widgets:
-            logo = open(self.logo_image, "rb")
+            with open(self.logo_image, "rb") as logo:
+                logo_data = logo.read()
 
             return self._load_widget(name, {
-                "value": logo.read()
+                "value": logo_data
             })
 
         return self.widgets[name]
@@ -1374,9 +1375,10 @@ class Widgets:
         
         styles = []
         for path in css_file_paths:
-            styles.append(open(self.get_sibling_file_path(path), "r").read())
+            with open(self.get_sibling_file_path(path), "r", encoding="utf-8") as stylesheet:
+                styles.append(stylesheet.read())
 
-        s = '<style>%s</style>' % " ".join(styles)     
+        s = '<style>%s</style>' % " ".join(styles)
         return widgets.HTML(s)
         
     def display_gui(self) -> None:
