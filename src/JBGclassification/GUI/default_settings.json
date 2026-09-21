@@ -131,6 +131,16 @@
                 "icon": "forward" 
             }
         },
+        "test_profile_button": {
+            "type": "Button",
+            "params": {
+                "description": "Regr. test",
+                "button_style": "primary",
+                "disabled": true,
+                "tooltip": "Continue and apply the temporary regression test profile",
+                "icon": "flask"
+            }
+        },
         "train_checkbox": {
             "type": "Checkbox",
             "params": {
@@ -404,7 +414,7 @@
         "models_form",
         "data_form",
         "class_summary",
-        "continuation_button",
+        "continuation_form",
         "checkboxes_form",
         "algorithm_form",
         "data_handling_form",
@@ -429,7 +439,8 @@
             "data_columns",
             "text_columns",
             "class_summary",
-            "continuation_button"
+            "continuation_button",
+            "test_profile_button"
         ],
         "classifier": [
             "train_checkbox",

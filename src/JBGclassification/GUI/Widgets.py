@@ -121,6 +121,7 @@ class EventHandler:
                 self.widgets.form_field_enabled_toggle("data", disabled=False)
 
                 self.widgets.disable_button("continuation_button")
+                self.widgets.disable_button("test_profile_button")
                 return
             
             self.widgets.update_from_model_config()
@@ -217,6 +218,11 @@ class EventHandler:
         
         self.widgets.deactivate_section("data")
         self.widgets.continuation_button_actions()
+
+    def test_profile_button_was_clicked(self, button: widgets.Button) -> None:
+        """Continue with a temporary regression profile for manual test runs."""
+        self.continuation_button_was_clicked(button)
+        self.widgets.apply_regression_test_profile()
         
 
     def start_button_was_clicked(self, button: widgets.Button) -> None:
@@ -275,6 +281,25 @@ class Widgets:
     """ Creates and populates the widgets of the GUI """
     TEXT_MIN_LIMIT = 30
     TEXT_AREA_MIN_LIMIT = 60
+
+    # Temporary manual regression profile. Keep this in one place so the
+    # button can be repurposed as later patches need different coverage.
+    REGRESSION_TEST_PROFILE = {
+        "algorithm_dropdown": ("LRN", "RFCL", "LSVC", "GNB", "KNN", "LDA"),
+        "preprocess_dropdown": ("NOS", "STA", "MIX"),
+        "reduction_dropdown": ("NOR", "PCA", "RFE"),
+        "scoremetric_dropdown": "balanced_accuracy",
+        "oversampler_dropdown": "NOG",
+        "undersampler_dropdown": "NUG",
+        "testdata_slider": 20,
+        "iterations_slider": 20000,
+        "encryption_checkbox": True,
+        "categorize_checkbox": True,
+        "categorize_columns": (),
+        "filter_checkbox": False,
+        "ngram_range_dropdown": "UNI_GRAM",
+        "show_info_checkbox": True,
+    }
     
     def __init__(self, src_path: Path, GUIhandler: GUIhandler, model_path: Path = None, settings: dict = None) -> None:
 
@@ -463,6 +488,7 @@ class Widgets:
         
         # Enable and disable buttons
         self.enable_button("continuation_button")
+        self.disable_button("test_profile_button")
         self.disable_button("start_button")
             
         
@@ -538,6 +564,10 @@ class Widgets:
                 "mispredicted_checkbox": False
             })
             
+    def apply_regression_test_profile(self) -> None:
+        """Apply the temporary numeric regression profile to classifier widgets."""
+        self.update_values(self.REGRESSION_TEST_PROFILE)
+
     def continuation_button_actions(self) -> None:
         """ Complex actions when button is clicked """
         new_model = self.new_model
@@ -946,8 +976,13 @@ class Widgets:
         ready_for_classifier = num_vars > 0 and self.id_column.value and self.class_column.value
         if ready_for_classifier:
             self.enable_button("continuation_button")
+            if self.new_model:
+                self.enable_button("test_profile_button")
+            else:
+                self.disable_button("test_profile_button")
         else:
             self.disable_button("continuation_button")
+            self.disable_button("test_profile_button")
 
 
     def get_item_or_error(self, name: str) -> widgets.Widget:
@@ -1000,6 +1035,18 @@ class Widgets:
 
     def data_form(self) -> widgets.Box:
         return self.create_form(self.forms["data"], widgets.Box)
+
+    def continuation_form(self) -> widgets.Box:
+        """Display normal and regression-test continue actions on one row."""
+        return widgets.HBox(
+            [self.continuation_button, self.test_profile_button],
+            layout=widgets.Layout(
+                display="flex",
+                justify_content="space-between",
+                align_items="center",
+                width="100%",
+            ),
+        )
     
     def checkboxes_form(self) -> widgets.Box:
         return self.create_form(self.forms["checkboxes"], widgets.HBox)
@@ -1194,6 +1241,14 @@ class Widgets:
         if name not in self.widgets:
             self._load_widget(name, callback=self.eventhandler.continuation_button_was_clicked)
         
+        return self.widgets[name]
+
+    @property
+    def test_profile_button(self) -> widgets.Button:
+        name = sys._getframe().f_code.co_name # Current function name
+        if name not in self.widgets:
+            self._load_widget(name, callback=self.eventhandler.test_profile_button_was_clicked)
+
         return self.widgets[name]
     
     @property

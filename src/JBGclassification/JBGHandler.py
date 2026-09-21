@@ -1315,6 +1315,52 @@ class ModelHandler:
             failure,
         ]
 
+    @staticmethod
+    def _summarize_cv_results(cv_results: np.ndarray) -> tuple[float, float]:
+        return cv_results.mean(), cv_results.std()
+
+    def _update_spot_check_best_state(self, state: _SpotCheckState, pipeline: Pipeline,
+                                      preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
+                                      cv_score: float, cv_stdev: float, test_score: float,
+                                      num_features: int, num_components: int) -> None:
+        state.trained_pipeline = pipeline
+        state.best_reduction = reduction
+        state.best_algorithm = algorithm
+        state.best_preprocessor = preprocessor
+        state.best_cv_score = cv_score
+        state.best_stdev = cv_stdev
+        state.best_test_score = test_score
+        state.best_rfe_feature_selection = num_features
+        state.best_num_components = num_components
+
+    def _consider_spot_check_candidate(self, state: _SpotCheckState, pipeline: Pipeline,
+                                       preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
+                                       cv_score: float, cv_stdev: float, test_score: float,
+                                       num_features: int, num_components: int, failure: str) -> tuple[str, bool]:
+        try:
+            if self.is_best_run_yet(
+                cv_score, cv_stdev, state.best_cv_score, state.best_stdev,
+                test_score, state.best_test_score
+            ):
+                self._update_spot_check_best_state(
+                    state=state,
+                    pipeline=pipeline,
+                    preprocessor=preprocessor,
+                    reduction=reduction,
+                    algorithm=algorithm,
+                    cv_score=cv_score,
+                    cv_stdev=cv_stdev,
+                    test_score=test_score,
+                    num_features=num_features,
+                    num_components=num_components,
+                )
+        except UnstableModelException as ex:
+            if not failure:
+                failure = f"{','.join(ex.args)}"
+            return failure, False
+
+        return failure, True
+
     def _evaluate_spot_check_candidate(self, dh: DatasetHandler, preprocessor: Preprocess,
                                        preprocessor_callable: Transform, reduction: Reduction,
                                        reduction_callable: Transform, algorithm: Algorithm,
@@ -1383,33 +1429,25 @@ class ModelHandler:
                 self.handler.logger.print_warning(f"Exception: {str(ex)}")
 
             elapsed_time = time.time() - t0
-            temp_cv_score = cv_results.mean()
-            temp_cv_stdev = cv_results.std()
+            temp_cv_score, temp_cv_stdev = self._summarize_cv_results(cv_results)
+            rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(
+                temp_cv_score, rfe_score, num_features, max_features_selection, min_features_selection
+            )
 
-            if temp_cv_score >= rfe_score:
-                rfe_score = temp_cv_score
-                max_features_selection = num_features
-            else:
-                min_features_selection = num_features
-
-            try:
-                if self.is_best_run_yet(
-                    temp_cv_score, temp_cv_stdev, state.best_cv_score, state.best_stdev,
-                    tmp_test_score, state.best_test_score
-                ):
-                    state.trained_pipeline = current_pipeline
-                    state.best_reduction = reduction
-                    state.best_algorithm = algorithm
-                    state.best_preprocessor = preprocessor
-                    state.best_cv_score = temp_cv_score
-                    state.best_stdev = temp_cv_stdev
-                    state.best_test_score = tmp_test_score
-                    state.best_rfe_feature_selection = num_features
-                    state.best_num_components = num_components
-            except UnstableModelException as ex:
-                if not failure:
-                    failure = f"{','.join(ex.args)}"
-            else:
+            failure, candidate_is_stable = self._consider_spot_check_candidate(
+                state=state,
+                pipeline=current_pipeline,
+                preprocessor=preprocessor,
+                reduction=reduction,
+                algorithm=algorithm,
+                cv_score=temp_cv_score,
+                cv_stdev=temp_cv_stdev,
+                test_score=tmp_test_score,
+                num_features=num_features,
+                num_components=num_components,
+                failure=failure,
+            )
+            if candidate_is_stable:
                 candidate_success = True
 
             candidate_results.append(self._build_spot_check_result(
@@ -2271,6 +2309,21 @@ class PredictionsHandler:
 
         # Use these as labels
         labels = np.sort(Y.unique())
+
+        # Dark-number probability calculations require predict_proba(). Some
+        # otherwise valid classifiers (for example LinearSVC) do not expose it.
+        # We can still produce their confusion matrices, but there is no
+        # probability input from which to calculate dark numbers.
+        supports_predict_proba = [hasattr(model, "predict_proba") for model in models]
+        if not any(supports_predict_proba):
+            for model, model_name in zip(models, model_names):
+                Y_pred = pd.Series(model.predict(X), index=Y.index)
+                self._update_confusion_matrix(model_name, Y, Y_pred, labels)
+                self.handler.logger.print_warning(
+                    f"Skipping dark number calculations for {model_name}: "
+                    "model does not support predict_proba()."
+                )
+            return None
         
         # Find correction numbers for each label and a retrained model
         corrs = {}
@@ -2328,13 +2381,20 @@ class PredictionsHandler:
                 corrs[label] = 1.0
         
         # Compute dark number for all models
-        for model, model_name in zip(models, model_names):
+        for model, model_name, can_predict_proba in zip(models, model_names, supports_predict_proba):
 
             # Make prediction for current model
             Y_pred = pd.Series(model.predict(X), index=Y.index)
 
             # Update the confusion matrix
             self._update_confusion_matrix(model_name, Y, Y_pred, labels)
+
+            if not can_predict_proba:
+                self.handler.logger.print_warning(
+                    f"Skipping dark number calculations for {model_name}: "
+                    "model does not support predict_proba()."
+                )
+                continue
             
             # Predict probabilities for current predictions
             Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(X)], index=Y.index)

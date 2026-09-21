@@ -6,7 +6,7 @@ from conftest import get_fixture_path
 
 from JBGExceptions import DatasetException, HandlerException
 
-from JBGHandler import JBGHandler, DatasetHandler, Model
+from JBGHandler import JBGHandler, DatasetHandler, Model, _SpotCheckState
 from JBGMeta import Algorithm, Preprocess, Reduction
 
 # One class per class in the module
@@ -553,6 +553,57 @@ class TestModelHandler():
         assert kfold.shuffle is True
         assert kfold.random_state == 1
 
+    def test_spot_check_candidate_updates_best_state(self, default_model_handler):
+        state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)
+        pipeline = object()
+
+        failure, stable = default_model_handler._consider_spot_check_candidate(
+            state=state,
+            pipeline=pipeline,
+            preprocessor=Preprocess.NOS,
+            reduction=Reduction.NOR,
+            algorithm=Algorithm.DUMY,
+            cv_score=0.8,
+            cv_stdev=0.1,
+            test_score=0.8,
+            num_features=3,
+            num_components=2,
+            failure="",
+        )
+
+        assert failure == ""
+        assert stable is True
+        assert state.trained_pipeline is pipeline
+        assert state.best_preprocessor == Preprocess.NOS
+        assert state.best_reduction == Reduction.NOR
+        assert state.best_algorithm == Algorithm.DUMY
+        assert state.best_cv_score == 0.8
+        assert state.best_stdev == 0.1
+        assert state.best_test_score == 0.8
+        assert state.best_rfe_feature_selection == 3
+        assert state.best_num_components == 2
+
+    def test_spot_check_candidate_marks_unstable_without_overwriting_failure(self, default_model_handler):
+        state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)
+
+        failure, stable = default_model_handler._consider_spot_check_candidate(
+            state=state,
+            pipeline=object(),
+            preprocessor=Preprocess.NOS,
+            reduction=Reduction.NOR,
+            algorithm=Algorithm.DUMY,
+            cv_score=1.0,
+            cv_stdev=0.0,
+            test_score=0.9,
+            num_features=4,
+            num_components=4,
+            failure="existing failure",
+        )
+
+        assert failure == "existing failure"
+        assert stable is False
+        assert state.trained_pipeline is None
+
     def test_validation_fit_falls_back_to_numpy(self, default_model_handler):
         class DataFrameRejectingPipeline:
             def __init__(self):
@@ -606,6 +657,42 @@ class TestModelHandler():
 
 class TestPredictionsHandler:
     """ Tests functions in the predictions handler """
+
+    def test_dark_numbers_skip_models_without_predict_proba(self, default_predictions_handler):
+        class PredictOnlyModel:
+            def __init__(self, predictions):
+                self.predictions = predictions
+
+            def predict(self, X):
+                return np.array(self.predictions)
+
+        class WarningLogger:
+            def __init__(self):
+                self.warnings = []
+
+            def print_warning(self, message):
+                self.warnings.append(message)
+
+        logger = WarningLogger()
+        default_predictions_handler.handler.logger = logger
+        X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0]})
+        Y = pandas.Series(["B", "M", "B"])
+        models = [
+            PredictOnlyModel(["B", "M", "B"]),
+            PredictOnlyModel(["B", "B", "B"]),
+        ]
+
+        default_predictions_handler.get_dark_numbers(
+            X=X,
+            Y=Y,
+            models=models,
+            model_names=["Cross-trained", "Retrained"],
+        )
+
+        assert default_predictions_handler.dark_numbers.empty
+        assert not default_predictions_handler.dark_numb_conf_matrix.empty
+        assert len(logger.warnings) == 2
+        assert all("does not support predict_proba()" in warning for warning in logger.warnings)
 
     def test_get_prediction_results(self, default_predictions_handler):
         """ Two cases: An appropriate list or an empty list """
