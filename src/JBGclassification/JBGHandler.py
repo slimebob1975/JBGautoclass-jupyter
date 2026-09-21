@@ -1087,8 +1087,16 @@ class ModelHandler:
             max_cores = psutil.cpu_count(logical=True)
             n_jobs_desired = min(total_jobs, max_cores, self.handler.STANDARD_DESIRED_N_JOBS)
 
-            # Create search grid and fit model
-            search_verbosity = 4 if self.handler.config.io.verbose else 0
+            # Keep sklearn/joblib worker output quiet. With process-based parallelism,
+            # GridSearchCV verbose output bypasses the application's stdout capture and
+            # ends up only in the Voilà/server terminal. Log a compact execution plan
+            # through the application logger instead.
+            if self.handler.config.io.verbose:
+                self.handler.logger.anaconda_debug(
+                    f"Grid search execution: {n_param_combos} parameter combinations x "
+                    f"{n_splits} folds = {total_jobs} fits; n_jobs={n_jobs_desired}"
+                )
+
             search = self.execute_n_job(
                 GridSearchCV, 
                 model, 
@@ -1096,7 +1104,7 @@ class ModelHandler:
                 scoring=scorer, 
                 cv=kfold, 
                 refit=True, 
-                verbose=search_verbosity,
+                verbose=0,
                 error_score='raise',
                 n_jobs_desired=n_jobs_desired)
             try:

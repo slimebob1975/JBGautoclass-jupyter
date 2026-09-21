@@ -32,6 +32,18 @@ def test_timestamped_log_file_assigns_and_preserves_levels(tmp_path):
     log_file.close()
 
 
+def test_timestamped_log_file_references_server_log_from_environment(tmp_path, monkeypatch):
+    server_log = tmp_path / "jbg-server.log"
+    monkeypatch.setenv("JBG_SERVER_LOG", str(server_log))
+
+    log_file = TimestampedLogFile(log_dir=tmp_path, filename="application.log")
+    text = read_log(log_file)
+
+    assert f"[INFO] Server log: {server_log}" in text
+
+    log_file.close()
+
+
 def test_capture_console_output_logs_stdout_stderr_warnings_and_exceptions(tmp_path):
     log_file = TimestampedLogFile(log_dir=tmp_path, filename="capture.log")
 
@@ -48,7 +60,7 @@ def test_capture_console_output_logs_stdout_stderr_warnings_and_exceptions(tmp_p
     assert "[INFO] stdout message" in text
     assert "[ERROR] stderr message" in text
     assert "[WARNING] RuntimeWarning: runtime warning" in text
-    assert "[EXCEPTION] Exception escaped classifier run" in text
+    assert "[EXCEPTION] Exception escaped captured application scope" in text
     assert "[ERROR] Traceback (most recent call last):" in text
     assert "[ERROR] ValueError: boom" in text
 

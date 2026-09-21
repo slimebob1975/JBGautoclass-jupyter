@@ -115,6 +115,9 @@ class TimestampedLogFile:
         self.write_message(f"Process ID: {os.getpid()}", level="INFO")
         self.write_message(f"Python: {sys.version.split()[0]}", level="INFO")
         self.write_message(f"Working directory: {Path.cwd()}", level="INFO")
+        server_log = os.environ.get("JBG_SERVER_LOG")
+        if server_log:
+            self.write_message(f"Server log: {server_log}", level="INFO")
         atexit.register(self.close)
 
     def _timestamp(self) -> str:
