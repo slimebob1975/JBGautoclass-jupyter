@@ -1220,6 +1220,43 @@ class ModelHandler:
         else:
             return True
 
+    def get_preflight_skip_reason(self, preprocessor: Preprocess, scaler: Transform, reduction: Reduction,
+                                  algorithm: Algorithm, X_train: pd.DataFrame) -> Union[str, None]:
+        """Return a reason to skip a model candidate when preprocessing removes all feature variance.
+
+        This is deliberately conservative. If the probe itself cannot inspect a transformer, the
+        normal training path is allowed to continue. DummyClassifier without feature reduction is
+        retained as the useful no-signal baseline.
+        """
+        if algorithm == Algorithm.DUMY and reduction == Reduction.NOR:
+            return None
+
+        try:
+            # Mirror the pipeline's initial imputation so the probe evaluates the same numeric input.
+            probe = SimpleImputer(strategy="constant", fill_value=0, keep_empty_features=True) \
+                .fit_transform(X_train)
+            probe = clone(scaler).fit_transform(probe)
+
+            if hasattr(probe, "toarray"):
+                probe = probe.toarray()
+
+            probe = np.asarray(probe, dtype=float)
+            if probe.ndim == 1:
+                probe = probe.reshape(-1, 1)
+
+            if probe.shape[1] == 0:
+                return f"no features remain after preprocessing {preprocessor.name}"
+
+            variances = np.nanvar(probe, axis=0)
+            informative_features = np.isfinite(variances) & (variances > np.finfo(float).eps)
+            if not np.any(informative_features):
+                return f"no feature variance after preprocessing {preprocessor.name}"
+        except Exception:
+            # Preflight must never reject a candidate merely because the probe cannot inspect it.
+            return None
+
+        return None
+
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
@@ -1316,6 +1353,27 @@ class ModelHandler:
                         else:
                             first_rfe_round = False
 
+                        # Avoid expensive and noisy training when preprocessing has removed all signal.
+                        skip_reason = self.get_preflight_skip_reason(
+                            preprocessor, preprocessor_callable, reduction, algorithm, dh.X_train
+                        )
+                        if skip_reason:
+                            failure = f"SKIPPED: {skip_reason}"
+                            self.handler.logger.print_info(
+                                f"SKIPPED {preprocessor.name}-{reduction.name}-{algorithm.name}: {skip_reason}"
+                            )
+                            listOfResults.append([
+                                preprocessor.name,
+                                reduction.name,
+                                str(algorithm.name) + " - " + str(algorithm.full_name) + " (" + str(algorithm.lib.full_name) + ")",
+                                dh.X_train.shape[1],
+                                np.nan,
+                                np.nan,
+                                np.nan,
+                                0.0,
+                                failure])
+                            continue
+
                         # Add RFE feature selection if selected, i.e., the option of reducing the number of variables recursively.
                         # With RFE, we make a binary search for the optimal number of features.
                         max_features_selection = dh.X.shape[1]
@@ -1357,7 +1415,7 @@ class ModelHandler:
 
                                 # Get used number of features after reduction (components)
                                 num_components = self.get_components_from_pipeline(reduction, current_pipeline, num_features)
-                            except ModelException:
+                            except ModelException as ex:
                                 # If any exceptions happen, continue to next step in the loop
                                 self.handler.logger.print_warning(f"ModelException: {str(ex)}")
                                 break

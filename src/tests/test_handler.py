@@ -468,6 +468,58 @@ class TestModelHandler():
         path = get_fixture_path() / "model-save.sav"
         assert default_model_handler.load_pipeline_from_file(path) == None
 
+    def test_preflight_skips_degenerate_binarized_candidates(self, default_model_handler):
+        X = pandas.DataFrame({
+            "a": [1.0, 2.0, 3.0, 4.0],
+            "b": [5.0, 6.0, 7.0, 8.0],
+        })
+        scaler = Preprocess.BIN.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.BIN, scaler, Reduction.NOR, Algorithm.LDA, X
+        )
+
+        assert reason == "no feature variance after preprocessing BIN"
+
+    def test_preflight_keeps_dummy_without_reduction_as_baseline(self, default_model_handler):
+        X = pandas.DataFrame({
+            "a": [1.0, 2.0, 3.0, 4.0],
+            "b": [5.0, 6.0, 7.0, 8.0],
+        })
+        scaler = Preprocess.BIN.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.BIN, scaler, Reduction.NOR, Algorithm.DUMY, X
+        )
+
+        assert reason is None
+
+    def test_preflight_skips_dummy_when_reduction_would_receive_constant_data(self, default_model_handler):
+        X = pandas.DataFrame({
+            "a": [1.0, 2.0, 3.0, 4.0],
+            "b": [5.0, 6.0, 7.0, 8.0],
+        })
+        scaler = Preprocess.BIN.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.BIN, scaler, Reduction.PCA, Algorithm.DUMY, X
+        )
+
+        assert reason == "no feature variance after preprocessing BIN"
+
+    def test_preflight_allows_informative_binarized_features(self, default_model_handler):
+        X = pandas.DataFrame({
+            "a": [-1.0, 1.0, -2.0, 2.0],
+            "b": [2.0, -2.0, 3.0, -3.0],
+        })
+        scaler = Preprocess.BIN.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.BIN, scaler, Reduction.PCA, Algorithm.LDA, X
+        )
+
+        assert reason is None
+
     # Series of functions calling each other
     # train_model calls get_model_from
     # get_model_from calls spot_check_ml_algorithms
