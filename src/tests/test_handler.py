@@ -553,6 +553,51 @@ class TestModelHandler():
         assert kfold.shuffle is True
         assert kfold.random_state == 1
 
+    def test_validation_fit_falls_back_to_numpy(self, default_model_handler):
+        class DataFrameRejectingPipeline:
+            def __init__(self):
+                self.fit_inputs = []
+
+            def fit(self, X, Y):
+                self.fit_inputs.append((X, Y))
+                if isinstance(X, pandas.DataFrame):
+                    raise TypeError("DataFrame not supported")
+                return self
+
+        dh = type("Dataset", (), {})()
+        dh.X_train = pandas.DataFrame({"a": [1.0, 2.0]})
+        dh.Y_train = pandas.Series([0, 1])
+        pipeline = DataFrameRejectingPipeline()
+
+        default_model_handler._fit_pipeline_for_validation(pipeline, dh)
+
+        assert len(pipeline.fit_inputs) == 2
+        assert isinstance(pipeline.fit_inputs[0][0], pandas.DataFrame)
+        assert isinstance(pipeline.fit_inputs[1][0], np.ndarray)
+        assert isinstance(pipeline.fit_inputs[1][1], np.ndarray)
+
+    def test_validation_scorer_falls_back_to_numpy(self, default_model_handler):
+        score_inputs = []
+
+        def scorer(pipeline, X, Y):
+            score_inputs.append((X, Y))
+            if isinstance(X, pandas.DataFrame):
+                raise TypeError("DataFrame not supported")
+            return 0.75
+
+        default_model_handler.handler.config.get_scoring_mechanism = lambda: scorer
+        dh = type("Dataset", (), {})()
+        dh.X_validation = pandas.DataFrame({"a": [1.0, 2.0]})
+        dh.Y_validation = pandas.Series([0, 1])
+
+        score = default_model_handler._score_validation_pipeline(object(), dh)
+
+        assert score == 0.75
+        assert len(score_inputs) == 2
+        assert isinstance(score_inputs[0][0], pandas.DataFrame)
+        assert isinstance(score_inputs[1][0], np.ndarray)
+        assert isinstance(score_inputs[1][1], np.ndarray)
+
     # Series of functions calling each other
     # train_model calls get_model_from
     # get_model_from calls spot_check_ml_algorithms

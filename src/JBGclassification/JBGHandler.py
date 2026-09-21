@@ -1122,40 +1122,48 @@ class ModelHandler:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
 
+    def _fit_pipeline_for_validation(self, pipeline: Pipeline, dh: DatasetHandler) -> None:
+        """Fit a spot-check pipeline, preserving the existing DataFrame-to-NumPy fallback."""
+        try:
+            pipeline.fit(dh.X_train, dh.Y_train)
+        except TypeError:
+            pipeline.fit(dh.X_train.to_numpy(), dh.Y_train.to_numpy())
+
+    def _score_validation_pipeline(self, pipeline: Pipeline, dh: DatasetHandler) -> float:
+        """Score an already fitted spot-check pipeline on the validation split."""
+        scorer = self.handler.config.get_scoring_mechanism()
+
+        if not isinstance(scorer, str):
+            try:
+                return scorer(pipeline, dh.X_validation, dh.Y_validation)
+            except TypeError:
+                return scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
+
+        if scorer == 'roc_auc_ovo':
+            return self.generate_roc_auc_score(pipeline, dh)
+
+        raise MissingScorerException("Scorer {0} is not supported".format(scorer))
+
+    @staticmethod
+    def _format_captured_exception(ex: Exception) -> str:
+        if not GIVE_EXCEPTION_TRACEBACK:
+            return str("{0}: {1}".format(type(ex).__name__, ','.join(ex.args)))
+        return str(traceback.format_exc())
+
     # Train and evaluate picked model (warning for overfitting)
     def train_and_evaluate_picked_model(self, pipeline: Pipeline, dh: DatasetHandler):
 
         exception = ""
         test_score = -1.0
         try:
-            # First train model on whole of test data (no k-folded cross validation here).
-            # Handle problems with sparse input by conversion to numpy, if needed
-            try:
-                pipeline.fit(dh.X_train, dh.Y_train)
-            except TypeError:
-                pipeline.fit(dh.X_train.to_numpy(), dh.Y_train.to_numpy())
+            self._fit_pipeline_for_validation(pipeline, dh)
 
-            # Evaluate on test_data with correct scorer
             if dh.X_validation is not None and dh.Y_validation is not None:
-                scorer = self.handler.config.get_scoring_mechanism()
-                
-                if not isinstance(scorer, str):
-                    try:
-                        test_score = scorer(pipeline, dh.X_validation, dh.Y_validation)
-                    except TypeError:
-                        test_score = scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
-                        
-                elif scorer == 'roc_auc_ovo':
-                    test_score = self.generate_roc_auc_score(pipeline, dh)
-                else:
-                    raise MissingScorerException("Scorer {0} is not supported".format(scorer))
-                    
+                test_score = self._score_validation_pipeline(pipeline, dh)
+
         except Exception as ex:
             test_score = np.nan
-            if not GIVE_EXCEPTION_TRACEBACK:
-                exception = str("{0}: {1}".format(type(ex).__name__, ','.join(ex.args)))
-            else:
-                exception = str(traceback.format_exc())
+            exception = self._format_captured_exception(ex)
 
         return pipeline, test_score, exception
     
@@ -1555,6 +1563,17 @@ class ModelHandler:
         else:
             return False
 
+    def _build_spot_check_pipeline(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess,
+                                   feature_reducer: Transform, estimator: Estimator, scaler: Transform,
+                                   oversampler: Oversampling, undersampler: Undersampling,
+                                   kfold: StratifiedKFold, dh: DatasetHandler, num_features: int):
+        """Build the pipeline used by one spot-check cross-validation attempt."""
+        return self.get_pipeline(
+            reduction, feature_reducer, algorithm, estimator, preprocessor, scaler,
+            oversampler, undersampler, dh.X_train.shape[1], num_features,
+            min(5, kfold.get_n_splits())
+        )
+
     # Build pipeline and perform cross validation
     def create_pipeline_and_cv(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess, feature_reducer: Transform, \
         estimator: Estimator, scaler: Transform, oversampler: Oversampling, undersampler: Undersampling, kfold: StratifiedKFold, \
@@ -1562,20 +1581,17 @@ class ModelHandler:
 
         exception = ""
         try:
-                    
-            # Build pipeline of model and preprocessor.
-            pipe = self.get_pipeline(reduction, feature_reducer, algorithm, estimator, preprocessor, scaler, \
-                oversampler, undersampler, dh.X_train.shape[1], num_features, min(5, kfold.get_n_splits()))
-                        
-            # Use parallel processing for k-folded cross evaluation
-            cv_results = self.get_cross_val_score(pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm)
+            pipe = self._build_spot_check_pipeline(
+                reduction, algorithm, preprocessor, feature_reducer, estimator, scaler,
+                oversampler, undersampler, kfold, dh, num_features
+            )
+            cv_results = self.get_cross_val_score(
+                pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm
+            )
 
         except Exception as ex:
             cv_results = np.array([np.nan])
-            if not GIVE_EXCEPTION_TRACEBACK:
-                exception = str("{0}: {1}".format(type(ex).__name__, ','.join(ex.args)))
-            else:
-                exception = str(traceback.format_exc())
+            exception = self._format_captured_exception(ex)
 
         return pipe, cv_results, exception
     
