@@ -79,3 +79,15 @@ def test_passive_aggressive_algorithm_uses_sgd_equivalent_without_deprecation_wa
         "PassiveAggressiveClassifier is deprecated" in str(item.message)
         for item in captured
     )
+
+
+def test_sgd_classifier_grid_uses_only_current_loss_names():
+    params = AlgorithmGridSearchParams.SGDE.parameters
+    combinations = list(ParameterGrid(params))
+
+    assert "log" not in params["loss"]
+    assert "log_loss" in params["loss"]
+    assert len(combinations) == 27
+
+    for combination in combinations:
+        SGDClassifier(max_iter=200, **combination).fit(_X, _Y)

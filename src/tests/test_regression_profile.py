@@ -125,6 +125,7 @@ def test_regression_suite_button_does_not_require_manual_dataset_selection():
     widgets.eventhandler.regression_suite_button_was_clicked(widgets.regression_suite_button)
 
     assert widgets.regression_suite_state is True
+    assert widgets.project.value == "test_suite"
     assert widgets.train_checkbox.value is True
     assert widgets.predict_checkbox.value is False
     assert widgets.mispredicted_checkbox.value is False
@@ -143,6 +144,8 @@ def test_regression_suite_base_config_forces_training_and_disables_reclassificat
 
     params = widgets.get_regression_suite_base_config_params()
 
+    assert params["name"] == "test_suite"
+    assert params["io"].model_name == "test_suite"
     assert params["mode"].train is True
     assert params["mode"].predict is False
     assert params["mode"].mispredicted is False

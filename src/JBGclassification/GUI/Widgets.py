@@ -303,6 +303,7 @@ class Widgets:
     """ Creates and populates the widgets of the GUI """
     TEXT_MIN_LIMIT = 30
     TEXT_AREA_MIN_LIMIT = 60
+    REGRESSION_SUITE_PROJECT = "test_suite"
 
     # Temporary manual regression profile. Keep this in one place so the
     # button can be repurposed as later patches need different coverage.
@@ -642,6 +643,7 @@ class Widgets:
     def regression_suite_button_actions(self) -> None:
         """Enable classifier controls without touching manual dataset validation."""
         self.regression_suite_state = True
+        self.project.value = self.REGRESSION_SUITE_PROJECT
 
         # Do not call set_checkboxes() here. That helper asks whether the currently
         # selected dataset can be predicted, which queries the manual class column.

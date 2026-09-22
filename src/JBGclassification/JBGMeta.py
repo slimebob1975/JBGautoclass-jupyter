@@ -313,8 +313,8 @@ class AlgorithmGridSearchParams(MetaEnum):
          'class_weight': ('balanced', None)},
     ]}
     SLSV = {"parameters": {}}
-    SGDE = {"parameters": {'loss': ('hinge', 'log_loss', 'log', 'modified_huber', 'squared_hinge', 'perceptron', 
-            'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'), 
+    SGDE = {"parameters": {'loss': ('hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron',
+            'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'),
             'penalty': ('l2', 'l1', 'elasticnet')}}
     NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': np.arange(0, 1.01, 0.01)}}
     SVC = {"parameters": {'C': [1, 10, 100, 1000], 'gamma': ['scale', 'auto'], 'max_iter': [-1],
