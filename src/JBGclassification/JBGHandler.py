@@ -2286,6 +2286,13 @@ class PredictionsHandler:
 
     
     # Dark number stuffs
+    @staticmethod
+    def _validate_dark_number_correction(corr: float) -> float:
+        corr = float(corr)
+        if not np.isfinite(corr) or corr <= 0:
+            raise ValueError(f"Invalid dark-number correction factor: {corr}")
+        return corr
+
     def get_dark_numbers(self, X: pd.DataFrame, Y: pd.DataFrame, type: str = "all", models: list = [None], \
                          model_names: list = [None], combine_models=True, random_state=42) -> None:
         
@@ -2347,7 +2354,7 @@ class PredictionsHandler:
                         logger=self.handler.logger 
                     )
                     mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, estimator_X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS)
-                    corrs[label] = corr_estimator.score()
+                    corrs[label] = self._validate_dark_number_correction(corr_estimator.score())
                     #raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
                 except Exception as ex:
                     self.handler.logger.print_warning(f"Correction number estimator failed: {str(ex)}. Fallback: using regressor.")
@@ -2365,7 +2372,7 @@ class PredictionsHandler:
                         logger=self.handler.logger
                     )
                     mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, estimator_X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS)
-                    corrs[label] = corr_regressor.score()
+                    corrs[label] = self._validate_dark_number_correction(corr_regressor.score())
                     if DARK_NUMBER_DEBUG_LOGGING:
                         self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_} with result {corrs[label]}")
             except Exception as ex:

@@ -823,6 +823,22 @@ class TestModelHandler():
 class TestPredictionsHandler:
     """ Tests functions in the predictions handler """
 
+    @pytest.mark.parametrize("correction", [0.0, -1.0, np.nan, np.inf, -np.inf])
+    def test_dark_number_correction_rejects_nonfinite_or_nonpositive_values(
+        self, default_predictions_handler, correction
+    ):
+        with pytest.raises(ValueError, match="Invalid dark-number correction factor"):
+            default_predictions_handler._validate_dark_number_correction(correction)
+
+    @pytest.mark.parametrize("correction", [1.0, 1.25, np.float64(2.0)])
+    def test_dark_number_correction_accepts_finite_positive_values(
+        self, default_predictions_handler, correction
+    ):
+        result = default_predictions_handler._validate_dark_number_correction(correction)
+
+        assert result == float(correction)
+        assert isinstance(result, float)
+
     def test_dark_numbers_skip_models_without_predict_proba(self, default_predictions_handler):
         class PredictOnlyModel:
             def __init__(self, predictions):
