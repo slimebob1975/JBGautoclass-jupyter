@@ -23,8 +23,8 @@ from JBGStreamedLogger import JBGLogger
 from AutomaticClassifier import AutomaticClassifier as autoclass
 from Config import Config
 from JBGMeta import (
-    AlgorithmTuple, Oversampling, PreprocessTuple, ReductionTuple, ScoreMetric,
-    Undersampling,
+    AlgorithmTuple, NgramRange, Oversampling, PreprocessTuple, ReductionTuple,
+    ScoreMetric, Undersampling,
 )
 from SQLDataLayer import DataLayer
 from GUI.Widgets import Widgets
@@ -53,6 +53,17 @@ class GUIHandler:
             "class_column": "class",
             "id_column": "id",
         },
+        {
+            "label": "Text + Category",
+            "slug": "text_category",
+            "table_name": "text_regression",
+            "class_column": "class",
+            "id_column": "id",
+            # This fixture is intentionally targeted-only. Running the broad
+            # numeric Cartesian profile over TF-IDF output would be both slow
+            # and dominated by combinations that are unsuitable for sparse text.
+            "run_base": False,
+        },
     )
 
     # Additional targeted runs reuse a resolved dataset but override selected
@@ -61,6 +72,9 @@ class GUIHandler:
     # Cartesian product of every algorithm and transform.
     REGRESSION_SUITE_SAMPLING_ALGORITHMS = (
         "LRN", "RFCL", "LSVC", "GNB", "KNN", "DTC", "SGDE",
+    )
+    REGRESSION_SUITE_TEXT_ALGORITHMS = (
+        "LRN", "LSVC", "SGDE", "MNB", "CNB",
     )
     REGRESSION_SUITE_PROFILES = (
         {
@@ -84,6 +98,22 @@ class GUIHandler:
             "algorithms": REGRESSION_SUITE_SAMPLING_ALGORITHMS,
             "preprocessors": ("NOS", "STA"),
             "reductions": ("NOR", "PCA"),
+        },
+        {
+            "label": "Text + Category / Uni-bigrams",
+            "slug": "text_category_uni_bigram",
+            "dataset_slug": "text_category",
+            "oversampler": "NOG",
+            "undersampler": "NUG",
+            "scoring": "f1_macro",
+            "algorithms": REGRESSION_SUITE_TEXT_ALGORITHMS,
+            "preprocessors": ("NOS", "MAX"),
+            "reductions": ("NOR",),
+            "use_stop_words": False,
+            "ngram_range": "UNI_BI_GRAM",
+            "hex_encode": False,
+            "use_categorization": True,
+            "category_text_columns": ("channel",),
         },
     )
 
@@ -323,6 +353,19 @@ class GUIHandler:
         mode.preprocessor = PreprocessTuple(profile["preprocessors"])
         mode.feature_selection = ReductionTuple(profile["reductions"])
 
+        # Text settings are optional so the established numeric sampling
+        # profiles keep inheriting the broad suite defaults unchanged.
+        if "use_stop_words" in profile:
+            mode.use_stop_words = profile["use_stop_words"]
+        if "ngram_range" in profile:
+            mode.ngram_range = NgramRange[profile["ngram_range"]]
+        if "hex_encode" in profile:
+            mode.hex_encode = profile["hex_encode"]
+        if "use_categorization" in profile:
+            mode.use_categorization = profile["use_categorization"]
+        if "category_text_columns" in profile:
+            mode.category_text_columns = list(profile["category_text_columns"])
+
     def _build_regression_suite_config(
         self,
         base_config_params: dict,
@@ -366,7 +409,8 @@ class GUIHandler:
                 continue
 
             resolved_by_slug[dataset["slug"]] = resolved
-            configs.append((dataset["label"], self._build_regression_suite_config(base_config_params, resolved)))
+            if dataset.get("run_base", True):
+                configs.append((dataset["label"], self._build_regression_suite_config(base_config_params, resolved)))
 
         for profile in self.REGRESSION_SUITE_PROFILES:
             resolved = resolved_by_slug.get(profile["dataset_slug"])
