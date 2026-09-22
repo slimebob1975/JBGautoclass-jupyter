@@ -285,8 +285,11 @@ class Widgets:
     # Temporary manual regression profile. Keep this in one place so the
     # button can be repurposed as later patches need different coverage.
     REGRESSION_TEST_PROFILE = {
-        "algorithm_dropdown": ("LRN", "RFCL", "LSVC", "GNB", "KNN", "LDA"),
-        "preprocess_dropdown": ("NOS", "STA", "MIX"),
+        "algorithm_dropdown": (
+            "LRN", "RFCL", "LSVC", "GNB", "KNN", "LDA",
+            "DTC", "REC", "PAC", "SGDE", "QDA", "SVC", "HIST", "NCT", "BGC",
+        ),
+        "preprocess_dropdown": ("NOS", "STA", "MIX", "MAX"),
         "reduction_dropdown": ("NOR", "PCA", "RFE"),
         "scoremetric_dropdown": "balanced_accuracy",
         "oversampler_dropdown": "NOG",

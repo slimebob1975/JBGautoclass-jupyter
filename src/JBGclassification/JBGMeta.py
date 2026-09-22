@@ -32,8 +32,7 @@ from sklearn.ensemble import (AdaBoostClassifier, BaggingClassifier,
 from sklearn.feature_selection import RFE, SelectFromModel
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.kernel_approximation import Nystroem
-from sklearn.linear_model import (LogisticRegression,
-                                  PassiveAggressiveClassifier, Perceptron,
+from sklearn.linear_model import (LogisticRegression, Perceptron,
                                   RidgeClassifier, SGDClassifier)
 from sklearn.manifold import Isomap, LocallyLinearEmbedding
 from sklearn.metrics import (roc_auc_score, accuracy_score, average_precision_score,
@@ -329,8 +328,8 @@ class AlgorithmGridSearchParams(MetaEnum):
     ]}
 
     QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
-    BGC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 1.0, 2.0), 
-            'max_features': (0.5, 1.0, 2.0), 'warm_start': (True, False)}}
+    BGC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 0.75, 1.0),
+            'max_features': (0.5, 0.75, 1.0), 'warm_start': (True, False)}}
     ETC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
             'max_depth': range(1, 10, 1), 'max_features': ('sqrt', 'log2', None),
             'class_weight': ('balanced', 'balanced_subsample', None)}}
@@ -554,8 +553,11 @@ class Algorithm(MetaEnum):
     def do_PCN(self, max_iterations: int, size: int)-> Perceptron:
         return Perceptron(max_iter=max_iterations)
 
-    def do_PAC(self, max_iterations: int, size: int)-> PassiveAggressiveClassifier:
-        return PassiveAggressiveClassifier(max_iter=max_iterations)
+    def do_PAC(self, max_iterations: int, size: int)-> SGDClassifier:
+        return SGDClassifier(
+            loss="hinge", penalty=None, learning_rate="pa1", eta0=1.0,
+            max_iter=max_iterations
+        )
 
     def do_RFCL(self, max_iterations: int, size: int)-> RandomForestClassifier:
         return RandomForestClassifier()

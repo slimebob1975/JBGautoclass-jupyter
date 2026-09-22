@@ -4,6 +4,7 @@ import pandas
 import pytest
 from conftest import get_fixture_path
 
+import JBGHandler as handler_module
 from JBGExceptions import DatasetException, HandlerException
 
 from JBGHandler import JBGHandler, DatasetHandler, Model, _SpotCheckState
@@ -582,6 +583,104 @@ class TestModelHandler():
         assert state.best_test_score == 0.8
         assert state.best_rfe_feature_selection == 3
         assert state.best_num_components == 2
+
+    def test_apply_spot_check_state_uses_winning_reduction(self, default_model_handler):
+        captured_updates = {}
+
+        def capture_updates(updates: dict, type: str = None) -> None:
+            captured_updates.update(updates)
+
+        default_model_handler.handler.config.update_attributes = capture_updates
+        default_model_handler.model = Model(
+            text_converter=None,
+            preprocess=Preprocess.NOS,
+            reduction=Reduction.NOR,
+            algorithm=Algorithm.DUMY,
+            pipeline=None,
+            n_features_out=4,
+        )
+        pipeline = object()
+        state = _SpotCheckState(
+            best_num_components=2,
+            best_rfe_feature_selection=3,
+            trained_pipeline=pipeline,
+            best_algorithm=Algorithm.LRN,
+            best_preprocessor=Preprocess.STA,
+            best_reduction=Reduction.PCA,
+        )
+
+        best_model = default_model_handler._apply_spot_check_state(state)
+
+        assert captured_updates["feature_selection"] == Reduction.PCA
+        assert captured_updates["algorithm"] == Algorithm.LRN
+        assert captured_updates["preprocessor"] == Preprocess.STA
+        assert captured_updates["num_selected_features"] == 3
+        assert best_model.reduction == Reduction.PCA
+        assert best_model.algorithm == Algorithm.LRN
+        assert best_model.preprocess == Preprocess.STA
+        assert best_model.pipeline is pipeline
+        assert best_model.n_features_out == 2
+
+    def test_create_pipeline_and_cv_returns_none_pipeline_when_build_fails(self, default_model_handler):
+        def fail_build(*args, **kwargs):
+            raise RuntimeError("pipeline build failed")
+
+        default_model_handler._build_spot_check_pipeline = fail_build
+
+        pipe, cv_results, exception = default_model_handler.create_pipeline_and_cv(
+            reduction=None,
+            algorithm=None,
+            preprocessor=None,
+            feature_reducer=None,
+            estimator=None,
+            scaler=None,
+            oversampler=None,
+            undersampler=None,
+            kfold=None,
+            dh=None,
+            num_features=1,
+        )
+
+        assert pipe is None
+        assert np.isnan(cv_results).all()
+        assert exception == "RuntimeError: pipeline build failed"
+
+    def test_cross_val_score_serial_fallback_uses_sklearn_n_jobs_keyword(
+        self, monkeypatch, default_model_handler
+    ):
+        parallel_attempts = []
+
+        def fail_parallel(*args, **kwargs):
+            parallel_attempts.append(kwargs)
+            if len(parallel_attempts) == 1:
+                raise TypeError("NumPy input not supported")
+            raise RuntimeError("parallel execution failed")
+
+        serial_kwargs = {}
+
+        def fake_cross_val_score(*args, **kwargs):
+            serial_kwargs.update(kwargs)
+            return np.array([0.5, 0.5])
+
+        default_model_handler.execute_n_job = fail_parallel
+        monkeypatch.setattr(handler_module, "cross_val_score", fake_cross_val_score)
+
+        dh = type("Dataset", (), {})()
+        dh.X_train = pandas.DataFrame({"a": [1.0, 2.0, 3.0, 4.0]})
+        dh.Y_train = pandas.Series([0, 1, 0, 1])
+        kfold = type("KFold", (), {"get_n_splits": lambda self: 2})()
+
+        cv_results = default_model_handler.get_cross_val_score(
+            pipeline=object(),
+            dh=dh,
+            kfold=kfold,
+            algorithm=Algorithm.DUMY,
+        )
+
+        assert len(parallel_attempts) == 2
+        assert np.array_equal(cv_results, np.array([0.5, 0.5]))
+        assert serial_kwargs["n_jobs"] == 1
+        assert "n_jobs_desired" not in serial_kwargs
 
     def test_spot_check_candidate_marks_unstable_without_overwriting_failure(self, default_model_handler):
         state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)

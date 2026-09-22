@@ -26,8 +26,11 @@ def test_regression_test_profile_values():
     widgets = make_widgets()
     widgets.apply_regression_test_profile()
 
-    assert widgets.algorithm_dropdown.value == ("LRN", "RFCL", "LSVC", "GNB", "KNN", "LDA")
-    assert widgets.preprocess_dropdown.value == ("NOS", "STA", "MIX")
+    assert widgets.algorithm_dropdown.value == (
+        "LRN", "RFCL", "LSVC", "GNB", "KNN", "LDA",
+        "DTC", "REC", "PAC", "SGDE", "QDA", "SVC", "HIST", "NCT", "BGC",
+    )
+    assert widgets.preprocess_dropdown.value == ("NOS", "STA", "MIX", "MAX")
     assert widgets.reduction_dropdown.value == ("NOR", "PCA", "RFE")
     assert widgets.scoremetric_dropdown.value == "balanced_accuracy"
     assert widgets.oversampler_dropdown.value == "NOG"

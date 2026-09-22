@@ -1464,9 +1464,9 @@ class ModelHandler:
 
         return candidate_results, candidate_success
 
-    def _apply_spot_check_state(self, state: _SpotCheckState, feature_selection: Reduction) -> Model:
+    def _apply_spot_check_state(self, state: _SpotCheckState) -> Model:
         updates = {
-            "feature_selection": feature_selection,
+            "feature_selection": state.best_reduction,
             "algorithm": state.best_algorithm,
             "preprocessor": state.best_preprocessor,
             "num_selected_features": state.best_rfe_feature_selection,
@@ -1562,7 +1562,7 @@ class ModelHandler:
                         if candidate_success:
                             success = True
 
-        best_model = self._apply_spot_check_state(state, feature_selection=reduction)
+        best_model = self._apply_spot_check_state(state)
 
         self.handler.logger.clear_last_printed_result_line()
         self.handler.logger.print_test_performance(list_of_results, cross_validation_filepath)
@@ -1618,6 +1618,7 @@ class ModelHandler:
         dh: DatasetHandler, num_features: int):
 
         exception = ""
+        pipe = None
         try:
             pipe = self._build_spot_check_pipeline(
                 reduction, algorithm, preprocessor, feature_reducer, estimator, scaler,
@@ -1735,7 +1736,7 @@ class ModelHandler:
                 try:
                     self.handler.logger.print_info("Doing cross validation without parallelization.")
                     cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
-                        cv=kfold, scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, error_score='raise')
+                        cv=kfold, scoring=scorer_mechanism, n_jobs=1, params=fit_params, error_score='raise')
                 except Exception as ex:
                     raise ModelException(f"Unexpected error in cross_val_score: {str(ex)}") from ex
         
