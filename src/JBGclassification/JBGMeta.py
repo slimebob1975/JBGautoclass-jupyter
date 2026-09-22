@@ -275,7 +275,12 @@ class AlgorithmGridSearchParams(MetaEnum):
     RCNT = {"parameters": {}}
     LRN = {"parameters": {
             "solver": ["lbfgs"],
-            "penalty": ["l2", None],
+            # sklearn 1.8 deprecated ``penalty``. l1_ratio=0.0 is the
+            # supported equivalent of the previous L2 branch. The previous
+            # penalty=None branch is intentionally omitted: its C values were
+            # ignored, and sklearn 1.8.0 emits a spurious warning for the
+            # documented C=np.inf replacement.
+            "l1_ratio": [0.0],
             "tol": [1e-3, 1e-4, 1e-5],
             "C": [0.1, 1, 10],
             "class_weight": ["balanced", None],
@@ -297,8 +302,17 @@ class AlgorithmGridSearchParams(MetaEnum):
     PAC = {"parameters": {'class_weight': ('balanced', None)}}
     RFCL = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
             'max_features': ('sqrt', 'log2'), 'class_weight': ('balanced', 'balanced_subsample', None)}}
-    LSVC = {"parameters": {'penalty': ('l1', 'l2'), 'loss': ('hinge', 'squared_hinge'), 'dual': (True, False), 
-            'class_weight': ('balanced', None)}} 
+    LSVC = {"parameters": [
+        # LinearSVC only supports specific penalty/loss/dual combinations.
+        # Keep those combinations explicit so GridSearchCV never constructs
+        # an invalid estimator configuration.
+        {'penalty': ('l1',), 'loss': ('squared_hinge',), 'dual': (False,),
+         'class_weight': ('balanced', None)},
+        {'penalty': ('l2',), 'loss': ('hinge',), 'dual': (True,),
+         'class_weight': ('balanced', None)},
+        {'penalty': ('l2',), 'loss': ('squared_hinge',), 'dual': (True, False),
+         'class_weight': ('balanced', None)},
+    ]}
     SLSV = {"parameters": {}}
     SGDE = {"parameters": {'loss': ('hinge', 'log_loss', 'log', 'modified_huber', 'squared_hinge', 'perceptron', 
             'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'), 
