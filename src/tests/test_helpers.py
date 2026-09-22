@@ -2,6 +2,8 @@ from decimal import Decimal
 from datetime import datetime
 
 import pandas
+import numpy as np
+from scipy import sparse as scipy_sparse
 
 import Helpers
 
@@ -174,3 +176,40 @@ def test_save_matrix_as_csv_creates_parent_directory(tmp_path):
     Helpers.save_matrix_as_csv(matrix, filepath)
 
     assert filepath.is_file()
+
+
+def test_prepare_estimator_input_preserves_sparse_representation():
+    frame = pandas.DataFrame({
+        "dense": [1.0, 2.0, 3.0],
+        "sparse": pandas.arrays.SparseArray([0.0, 4.0, 0.0], fill_value=0.0),
+    })
+
+    prepared = Helpers.prepare_estimator_input(frame)
+
+    assert scipy_sparse.isspmatrix_csr(prepared)
+    np.testing.assert_allclose(
+        prepared.toarray(),
+        np.array([[1.0, 0.0], [2.0, 4.0], [3.0, 0.0]]),
+    )
+
+
+def test_prepare_estimator_input_keeps_dense_behavior():
+    frame = pandas.DataFrame({"a": [1.0, 2.0], "b": [3.0, 4.0]})
+
+    assert Helpers.prepare_estimator_input(frame) is frame
+    np.testing.assert_allclose(
+        Helpers.prepare_estimator_input(frame, prefer_numpy=True),
+        frame.to_numpy(),
+    )
+
+
+def test_contains_nan_handles_sparse_data_without_densifying():
+    clean = pandas.DataFrame({
+        "dense": [1.0, 2.0],
+        "sparse": pandas.arrays.SparseArray([0.0, 3.0], fill_value=0.0),
+    })
+    dirty = clean.copy()
+    dirty.loc[dirty.index[0], "dense"] = np.nan
+
+    assert not Helpers.contains_nan(clean)
+    assert Helpers.contains_nan(dirty)

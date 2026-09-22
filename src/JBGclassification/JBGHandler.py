@@ -974,16 +974,12 @@ class ModelHandler:
     def train_model(self, dh: DatasetHandler, cross_validation_filepath: str) -> None:
         
         # --- Extra säkerhetsbälte: NaN-kontroll före pipeline/SMOTE ---
-        try:
-            X_np = dh.X_train.to_numpy(dtype=float, copy=False)
-            if np.isnan(X_np).any():
-                self.handler.logger.print_warning(
-                    "Notice! NaN detected in training data before pipeline construction. "
-                    "This can break oversampling and/or undersampling if not handled by an imputer."
-                )
-        except Exception:
-            # Om dtype=float misslyckas (objektkolumner), gör inget – bara undvik krasch
-            pass
+        # Sparse TF-IDF data must not be densified just to inspect missing values.
+        if Helpers.contains_nan(dh.X_train):
+            self.handler.logger.print_warning(
+                "Notice! NaN detected in training data before pipeline construction. "
+                "This can break oversampling and/or undersampling if not handled by an imputer."
+            )
         # ------------------------------------------------------------
         try:
             self.model = self.get_model_from(dh, cross_validation_filepath)
@@ -1059,9 +1055,10 @@ class ModelHandler:
     # Train ml model
     def train_picked_model(self, model: Pipeline, X: pd.DataFrame, Y: pd.DataFrame) -> Pipeline:
         
-        # Train model
+        # Train model. Preserve sparse text features as SciPy CSR at the estimator boundary.
+        estimator_X = Helpers.prepare_estimator_input(X)
         try:
-            return model.fit(X, Y)
+            return model.fit(estimator_X, Y)
         except TypeError:
             return model.fit(X.to_numpy(), Y.to_numpy())
         except Exception as e:
@@ -1107,8 +1104,9 @@ class ModelHandler:
                 verbose=0,
                 error_score='raise',
                 n_jobs_desired=n_jobs_desired)
+            estimator_X = Helpers.prepare_estimator_input(X)
             try:
-                search.fit(X, Y)
+                search.fit(estimator_X, Y)
             except TypeError:
                 search.fit(X.to_numpy(), Y.to_numpy())
             except Exception as e:
@@ -1123,9 +1121,10 @@ class ModelHandler:
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
 
     def _fit_pipeline_for_validation(self, pipeline: Pipeline, dh: DatasetHandler) -> None:
-        """Fit a spot-check pipeline, preserving the existing DataFrame-to-NumPy fallback."""
+        """Fit a spot-check pipeline, preserving sparse text input and the dense fallback."""
+        estimator_X = Helpers.prepare_estimator_input(dh.X_train)
         try:
-            pipeline.fit(dh.X_train, dh.Y_train)
+            pipeline.fit(estimator_X, dh.Y_train)
         except TypeError:
             pipeline.fit(dh.X_train.to_numpy(), dh.Y_train.to_numpy())
 
@@ -1134,8 +1133,9 @@ class ModelHandler:
         scorer = self.handler.config.get_scoring_mechanism()
 
         if not isinstance(scorer, str):
+            estimator_X = Helpers.prepare_estimator_input(dh.X_validation)
             try:
-                return scorer(pipeline, dh.X_validation, dh.Y_validation)
+                return scorer(pipeline, estimator_X, dh.Y_validation)
             except TypeError:
                 return scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
 
@@ -1171,15 +1171,16 @@ class ModelHandler:
     def generate_roc_auc_score(self, pipeline: Pipeline, dh: DatasetHandler):
         
         # Multilabel case does not raise an ValueError
+        estimator_X = Helpers.prepare_estimator_input(dh.X_validation)
         try:
             try:
-                score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(dh.X_validation), multi_class='ovo')
+                score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(estimator_X), multi_class='ovo')
             except TypeError:
                 score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy()), multi_class='ovo')
         # Binary case
         except ValueError:
             try:
-                score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(dh.X_validation)[:, 1], multi_class='ovo')
+                score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(estimator_X)[:, 1], multi_class='ovo')
             except TypeError:
                 score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy())[:, 1], multi_class='ovo')
         return score
@@ -1262,8 +1263,11 @@ class ModelHandler:
 
         try:
             # Mirror the pipeline's initial imputation so the probe evaluates the same numeric input.
+            # Text conversion may produce pandas SparseDtype columns; hand sklearn SciPy CSR
+            # here as well so the preflight probe does not densify the feature matrix.
+            probe_input = Helpers.prepare_estimator_input(X_train)
             probe = SimpleImputer(strategy="constant", fill_value=0, keep_empty_features=True) \
-                .fit_transform(X_train)
+                .fit_transform(probe_input)
             probe = clone(scaler).fit_transform(probe)
 
             if hasattr(probe, "toarray"):
@@ -1700,18 +1704,19 @@ class ModelHandler:
             if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
                 fit_params[key] = func(dh.X_train, dh.Y_train)
 
-        # We want to executed the job with as many threads as possible, but as a final alternative use
-        # only one. Exception typically arises when input data is sparse, and a possible remedy to convert 
-        # it to dense numpy arrays.
+        # We want to execute the job with as many workers as possible. Dense data keeps
+        # the historical NumPy path, while pandas sparse text data is converted to SciPy
+        # CSR so sklearn can preserve sparsity through cross-validation.
         n_jobs_desired = min(kfold.get_n_splits(), self.handler.STANDARD_DESIRED_N_JOBS)
+        estimator_X = Helpers.prepare_estimator_input(dh.X_train, prefer_numpy=True)
         try:
-            cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), \
+            cv_results = self.execute_n_job(cross_val_score, pipeline, estimator_X, \
                     dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, \
                     error_score='raise') 
         except TypeError as ex:
-            self.handler.logger.print_warning(f"TypeError in parallel call of cross_val_score: {str(ex)}. Trying without NumPy conversion.")
+            self.handler.logger.print_warning(f"TypeError in parallel call of cross_val_score: {str(ex)}. Trying dense NumPy fallback.")
             try:
-                cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train, dh.Y_train, cv=kfold, \
+                cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), cv=kfold, \
                     scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, error_score='raise') 
             except Exception as ex:
                 self.handler.logger.print_warning(f"Could not execute cross_val_score in parallell: {str(ex)}")
@@ -1911,15 +1916,16 @@ class PredictionsHandler:
     # Make predictions on dataset
     def make_predictions(self, model: Pipeline, X: pd.DataFrame, classes: pd.Series, Y: pd.DataFrame = None) -> bool:
         could_predict_proba = False
+        estimator_X = Helpers.prepare_estimator_input(X)
         try:
-            predictions = model.predict(X)
+            predictions = model.predict(estimator_X)
         except TypeError:
             predictions = model.predict(X.to_numpy())
         except ValueError as e:
             self.handler.logger.abort_cleanly(message=f"It seems like you need to regenerate your prediction model: {e}")
         try:
             try:
-                probabilities = model.predict_proba(X)
+                probabilities = model.predict_proba(estimator_X)
             except TypeError:
                 probabilities = model.predict_proba(X.to_numpy())
             rates = np.amax(probabilities, axis=1)
@@ -2134,10 +2140,11 @@ class PredictionsHandler:
             self.X_mispredicted = pd.DataFrame()
             return
 
-        # Make predictions for both models (try DataFrame first, fall back to numpy)
+        # Make predictions for both models, preserving sparse text input where present.
+        estimator_X = Helpers.prepare_estimator_input(X)
         try:
-            y_pred_ct = ct_pipe.predict(X)
-            y_pred_ft = full_pipe.predict(X)
+            y_pred_ct = ct_pipe.predict(estimator_X)
+            y_pred_ft = full_pipe.predict(estimator_X)
         except TypeError:
             y_pred_ct = ct_pipe.predict(X.to_numpy())
             y_pred_ft = full_pipe.predict(X.to_numpy())
@@ -2204,10 +2211,11 @@ class PredictionsHandler:
         could_predict_proba = False
         Y_prob = None
 
+        estimator_X_misp = Helpers.prepare_estimator_input(X_misp_feat)
         try:
             try:
-                prob_ct = ct_pipe.predict_proba(X_misp_feat)
-                prob_ft = full_pipe.predict_proba(X_misp_feat)
+                prob_ct = ct_pipe.predict_proba(estimator_X_misp)
+                prob_ft = full_pipe.predict_proba(estimator_X_misp)
             except TypeError:
                 prob_ct = ct_pipe.predict_proba(X_misp_feat.to_numpy())
                 prob_ft = full_pipe.predict_proba(X_misp_feat.to_numpy())
@@ -2284,6 +2292,7 @@ class PredictionsHandler:
         # These DataFrames contain the results
         self.dark_numbers = pd.DataFrame()
         self.dark_numb_conf_matrix = pd.DataFrame()
+        estimator_X = Helpers.prepare_estimator_input(X)
 
         # Combine models to compute a worst case scenario
         if combine_models:
@@ -2300,7 +2309,7 @@ class PredictionsHandler:
         supports_predict_proba = [hasattr(model, "predict_proba") for model in models]
         if not any(supports_predict_proba):
             for model, model_name in zip(models, model_names):
-                Y_pred = pd.Series(model.predict(X), index=Y.index)
+                Y_pred = pd.Series(model.predict(estimator_X), index=Y.index)
                 self._update_confusion_matrix(model_name, Y, Y_pred, labels)
                 self.handler.logger.print_warning(
                     f"Skipping dark number calculations for {model_name}: "
@@ -2337,7 +2346,7 @@ class PredictionsHandler:
                         sample_size=1.0,
                         logger=self.handler.logger 
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS)
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, estimator_X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS)
                     corrs[label] = corr_estimator.score()
                     #raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
                 except Exception as ex:
@@ -2355,7 +2364,7 @@ class PredictionsHandler:
                         type='logbounded',
                         logger=self.handler.logger
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS) 
+                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, estimator_X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS)
                     corrs[label] = corr_regressor.score()
                     if DARK_NUMBER_DEBUG_LOGGING:
                         self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_} with result {corrs[label]}")
@@ -2367,7 +2376,7 @@ class PredictionsHandler:
         for model, model_name, can_predict_proba in zip(models, model_names, supports_predict_proba):
 
             # Make prediction for current model
-            Y_pred = pd.Series(model.predict(X), index=Y.index)
+            Y_pred = pd.Series(model.predict(estimator_X), index=Y.index)
 
             # Update the confusion matrix
             self._update_confusion_matrix(model_name, Y, Y_pred, labels)
@@ -2380,7 +2389,7 @@ class PredictionsHandler:
                 continue
             
             # Predict probabilities for current predictions
-            Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(X)], index=Y.index)
+            Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(estimator_X)], index=Y.index)
 
             # Compute and update the dark numbers matrix
             self._update_dark_numbers(model_name, Y, Y_pred, Y_prob_pred, type, corrs)

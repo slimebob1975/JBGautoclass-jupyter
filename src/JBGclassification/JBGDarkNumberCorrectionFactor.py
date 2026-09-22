@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import sparse as scipy_sparse
 from sklearn.base import BaseEstimator, clone
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from joblib import Parallel, delayed
@@ -96,7 +97,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         return int(np.ceil(required_positives / pos_ratio))
 
     def fit(self, X, y):
-        X = np.asarray(X)
+        # Preserve sparse text matrices; CSR supports the row indexing used below.
+        X = X.tocsr() if scipy_sparse.issparse(X) else np.asarray(X)
         y = np.asarray(y)
 
         # Check minimum sample requirement

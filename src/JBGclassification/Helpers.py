@@ -13,9 +13,43 @@ from typing import Any, Mapping, Union
 import numpy as np
 import pandas
 import IPython.display
+from scipy import sparse as scipy_sparse
 
 DOUBLE_UNDERSCORE = "__"
 EMAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+
+def dataframe_has_sparse_columns(data) -> bool:
+    """Return True when a pandas DataFrame contains one or more SparseDtype columns."""
+    return isinstance(data, pandas.DataFrame) and any(
+        isinstance(dtype, pandas.SparseDtype) for dtype in data.dtypes
+    )
+
+def prepare_estimator_input(data, prefer_numpy: bool = False):
+    """Prepare feature data for sklearn/imblearn without densifying sparse DataFrames.
+
+    Text conversion stores TF-IDF features as pandas SparseDtype columns. Passing that
+    mixed sparse/dense DataFrame directly to sklearn makes sklearn densify it and emit a
+    warning. Convert only such DataFrames to SciPy CSR. Dense DataFrames keep their
+    existing behavior unless ``prefer_numpy`` is requested by the caller.
+    """
+    if dataframe_has_sparse_columns(data):
+        sparse_frame = data.astype(pandas.SparseDtype("float64", fill_value=0.0))
+        return sparse_frame.sparse.to_coo().tocsr()
+
+    if prefer_numpy and hasattr(data, "to_numpy"):
+        return data.to_numpy()
+
+    return data
+
+def contains_nan(data) -> bool:
+    """Check numeric estimator input for NaN without densifying SciPy sparse matrices."""
+    prepared = prepare_estimator_input(data)
+    try:
+        if scipy_sparse.issparse(prepared):
+            return bool(np.isnan(prepared.data).any())
+        return bool(np.isnan(np.asarray(prepared, dtype=float)).any())
+    except (TypeError, ValueError):
+        return False
 
 def create_download_link(filename, title = "Click here to download file: "):  
     with open(filename, "rb") as infile:

@@ -1,4 +1,5 @@
 from datetime import datetime
+import warnings
 import numpy as np
 import pandas
 import pytest
@@ -508,6 +509,26 @@ class TestModelHandler():
         )
 
         assert reason == "no feature variance after preprocessing BIN"
+
+    def test_preflight_preserves_sparse_text_input(self, default_model_handler):
+        X = pandas.DataFrame({
+            "text_token": pandas.arrays.SparseArray([0.0, 1.0, 0.0, 1.0], fill_value=0.0),
+            "priority": [1.0, 2.0, 1.0, 2.0],
+        })
+        scaler = Preprocess.MAX.call_preprocess()
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            reason = default_model_handler.get_preflight_skip_reason(
+                Preprocess.MAX, scaler, Reduction.NOR, Algorithm.LRN, X
+            )
+
+        sparse_warnings = [
+            warning for warning in caught
+            if "pandas.DataFrame with sparse columns found" in str(warning.message)
+        ]
+        assert reason is None
+        assert sparse_warnings == []
 
     def test_preflight_allows_informative_binarized_features(self, default_model_handler):
         X = pandas.DataFrame({
