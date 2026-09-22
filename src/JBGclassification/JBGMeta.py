@@ -287,7 +287,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     }
     KNN = {"parameters": {'n_neighbors': (5, 10, 15), 'weights': ('uniform', 'distance'), 
            'algorithm': ('ball_tree', 'kd_tree', 'brute'), 'p': (1, 2)}}
-    RADN = {"parameters": {'radius': np.arange(0.5, 1.5, 0.1), 'weights': ('uniform','distance'), 'outlier_label': ('most_frequent', None)}}
+    RADN = {"parameters": {'radius': tuple(float(value) for value in np.arange(0.5, 1.5, 0.1)), 'weights': ('uniform','distance'), 'outlier_label': ('most_frequent', None)}}
     DTC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'splitter': ('best', 'random'), 
            'class_weight': ('balanced', None)}}
     GNB = {"parameters": {'var_smoothing': (1e-7, 1e-8, 1e-9)}}
@@ -316,7 +316,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     SGDE = {"parameters": {'loss': ('hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron',
             'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'),
             'penalty': ('l2', 'l1', 'elasticnet')}}
-    NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': np.arange(0, 1.01, 0.01)}}
+    NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': tuple(float(value) for value in np.arange(0, 1.01, 0.01))}}
     SVC = {"parameters": {'C': [1, 10, 100, 1000], 'gamma': ['scale', 'auto'], 'max_iter': [-1],
                           'kernel': ['linear', 'rbf', 'poly', 'sigmoid'], 'class_weight': ('balanced', None)}}
     STCL = {"parameters": {}}
@@ -327,7 +327,7 @@ class AlgorithmGridSearchParams(MetaEnum):
         {"solver": ["lsqr", "eigen"], "shrinkage": ["auto", None], "tol": [1e-3, 1e-4, 1e-5]},
     ]}
 
-    QDA = {"parameters": {'reg_param': np.arange(0.1, 1.0, 0.1), 'tol': [1e-3, 1e-4, 1e-5]}}
+    QDA = {"parameters": {'reg_param': tuple(float(value) for value in np.arange(0.1, 1.0, 0.1)), 'tol': [1e-3, 1e-4, 1e-5]}}
     BGC = {"parameters": {'n_estimators': [5, 10 , 15], 'max_samples': (0.5, 0.75, 1.0),
             'max_features': (0.5, 0.75, 1.0), 'warm_start': (True, False)}}
     ETC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
@@ -335,7 +335,7 @@ class AlgorithmGridSearchParams(MetaEnum):
             'class_weight': ('balanced', 'balanced_subsample', None)}}
     ABC = {"parameters": {'n_estimators': (10,30,50,100), 'learning_rate':(0.1, 1.0, 2.0)}}
     GBC = {"parameters": {'loss': ['log_loss', 'exponential'], 'learning_rate': [0.01, 0.1, 0.2],
-        'min_samples_split': np.linspace(0.1, 0.5, 12), 'min_samples_leaf': np.linspace(0.1, 0.5, 12),
+        'min_samples_split': tuple(float(value) for value in np.linspace(0.1, 0.5, 12)), 'min_samples_leaf': tuple(float(value) for value in np.linspace(0.1, 0.5, 12)),
         'max_depth':[3,5,8], 'max_features':['log2','sqrt'], 'criterion': ['friedman_mse', 'squared_error'],
         'subsample':[0.5, 0.8, 0.9, 1.0], 'n_estimators':[10]}}
     HIST = {"parameters": {'learning_rate': [0.01, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2],

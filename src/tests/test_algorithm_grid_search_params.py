@@ -1,3 +1,4 @@
+import pickle
 import warnings
 
 import numpy as np
@@ -91,3 +92,25 @@ def test_sgd_classifier_grid_uses_only_current_loss_names():
 
     for combination in combinations:
         SGDClassifier(max_iter=200, **combination).fit(_X, _Y)
+
+
+def _contains_numpy_array(value):
+    if isinstance(value, np.ndarray):
+        return True
+    if isinstance(value, dict):
+        return any(_contains_numpy_array(item) for item in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_contains_numpy_array(item) for item in value)
+    return False
+
+
+def test_algorithm_grid_search_params_are_pickle_safe_and_do_not_store_numpy_arrays():
+    for grid in AlgorithmGridSearchParams:
+        assert not _contains_numpy_array(grid.value), grid.name
+        assert pickle.loads(pickle.dumps(grid)) is grid
+
+
+def test_algorithms_with_former_numpy_grids_are_pickle_safe():
+    for algorithm_name in ("RADN", "NCT", "QDA", "GBC"):
+        algorithm = Algorithm[algorithm_name]
+        assert pickle.loads(pickle.dumps(algorithm)) is algorithm
