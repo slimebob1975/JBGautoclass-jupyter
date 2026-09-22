@@ -141,6 +141,16 @@
                 "icon": "flask"
             }
         },
+        "regression_suite_button": {
+            "type": "Button",
+            "params": {
+                "description": "Regr. suite",
+                "button_style": "primary",
+                "disabled": true,
+                "tooltip": "Run the Iris + Breast Cancer regression suite without selecting a dataset first",
+                "icon": "tasks"
+            }
+        },
         "train_checkbox": {
             "type": "Checkbox",
             "params": {
@@ -411,6 +421,7 @@
         "welcome",
         "project",
         "connection_form",
+        "regression_suite_form",
         "models_form",
         "data_form",
         "class_summary",
@@ -440,7 +451,8 @@
             "text_columns",
             "class_summary",
             "continuation_button",
-            "test_profile_button"
+            "test_profile_button",
+            "regression_suite_button"
         ],
         "classifier": [
             "train_checkbox",

@@ -69,8 +69,10 @@ class EventHandler:
                 )
                 self.widgets.update_data_catalogs_dropdown()
                 self.widgets.data_catalogs_dropdown.disabled = False
+                self.widgets.update_regression_suite_ready()
             else:
                 self.widgets.data_catalogs_dropdown.disabled = True
+                self.widgets.update_regression_suite_ready()
     
     def data_catalogs_dropdown(self, change: Bunch) -> None:
         """ Handler for data_catalogs_dropdown
@@ -223,6 +225,13 @@ class EventHandler:
         """Continue with a temporary regression profile for manual test runs."""
         self.continuation_button_was_clicked(button)
         self.widgets.apply_regression_test_profile()
+
+    def regression_suite_button_was_clicked(self, button: widgets.Button) -> None:
+        """Enter regression-suite mode without requiring a manually selected dataset."""
+        self.lock_observe_1 = True
+        self.widgets.deactivate_section("data")
+        self.widgets.regression_suite_button_actions()
+        self.widgets.apply_regression_test_profile()
         
 
     def start_button_was_clicked(self, button: widgets.Button) -> None:
@@ -234,6 +243,7 @@ class EventHandler:
     def reset_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Resets all widgets back to the way they were """
 
+        self.widgets.regression_suite_state = False
         self.widgets._load_default_widgets(clear=True)
     
     def unimplemented_handler(self, change) -> None:
@@ -259,13 +269,25 @@ class DataLayer(Protocol):
 
     def get_id_columns(self, **kwargs) -> dict:
         """ Used in the GUI, gets name and type for columns """
+
+    def get_table_columns(self, database: str, table: str) -> dict:
+        """ Used by the regression suite to inspect tables across catalogs """
         
 class GUIhandler(Protocol):
     def get_class_distribution(self, data_settings: dict, current_class: str) -> dict:
         """ Help function to avoid Widgets knowing about classifier DataLayer """
 
-    def run_classifier(self) -> None:
+    def run_classifier(
+        self,
+        config_params: dict,
+        output: widgets.Output,
+        set_rerun: bool = True,
+        regression_suite: bool = False,
+    ) -> None:
         """ Sets up the classifier and then runs it"""
+
+    def run_regression_suite(self, base_config_params: dict, output: widgets.Output) -> None:
+        """ Run the configured regression datasets sequentially """
 
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
         """ Changes the original dataset """
@@ -324,6 +346,7 @@ class Widgets:
         self.states = {
             "rerun": False,
             "summarise": False,
+            "regression_suite": False,
         }
         self.widgets = {}
         self._load_default_widgets()
@@ -438,6 +461,14 @@ class Widgets:
         self.states["rerun"] = state
     
     @property
+    def regression_suite_state(self) -> bool:
+        return self.states["regression_suite"]
+
+    @regression_suite_state.setter
+    def regression_suite_state(self, state: bool) -> None:
+        self.states["regression_suite"] = state
+
+    @property
     def summarise_state(self) -> bool:
         return self.states["summarise"]
 
@@ -492,6 +523,7 @@ class Widgets:
         # Enable and disable buttons
         self.enable_button("continuation_button")
         self.disable_button("test_profile_button")
+        self.update_regression_suite_ready()
         self.disable_button("start_button")
             
         
@@ -573,6 +605,10 @@ class Widgets:
 
     def continuation_button_actions(self) -> None:
         """ Complex actions when button is clicked """
+        self.regression_suite_state = False
+        self.start_button.description = "Start"
+        self.start_button.tooltip = "Run the classifier using the current settings"
+
         new_model = self.new_model
         self.set_checkboxes(new_model)
         default_enable_list = [
@@ -603,23 +639,70 @@ class Widgets:
         self.update_data_limit()
         self.enable_items(default_enable_list + new_model_list)
 
+    def regression_suite_button_actions(self) -> None:
+        """Enable classifier controls without touching manual dataset validation."""
+        self.regression_suite_state = True
+
+        # Do not call set_checkboxes() here. That helper asks whether the currently
+        # selected dataset can be predicted, which queries the manual class column.
+        # A suite run intentionally has no manual dataset/class selection yet.
+        self.enable_items(["train_checkbox"])
+        self.disable_items(["predict_checkbox", "mispredicted_checkbox", "metas_checkbox"])
+        self.update_values({
+            "train_checkbox": True,
+            "predict_checkbox": False,
+            "mispredicted_checkbox": False,
+            "metas_checkbox": False,
+        })
+        self.categorize_columns.options = ()
+
+        self.enable_items([
+            "show_info_checkbox",
+            "start_button",
+            "algorithm_dropdown",
+            "preprocess_dropdown",
+            "reduction_dropdown",
+            "scoremetric_dropdown",
+            "oversampler_dropdown",
+            "undersampler_dropdown",
+            "testdata_slider",
+            "iterations_slider",
+            "encryption_checkbox",
+            "categorize_checkbox",
+            "categorize_columns",
+            "filter_checkbox",
+            "ngram_range_dropdown",
+        ])
+        self.start_button.description = "Run suite"
+        self.start_button.tooltip = "Run the regression suite across configured datasets"
+
     def start_button_actions(self) -> None:
         """ Complex actions when button is clicked """
         if self.rerun_state:
-            self.update_class_summary()
+            if not self.regression_suite_state:
+                self.update_class_summary()
         else:
             self.rerun_state = True
         
         self.output.clear_output(wait=True)
         self.mispredicted_output.clear_output()
-        self.guihandler.run_classifier(config_params=self.get_config_params(), output=self.output)
+        if self.regression_suite_state:
+            config_params = self.get_regression_suite_base_config_params()
+            self.guihandler.run_regression_suite(base_config_params=config_params, output=self.output)
+        else:
+            config_params = self.get_config_params()
+            self.guihandler.run_classifier(config_params=config_params, output=self.output)
 
     def set_rerun(self) -> None:
         """ Updates buttons and checkboxes for doing a rerun with the settings """
         self.enable_items(["start_button", "show_info_checkbox"])
 
-        self.start_button.description = "Rerun"
-        self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
+        if self.regression_suite_state:
+            self.start_button.description = "Rerun suite"
+            self.start_button.tooltip = "Rerun the regression suite"
+        else:
+            self.start_button.description = "Rerun"
+            self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
         
     def handle_mispredicted(self, mispredicted: DataFrame, unique_classes: list[str]) -> None:
         """ Creates a gridbox with one row for each item and a dropdown to select whether to change the value in the database """
@@ -761,6 +844,29 @@ class Widgets:
             "save": True
         }
 
+        return params
+
+    def get_regression_suite_base_config_params(self) -> dict:
+        """Build suite settings without depending on the manually selected dataset widgets."""
+        params = self.get_config_params()
+        connection = params["connection"]
+        connection.data_catalog = ""
+        connection.data_table = ""
+        connection.class_column = ""
+        connection.data_text_columns = []
+        connection.data_numerical_columns = []
+        connection.id_column = ""
+
+        # Suite runs are always fresh training runs. Reclassification/mispredicted
+        # output is deliberately disabled because the suite is not a targeted
+        # dataset-cleanup workflow. Regr. test and normal runs remain unchanged.
+        mode = params["mode"]
+        mode.train = True
+        mode.predict = False
+        mode.mispredicted = False
+        mode.use_metas = False
+
+        params["io"].model_name = self.project.value or "regression"
         return params
 
     @property
@@ -987,6 +1093,21 @@ class Widgets:
             self.disable_button("continuation_button")
             self.disable_button("test_profile_button")
 
+        self.update_regression_suite_ready()
+
+    def update_regression_suite_ready(self) -> None:
+        """Enable the suite as soon as the SQL connection can enumerate catalogs."""
+        connection_ready = (
+            bool(self.sql_username.value)
+            and bool(self.sql_password.value)
+            and not self.data_catalogs_dropdown.disabled
+            and any(option not in ("", "N/A") for option in self.data_catalogs_dropdown.options)
+        )
+        if connection_ready:
+            self.enable_button("regression_suite_button")
+        else:
+            self.disable_button("regression_suite_button")
+
 
     def get_item_or_error(self, name: str) -> widgets.Widget:
         if not hasattr(self, name):
@@ -1039,16 +1160,18 @@ class Widgets:
     def data_form(self) -> widgets.Box:
         return self.create_form(self.forms["data"], widgets.Box)
 
+    def regression_suite_form(self) -> widgets.Box:
+        """Display the dataset-independent regression suite beside connection setup."""
+        return widgets.HBox(
+            [self.regression_suite_button],
+            layout=widgets.Layout(display="flex", justify_content="flex-end", width="100%"),
+        )
+
     def continuation_form(self) -> widgets.Box:
-        """Display normal and regression-test continue actions on one row."""
+        """Display actions that depend on the manually selected dataset."""
         return widgets.HBox(
             [self.continuation_button, self.test_profile_button],
-            layout=widgets.Layout(
-                display="flex",
-                justify_content="space-between",
-                align_items="center",
-                width="100%",
-            ),
+            layout=widgets.Layout(display="flex", justify_content="space-between", width="100%"),
         )
     
     def checkboxes_form(self) -> widgets.Box:
@@ -1251,6 +1374,14 @@ class Widgets:
         name = sys._getframe().f_code.co_name # Current function name
         if name not in self.widgets:
             self._load_widget(name, callback=self.eventhandler.test_profile_button_was_clicked)
+
+        return self.widgets[name]
+
+    @property
+    def regression_suite_button(self) -> widgets.Button:
+        name = sys._getframe().f_code.co_name # Current function name
+        if name not in self.widgets:
+            self._load_widget(name, callback=self.eventhandler.regression_suite_button_was_clicked)
 
         return self.widgets[name]
     

@@ -205,6 +205,21 @@ class DataLayer(DataLayerBase):
         return {column[0]:column[1] for column in data}
 
 
+    def get_table_columns(self, database: str, table: str) -> dict:
+        """Get column names and datatypes from a table in an explicit data catalog."""
+
+        database_name = str(database).replace("]", "]]" )
+        database_value = to_quoted_string(database)
+        table_value = to_quoted_string(table)
+        select = f"COLUMN_NAME, DATA_TYPE FROM [{database_name}].INFORMATION_SCHEMA.COLUMNS"
+        where = f"TABLE_CATALOG = {database_value} AND CONCAT(CONCAT(TABLE_SCHEMA,'.'),TABLE_NAME) = {table_value}"
+        order_by = "DATA_TYPE DESC"
+        query = f"SELECT {select} WHERE {where} ORDER BY {order_by}"
+
+        data = self.get_data_list_from_query(query)
+        return {column[0]: column[1] for column in data}
+
+
     def create_predictions_table(self, query: str) -> None:
         """ Create the predictions table """
         self.logger.print_progress(message="Create the predictions table")

@@ -32,8 +32,15 @@ from JBGHandler import JBGHandler
 class AutomaticClassifier:
 
     # Constructor with arguments
-    def __init__(self, config: Config.Config, logger: JBGLogger.JBGLogger, datalayer: SQLDataLayer.DataLayer):
+    def __init__(
+        self,
+        config: Config.Config,
+        logger: JBGLogger.JBGLogger,
+        datalayer: SQLDataLayer.DataLayer,
+        regression_suite: bool = False,
+    ):
         self.config = config
+        self.regression_suite = regression_suite
 
         self.logger = logger
 
@@ -68,7 +75,9 @@ class AutomaticClassifier:
         
         # Do some things prior to running the classification itself
         self.pre_run()
-        tr = JBGTaskRunner.TaskRunner( self.datalayer, self.config, self.logger, self.handler)
+        tr = JBGTaskRunner.TaskRunner(
+            self.datalayer, self.config, self.logger, self.handler, regression_suite=self.regression_suite
+        )
         early_exit = tr.run(JBGTaskRunner.get_tasks(self.config))
 
         if early_exit:

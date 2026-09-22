@@ -85,3 +85,20 @@ class TestDataLayer():
         expectedQuery = "UPDATE [DatabaseTwo].[InputTable] SET class = 'new_class' WHERE id = 1"
         
         assert query == expectedQuery
+
+
+def test_get_table_columns_queries_explicit_data_catalog(default_sqldatalayer, monkeypatch) -> None:
+    captured = {}
+
+    def fake_query(query):
+        captured["query"] = query
+        return [("id", "int"), ("feature", "float"), ("class", "varchar")]
+
+    monkeypatch.setattr(default_sqldatalayer, "get_data_list_from_query", fake_query)
+
+    columns = default_sqldatalayer.get_table_columns("OtherDatabase", "dbo.iris")
+
+    assert columns == {"id": "int", "feature": "float", "class": "varchar"}
+    assert "FROM [OtherDatabase].INFORMATION_SCHEMA.COLUMNS" in captured["query"]
+    assert "TABLE_CATALOG = 'OtherDatabase'" in captured["query"]
+    assert "CONCAT(CONCAT(TABLE_SCHEMA,'.'),TABLE_NAME) = 'dbo.iris'" in captured["query"]

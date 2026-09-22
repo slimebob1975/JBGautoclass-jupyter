@@ -87,6 +87,7 @@ class TaskRunner:
     config: Config
     logger: Logger
     handler: JBGHandler
+    regression_suite: bool = False
     
     def run(self, tasks: list):
         """
@@ -257,17 +258,20 @@ class TaskRunner:
 
     
     def display_mispredicted__task(self, cross_trained_model: Pipeline, trained_model: Pipeline) -> dict:
-        """ Compute and display most mispredicted data samples for possible manual correction """
-        if not self.config.should_display_mispredicted():    
+        """Compute reclassification output when requested and retain suite dark-number coverage."""
+        if self.config.should_display_mispredicted():
+            self.logger.print_task_header(title="Calculating mispredictions")
+            self.logger.print_progress(message="Calculating most mispredicted")
+
+            self.ph.most_mispredicted(
+                self.dh.X_original, trained_model, cross_trained_model, self.dh.X, self.dh.Y
+            )
+            self.ph.evaluate_mispredictions(self.config.get_output_filepath("misplaced"))
+        elif not self.regression_suite:
             return {}
+        else:
+            self.logger.print_task_header(title="Dark numbers")
 
-        self.logger.print_task_header(title="Calculating mispredictions")
-        self.logger.print_progress(message="Calculating most mispredicted")
-            
-        self.ph.most_mispredicted(self.dh.X_original, trained_model, cross_trained_model, self.dh.X, self.dh.Y)
-
-        self.ph.evaluate_mispredictions(self.config.get_output_filepath("misplaced"))
-        
         self.logger.print_progress(message="Get dark numbers")
 
         self.ph.get_dark_numbers(X = self.dh.X, Y = self.dh.Y, type = "all", models = [cross_trained_model, trained_model], \
@@ -275,7 +279,7 @@ class TaskRunner:
 
         self.ph.evaluate_dark_numbers(self.config.get_output_filepath("dark_numbers"),
                                       self.config.get_output_filepath("dark_numb_conf_matrix"))
-        
+
         return {}
 
 
