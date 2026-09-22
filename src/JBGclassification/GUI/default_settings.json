@@ -147,7 +147,7 @@
                 "description": "Regr. suite",
                 "button_style": "primary",
                 "disabled": true,
-                "tooltip": "Run the Iris + Breast Cancer regression suite without selecting a dataset first",
+                "tooltip": "Run the configured regression suite without selecting a dataset first",
                 "icon": "tasks"
             }
         },

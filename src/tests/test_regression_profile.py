@@ -101,6 +101,7 @@ def test_regression_suite_button_is_available_as_separate_action():
     assert button.disabled is True
     assert button.description == "Regr. suite"
     assert button.icon == "tasks"
+    assert button.tooltip == "Run the configured regression suite without selecting a dataset first"
 
 
 def test_regression_suite_becomes_ready_from_connection_without_dataset_selection():

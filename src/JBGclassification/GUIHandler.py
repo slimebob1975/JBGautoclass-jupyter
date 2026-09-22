@@ -22,6 +22,10 @@ from JBGExceptions import DataLayerException
 from JBGStreamedLogger import JBGLogger
 from AutomaticClassifier import AutomaticClassifier as autoclass
 from Config import Config
+from JBGMeta import (
+    AlgorithmTuple, Oversampling, PreprocessTuple, ReductionTuple, ScoreMetric,
+    Undersampling,
+)
 from SQLDataLayer import DataLayer
 from GUI.Widgets import Widgets
 
@@ -41,6 +45,45 @@ class GUIHandler:
             "table_name": "breast_cancer",
             "class_column": "diagnosis",
             "id_column": "id",
+        },
+        {
+            "label": "Wine",
+            "slug": "wine",
+            "table_name": "wine",
+            "class_column": "class",
+            "id_column": "id",
+        },
+    )
+
+    # Additional targeted runs reuse a resolved dataset but override selected
+    # training settings. Keep these narrower than the broad base profile: their
+    # purpose is regression coverage of sampling/scoring paths, not another full
+    # Cartesian product of every algorithm and transform.
+    REGRESSION_SUITE_SAMPLING_ALGORITHMS = (
+        "LRN", "RFCL", "LSVC", "GNB", "KNN", "DTC", "SGDE",
+    )
+    REGRESSION_SUITE_PROFILES = (
+        {
+            "label": "Breast Cancer / Random oversampling",
+            "slug": "breast_cancer_random_oversampling",
+            "dataset_slug": "breast_cancer",
+            "oversampler": "RND",
+            "undersampler": "NUG",
+            "scoring": "f1_macro",
+            "algorithms": REGRESSION_SUITE_SAMPLING_ALGORITHMS,
+            "preprocessors": ("NOS", "STA"),
+            "reductions": ("NOR", "PCA"),
+        },
+        {
+            "label": "Breast Cancer / Random undersampling",
+            "slug": "breast_cancer_random_undersampling",
+            "dataset_slug": "breast_cancer",
+            "oversampler": "NOG",
+            "undersampler": "RND",
+            "scoring": "f1_macro",
+            "algorithms": REGRESSION_SUITE_SAMPLING_ALGORITHMS,
+            "preprocessors": ("NOS", "STA"),
+            "reductions": ("NOR", "PCA"),
         },
     )
 
@@ -185,6 +228,10 @@ class GUIHandler:
             self.widgets.set_rerun()
         return result
 
+    @classmethod
+    def _regression_suite_dataset_labels(cls) -> str:
+        return ", ".join(dataset["label"] for dataset in cls.REGRESSION_SUITE_DATASETS)
+
     @staticmethod
     def _table_basename(table: str) -> str:
         return str(table).rsplit(".", 1)[-1].casefold()
@@ -265,7 +312,23 @@ class GUIHandler:
 
         return None
 
-    def _build_regression_suite_config(self, base_config_params: dict, dataset: dict) -> dict:
+    @staticmethod
+    def _apply_regression_suite_profile(config_params: dict, profile: dict) -> None:
+        """Apply a targeted suite-only training profile to a copied config."""
+        mode = config_params["mode"]
+        mode.oversampler = Oversampling[profile["oversampler"]]
+        mode.undersampler = Undersampling[profile["undersampler"]]
+        mode.scoring = ScoreMetric[profile["scoring"]]
+        mode.algorithm = AlgorithmTuple(profile["algorithms"])
+        mode.preprocessor = PreprocessTuple(profile["preprocessors"])
+        mode.feature_selection = ReductionTuple(profile["reductions"])
+
+    def _build_regression_suite_config(
+        self,
+        base_config_params: dict,
+        dataset: dict,
+        profile: dict | None = None,
+    ) -> dict:
         config_params = copy.deepcopy(base_config_params)
         connection = config_params["connection"]
         connection.data_catalog = dataset["catalog"]
@@ -278,29 +341,52 @@ class GUIHandler:
         config_params["mode"].category_text_columns = []
         config_params["debug"].data_limit = dataset["row_count"]
 
+        run_slug = dataset["slug"]
+        if profile is not None:
+            self._apply_regression_suite_profile(config_params, profile)
+            run_slug = profile["slug"]
+
         base_model_name = config_params["io"].model_name or "regression"
-        config_params["io"].model_name = f"{base_model_name}_{dataset['slug']}"
-        config_params["name"] = f"{config_params['name']}_{dataset['slug']}"
+        config_params["io"].model_name = f"{base_model_name}_{run_slug}"
+        config_params["name"] = f"{config_params['name']}_{run_slug}"
         return config_params
 
     def get_regression_suite_configs(self, base_config_params: dict) -> tuple[list[tuple[str, dict]], list[str]]:
         preferred_catalog = base_config_params["connection"].data_catalog
         configs = []
         missing = []
+        resolved_by_slug = {}
 
+        # Keep the established broad dataset runs first. Targeted profiles are
+        # appended afterwards so their addition does not change base-run order.
         for dataset in self.REGRESSION_SUITE_DATASETS:
             resolved = self._find_regression_suite_dataset(dataset, preferred_catalog)
             if resolved is None:
                 missing.append(dataset["label"])
                 continue
+
+            resolved_by_slug[dataset["slug"]] = resolved
             configs.append((dataset["label"], self._build_regression_suite_config(base_config_params, resolved)))
+
+        for profile in self.REGRESSION_SUITE_PROFILES:
+            resolved = resolved_by_slug.get(profile["dataset_slug"])
+            if resolved is None:
+                continue
+            configs.append((
+                profile["label"],
+                self._build_regression_suite_config(base_config_params, resolved, profile=profile),
+            ))
 
         return configs, missing
 
     def run_regression_suite(self, base_config_params: dict, output: Output) -> None:
         """Run known regression datasets sequentially and isolate dataset-level failures."""
+        dataset_labels = self._regression_suite_dataset_labels()
         with output, self.logger.capture_console_output():
-            self.logger.print_info("Regression suite: resolving Iris and Breast Cancer datasets.")
+            self.logger.print_info(f"Regression suite: resolving configured datasets: {dataset_labels}.")
+            if self.REGRESSION_SUITE_PROFILES:
+                profile_labels = ", ".join(profile["label"] for profile in self.REGRESSION_SUITE_PROFILES)
+                self.logger.print_info(f"Regression suite: targeted profiles: {profile_labels}.")
             self.logger.print_info(
                 "Regression suite: reclassification/mispredicted output is disabled for suite runs."
             )
