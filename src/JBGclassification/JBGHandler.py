@@ -29,7 +29,7 @@ from Config import Config
 from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estimator, Transform,
                      Oversampling, Undersampling, NgramRange)
 from JBGExceptions import (DatasetException, MissingScorerException, ModelException, HandlerException, ModelInitializationException, 
-    UnstableModelException, PipelineException)
+    PipelineException)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
@@ -1337,27 +1337,21 @@ class ModelHandler:
                                        preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
                                        cv_score: float, cv_stdev: float, test_score: float,
                                        num_features: int, num_components: int, failure: str) -> tuple[str, bool]:
-        try:
-            if self.is_best_run_yet(
-                cv_score, cv_stdev, state.best_cv_score, state.best_stdev,
-                test_score, state.best_test_score
-            ):
-                self._update_spot_check_best_state(
-                    state=state,
-                    pipeline=pipeline,
-                    preprocessor=preprocessor,
-                    reduction=reduction,
-                    algorithm=algorithm,
-                    cv_score=cv_score,
-                    cv_stdev=cv_stdev,
-                    test_score=test_score,
-                    num_features=num_features,
-                    num_components=num_components,
-                )
-        except UnstableModelException as ex:
-            if not failure:
-                failure = f"{','.join(ex.args)}"
-            return failure, False
+        if self.is_best_run_yet(
+            cv_score, cv_stdev, state.best_cv_score, state.best_stdev
+        ):
+            self._update_spot_check_best_state(
+                state=state,
+                pipeline=pipeline,
+                preprocessor=preprocessor,
+                reduction=reduction,
+                algorithm=algorithm,
+                cv_score=cv_score,
+                cv_stdev=cv_stdev,
+                test_score=test_score,
+                num_features=num_features,
+                num_components=num_components,
+            )
 
         return failure, True
 
@@ -1579,27 +1573,15 @@ class ModelHandler:
         # Too much reduced
         return best_score, max_features, num_features
 
-    def is_best_run_yet(self, train_score: float, train_stdev: float, best_train_score: float, best_stdev: float, \
-                        test_score: float, best_test_score: float) -> bool:
-        """ Calculates if this round is better than any prior """
-        
-        # First check if performance seems unstable
-        if abs(train_score - test_score) > 2.0 * train_stdev:
-            raise UnstableModelException(f"Performance metric difference for cross evaluation and final test exceeds 2*stdev")
-        
-        # If performance is stable, check if it is better than last time.
-        # Use these rules to detemine:
-        # 1. If it is better on test and at least comparable for train data, it is better
-        if test_score > best_test_score and train_score >= best_train_score: 
-            return True
-        # 2. If at least comparable on test and train data and with lower standard deviation, it is better
-        elif test_score >= best_test_score and train_score >= best_train_score and train_stdev < best_stdev:
-            return True
-        # 3. If strictly better on test and the difference between train and test is less than or equal to 1*stdev
-        elif test_score > best_test_score and abs(train_score - test_score) <= 1*train_stdev:
-            return True
-        else:
+    def is_best_run_yet(self, cv_score: float, cv_stdev: float, best_cv_score: float, best_stdev: float) -> bool:
+        """Return whether cross-validation performance improves on the current best candidate."""
+        if not np.isfinite(cv_score):
             return False
+
+        if cv_score > best_cv_score:
+            return True
+
+        return cv_score == best_cv_score and cv_stdev < best_stdev
 
     def _build_spot_check_pipeline(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess,
                                    feature_reducer: Transform, estimator: Estimator, scaler: Transform,

@@ -466,12 +466,12 @@ class JBGLogger(terminal.Logger):
         """
         resultsMatrix = pd.DataFrame(listOfResults,
             columns=["Preprocessor","Feature Reduction","Algorithm (Library)","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
-        resultsMatrix.sort_values(by = ["Test data","Mean cv","Stdev."], axis = 0, ascending = [False, False, True], \
+        resultsMatrix.sort_values(by = ["Mean cv","Stdev.","Test data"], axis = 0, ascending = [False, True, False], \
             inplace = True, ignore_index = True)
 
         # Save cross validation results to csv file
         save_matrix_as_csv(resultsMatrix, cross_validation_filepath)
-        self.display_matrix(f"Model test performance in descending order", resultsMatrix)
+        self.display_matrix(f"Model cross-validation performance in descending order", resultsMatrix)
 
     def display_matrix(self, title: str, matrix: pd.DataFrame, print_always: bool = True, precision: int = 2) -> None:
         """ Prints out a matrix, but only if it's verbose, or print_always is True """

@@ -584,6 +584,51 @@ class TestModelHandler():
         assert state.best_rfe_feature_selection == 3
         assert state.best_num_components == 2
 
+    def test_spot_check_candidate_prefers_higher_cv_over_holdout(self, default_model_handler):
+        state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)
+        first_pipeline = object()
+        second_pipeline = object()
+
+        default_model_handler._consider_spot_check_candidate(
+            state=state,
+            pipeline=first_pipeline,
+            preprocessor=Preprocess.STA,
+            reduction=Reduction.PCA,
+            algorithm=Algorithm.LRN,
+            cv_score=0.974178,
+            cv_stdev=0.030762,
+            test_score=1.0,
+            num_features=30,
+            num_components=30,
+            failure="",
+        )
+
+        failure, candidate_success = default_model_handler._consider_spot_check_candidate(
+            state=state,
+            pipeline=second_pipeline,
+            preprocessor=Preprocess.STA,
+            reduction=Reduction.RFE,
+            algorithm=Algorithm.LRN,
+            cv_score=0.978843,
+            cv_stdev=0.022639,
+            test_score=0.90,
+            num_features=22,
+            num_components=22,
+            failure="",
+        )
+
+        assert failure == ""
+        assert candidate_success is True
+        assert state.trained_pipeline is second_pipeline
+        assert state.best_reduction == Reduction.RFE
+        assert state.best_cv_score == 0.978843
+        assert state.best_test_score == 0.90
+
+    def test_spot_check_selection_uses_cv_stdev_as_tiebreaker(self, default_model_handler):
+        assert default_model_handler.is_best_run_yet(0.95, 0.02, 0.95, 0.03) is True
+        assert default_model_handler.is_best_run_yet(0.95, 0.04, 0.95, 0.03) is False
+        assert default_model_handler.is_best_run_yet(np.nan, 0.01, 0.95, 0.03) is False
+
     def test_apply_spot_check_state_uses_winning_reduction(self, default_model_handler):
         captured_updates = {}
 
