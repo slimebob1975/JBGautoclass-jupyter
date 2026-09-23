@@ -46,6 +46,80 @@ class TestTextDataToNumbersConverter():
         expected_dataset.index = index
         
         pd.testing.assert_frame_equal(dataset, expected_dataset, check_dtype=False, check_exact=False, atol=0.1, rtol=0.1)
+
+    def test_automatically_categorizes_low_cardinality_text_columns(self):
+        dataset = pd.DataFrame({
+            "channel": ["email", "chat", "email", "chat", None],
+            "message": [
+                "payment failed after login",
+                "please update my address",
+                "login failed again today",
+                "please change payment date",
+                "account login question",
+            ],
+        })
+
+        ttnc = TextDataToNumbersConverter(
+            text_columns=["channel", "message"],
+            category_columns=[],
+            limit_categorize=2,
+            language="en",
+            stop_words=False,
+            df=1.0,
+            use_encryption=False,
+        )
+
+        ttnc.fit(dataset)
+
+        assert ttnc.category_columns_ == ["channel"]
+        assert ttnc.text_columns_ == ["message"]
+
+        transformed = ttnc.transform(dataset)
+        assert "channel" in transformed.columns
+        assert "message" not in transformed.columns
+        assert transformed["channel"].notna().all()
+
+    def test_auto_categorization_keeps_high_cardinality_columns_as_text(self):
+        dataset = pd.DataFrame({
+            "code": ["AA", "BB", "CC", "DD"],
+        })
+
+        ttnc = TextDataToNumbersConverter(
+            text_columns=["code"],
+            category_columns=[],
+            limit_categorize=3,
+            language="en",
+            stop_words=False,
+            df=1.0,
+            use_encryption=False,
+        )
+
+        ttnc.fit(dataset)
+
+        assert ttnc.category_columns_ == []
+        assert ttnc.text_columns_ == ["code"]
+
+
+    def test_auto_categorization_does_not_duplicate_forced_categories(self):
+        dataset = pd.DataFrame({
+            "channel": ["email", "chat", "email", "chat"],
+            "message": ["alpha one", "beta two", "gamma three", "delta four"],
+        })
+
+        ttnc = TextDataToNumbersConverter(
+            text_columns=["channel", "message"],
+            category_columns=["channel"],
+            limit_categorize=2,
+            language="en",
+            stop_words=False,
+            df=1.0,
+            use_encryption=False,
+        )
+
+        ttnc.fit(dataset)
+
+        assert ttnc.category_columns_ == ["channel"]
+        assert ttnc.text_columns_ == ["message"]
    
 
 class TestNNClassifier3PL:

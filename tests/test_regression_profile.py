@@ -32,7 +32,7 @@ class MockGUIHandler:
 
 
 def make_widgets() -> Widgets:
-    src_path = Path(__file__).parents[1] / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
     model_path = Path(__file__).parent / "fixtures"
     return Widgets(src_path=src_path, GUIhandler=MockGUIHandler(), model_path=model_path)
 

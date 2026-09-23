@@ -884,6 +884,7 @@ class ModelHandler:
     use_feature_selection: bool = field(init=False)
     text_data: bool = field(init=False)
     SPOT_CHECK_REPETITIONS: int = 5
+    MAX_RFE_SEARCH_ROUNDS: int = 32
     STANDARD_K_FOLDS: int = 10
     STANDARD_NUM_SAMPLES_PER_FOLD_FOR_OVERSAMPLER: int = 2
     
@@ -1319,6 +1320,13 @@ class ModelHandler:
             failure,
         ]
 
+    @classmethod
+    def _get_rfe_search_round_limit(cls, n_features: int) -> int:
+        """Return a conservative upper bound for the outer binary RFE search."""
+        n_features = max(1, int(n_features))
+        expected_rounds = 1 + (n_features - 1).bit_length()
+        return min(expected_rounds, cls.MAX_RFE_SEARCH_ROUNDS)
+
     @staticmethod
     def _summarize_cv_results(cv_results: np.ndarray) -> tuple[float, float]:
         return cv_results.mean(), cv_results.std()
@@ -1387,6 +1395,9 @@ class ModelHandler:
 
         max_features_selection = dh.X.shape[1]
         min_features_selection = 0 if reduction == Reduction.RFE else max_features_selection
+        total_features = max_features_selection
+        rfe_round = 0
+        rfe_round_limit = self._get_rfe_search_round_limit(total_features)
         num_components = max_features_selection
         rfe_score = 0.0
         num_features = max_features_selection
@@ -1402,6 +1413,23 @@ class ModelHandler:
             else:
                 first_feature_selection = False
                 num_features = max_features_selection
+
+            if reduction == Reduction.RFE and rfe_round >= rfe_round_limit:
+                self.handler.logger.print_warning(
+                    f"Stopping RFE search {preprocessor.name}-{reduction.name}-{algorithm.name} "
+                    f"after {rfe_round} rounds; limit is {rfe_round_limit}."
+                )
+                break
+
+            bounds_before = (min_features_selection, max_features_selection)
+            if reduction == Reduction.RFE:
+                rfe_round += 1
+                self.handler.logger.print_info(
+                    f"RFE search {preprocessor.name}-{reduction.name}-{algorithm.name}: "
+                    f"round {rfe_round}/{rfe_round_limit}, target features "
+                    f"{num_features}/{total_features}, search interval "
+                    f"[{min_features_selection}, {max_features_selection}]."
+                )
 
             t0 = time.time()
 
@@ -1431,6 +1459,11 @@ class ModelHandler:
             rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(
                 temp_cv_score, rfe_score, num_features, max_features_selection, min_features_selection
             )
+            rfe_search_stalled = (
+                reduction == Reduction.RFE
+                and rfe_round > 1
+                and bounds_before == (min_features_selection, max_features_selection)
+            )
 
             failure, candidate_is_stable = self._consider_spot_check_candidate(
                 state=state,
@@ -1459,6 +1492,14 @@ class ModelHandler:
                 elapsed_time=elapsed_time,
                 failure=failure,
             ))
+
+            if rfe_search_stalled:
+                self.handler.logger.print_warning(
+                    f"Stopping RFE search {preprocessor.name}-{reduction.name}-{algorithm.name}: "
+                    f"search interval did not shrink from "
+                    f"[{bounds_before[0]}, {bounds_before[1]}]."
+                )
+                break
 
         return candidate_results, candidate_success
 

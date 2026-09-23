@@ -1,4 +1,5 @@
 from datetime import datetime
+from types import SimpleNamespace
 import warnings
 import numpy as np
 import pandas
@@ -574,6 +575,119 @@ class TestModelHandler():
         assert kfold.n_splits == 7
         assert kfold.shuffle is True
         assert kfold.random_state == 1
+
+    def test_rfe_search_round_limit_scales_with_feature_count(self, default_model_handler):
+        assert default_model_handler._get_rfe_search_round_limit(1) == 1
+        assert default_model_handler._get_rfe_search_round_limit(30) == 6
+        assert default_model_handler._get_rfe_search_round_limit(230) == 9
+        assert default_model_handler._get_rfe_search_round_limit(1 << 40) == \
+            default_model_handler.MAX_RFE_SEARCH_ROUNDS
+
+    def test_rfe_search_finishes_normal_binary_search_without_limit_warning(
+        self, default_model_handler
+    ):
+        dh = SimpleNamespace(
+            X=pandas.DataFrame(np.zeros((8, 230))),
+            X_train=pandas.DataFrame(np.zeros((8, 230))),
+            X_validation=None,
+            Y_validation=None,
+        )
+        state = _SpotCheckState(
+            best_num_components=230,
+            best_rfe_feature_selection=230,
+        )
+        targets = []
+        warning_messages = []
+
+        default_model_handler.get_preflight_skip_reason = lambda *args, **kwargs: None
+        default_model_handler.create_pipeline_and_cv = lambda *args, **kwargs: (
+            targets.append(args[-1]) or object(),
+            np.array([0.8]),
+            "",
+        )
+        default_model_handler.get_components_from_pipeline = \
+            lambda reduction, pipeline, num_features: num_features
+        default_model_handler.handler.logger.print_warning = \
+            lambda message, *args, **kwargs: warning_messages.append(message)
+
+        results, success = default_model_handler._evaluate_spot_check_candidate(
+            dh=dh,
+            preprocessor=Preprocess.STA,
+            preprocessor_callable=None,
+            reduction=Reduction.RFE,
+            reduction_callable=None,
+            algorithm=Algorithm.LRN,
+            algorithm_callable=None,
+            oversampler=None,
+            undersampler=None,
+            kfold=None,
+            state=state,
+        )
+
+        assert success is True
+        assert targets == [230, 115, 58, 29, 15, 8, 4, 2, 1]
+        assert len(results) == 9
+        assert warning_messages == []
+
+    def test_rfe_search_logs_progress_and_stops_if_interval_does_not_shrink(
+        self, default_model_handler
+    ):
+        dh = SimpleNamespace(
+            X=pandas.DataFrame(np.zeros((8, 230))),
+            X_train=pandas.DataFrame(np.zeros((8, 230))),
+            X_validation=None,
+            Y_validation=None,
+        )
+        state = _SpotCheckState(
+            best_num_components=230,
+            best_rfe_feature_selection=230,
+        )
+        targets = []
+        info_messages = []
+        warning_messages = []
+
+        default_model_handler.get_preflight_skip_reason = lambda *args, **kwargs: None
+        default_model_handler.create_pipeline_and_cv = lambda *args, **kwargs: (
+            targets.append(args[-1]) or object(),
+            np.array([0.8]),
+            "",
+        )
+        default_model_handler.get_components_from_pipeline = \
+            lambda reduction, pipeline, num_features: num_features
+        default_model_handler.calculate_current_features = \
+            lambda current_score, best_score, num_features, max_features, min_features: (
+                best_score, max_features, min_features
+            )
+        default_model_handler.handler.logger.print_info = \
+            lambda message, *args, **kwargs: info_messages.append(message)
+        default_model_handler.handler.logger.print_warning = \
+            lambda message, *args, **kwargs: warning_messages.append(message)
+
+        results, success = default_model_handler._evaluate_spot_check_candidate(
+            dh=dh,
+            preprocessor=Preprocess.STA,
+            preprocessor_callable=None,
+            reduction=Reduction.RFE,
+            reduction_callable=None,
+            algorithm=Algorithm.LRN,
+            algorithm_callable=None,
+            oversampler=None,
+            undersampler=None,
+            kfold=None,
+            state=state,
+        )
+
+        assert success is True
+        assert targets == [230, 115]
+        assert len(results) == 2
+        assert any(
+            "RFE search STA-RFE-LRN: round 2/9, target features 115/230" in message
+            for message in info_messages
+        )
+        assert any(
+            "Stopping RFE search STA-RFE-LRN: search interval did not shrink" in message
+            for message in warning_messages
+        )
 
     def test_spot_check_candidate_updates_best_state(self, default_model_handler):
         state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)

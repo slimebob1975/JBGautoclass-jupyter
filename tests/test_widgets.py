@@ -33,7 +33,7 @@ class MockGUIhandler:
 
 def get_src_path() -> Path:
     this_file = Path(__file__)
-    return this_file.parents[1] / "JBGclassification"
+    return this_file.parents[1] / "src" / "JBGclassification"
 
 def get_model_path() -> Path:
     this_file = Path(__file__)

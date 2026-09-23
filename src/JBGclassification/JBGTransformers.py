@@ -268,7 +268,7 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
             # Find out what text columns in text list that are categorical and separate them into
             # list of categories
             for column in self.text_columns_:
-                if self._is_categorical_column(X, column):
+                if column not in self.category_columns_ and self._is_categorical_column(X, column):
                     self.category_columns_.append(column)
             if self.category_columns_:
                 self.text_columns_ = [col for col in self.text_columns_ if col not in self.category_columns_]
@@ -320,11 +320,10 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
     
     # Some help functions below
     def _is_categorical_column(self, X: pd.DataFrame, column: str) -> bool:
-        
-        if X is None or X[column] is None:
-            return X[column].value_counts().count() <= self.limit_categorize_
-        else:
+        if X is None or column not in X.columns:
             return False
+
+        return X[column].nunique(dropna=True) <= self.limit_categorize_
 
     def _separate_and_encrypt_input_data(self, X: pd.DataFrame):
          

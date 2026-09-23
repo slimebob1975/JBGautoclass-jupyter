@@ -101,11 +101,14 @@ def save_model_to_file(filename, config):
     except Exception as e:
         print(f"Something went wrong on saving model to file: {e}")
 
+def get_fixture_dir() -> str:
+    srcdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    project_root = os.path.dirname(srcdir)
+    return os.path.join(project_root, "tests", "fixtures")
+
 def regenerate_model_save():
     config = bare_iris_config()
-    
-    srcdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) 
-    path = os.path.join(srcdir, "tests", "fixtures") # This is where all the fixtures should be saved
+    path = get_fixture_dir()
     
     modelSaveName = os.path.join(path, "model-save.sav")
 
@@ -113,9 +116,7 @@ def regenerate_model_save():
 
 def regenerate_config_save():
     config = bare_iris_config()
-    
-    srcdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) 
-    path = os.path.join(srcdir, "tests", "fixtures") # This is where all the fixtures should be saved
+    path = get_fixture_dir()
     
     configSaveName = os.path.join(path, "config-save.sav")
 
