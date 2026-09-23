@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import ipywidgets
 
@@ -6,6 +7,14 @@ from GUI.Widgets import Widgets
 
 
 class MockDataLayer:
+    def __init__(self):
+        self.config = SimpleNamespace(
+            connection=SimpleNamespace(sql_username="", sql_password="")
+        )
+
+    def get_catalogs_as_options(self):
+        return ["", "CatalogA", "CatalogB"]
+
     def get_trained_models_from_files(self, *args, **kwargs):
         return ["config-save.sav", "model-save.sav"]
 
@@ -14,7 +23,9 @@ class MockGUIHandler:
     def __init__(self):
         self.classifier_calls = []
         self.suite_calls = []
+        self.repeat_calls = []
         self.class_distribution_calls = []
+        self.saved_run_available = False
 
     @property
     def datalayer(self):
@@ -25,6 +36,12 @@ class MockGUIHandler:
 
     def run_regression_suite(self, base_config_params, output):
         self.suite_calls.append(base_config_params)
+
+    def has_saved_classifier_run(self):
+        return self.saved_run_available
+
+    def repeat_last_classifier_run(self, output, sql_username, sql_password):
+        self.repeat_calls.append((sql_username, sql_password))
 
     def get_class_distribution(self, data_settings, current_class):
         self.class_distribution_calls.append((data_settings, current_class))
@@ -88,7 +105,10 @@ def test_regression_suite_has_connection_level_form():
     form = widgets.regression_suite_form()
 
     assert isinstance(form, ipywidgets.HBox)
-    assert tuple(form.children) == (widgets.regression_suite_button,)
+    assert tuple(form.children) == (
+        widgets.repeat_last_run_button,
+        widgets.regression_suite_button,
+    )
     assert form.layout.justify_content == "flex-end"
     assert form.layout.width == "100%"
 
@@ -102,6 +122,42 @@ def test_regression_suite_button_is_available_as_separate_action():
     assert button.description == "Regr. suite"
     assert button.icon == "tasks"
     assert button.tooltip == "Run the configured regression suite without selecting a dataset first"
+
+
+def test_repeat_last_run_button_is_available_beside_regression_suite():
+    widgets = make_widgets()
+    button = widgets.repeat_last_run_button
+
+    assert isinstance(button, ipywidgets.Button)
+    assert button.disabled is True
+    assert button.description == "Repeat last"
+    assert button.icon == "repeat"
+    assert button.tooltip == "Repeat the previous classifier settings; data is fetched again"
+
+
+def test_repeat_last_run_becomes_ready_when_saved_run_and_connection_are_available():
+    widgets = make_widgets()
+    widgets.guihandler.saved_run_available = True
+    widgets.sql_username.value = "test-user"
+    widgets.sql_password.value = "test-password"
+    widgets.data_catalogs_dropdown.options = ("", "CatalogA")
+    widgets.data_catalogs_dropdown.disabled = False
+
+    widgets.update_regression_suite_ready()
+
+    assert widgets.repeat_last_run_button.disabled is False
+
+
+def test_repeat_last_run_uses_current_credentials_without_manual_dataset_setup():
+    widgets = make_widgets()
+    widgets.guihandler.saved_run_available = True
+    widgets.sql_username.value = "test-user"
+    widgets.sql_password.value = "test-password"
+
+    widgets.repeat_last_run_button_actions()
+
+    assert widgets.guihandler.repeat_calls == [("test-user", "test-password")]
+    assert widgets.regression_suite_state is False
 
 
 def test_regression_suite_becomes_ready_from_connection_without_dataset_selection():

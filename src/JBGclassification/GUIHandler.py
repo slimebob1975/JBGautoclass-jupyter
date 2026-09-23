@@ -31,6 +31,9 @@ from GUI.Widgets import Widgets
 
 # Class definition for the GUI
 class GUIHandler:
+    LAST_RUN_STATE_FILENAME = ".jbg_last_run.json"
+    LAST_RUN_STATE_VERSION = 1
+
     REGRESSION_SUITE_DATASETS = (
         {
             "label": "Iris",
@@ -225,6 +228,158 @@ class GUIHandler:
 
         return self.classifier_datalayer        
         
+    @property
+    def last_run_state_path(self) -> Path:
+        """Project-local state used to repeat the most recent manual classifier run."""
+        return Path(os.getcwd()) / self.LAST_RUN_STATE_FILENAME
+
+    @staticmethod
+    def _config_params_to_last_run_snapshot(config_params: dict) -> dict:
+        """Serialize a classifier configuration without persisting SQL credentials."""
+        connection = config_params["connection"]
+        mode = config_params["mode"]
+        io = config_params["io"]
+        debug = config_params["debug"]
+        mail = config_params["mail"]
+
+        return {
+            "version": GUIHandler.LAST_RUN_STATE_VERSION,
+            "connection": {
+                "odbc_driver": connection.odbc_driver,
+                "host": connection.host,
+                "trusted_connection": connection.trusted_connection,
+                "class_catalog": connection.class_catalog,
+                "class_table": connection.class_table,
+                "data_catalog": connection.data_catalog,
+                "data_table": connection.data_table,
+                "class_column": connection.class_column,
+                "data_text_columns": list(connection.data_text_columns),
+                "data_numerical_columns": list(connection.data_numerical_columns),
+                "id_column": connection.id_column,
+            },
+            "mode": {
+                "train": mode.train,
+                "predict": mode.predict,
+                "mispredicted": mode.mispredicted,
+                "use_metas": mode.use_metas,
+                "use_stop_words": mode.use_stop_words,
+                "ngram_range": mode.ngram_range.name,
+                "hex_encode": mode.hex_encode,
+                "use_categorization": mode.use_categorization,
+                "category_text_columns": list(mode.category_text_columns),
+                "test_size": mode.test_size,
+                "oversampler": mode.oversampler.name,
+                "undersampler": mode.undersampler.name,
+                "algorithm": mode.algorithm.get_abbreviations(),
+                "preprocessor": mode.preprocessor.get_abbreviations(),
+                "feature_selection": mode.feature_selection.get_abbreviations(),
+                "num_selected_features": mode.num_selected_features,
+                "scoring": mode.scoring.name,
+                "max_iterations": mode.max_iterations,
+            },
+            "io": {
+                "verbose": io.verbose,
+                "model_path": io.model_path,
+                "model_name": io.model_name,
+            },
+            "debug": {
+                "on": debug.on,
+                "data_limit": debug.data_limit,
+            },
+            "mail": {
+                "smtp_server": mail.smtp_server,
+                "notification_email": mail.notification_email,
+            },
+            "name": config_params["name"],
+            "save": config_params["save"],
+        }
+
+    @staticmethod
+    def _last_run_snapshot_to_config_params(
+        snapshot: dict,
+        sql_username: str,
+        sql_password: str,
+    ) -> dict:
+        """Recreate runtime Config objects and inject current SQL credentials."""
+        if snapshot.get("version") != GUIHandler.LAST_RUN_STATE_VERSION:
+            raise ValueError("Saved previous-run configuration has an unsupported version")
+
+        connection = dict(snapshot["connection"])
+        mode = snapshot["mode"]
+
+        return {
+            "connection": Config.Connection(
+                **connection,
+                sql_username=sql_username,
+                sql_password=sql_password,
+            ),
+            "mode": Config.Mode(
+                train=mode["train"],
+                predict=mode["predict"],
+                mispredicted=mode["mispredicted"],
+                use_metas=mode["use_metas"],
+                use_stop_words=mode["use_stop_words"],
+                ngram_range=NgramRange[mode["ngram_range"]],
+                hex_encode=mode["hex_encode"],
+                use_categorization=mode["use_categorization"],
+                category_text_columns=list(mode["category_text_columns"]),
+                test_size=mode["test_size"],
+                oversampler=Oversampling[mode["oversampler"]],
+                undersampler=Undersampling[mode["undersampler"]],
+                algorithm=AlgorithmTuple(mode["algorithm"]),
+                preprocessor=PreprocessTuple(mode["preprocessor"]),
+                feature_selection=ReductionTuple(mode["feature_selection"]),
+                num_selected_features=mode["num_selected_features"],
+                scoring=ScoreMetric[mode["scoring"]],
+                max_iterations=mode["max_iterations"],
+            ),
+            "io": Config.IO(**snapshot["io"]),
+            "debug": Config.Debug(**snapshot["debug"]),
+            "mail": Config.Mail(**snapshot["mail"]),
+            "name": snapshot["name"],
+            "save": snapshot["save"],
+        }
+
+    def save_last_classifier_run(self, config_params: dict) -> None:
+        """Persist the last manual run atomically; SQL credentials are deliberately omitted."""
+        snapshot = self._config_params_to_last_run_snapshot(config_params)
+        path = self.last_run_state_path
+        temporary_path = path.with_suffix(path.suffix + ".tmp")
+        with temporary_path.open("w", encoding="utf-8") as handle:
+            json.dump(snapshot, handle, ensure_ascii=False, indent=2)
+        temporary_path.replace(path)
+
+    def load_last_classifier_run(self, sql_username: str, sql_password: str) -> dict:
+        """Load the last manual run and combine it with the current login credentials."""
+        with self.last_run_state_path.open(encoding="utf-8") as handle:
+            snapshot = json.load(handle)
+        return self._last_run_snapshot_to_config_params(snapshot, sql_username, sql_password)
+
+    def has_saved_classifier_run(self) -> bool:
+        """Return True only when a readable, supported previous-run snapshot exists."""
+        try:
+            with self.last_run_state_path.open(encoding="utf-8") as handle:
+                snapshot = json.load(handle)
+            return snapshot.get("version") == self.LAST_RUN_STATE_VERSION
+        except (OSError, ValueError, TypeError, AttributeError, json.JSONDecodeError):
+            return False
+
+    def repeat_last_classifier_run(
+        self,
+        output: Output,
+        sql_username: str,
+        sql_password: str,
+    ):
+        """Rerun the persisted manual classifier configuration with current credentials."""
+        config_params = self.load_last_classifier_run(sql_username, sql_password)
+        connection = config_params["connection"]
+        with output, self.logger.capture_console_output():
+            self.logger.print_info(
+                "Repeat previous run: using saved classifier settings for "
+                f"{connection.data_catalog}.{connection.data_table}; data will be fetched again."
+            )
+        return self.run_classifier(config_params=config_params, output=output)
+
     def run_classifier(
         self,
         config_params: dict,
@@ -233,7 +388,16 @@ class GUIHandler:
         regression_suite: bool = False,
     ):
         """ Sets up the classifier and then runs it"""
-        
+
+        if not regression_suite:
+            try:
+                self.save_last_classifier_run(config_params)
+            except Exception as ex:
+                with output, self.logger.capture_console_output():
+                    self.logger.print_warning(
+                        f"Could not save previous-run configuration: {type(ex).__name__}: {ex}"
+                    )
+
         self.get_classifier_datalayer(config_params = config_params)
 
         self.logger.set_enable_quiet(not config_params["io"].verbose)

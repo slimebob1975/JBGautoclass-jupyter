@@ -531,6 +531,19 @@ class TestModelHandler():
         assert reason is None
         assert sparse_warnings == []
 
+    def test_preflight_skips_minmax_for_sparse_text_input(self, default_model_handler):
+        X = pandas.DataFrame({
+            "text_token": pandas.arrays.SparseArray([0.0, 1.0, 0.0, 1.0], fill_value=0.0),
+            "priority": [1.0, 2.0, 1.0, 2.0],
+        })
+        scaler = Preprocess.MIX.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.MIX, scaler, Reduction.NOR, Algorithm.DUMY, X
+        )
+
+        assert reason == "MinMaxScaler does not support sparse input"
+
     def test_preflight_allows_informative_binarized_features(self, default_model_handler):
         X = pandas.DataFrame({
             "a": [-1.0, 1.0, -2.0, 2.0],
@@ -883,6 +896,46 @@ class TestModelHandler():
         assert stable is False
         assert state.trained_pipeline is None
 
+    def test_spot_check_cv_failure_is_not_overwritten_by_validation(self, default_model_handler):
+        dh = SimpleNamespace(
+            X=pandas.DataFrame(np.zeros((8, 4))),
+            X_train=pandas.DataFrame(np.zeros((8, 4))),
+            X_validation=pandas.DataFrame(np.zeros((2, 4))),
+            Y_validation=pandas.Series([0, 1]),
+        )
+        state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)
+        validation_calls = []
+
+        default_model_handler.get_preflight_skip_reason = lambda *args, **kwargs: None
+        default_model_handler.create_pipeline_and_cv = lambda *args, **kwargs: (
+            object(),
+            np.array([np.nan]),
+            "ValueError: original CV failure",
+        )
+        default_model_handler.train_and_evaluate_picked_model = \
+            lambda *args, **kwargs: validation_calls.append(True)
+        default_model_handler.get_components_from_pipeline = \
+            lambda reduction, pipeline, num_features: num_features
+
+        results, success = default_model_handler._evaluate_spot_check_candidate(
+            dh=dh,
+            preprocessor=Preprocess.MAX,
+            preprocessor_callable=None,
+            reduction=Reduction.PCA,
+            reduction_callable=None,
+            algorithm=Algorithm.RFCL,
+            algorithm_callable=None,
+            oversampler=None,
+            undersampler=None,
+            kfold=None,
+            state=state,
+        )
+
+        assert success is False
+        assert validation_calls == []
+        assert results[0][-1] == "ValueError: original CV failure"
+        assert state.trained_pipeline is None
+
     def test_validation_fit_falls_back_to_numpy(self, default_model_handler):
         class DataFrameRejectingPipeline:
             def __init__(self):
@@ -988,6 +1041,35 @@ class TestPredictionsHandler:
         assert not default_predictions_handler.dark_numb_conf_matrix.empty
         assert len(logger.warnings) == 2
         assert all("does not support predict_proba()" in warning for warning in logger.warnings)
+
+    def test_make_predictions_without_predict_proba_uses_single_warning_and_precision_fallback(
+        self, default_predictions_handler
+    ):
+        class PredictOnlyModel:
+            def predict(self, X):
+                return np.array([0, 1, 0, 1])
+
+        class WarningLogger:
+            def __init__(self):
+                self.warnings = []
+
+            def print_warning(self, message):
+                self.warnings.append(message)
+
+        logger = WarningLogger()
+        default_predictions_handler.handler.logger = logger
+        X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0, 3.0]})
+        Y = pandas.Series([0, 1, 0, 0])
+        classes = pandas.Series([0, 1])
+
+        could_predict_proba = default_predictions_handler.make_predictions(
+            PredictOnlyModel(), X=X, classes=classes, Y=Y
+        )
+
+        assert could_predict_proba is False
+        assert default_predictions_handler.probabilites == [1.0, 0.5, 1.0, 0.5]
+        assert len(logger.warnings) == 1
+        assert "does not support predict_proba()" in logger.warnings[0]
 
     def test_get_prediction_results(self, default_predictions_handler):
         """ Two cases: An appropriate list or an empty list """

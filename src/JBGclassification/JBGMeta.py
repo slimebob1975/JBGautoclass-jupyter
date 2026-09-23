@@ -929,8 +929,18 @@ class Reduction(MetaEnum):
                 return int(n_components)
             
             return float(variance_target)
-        
-        return PCA(n_components=choose_n_components(num_samples, num_features, num_selected_features))
+
+        n_components = choose_n_components(num_samples, num_features, num_selected_features)
+
+        # sklearn 1.8 lets PCA accept sparse input, but ``svd_solver="auto"``
+        # selects ARPACK for sparse matrices. ARPACK only accepts an integer
+        # n_components, while our default PCA configuration is a variance target
+        # (0.95). ``covariance_eigh`` supports sparse input and fractional
+        # n_components, preserving the intended "retain 95 % variance" behavior.
+        if isinstance(n_components, float) and 0.0 < n_components < 1.0:
+            return PCA(n_components=n_components, svd_solver="covariance_eigh")
+
+        return PCA(n_components=n_components)
     
     def do_PCA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
 

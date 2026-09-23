@@ -6,16 +6,16 @@
 - [ ] Run one or more realistic end-to-end classification projects outside the regression suite and let observed product/runtime issues drive the next patches.
 - [ ] Treat `Regr. suite` primarily as a regression safety net after changes rather than continuing to expand it by default.
 - [ ] Exercise the full real-world lifecycle where practical: configure data, train, review CV/holdout results, save model, reload model, and predict previously unknown rows.
+- [ ] Improve `Repeat last` clarity by restoring the saved run values into all corresponding GUI setting widgets before execution, so the visible table/model/settings match the run that is about to be repeated.
 
 ## Known issues / correctness
 
-- [ ] Probability collection during evaluation can still emit repeated warnings when the winning estimator does not support `predict_proba()` (observed with Wine/PAC). Align this path with the guarded Dark Numbers behavior.
 - [ ] Verify and fix the Nearest Centroid grid metric spelling `euclidian` if the installed scikit-learn API requires `euclidean`.
 - [ ] QDA can fail candidate evaluation on rank-deficient covariance matrices (currently observed on Breast Cancer with no reduction). Decide whether this should remain an expected rejected candidate or receive estimator-specific handling.
 - [ ] Review automatic text categorization. The regression text profile currently forces the categorical column explicitly instead of relying on auto-detection.
 - [ ] Sometimes: Conversion problem float64 to int 64 when running SMOTE with MLPC in GridSearchCV.
 - [ ] `validate_dataset` contains an `astype` conversion whose result may not be assigned; verify whether this is a latent correctness bug.
-- [ ] Review CV failure reporting so an earlier CV failure cannot be hidden or overwritten by a later validation failure.
+- [ ] Review scoring names/semantics for `Balanced F1 Micro/Macro/Weighted`. In single-label classification, micro-F1 closely tracks accuracy and can hide minority-class failure, as the realistic Återkrav run demonstrated.
 - [ ] Review the NumPy compatibility/fallback path for overly broad `TypeError` handling that may mask estimator-internal errors.
 - [ ] Review `execute_n_job` exception wrapping; generic wrapping may make outer `TypeError` fallback handling unreachable.
 
@@ -29,6 +29,7 @@
 
 ## Serialization / model persistence
 
+- [ ] Generated `autoclassconfig_*.py` files currently persist `sql_password` in plaintext; remove credential serialization and inject credentials only at runtime.
 - [ ] Evaluate whether the project can reduce or remove its dependency on `dill` in favor of standard `pickle` by making pipelines fully pickle-friendly.
 - [ ] Replace local lambdas/functions embedded in `FunctionTransformer` steps with module-level pickle-friendly callables where practical.
 - [ ] Define and test a supported model persistence contract: save, reload in a fresh process, retrain, and predict.
@@ -44,6 +45,7 @@
 
 ## Runtime / server / operations
 
+- [ ] Investigate intermittent widget-rendering failure after `Reclassification table for most mispredicted`, where the UI only shows `Error displaying widget` without an application crash or explanatory exception. Capture whether the failure originates in widget payload size/content, serialization, frontend rendering, or kernel/frontend state, and make the failure observable in logs.
 - [ ] Investigate the Voilà `_xsrf` shutdown/reload 403 behavior.
 - [ ] Review the local server/kernel communication setup; the current TCP transport has no encryption and should have an explicit trust/security model.
 - [ ] Add possibility of using threads in `execute_n_jobs` when `PicklingError` occurs, but verify NaN handling and estimator thread-safety before enabling it.
@@ -58,6 +60,10 @@ Current coverage includes numeric binary/multiclass classification, 4/13/30-feat
 
 ## Solved / established
 
+- [X] 035 — Guard evaluation-time probability collection for estimators without `predict_proba()`: emit one capability warning, then use classification-report precision as the fallback confidence without per-row label-key warnings (including numeric class labels).
+- [X] 034 — Added a persistent `Repeat last` action beside `Regr. suite`. It stores the most recent manual classifier settings without SQL credentials and can recreate the run after a GUI/kernel restart using the current login; data is deliberately fetched again.
+- [X] 032 — Skip Min-Max preprocessing during spot-check preflight when converted features are sparse; avoids known `MinMaxScaler` CV failures without unsafe automatic densification.
+- [X] 031 — Fixed sparse PCA with fractional variance targets on current scikit-learn by using `covariance_eigh`; also fixed spot-check failure propagation so failed CV candidates cannot be treated as successful or have their root error overwritten by validation.
 - [X] Persistent timestamped logging and structured warning/error output.
 - [X] CV-only winner selection with stdev tie-break; holdout is diagnostic only.
 - [X] Final training uses the winning feature-reduction state.

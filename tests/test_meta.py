@@ -1,4 +1,6 @@
+import numpy as np
 import pytest
+from scipy import sparse
 
 from JBGMeta import (Algorithm, Detector, Preprocess, Reduction, ScoreMetric)
 
@@ -164,6 +166,22 @@ class TestPreprocess:
 
 class TestReduction:
     """ Tests the Enum Reduction functions """
+    def test_default_pca_variance_target_supports_sparse_input(self):
+        rng = np.random.default_rng(1)
+        X = sparse.csr_matrix(rng.normal(size=(40, 8)))
+
+        pca = Reduction.PCA.get_PCA(
+            num_samples=X.shape[0],
+            num_features=X.shape[1],
+            num_selected_features=None,
+        )
+        transformed = pca.fit_transform(X)
+
+        assert pca.n_components == 0.95
+        assert pca.svd_solver == "covariance_eigh"
+        assert transformed.shape[0] == X.shape[0]
+        assert 1 <= pca.n_components_ <= X.shape[1]
+
     def test_get_sorted_list(self):
         """ This function gives a list of tuples: (value, name) """
         sorted_list_default = Reduction.get_sorted_list(default_terms_first=False)

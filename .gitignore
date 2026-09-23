@@ -14,3 +14,7 @@ __test.py
 settings.json
 src/*/*.pt
 src/*/output/logs/
+
+# Local previous-run recipe; contains configuration metadata but no SQL password.
+.jbg_last_run.json
+.jbg_last_run.json.tmp

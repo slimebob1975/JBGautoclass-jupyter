@@ -232,6 +232,14 @@ class EventHandler:
         self.widgets.deactivate_section("data")
         self.widgets.regression_suite_button_actions()
         self.widgets.apply_regression_test_profile()
+
+    def repeat_last_run_button_was_clicked(self, button: widgets.Button) -> None:
+        """Rerun the last persisted manual classifier configuration immediately."""
+        button.disabled = True
+        self.lock_observe_1 = True
+        self.widgets.deactivate_section("data")
+        self.widgets.deactivate_section("classifier")
+        self.widgets.repeat_last_run_button_actions()
         
 
     def start_button_was_clicked(self, button: widgets.Button) -> None:
@@ -288,6 +296,17 @@ class GUIhandler(Protocol):
 
     def run_regression_suite(self, base_config_params: dict, output: widgets.Output) -> None:
         """ Run the configured regression datasets sequentially """
+
+    def has_saved_classifier_run(self) -> bool:
+        """ Whether a previous manual classifier run can be repeated """
+
+    def repeat_last_classifier_run(
+        self,
+        output: widgets.Output,
+        sql_username: str,
+        sql_password: str,
+    ) -> None:
+        """ Repeat the previous manual classifier run """
 
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
         """ Changes the original dataset """
@@ -678,6 +697,17 @@ class Widgets:
         self.start_button.description = "Run suite"
         self.start_button.tooltip = "Run the regression suite across configured datasets"
 
+    def repeat_last_run_button_actions(self) -> None:
+        """Run the persisted previous configuration without rebuilding it from current widgets."""
+        self.regression_suite_state = False
+        self.output.clear_output(wait=True)
+        self.mispredicted_output.clear_output()
+        self.guihandler.repeat_last_classifier_run(
+            output=self.output,
+            sql_username=self.sql_username.value,
+            sql_password=self.sql_password.value,
+        )
+
     def start_button_actions(self) -> None:
         """ Complex actions when button is clicked """
         if self.rerun_state:
@@ -698,6 +728,7 @@ class Widgets:
     def set_rerun(self) -> None:
         """ Updates buttons and checkboxes for doing a rerun with the settings """
         self.enable_items(["start_button", "show_info_checkbox"])
+        self.update_repeat_last_run_ready()
 
         if self.regression_suite_state:
             self.start_button.description = "Rerun suite"
@@ -1098,7 +1129,7 @@ class Widgets:
         self.update_regression_suite_ready()
 
     def update_regression_suite_ready(self) -> None:
-        """Enable the suite as soon as the SQL connection can enumerate catalogs."""
+        """Enable connection-level actions as soon as SQL login/catalog discovery is ready."""
         connection_ready = (
             bool(self.sql_username.value)
             and bool(self.sql_password.value)
@@ -1109,6 +1140,17 @@ class Widgets:
             self.enable_button("regression_suite_button")
         else:
             self.disable_button("regression_suite_button")
+        self.update_repeat_last_run_ready(connection_ready=connection_ready)
+
+    def update_repeat_last_run_ready(self, connection_ready: bool | None = None) -> None:
+        """Enable repeat only when current credentials and a persisted manual run are available."""
+        if connection_ready is None:
+            connection_ready = bool(self.sql_username.value) and bool(self.sql_password.value)
+
+        if connection_ready and self.guihandler.has_saved_classifier_run():
+            self.enable_button("repeat_last_run_button")
+        else:
+            self.disable_button("repeat_last_run_button")
 
 
     def get_item_or_error(self, name: str) -> widgets.Widget:
@@ -1163,9 +1205,9 @@ class Widgets:
         return self.create_form(self.forms["data"], widgets.Box)
 
     def regression_suite_form(self) -> widgets.Box:
-        """Display the dataset-independent regression suite beside connection setup."""
+        """Display connection-level repeat and regression-suite actions together."""
         return widgets.HBox(
-            [self.regression_suite_button],
+            [self.repeat_last_run_button, self.regression_suite_button],
             layout=widgets.Layout(display="flex", justify_content="flex-end", width="100%"),
         )
 
@@ -1376,6 +1418,26 @@ class Widgets:
         name = sys._getframe().f_code.co_name # Current function name
         if name not in self.widgets:
             self._load_widget(name, callback=self.eventhandler.test_profile_button_was_clicked)
+
+        return self.widgets[name]
+
+    @property
+    def repeat_last_run_button(self) -> widgets.Button:
+        name = sys._getframe().f_code.co_name # Current function name
+        if name not in self.default_widgets:
+            # Keep older local settings.json files compatible with this newly added action.
+            self.default_widgets[name] = {
+                "type": "Button",
+                "params": {
+                    "description": "Repeat last",
+                    "button_style": "primary",
+                    "disabled": True,
+                    "tooltip": "Repeat the previous classifier settings; data is fetched again",
+                    "icon": "repeat",
+                },
+            }
+        if name not in self.widgets:
+            self._load_widget(name, callback=self.eventhandler.repeat_last_run_button_was_clicked)
 
         return self.widgets[name]
 

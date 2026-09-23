@@ -141,6 +141,16 @@
                 "icon": "flask"
             }
         },
+        "repeat_last_run_button": {
+            "type": "Button",
+            "params": {
+                "description": "Repeat last",
+                "button_style": "primary",
+                "disabled": true,
+                "tooltip": "Repeat the previous classifier settings; data is fetched again",
+                "icon": "repeat"
+            }
+        },
         "regression_suite_button": {
             "type": "Button",
             "params": {
@@ -452,6 +462,7 @@
             "class_summary",
             "continuation_button",
             "test_profile_button",
+            "repeat_last_run_button",
             "regression_suite_button"
         ],
         "classifier": [

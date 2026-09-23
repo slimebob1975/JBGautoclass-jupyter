@@ -14,6 +14,7 @@ import os
 import langdetect
 import numpy as np
 import pandas as pd
+from scipy import sparse as scipy_sparse
 from lexicalrichness import LexicalRichness
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
@@ -1259,6 +1260,14 @@ class ModelHandler:
         normal training path is allowed to continue. DummyClassifier without feature reduction is
         retained as the useful no-signal baseline.
         """
+        # MinMaxScaler rejects SciPy sparse matrices. Text/category conversion deliberately
+        # preserves sparse features, so fail this combination in preflight instead of
+        # spending a full CV run on a known-incompatible pipeline (or densifying implicitly).
+        if preprocessor == Preprocess.MIX and (
+            scipy_sparse.issparse(X_train) or Helpers.dataframe_has_sparse_columns(X_train)
+        ):
+            return "MinMaxScaler does not support sparse input"
+
         if algorithm == Algorithm.DUMY and reduction == Reduction.NOR:
             return None
 
@@ -1349,6 +1358,15 @@ class ModelHandler:
                                        preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
                                        cv_score: float, cv_stdev: float, test_score: float,
                                        num_features: int, num_components: int, failure: str) -> tuple[str, bool]:
+        candidate_success = (
+            pipeline is not None
+            and not failure
+            and np.isfinite(cv_score)
+            and np.isfinite(cv_stdev)
+        )
+        if not candidate_success:
+            return failure, False
+
         if self.is_best_run_yet(
             cv_score, cv_stdev, state.best_cv_score, state.best_stdev
         ):
@@ -1439,15 +1457,22 @@ class ModelHandler:
                     preprocessor_callable, oversampler, undersampler, kfold, dh, num_features
                 )
 
-                if dh.X_validation is not None and dh.Y_validation is not None:
-                    current_pipeline, tmp_test_score, failure = \
+                # Do not let a secondary validation attempt hide the original CV
+                # failure. A candidate that did not complete CV is already invalid.
+                tmp_test_score = np.nan if failure else 0.0
+                if not failure and current_pipeline is not None \
+                        and dh.X_validation is not None and dh.Y_validation is not None:
+                    current_pipeline, tmp_test_score, validation_failure = \
                         self.train_and_evaluate_picked_model(current_pipeline, dh)
-                else:
-                    tmp_test_score = 0.0
+                    if validation_failure:
+                        failure = validation_failure
 
-                num_components = self.get_components_from_pipeline(
-                    reduction, current_pipeline, num_features
-                )
+                if current_pipeline is not None:
+                    num_components = self.get_components_from_pipeline(
+                        reduction, current_pipeline, num_features
+                    )
+                else:
+                    num_components = num_features
             except ModelException as ex:
                 self.handler.logger.print_warning(f"ModelException: {str(ex)}")
                 break
@@ -1601,11 +1626,17 @@ class ModelHandler:
                         if candidate_success:
                             success = True
 
-        best_model = self._apply_spot_check_state(state)
-
         self.handler.logger.clear_last_printed_result_line()
         self.handler.logger.print_test_performance(list_of_results, cross_validation_filepath)
         self.handler.logger.end_inline_progress(progress_key)
+
+        if state.trained_pipeline is None:
+            raise ModelException(
+                "No model candidate completed successfully during spot check. "
+                "See the cross-validation results for the underlying candidate errors."
+            )
+
+        best_model = self._apply_spot_check_state(state)
         return best_model
 
     def calculate_current_features(self, current_score: float, best_score: float, num_features: int, max_features: int, min_features: int):
@@ -1964,15 +1995,23 @@ class PredictionsHandler:
             predictions = model.predict(X.to_numpy())
         except ValueError as e:
             self.handler.logger.abort_cleanly(message=f"It seems like you need to regenerate your prediction model: {e}")
-        try:
+        if hasattr(model, "predict_proba"):
             try:
-                probabilities = model.predict_proba(estimator_X)
-            except TypeError:
-                probabilities = model.predict_proba(X.to_numpy())
-            rates = np.amax(probabilities, axis=1)
-            could_predict_proba = True
-        except Exception as e:
-            self.handler.logger.print_warning(f"Probablity prediction not available for current model: {e}")
+                try:
+                    probabilities = model.predict_proba(estimator_X)
+                except TypeError:
+                    probabilities = model.predict_proba(X.to_numpy())
+                rates = np.amax(probabilities, axis=1)
+                could_predict_proba = True
+            except Exception as e:
+                self.handler.logger.print_warning(f"Probability prediction not available for current model: {e}")
+                probabilities = np.array([[-1.0]*len(classes)]*X.shape[0])
+                rates = np.array([-1.0]*X.shape[0])
+        else:
+            self.handler.logger.print_warning(
+                "Probability prediction not available for current model: "
+                "model does not support predict_proba(). Falling back to class precision."
+            )
             probabilities = np.array([[-1.0]*len(classes)]*X.shape[0])
             rates = np.array([-1.0]*X.shape[0])
         
@@ -2007,14 +2046,31 @@ class PredictionsHandler:
             return 
         
         prob = []
-        
+        missing_labels = set()
+
         for prediction in self.predictions:
-            try:
-                # This should probably be a list of floats, not a float
-                prob = prob + [self.class_report[prediction]['precision']]
-            except KeyError as e:
-                self.handler.logger.print_warning(f"probability collection failed for key {prediction} with error {e}")
-    
+            # sklearn's classification_report stores class-label keys as strings,
+            # even when the original labels are numeric. Prefer the exact key for
+            # backwards compatibility, then fall back to its string form.
+            report_row = self.class_report.get(prediction)
+            if report_row is None:
+                report_row = self.class_report.get(str(prediction))
+
+            if report_row is None or 'precision' not in report_row:
+                missing_labels.add(str(prediction))
+                prob.append(-1.0)
+                continue
+
+            # This remains a scalar fallback confidence rather than a full
+            # per-class probability vector when predict_proba() is unavailable.
+            prob.append(float(report_row['precision']))
+
+        if missing_labels:
+            self.handler.logger.print_warning(
+                "Probability fallback could not find classification-report precision "
+                f"for label(s): {', '.join(sorted(missing_labels))}"
+            )
+
         self.probabilites = prob
         
     
