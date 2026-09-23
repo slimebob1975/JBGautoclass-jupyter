@@ -59,7 +59,7 @@ def test_regression_suite_text_profile_is_targeted_and_sparse_friendly():
     assert profile["ngram_range"] == "UNI_BI_GRAM"
     assert profile["hex_encode"] is False
     assert profile["use_categorization"] is True
-    assert profile["category_text_columns"] == ("channel",)
+    assert profile["category_text_columns"] == ()
 
 
 def test_regression_suite_sampling_profile_overrides_only_targeted_training_settings():
@@ -226,7 +226,7 @@ def test_regression_suite_text_profile_configures_text_and_category_paths():
     assert config["connection"].data_text_columns == ["channel", "message"]
     assert config["connection"].data_numerical_columns == ["priority"]
     assert config["debug"].data_limit == 160
-    assert config["mode"].category_text_columns == ["channel"]
+    assert config["mode"].category_text_columns == []
     assert config["mode"].use_stop_words is False
     assert config["mode"].ngram_range.name == "UNI_BI_GRAM"
     assert config["mode"].hex_encode is False
@@ -302,3 +302,73 @@ def test_regression_suite_appends_sampling_profiles_after_base_datasets():
         "test_suite_breast_cancer_random_undersampling",
         "test_suite_text_category_uni_bigram",
     ]
+
+
+def test_regression_suite_reports_wall_clock_time_and_sends_one_summary_email(monkeypatch):
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+    import GUIHandler as gui_module
+
+    class FakeLogger:
+        def __init__(self):
+            self.info = []
+            self.warning = []
+            self.error = []
+            self.progress = []
+
+        def capture_console_output(self):
+            return nullcontext()
+
+        def print_info(self, message):
+            self.info.append(message)
+
+        def print_warning(self, message):
+            self.warning.append(message)
+
+        def print_error(self, message):
+            self.error.append(message)
+
+        def print_progress(self, message=None, percent=None):
+            self.progress.append((message, percent))
+
+    class FakeOutput:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    handler = GUIHandler.__new__(GUIHandler)
+    handler.logger = FakeLogger()
+    handler.widgets = SimpleNamespace(set_rerun=lambda: None)
+    configs = [
+        ("Alpha", {"connection": SimpleNamespace(data_catalog="AIdata", data_table="alpha")}),
+        ("Beta", {"connection": SimpleNamespace(data_catalog="AIdata", data_table="beta")}),
+    ]
+    handler.get_regression_suite_configs = lambda base: (configs, ["Gamma"])
+
+    results = iter([True, False])
+    handler.run_classifier = lambda **kwargs: next(results)
+
+    ticks = iter([100.0, 165.4])
+    monkeypatch.setattr(gui_module.time, "monotonic", lambda: next(ticks))
+    sent = []
+    monkeypatch.setattr(
+        gui_module.JBGTaskRunner,
+        "send_email",
+        lambda mail, logger, subject, text_body, html_body: sent.append(
+            (mail, subject, text_body, html_body)
+        ) or True,
+    )
+
+    mail = SimpleNamespace(smtp_server="smtp.example", notification_email="test@example.com")
+    handler.run_regression_suite({"mail": mail}, FakeOutput())
+
+    assert handler.logger.progress[-1] == ("Regression suite finished after 0:01:05", 1.0)
+    assert any("total elapsed time 0:01:05" in message for message in handler.logger.info)
+    assert len(sent) == 1
+    assert sent[0][0] is mail
+    assert sent[0][1] == "JBG Regression Suite has completed"
+    assert "COMPLETED: Alpha" in sent[0][2]
+    assert "FAILED - no result: Beta" in sent[0][2]
+    assert "MISSING: Gamma" in sent[0][2]

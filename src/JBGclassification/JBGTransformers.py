@@ -223,7 +223,8 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
     # Create new instance of converter object
     def __init__(self, text_columns: list[str] = None, category_columns: list[str] = None, \
         limit_categorize: int = LIMIT_IS_CATEGORICAL, language: str = STANDARD_LANGUAGE, \
-        stop_words: bool = True, df: float = 1.0, ngram_range: tuple = (1,1), use_encryption: bool = True ):
+        stop_words: bool = True, df: float = 1.0, ngram_range: tuple = (1,1), use_encryption: bool = True, \
+        use_categorization: bool = True ):
                 
         # Take care of input
         if text_columns:
@@ -240,6 +241,7 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
         self.df_ = df
         self.use_encryption_ = use_encryption
         self.ngram_range_ = ngram_range
+        self.use_categorization_ = use_categorization
 
         # Internal transforms for conversion (placeholders)
         self.tfidvectorizer_ = None
@@ -267,9 +269,10 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
 
             # Find out what text columns in text list that are categorical and separate them into
             # list of categories
-            for column in self.text_columns_:
-                if column not in self.category_columns_ and self._is_categorical_column(X, column):
-                    self.category_columns_.append(column)
+            if self.use_categorization_:
+                for column in self.text_columns_:
+                    if column not in self.category_columns_ and self._is_categorical_column(X, column):
+                        self.category_columns_.append(column)
             if self.category_columns_:
                 self.text_columns_ = [col for col in self.text_columns_ if col not in self.category_columns_]
 

@@ -80,6 +80,51 @@ class Config(Protocol):
             The second parameter allows for injecting the path for reliable testing
         """
 
+
+def send_email(mail_config, logger: Logger, subject: str, text_body: str, html_body: str) -> bool:
+    """Send a multipart completion email using the configured SMTP settings."""
+    from email.message import EmailMessage
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = "no-reply@jbg.se"
+
+    recipients = mail_config.notification_email
+    if isinstance(recipients, (list, tuple)):
+        dest = list(recipients)
+    else:
+        dest = [recipients]
+
+    valid_dest = [recipient for recipient in dest if Helpers.is_valid_email(recipient)]
+    if not valid_dest:
+        logger.print_info("Error sending completion mail: no valid recipient(s).")
+        return False
+
+    msg["To"] = ", ".join(valid_dest)
+    msg.set_content(text_body)
+    msg.add_alternative(html_body, subtype="html")
+
+    try:
+        host = mail_config.smtp_server
+        port = getattr(mail_config, "smtp_port", 25)
+        use_starttls = getattr(mail_config, "use_starttls", port in (587,))
+        username = getattr(mail_config, "username", None)
+        password = getattr(mail_config, "password", None)
+
+        with smtplib.SMTP(host, port) as smtp:
+            smtp.ehlo()
+            if use_starttls:
+                smtp.starttls()
+                smtp.ehlo()
+            if username and password:
+                smtp.login(username, password)
+            smtp.send_message(msg)
+    except Exception as ex:
+        logger.print_info("Error sending completion mail:", str(ex))
+        return False
+
+    return True
+
 @dataclass
 class TaskRunner:
     """ Runs the tasks of the classification"""
@@ -308,37 +353,24 @@ class TaskRunner:
         return {}
     
     def send_completetion_email__task(self) -> dict:
-        """
-        Sends a completion email with both a text/plain part (fallback)
-        and a text/html part (tables render correctly).
-        """
-        import smtplib
-        from email.message import EmailMessage
-
-        # ---- Build bodies ----
+        """Build the standard per-run completion email and send it."""
         subject = f"JBG classification for task '{self.config.name}' has completed"
         greeting_text = (
             f'Your last JBG classification task "{self.config.name}" has been completed!\n\n'
             "Sincerely yours,\nJBG\n\n"
         )
 
-        # Plain-text body: greeting + plain log
-        text_log = ""
         try:
-            # Prefer the dedicated plain-text buffer if you added it
             text_log = self.logger.get_log_output()
         except AttributeError:
-            # Fallback: strip tags from HTML buffer if needed
             import re
             html = getattr(self.logger, "get_log_output_html", lambda: "")()
             text_log = re.sub(r"<[^>]+>", "", html)
 
         text_body = greeting_text + (text_log or "")
 
-        # HTML body: greeting + HTML log inside an HTML scaffold
         html_log = getattr(self.logger, "get_log_output_html", lambda: "")()
         if html_log and not html_log.lstrip().startswith("<"):
-            # If someone fed us plain text, wrap in <pre>
             html_log = f"<pre>{html_log}</pre>"
 
         html_body = f"""\
@@ -363,56 +395,11 @@ class TaskRunner:
             </body>
             </html>"""
 
-        # ---- Build message ----
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = "no-reply@jbg.se"
-
-        # Support single email or list/tuple
-        recipients = self.config.mail.notification_email
-        if isinstance(recipients, (list, tuple)):
-            msg["To"] = ", ".join(recipients)
-            dest = recipients
-        else:
-            msg["To"] = recipients
-            dest = [recipients]
-
-        # Set plain text, then add HTML alternative
-        msg.set_content(text_body)                 # text/plain
-        msg.add_alternative(html_body, subtype="html")  # text/html
-
-        # ---- Send ----
-        try:
-            # Optional: validate each recipient if you want
-            valid_dest = []
-            for r in dest:
-                if Helpers.is_valid_email(r):
-                    valid_dest.append(r)
-            if not valid_dest:
-                self.logger.print_info("Error sending completion mail: no valid recipient(s).")
-                return {}
-
-            host = self.config.mail.smtp_server
-            port = getattr(self.config.mail, "smtp_port", 25)
-            use_starttls = getattr(self.config.mail, "use_starttls", port in (587,))
-            username = getattr(self.config.mail, "username", None)
-            password = getattr(self.config.mail, "password", None)
-
-            with smtplib.SMTP(host, port) as s:
-                s.ehlo()
-                if use_starttls:
-                    s.starttls()
-                    s.ehlo()
-                if username and password:
-                    s.login(username, password)
-                s.send_message(msg)
-        except Exception as e:
-            self.logger.print_info("Error sending completion mail:", str(e))
-
+        send_email(self.config.mail, self.logger, subject, text_body, html_body)
         return {}
 
 
-def get_tasks(config: Config) -> list:
+def get_tasks(config: Config, regression_suite: bool = False) -> list:
     """ Gets a list of tasks for the given config """
     tasks = [
         "load_model",
@@ -439,6 +426,7 @@ def get_tasks(config: Config) -> list:
         ]
         tasks.extend(predict_tasks)
         
-    tasks.extend(["send_completetion_email"])
+    if not regression_suite:
+        tasks.extend(["send_completetion_email"])
 
     return tasks

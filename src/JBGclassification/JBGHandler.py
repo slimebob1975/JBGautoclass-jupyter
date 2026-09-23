@@ -346,12 +346,21 @@ class DatasetHandler:
         if self.handler.config.should_train():
             self.handler.logger.investigate_dataset(self.dataset, class_column) # Returns True if the investigation/printing was not suppressed
         
+    @staticmethod
+    def _normalize_class_column(dataset: pd.DataFrame, class_column: str) -> None:
+        """Convert known class labels to strings without destroying unknown labels."""
+        class_values = dataset[class_column].astype(object)
+        unknown_mask = class_values.isna() | class_values.astype(str).str.strip().eq("")
+        class_values.loc[~unknown_mask] = class_values.loc[~unknown_mask].astype(str)
+        dataset[class_column] = class_values
+
     def validate_dataset_old(self, data: list, column_names: list, class_column: str) -> pd.DataFrame:
         dataset = pd.DataFrame(data, columns = column_names)
         
-        # Make sure the class column is a categorical variable by setting it as string
+        # Make sure known class labels use one stable string representation while
+        # preserving None/empty values that mark rows waiting for prediction.
         try:
-            dataset.astype({class_column: 'str'})
+            self._normalize_class_column(dataset, class_column)
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
@@ -385,7 +394,7 @@ class DatasetHandler:
         dataset = pd.DataFrame(data, columns=column_names)
 
         try:
-            dataset.astype({class_column: 'str'})
+            self._normalize_class_column(dataset, class_column)
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not convert class column {class_column} to string variable: {e}")
@@ -567,7 +576,8 @@ class DatasetHandler:
                     stop_words=self.handler.config.use_stop_words(), \
                     df=1.0, \
                     ngram_range=(self.handler.config.get_ngram_range()).ngram_range, \
-                    use_encryption=self.handler.config.should_hex_encode() \
+                    use_encryption=self.handler.config.should_hex_encode(), \
+                    use_categorization=self.handler.config.use_categorization() \
                 )
             
             except Exception as ex:
@@ -1260,13 +1270,21 @@ class ModelHandler:
         normal training path is allowed to continue. DummyClassifier without feature reduction is
         retained as the useful no-signal baseline.
         """
+        sparse_input = (
+            scipy_sparse.issparse(X_train) or Helpers.dataframe_has_sparse_columns(X_train)
+        )
+
         # MinMaxScaler rejects SciPy sparse matrices. Text/category conversion deliberately
         # preserves sparse features, so fail this combination in preflight instead of
         # spending a full CV run on a known-incompatible pipeline (or densifying implicitly).
-        if preprocessor == Preprocess.MIX and (
-            scipy_sparse.issparse(X_train) or Helpers.dataframe_has_sparse_columns(X_train)
-        ):
+        if preprocessor == Preprocess.MIX and sparse_input:
             return "MinMaxScaler does not support sparse input"
+
+        # LinearDiscriminantAnalysis requires dense estimator input. NOR and RFE preserve
+        # the sparse text matrix all the way to the estimator, while PCA/Nystroem/TSVD
+        # already produce dense arrays. Reject only the known-incompatible sparse paths.
+        if sparse_input and algorithm == Algorithm.LDA and reduction in (Reduction.NOR, Reduction.RFE):
+            return "LinearDiscriminantAnalysis requires dense input"
 
         if algorithm == Algorithm.DUMY and reduction == Reduction.NOR:
             return None
@@ -1396,9 +1414,6 @@ class ModelHandler:
         )
         if skip_reason:
             failure = f"SKIPPED: {skip_reason}"
-            self.handler.logger.print_info(
-                f"SKIPPED {preprocessor.name}-{reduction.name}-{algorithm.name}: {skip_reason}"
-            )
             return [self._build_spot_check_result(
                 preprocessor=preprocessor,
                 reduction=reduction,
@@ -1442,11 +1457,13 @@ class ModelHandler:
             bounds_before = (min_features_selection, max_features_selection)
             if reduction == Reduction.RFE:
                 rfe_round += 1
-                self.handler.logger.print_info(
-                    f"RFE search {preprocessor.name}-{reduction.name}-{algorithm.name}: "
-                    f"round {rfe_round}/{rfe_round_limit}, target features "
-                    f"{num_features}/{total_features}, search interval "
-                    f"[{min_features_selection}, {max_features_selection}]."
+                self.handler.logger.print_progress(
+                    message=(
+                        f"RFE search {preprocessor.name}-{reduction.name}-{algorithm.name}: "
+                        f"round {rfe_round}/{rfe_round_limit}, target features "
+                        f"{num_features}/{total_features}, search interval "
+                        f"[{min_features_selection}, {max_features_selection}]."
+                    )
                 )
 
             t0 = time.time()
@@ -1659,11 +1676,34 @@ class ModelHandler:
 
         return cv_score == best_cv_score and cv_stdev < best_stdev
 
+    @staticmethod
+    def _cap_nystroem_components_for_cv(feature_reducer: Transform, kfold: StratifiedKFold,
+                                        n_train: int) -> Transform:
+        """Keep Nystroem within the smallest training fold used by cross-validation."""
+        if feature_reducer is None or not hasattr(feature_reducer, "n_components"):
+            return feature_reducer
+
+        n_splits = max(2, int(kfold.get_n_splits()))
+        min_fold_train = max(1, int(n_train) - ceil(int(n_train) / n_splits))
+        if int(feature_reducer.n_components) <= min_fold_train:
+            return feature_reducer
+
+        capped_reducer = clone(feature_reducer)
+        capped_reducer.set_params(n_components=min_fold_train)
+        return capped_reducer
+
     def _build_spot_check_pipeline(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess,
                                    feature_reducer: Transform, estimator: Estimator, scaler: Transform,
                                    oversampler: Oversampling, undersampler: Undersampling,
                                    kfold: StratifiedKFold, dh: DatasetHandler, num_features: int):
         """Build the pipeline used by one spot-check cross-validation attempt."""
+        if reduction == Reduction.NYS:
+            feature_reducer = self._cap_nystroem_components_for_cv(
+                feature_reducer=feature_reducer,
+                kfold=kfold,
+                n_train=dh.X_train.shape[0],
+            )
+
         return self.get_pipeline(
             reduction, feature_reducer, algorithm, estimator, preprocessor, scaler,
             oversampler, undersampler, dh.X_train.shape[1], num_features,

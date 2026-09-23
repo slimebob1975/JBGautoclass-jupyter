@@ -291,9 +291,14 @@ class AlgorithmGridSearchParams(MetaEnum):
     DTC = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'splitter': ('best', 'random'), 
            'class_weight': ('balanced', None)}}
     GNB = {"parameters": {'var_smoothing': (1e-7, 1e-8, 1e-9)}}
-    MNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False)}}
-    BNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False)}}
-    CNB = {"parameters": {'alpha': (0.0, 0.1, 1.0), 'fit_prior': (True, False), 'norm': (True, False)}}
+    # Current scikit-learn keeps alpha=0 unchanged because force_alpha=True by
+    # default. With sparse/text features, unseen feature/class combinations can
+    # then produce log(0), non-finite probabilities and RuntimeWarning spam.
+    # Keep a weak-smoothing branch instead of the numerically unsafe no-smoothing
+    # branch while preserving the size of the search grids.
+    MNB = {"parameters": {'alpha': (0.01, 0.1, 1.0), 'fit_prior': (True, False)}}
+    BNB = {"parameters": {'alpha': (0.01, 0.1, 1.0), 'fit_prior': (True, False)}}
+    CNB = {"parameters": {'alpha': (0.01, 0.1, 1.0), 'fit_prior': (True, False), 'norm': (True, False)}}
     REC = {"parameters": {'alpha': [1.0, 0.1, 0.01, 0.001, 0.0001], 'tol': [1e-1, 1e-2, 1e-3, 1e-4, 1e-5], "fit_intercept": [True, False], 
            'class_weight': ('balanced', None)}}
     PCN = {"parameters": {'penalty': ('l2', 'l1', 'elasticnet'), 'alpha': (1e-3, 1e-4, 1e-5), 
@@ -303,11 +308,12 @@ class AlgorithmGridSearchParams(MetaEnum):
             'max_features': ('sqrt', 'log2'), 'class_weight': ('balanced', 'balanced_subsample', None)}}
     LSVC = {"parameters": [
         # LinearSVC only supports specific penalty/loss/dual combinations.
-        # Keep those combinations explicit so GridSearchCV never constructs
-        # an invalid estimator configuration.
+        # The l2/hinge/dual=True branch repeatedly fails to converge with the
+        # project's sparse-compatible StandardScaler(with_mean=False), even at
+        # max_iter=20000 on the Breast Cancer regression profile. Keep the
+        # stable squared-hinge branches instead of returning unconverged CV
+        # fits and flooding the server log with ConvergenceWarning messages.
         {'penalty': ('l1',), 'loss': ('squared_hinge',), 'dual': (False,),
-         'class_weight': ('balanced', None)},
-        {'penalty': ('l2',), 'loss': ('hinge',), 'dual': (True,),
          'class_weight': ('balanced', None)},
         {'penalty': ('l2',), 'loss': ('squared_hinge',), 'dual': (True, False),
          'class_weight': ('balanced', None)},
@@ -316,7 +322,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     SGDE = {"parameters": {'loss': ('hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron',
             'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive'),
             'penalty': ('l2', 'l1', 'elasticnet')}}
-    NCT = {"parameters": {'metric': ('euclidian', 'manhattan'), 'shrink_threshold': tuple(float(value) for value in np.arange(0, 1.01, 0.01))}}
+    NCT = {"parameters": {'metric': ('euclidean', 'manhattan'), 'shrink_threshold': (None,) + tuple(float(value) for value in np.arange(0.01, 1.01, 0.01))}}
     SVC = {"parameters": {'C': [1, 10, 100, 1000], 'gamma': ['scale', 'auto'], 'max_iter': [-1],
                           'kernel': ['linear', 'rbf', 'poly', 'sigmoid'], 'class_weight': ('balanced', None)}}
     STCL = {"parameters": {}}
@@ -591,7 +597,11 @@ class Algorithm(MetaEnum):
         return LinearDiscriminantAnalysis()
 
     def do_QDA(self, max_iterations: int, size: int)-> QuadraticDiscriminantAnalysis:     
-        return QuadraticDiscriminantAnalysis()
+        # The unregularized sklearn default (reg_param=0.0) raises LinAlgError
+        # for rank-deficient class covariance matrices. Start spot-checking at
+        # the same smallest regularization value already used by the QDA grid.
+        reg_params = AlgorithmGridSearchParams.QDA.parameters["reg_param"]
+        return QuadraticDiscriminantAnalysis(reg_param=min(reg_params))
 
     def do_BGC(self, max_iterations: int, size: int)-> BaggingClassifier:     
         return BaggingClassifier()
@@ -964,6 +974,10 @@ class Reduction(MetaEnum):
         else:
             components = max(LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
 
+        # TruncatedSVD requires n_components <= n_features. The historical
+        # LOWER_LIMIT_REDUCTION floor can otherwise create an invalid reducer
+        # for compact text matrices (for example 93 features -> 100 components).
+        components = min(int(components), int(num_features))
         return TruncatedSVD(n_components=components)
     
     def do_TSVD(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):

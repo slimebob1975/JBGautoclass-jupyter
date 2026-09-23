@@ -3,10 +3,13 @@
 # Broken into module by: Marie Hogebrandt June-oct 2022
 
 import copy
+import html
 import errno
 import json
 import os
 import sys
+import time
+from datetime import timedelta
 from pathlib import Path
 
 from ipywidgets import Output
@@ -19,6 +22,7 @@ sys.path.append(src_dir)
 from dotenv import load_dotenv
 
 from JBGExceptions import DataLayerException
+import JBGTaskRunner
 from JBGStreamedLogger import JBGLogger
 from AutomaticClassifier import AutomaticClassifier as autoclass
 from Config import Config
@@ -116,7 +120,7 @@ class GUIHandler:
             "ngram_range": "UNI_BI_GRAM",
             "hex_encode": False,
             "use_categorization": True,
-            "category_text_columns": ("channel",),
+            "category_text_columns": (),
         },
     )
 
@@ -589,6 +593,7 @@ class GUIHandler:
 
     def run_regression_suite(self, base_config_params: dict, output: Output) -> None:
         """Run known regression datasets sequentially and isolate dataset-level failures."""
+        suite_started = time.monotonic()
         dataset_labels = self._regression_suite_dataset_labels()
         with output, self.logger.capture_console_output():
             self.logger.print_info(f"Regression suite: resolving configured datasets: {dataset_labels}.")
@@ -606,6 +611,7 @@ class GUIHandler:
 
         completed = []
         failed = []
+        statuses = []
         for index, (label, config_params) in enumerate(configs, start=1):
             connection = config_params["connection"]
             with output, self.logger.capture_console_output():
@@ -623,28 +629,87 @@ class GUIHandler:
                 )
                 if result:
                     completed.append(label)
+                    statuses.append((label, "COMPLETED"))
                     with output, self.logger.capture_console_output():
                         self.logger.print_info(f"Regression suite: completed {label}.")
                 else:
                     failed.append(label)
+                    statuses.append((label, "FAILED - no result"))
                     with output, self.logger.capture_console_output():
                         self.logger.print_warning(f"Regression suite: {label} returned no result.")
             except SystemExit as ex:
                 failed.append(label)
+                details = self._compact_regression_suite_failure(ex)
+                statuses.append((label, f"FAILED - aborted: {details}"))
                 with output, self.logger.capture_console_output():
                     self.logger.print_error(f"Regression suite: {label} aborted: {ex}")
             except Exception as ex:
                 failed.append(label)
+                details = self._compact_regression_suite_failure(ex)
+                statuses.append((label, f"FAILED - {type(ex).__name__}: {details}"))
                 with output, self.logger.capture_console_output():
                     self.logger.print_error(f"Regression suite: {label} failed: {type(ex).__name__}: {ex}")
 
+        statuses.extend((label, "MISSING") for label in missing)
+        elapsed = timedelta(seconds=round(time.monotonic() - suite_started))
+        summary = (
+            "Regression suite summary: "
+            f"{len(completed)} completed, {len(failed)} failed, {len(missing)} missing; "
+            f"total elapsed time {elapsed}."
+        )
         with output, self.logger.capture_console_output():
-            self.logger.print_info(
-                "Regression suite summary: "
-                f"{len(completed)} completed, {len(failed)} failed, {len(missing)} missing."
+            self.logger.print_info(summary)
+            for label, status in statuses:
+                self.logger.print_info(f"Regression suite result: {status} - {label}.")
+            self.logger.print_progress(
+                message=f"Regression suite finished after {elapsed}",
+                percent=1.0,
             )
 
+        self._send_regression_suite_email(base_config_params["mail"], statuses, elapsed)
         self.widgets.set_rerun()
+
+    @staticmethod
+    def _compact_regression_suite_failure(ex: BaseException, max_length: int = 160) -> str:
+        """Keep suite-summary/email failure details informative without copying full trace payloads."""
+        details = " ".join(str(ex).split())
+        if len(details) <= max_length:
+            return details
+        return details[:max_length - 3] + "..."
+
+    def _send_regression_suite_email(self, mail_config, statuses: list[tuple[str, str]], elapsed: timedelta) -> None:
+        """Send one compact completion email after all suite profiles have finished."""
+        text_rows = "\n".join(f"{status}: {label}" for label, status in statuses)
+        html_rows = "".join(
+            f"<tr><td>{html.escape(label)}</td><td>{html.escape(status)}</td></tr>"
+            for label, status in statuses
+        )
+        subject = "JBG Regression Suite has completed"
+        text_body = (
+            f"The JBG Regression Suite has completed after {elapsed}.\n\n"
+            f"{text_rows}\n\nSincerely yours,\nJBG\n"
+        )
+        html_body = f"""\
+            <!doctype html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <style>
+                body {{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }}
+                table {{ border-collapse: collapse; border: 1px solid #ccc; }}
+                th, td {{ border: 1px solid #ccc; padding: 4px 6px; text-align: left; }}
+                </style>
+            </head>
+            <body>
+                <p>The JBG Regression Suite has completed after {elapsed}.</p>
+                <table>
+                    <thead><tr><th>Profile</th><th>Status</th></tr></thead>
+                    <tbody>{html_rows}</tbody>
+                </table>
+                <p>Sincerely yours,<br>JBG</p>
+            </body>
+            </html>"""
+        JBGTaskRunner.send_email(mail_config, self.logger, subject, text_body, html_body)
 
     def display_gui(self) -> None:
         self.widgets.display_gui()

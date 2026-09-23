@@ -191,6 +191,22 @@ class TestDatasetHandler():
         assert isinstance(dataset, pandas.DataFrame)
         pandas.testing.assert_frame_equal(dataset, expected_dataset)
 
+    def test_validate_dataset_normalizes_known_class_labels_without_losing_unknowns(self, default_dataset_handler):
+        column_names = default_dataset_handler.handler.config.get_column_names()
+        class_column = default_dataset_handler.handler.config.get_class_column_name()
+
+        rows = [
+            ["Karan", 23, 1, 1],
+            ["Rohit", 22, 2, 2],
+            ["Sahil", 21, None, 3],
+            ["Aryan", 24, "", 4],
+        ]
+
+        dataset = default_dataset_handler.validate_dataset(rows, column_names, class_column)
+
+        assert dataset[class_column].tolist() == ["1", "2", None, ""]
+        assert default_dataset_handler.get_num_unpredicted_rows(dataset) == 2
+
     def test_concat_with_index(self, default_dataset_handler):
         """ This function takes two dataframes and one int64 index """
         index = pandas.Int64Index(data=[1, 2, 3, 4], dtype="int64", name="test_id")
@@ -557,6 +573,83 @@ class TestModelHandler():
 
         assert reason is None
 
+    def test_preflight_skips_lda_when_sparse_input_reaches_estimator(self, default_model_handler):
+        X = pandas.DataFrame({
+            "text_token": pandas.arrays.SparseArray([0.0, 1.0, 0.0, 1.0], fill_value=0.0),
+            "priority": [1.0, 2.0, 1.0, 2.0],
+        })
+        scaler = Preprocess.MAX.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.MAX, scaler, Reduction.NOR, Algorithm.LDA, X
+        )
+
+        assert reason == "LinearDiscriminantAnalysis requires dense input"
+
+    def test_preflight_allows_lda_after_dense_text_reduction(self, default_model_handler):
+        X = pandas.DataFrame({
+            "text_token": pandas.arrays.SparseArray([0.0, 1.0, 0.0, 1.0], fill_value=0.0),
+            "priority": [1.0, 2.0, 1.0, 2.0],
+        })
+        scaler = Preprocess.MAX.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.MAX, scaler, Reduction.TSVD, Algorithm.LDA, X
+        )
+
+        assert reason is None
+
+    def test_nystroem_components_are_capped_to_smallest_cv_training_fold(
+        self, default_model_handler
+    ):
+        reducer = Reduction.NYS.get_function(num_samples=160, num_features=641)
+        kfold = default_model_handler._create_spot_check_kfold(10)
+
+        capped = default_model_handler._cap_nystroem_components_for_cv(
+            feature_reducer=reducer,
+            kfold=kfold,
+            n_train=128,
+        )
+
+        assert reducer.n_components == 160
+        assert capped is not reducer
+        assert capped.n_components == 115
+
+    def test_preflight_skip_is_kept_in_results_without_per_candidate_info_output(
+        self, default_model_handler
+    ):
+        dh = SimpleNamespace(
+            X=pandas.DataFrame(np.zeros((8, 4))),
+            X_train=pandas.DataFrame(np.zeros((8, 4))),
+            X_validation=None,
+            Y_validation=None,
+        )
+        state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)
+        info_messages = []
+
+        default_model_handler.get_preflight_skip_reason = \
+            lambda *args, **kwargs: "known incompatible combination"
+        default_model_handler.handler.logger.print_info = \
+            lambda message, *args, **kwargs: info_messages.append(message)
+
+        results, success = default_model_handler._evaluate_spot_check_candidate(
+            dh=dh,
+            preprocessor=Preprocess.MIX,
+            preprocessor_callable=None,
+            reduction=Reduction.TSVD,
+            reduction_callable=None,
+            algorithm=Algorithm.LDA,
+            algorithm_callable=None,
+            oversampler=None,
+            undersampler=None,
+            kfold=None,
+            state=state,
+        )
+
+        assert success is False
+        assert results[0][-1] == "SKIPPED: known incompatible combination"
+        assert info_messages == []
+
     def test_spot_check_result_schema(self, default_model_handler):
         result = default_model_handler._build_spot_check_result(
             preprocessor=Preprocess.NOS,
@@ -642,7 +735,7 @@ class TestModelHandler():
         assert len(results) == 9
         assert warning_messages == []
 
-    def test_rfe_search_logs_progress_and_stops_if_interval_does_not_shrink(
+    def test_rfe_search_uses_transient_progress_and_stops_if_interval_does_not_shrink(
         self, default_model_handler
     ):
         dh = SimpleNamespace(
@@ -657,6 +750,7 @@ class TestModelHandler():
         )
         targets = []
         info_messages = []
+        progress_messages = []
         warning_messages = []
 
         default_model_handler.get_preflight_skip_reason = lambda *args, **kwargs: None
@@ -673,6 +767,8 @@ class TestModelHandler():
             )
         default_model_handler.handler.logger.print_info = \
             lambda message, *args, **kwargs: info_messages.append(message)
+        default_model_handler.handler.logger.print_progress = \
+            lambda message=None, percent=None, *args, **kwargs: progress_messages.append(message)
         default_model_handler.handler.logger.print_warning = \
             lambda message, *args, **kwargs: warning_messages.append(message)
 
@@ -695,6 +791,10 @@ class TestModelHandler():
         assert len(results) == 2
         assert any(
             "RFE search STA-RFE-LRN: round 2/9, target features 115/230" in message
+            for message in progress_messages
+        )
+        assert not any(
+            message.startswith("RFE search ")
             for message in info_messages
         )
         assert any(

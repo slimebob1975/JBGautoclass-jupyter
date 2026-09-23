@@ -78,7 +78,7 @@ class AutomaticClassifier:
         tr = JBGTaskRunner.TaskRunner(
             self.datalayer, self.config, self.logger, self.handler, regression_suite=self.regression_suite
         )
-        early_exit = tr.run(JBGTaskRunner.get_tasks(self.config))
+        early_exit = tr.run(JBGTaskRunner.get_tasks(self.config, regression_suite=self.regression_suite))
 
         if early_exit:
             self.logger.print_progress(message="Process finished", percent=1.0)

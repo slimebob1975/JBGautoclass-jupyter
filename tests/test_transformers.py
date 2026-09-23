@@ -79,6 +79,50 @@ class TestTextDataToNumbersConverter():
         assert "message" not in transformed.columns
         assert transformed["channel"].notna().all()
 
+
+    def test_auto_categorization_can_be_disabled(self):
+        dataset = pd.DataFrame({
+            "channel": ["email", "chat", "email", "chat"],
+        })
+
+        ttnc = TextDataToNumbersConverter(
+            text_columns=["channel"],
+            category_columns=[],
+            limit_categorize=2,
+            language="en",
+            stop_words=False,
+            df=1.0,
+            use_encryption=False,
+            use_categorization=False,
+        )
+
+        ttnc.fit(dataset)
+
+        assert ttnc.category_columns_ == []
+        assert ttnc.text_columns_ == ["channel"]
+
+    def test_forced_category_still_applies_when_auto_categorization_is_disabled(self):
+        dataset = pd.DataFrame({
+            "channel": ["email", "chat", "email", "chat"],
+            "message": ["alpha one", "beta two", "gamma three", "delta four"],
+        })
+
+        ttnc = TextDataToNumbersConverter(
+            text_columns=["channel", "message"],
+            category_columns=["channel"],
+            limit_categorize=2,
+            language="en",
+            stop_words=False,
+            df=1.0,
+            use_encryption=False,
+            use_categorization=False,
+        )
+
+        ttnc.fit(dataset)
+
+        assert ttnc.category_columns_ == ["channel"]
+        assert ttnc.text_columns_ == ["message"]
+
     def test_auto_categorization_keeps_high_cardinality_columns_as_text(self):
         dataset = pd.DataFrame({
             "code": ["AA", "BB", "CC", "DD"],

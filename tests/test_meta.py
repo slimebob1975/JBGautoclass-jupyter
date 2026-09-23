@@ -182,6 +182,29 @@ class TestReduction:
         assert transformed.shape[0] == X.shape[0]
         assert 1 <= pca.n_components_ <= X.shape[1]
 
+    def test_tsvd_components_do_not_exceed_available_features(self):
+        rng = np.random.default_rng(1)
+        X = sparse.csr_matrix(rng.normal(size=(128, 93)))
+
+        tsvd = Reduction.TSVD.get_TSVD(
+            num_samples=X.shape[0],
+            num_features=X.shape[1],
+            num_selected_features=None,
+        )
+        transformed = tsvd.fit_transform(X)
+
+        assert tsvd.n_components == X.shape[1] == 93
+        assert transformed.shape[0] == X.shape[0]
+
+    def test_tsvd_explicit_components_are_capped_to_available_features(self):
+        tsvd = Reduction.TSVD.get_TSVD(
+            num_samples=128,
+            num_features=93,
+            num_selected_features=120,
+        )
+
+        assert tsvd.n_components == 93
+
     def test_get_sorted_list(self):
         """ This function gives a list of tuples: (value, name) """
         sorted_list_default = Reduction.get_sorted_list(default_terms_first=False)

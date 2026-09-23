@@ -10,11 +10,7 @@
 
 ## Known issues / correctness
 
-- [ ] Verify and fix the Nearest Centroid grid metric spelling `euclidian` if the installed scikit-learn API requires `euclidean`.
-- [ ] QDA can fail candidate evaluation on rank-deficient covariance matrices (currently observed on Breast Cancer with no reduction). Decide whether this should remain an expected rejected candidate or receive estimator-specific handling.
-- [ ] Review automatic text categorization. The regression text profile currently forces the categorical column explicitly instead of relying on auto-detection.
 - [ ] Sometimes: Conversion problem float64 to int 64 when running SMOTE with MLPC in GridSearchCV.
-- [ ] `validate_dataset` contains an `astype` conversion whose result may not be assigned; verify whether this is a latent correctness bug.
 - [ ] Review scoring names/semantics for `Balanced F1 Micro/Macro/Weighted`. In single-label classification, micro-F1 closely tracks accuracy and can hide minority-class failure, as the realistic Återkrav run demonstrated.
 - [ ] Review the NumPy compatibility/fallback path for overly broad `TypeError` handling that may mask estimator-internal errors.
 - [ ] Review `execute_n_job` exception wrapping; generic wrapping may make outer `TypeError` fallback handling unreachable.
@@ -60,6 +56,16 @@ Current coverage includes numeric binary/multiclass classification, 4/13/30-feat
 
 ## Solved / established
 
+- [X] 046 — Fixed class-label normalization in `validate_dataset`: the previous `DataFrame.astype(...)` result was discarded, so numeric known labels could remain numeric despite the loader contract. Known labels are now normalized to strings while `None`/empty labels remain untouched so prediction rows are still recognized as unclassified; added targeted regression coverage.
+- [X] 045 — Removed the repeatedly non-converging `LinearSVC(loss="hinge", dual=True)` branch from the grid. With the project's sparse-compatible `StandardScaler(with_mean=False)`, that branch produced 18 `ConvergenceWarning` messages during the Breast Cancer random-oversampling suite profile even at `max_iter=20000`; the six remaining squared-hinge combinations stay warning-free in targeted regression coverage.
+- [X] 044 — Made Regression Suite own its lifecycle reporting: the final progress status now shows wall-clock time for the complete suite, per-profile completion emails are suppressed, and one final compact suite email reports the status of every completed/failed/missing run.
+- [X] 043 — Capped TruncatedSVD `n_components` at the available input feature count, preventing the reduction floor of 100 from creating invalid TSVD candidates on compact text matrices such as the 93-feature regression dataset; added default and explicit-component regression tests.
+- [X] 042 — Tightened sparse/text spot-check preflight: silently retain expected skipped candidates in the result table instead of printing one `SKIPPED ...` line per combination, skip sparse NOR/RFE + LDA before CV because LDA requires dense input, and cap Nystroem components to the smallest CV training fold to avoid repeated `n_components > n_samples` warnings.
+- [X] 041 — Removed the numerically unsafe `alpha=0.0` branch from Multinomial/Bernoulli/Complement Naive Bayes grids. Current scikit-learn keeps zero smoothing unchanged by default, which produced repeated `log(0)` RuntimeWarnings and non-finite probabilities on sparse text data; the grids now use `0.01, 0.1, 1.0` and have targeted finite-probability/warning coverage.
+- [X] 040 — Made the automatic text-categorization setting effective in `TextDataToNumbersConverter`; disabling it now keeps low-cardinality text on the text/TF-IDF path while explicitly forced categorical columns still remain categorical. The regression text profile now relies on auto-detection instead of forcing `channel`.
+- [X] 039 — Made per-round RFE binary-search status transient by routing it through the existing progress label instead of permanent INFO output; the GUI now updates one status line while genuine RFE stop warnings remain persistent.
+- [X] 038 — Regularized the QDA spot-check baseline with the grid's minimum `reg_param=0.1`, preventing rank-deficient covariance matrices from rejecting QDA before its already-regularized grid search can run; added a targeted collinearity regression test.
+- [X] 037 — Fixed the Nearest Centroid grid for current scikit-learn: corrected `euclidian` to `euclidean` and replaced invalid `shrink_threshold=0.0` with `None`; regression coverage now fits every configured NCT grid combination.
 - [X] 035 — Guard evaluation-time probability collection for estimators without `predict_proba()`: emit one capability warning, then use classification-report precision as the fallback confidence without per-row label-key warnings (including numeric class labels).
 - [X] 034 — Added a persistent `Repeat last` action beside `Regr. suite`. It stores the most recent manual classifier settings without SQL credentials and can recreate the run after a GUI/kernel restart using the current login; data is deliberately fetched again.
 - [X] 032 — Skip Min-Max preprocessing during spot-check preflight when converted features are sparse; avoids known `MinMaxScaler` CV failures without unsafe automatic densification.

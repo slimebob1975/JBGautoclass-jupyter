@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from JBGTaskRunner import TaskRunner
+from JBGTaskRunner import TaskRunner, get_tasks
 
 
 class StubConfig:
@@ -85,3 +85,26 @@ def test_regular_run_with_mispredicted_disabled_keeps_previous_behavior():
     assert predictions.mispredicted_evaluations == []
     assert predictions.dark_number_calls == []
     assert predictions.dark_number_evaluations == []
+
+
+class TaskListConfig:
+    def get_text_column_names(self):
+        return []
+
+    def should_train(self):
+        return True
+
+    def should_predict(self):
+        return False
+
+
+def test_regression_suite_omits_per_profile_completion_email_task():
+    tasks = get_tasks(TaskListConfig(), regression_suite=True)
+
+    assert "send_completetion_email" not in tasks
+
+
+def test_regular_run_keeps_completion_email_task():
+    tasks = get_tasks(TaskListConfig())
+
+    assert tasks[-1] == "send_completetion_email"
