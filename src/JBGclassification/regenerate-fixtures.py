@@ -15,6 +15,10 @@ from JBGMeta import (Algorithm, Preprocess, Reduction, ScoreMetric,
     Current generators:
     - config-save.sav: Creates a model file with just a config file. Enough for test_config, but not for test_handler
     - model-save.sav: Creates a model file with default (IE None). Enough to test basics in test_handler
+
+    These .sav files are local generated artifacts and are intentionally ignored by Git.
+    Do not treat them as portable or trusted fixtures: dill/pickle payloads are runtime-
+    version-sensitive and must only be loaded when their origin is trusted.
 """
 
 def bare_iris_config() -> Config:
@@ -104,7 +108,9 @@ def save_model_to_file(filename, config):
 def get_fixture_dir() -> str:
     srcdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     project_root = os.path.dirname(srcdir)
-    return os.path.join(project_root, "tests", "fixtures")
+    fixture_dir = os.path.join(project_root, "tests", "fixtures")
+    os.makedirs(fixture_dir, exist_ok=True)
+    return fixture_dir
 
 def regenerate_model_save():
     config = bare_iris_config()

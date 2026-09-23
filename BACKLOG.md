@@ -3,7 +3,7 @@
 
 ## Current direction
 
-- [ ] Run one or more realistic end-to-end classification projects outside the regression suite and let observed product/runtime issues drive the next patches.
+- [X] Run one or more realistic end-to-end classification projects outside the regression suite and let observed product/runtime issues drive the next patches. This revision used repeated targeted real-data runs to drive fixes 031–047.
 - [ ] Treat `Regr. suite` primarily as a regression safety net after changes rather than continuing to expand it by default.
 - [ ] Exercise the full real-world lifecycle where practical: configure data, train, review CV/holdout results, save model, reload model, and predict previously unknown rows.
 - [ ] Improve `Repeat last` clarity by restoring the saved run values into all corresponding GUI setting widgets before execution, so the visible table/model/settings match the run that is about to be repeated.
@@ -41,6 +41,7 @@
 
 ## Runtime / server / operations
 
+- [ ] Review FastICA sizing/convergence before enabling it in broad runs again. An accumulated server log showed repeated `n_components is too large` auto-capping plus `FastICA did not converge` warnings; cap components to the effective fold/input dimensions and tune or preflight convergence in a future revision.
 - [ ] Investigate intermittent widget-rendering failure after `Reclassification table for most mispredicted`, where the UI only shows `Error displaying widget` without an application crash or explanatory exception. Capture whether the failure originates in widget payload size/content, serialization, frontend rendering, or kernel/frontend state, and make the failure observable in logs.
 - [ ] Investigate the Voilà `_xsrf` shutdown/reload 403 behavior.
 - [ ] Review the local server/kernel communication setup; the current TCP transport has no encryption and should have an explicit trust/security model.
@@ -56,6 +57,7 @@ Current coverage includes numeric binary/multiclass classification, 4/13/30-feat
 
 ## Solved / established
 
+- [X] 047 — Kept generated persistence-test `.sav` files out of version control: `tests/fixtures/*.sav` is now ignored, the fixture directory documents the local/trusted-artifact policy, and the regeneration helper creates the directory when needed. The final broad Breast Cancer run after 046 completed spot-check, GridSearch, evaluation, retraining, misprediction handling, and Dark Numbers without candidate exceptions; the older accumulated FastICA warning storm is explicitly deferred above.
 - [X] 046 — Fixed class-label normalization in `validate_dataset`: the previous `DataFrame.astype(...)` result was discarded, so numeric known labels could remain numeric despite the loader contract. Known labels are now normalized to strings while `None`/empty labels remain untouched so prediction rows are still recognized as unclassified; added targeted regression coverage.
 - [X] 045 — Removed the repeatedly non-converging `LinearSVC(loss="hinge", dual=True)` branch from the grid. With the project's sparse-compatible `StandardScaler(with_mean=False)`, that branch produced 18 `ConvergenceWarning` messages during the Breast Cancer random-oversampling suite profile even at `max_iter=20000`; the six remaining squared-hinge combinations stay warning-free in targeted regression coverage.
 - [X] 044 — Made Regression Suite own its lifecycle reporting: the final progress status now shows wall-clock time for the complete suite, per-profile completion emails are suppressed, and one final compact suite email reports the status of every completed/failed/missing run.
