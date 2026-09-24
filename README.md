@@ -44,10 +44,20 @@ Troubleshooting:
 
 To run the script in the terminal you need to have a file in `src\JBGclassification\config` with a functional config. 
 Configs start with `autoclassconfig_` as the name, and will be saved when you create a new model using the GUI.
+Generated config files deliberately do **not** contain the SQL password. Supply it at runtime through the
+`JBG_SQL_PASSWORD` process environment variable (or enter it in the GUI). Saved `.sav` model files likewise omit
+the SQL password; when a model is loaded through the application, the current runtime credentials are injected.
 
 Go into `src\JBGclassification` and run `python JBGautomaticClassifier.py -f <path-to-file>`. The path to the file needs to
 be on the format of `.config\filename.py`, so assuming that the config-file is `autoclassconfig_iris_abc0123.py` 
 (check the `config` directory for the right name), the command is: `python JBGautomaticClassifier.py -f autoclassconfig_iris_abc0123.py`
+
+
+Serialized `.sav` model files use Python pickle/dill-compatible serialization. New model files are written with
+an explicit JBG artifact format marker and schema version; the loader also accepts the legacy six-item payload used
+by earlier releases. The supported persistence contract is save/reload/predict/retrain within a compatible JBG/Python/
+ML dependency environment, not portability across arbitrary Python or scikit-learn versions. Only load model files
+from a trusted source: loading an untrusted pickle/dill payload can execute arbitrary code.
 
 === Troubleshooting ===
 

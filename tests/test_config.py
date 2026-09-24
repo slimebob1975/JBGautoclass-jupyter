@@ -1,7 +1,8 @@
 from typing import Callable
+import importlib.util
 
 import pytest
-from conftest import get_fixture_path, get_fixture_content_as_string
+from conftest import get_fixture_path
 
 from Config import Config
 from imblearn.over_sampling import oversampler
@@ -205,6 +206,16 @@ class TestConfig:
         with pytest.raises(ConfigException):
             valid_iris_config.get_attribute("mode.does_not_exist")
 
+    def test_dark_number_flip_fraction_defaults_to_published_20_percent(self):
+        config = Config()
+
+        assert config.get_dark_number_flip_fraction() == pytest.approx(0.2)
+
+    @pytest.mark.parametrize("value", [0.0, 1.0, -0.1, 1.1])
+    def test_dark_number_flip_fraction_must_be_between_zero_and_one(self, value):
+        with pytest.raises(ValueError, match="dark_number_flip_fraction"):
+            Config(mode=Config.Mode(dark_number_flip_fraction=float(value)))
+
     def test_get_calculated_values(self, valid_iris_config):
         """ Testing simple calculated values """
         expected = "[DatabaseOne].[ResultTable]"
@@ -262,14 +273,29 @@ class TestConfig:
         cleaned_config = valid_iris_config.get_clean_config()
         assert cleaned_config == bare_iris_config
 
-    def test_saving_config(self, tmp_path, valid_iris_config):
-        """ Tests saving the config to a temporary directory """
+    def test_clean_config_does_not_persist_sql_password(self, valid_iris_config):
+        """Model metadata must not retain the live SQL password."""
+        secret = "do-not-persist-this-password"
+        valid_iris_config.connection.sql_password = secret
+
+        cleaned_config = valid_iris_config.get_clean_config()
+
+        assert cleaned_config.connection.sql_password == ""
+        assert valid_iris_config.connection.sql_password == secret
+
+    def test_saving_config_does_not_persist_sql_password(self, tmp_path, valid_iris_config):
+        """Generated config files keep credentials runtime-only."""
         d = tmp_path / "config"
         d.mkdir()
         p = d / "config.py"
-        
+        secret = "do-not-write-this-password"
+        valid_iris_config.connection.sql_password = secret
+
         valid_iris_config.save_to_file(p, "some_fake_name")
-        assert p.read_text() == get_fixture_content_as_string("test-iris-saved.py")
+        saved_text = p.read_text(encoding="utf-8")
+
+        assert secret not in saved_text
+        assert '"sql_password": ""' in saved_text
 
     def test_load_config_from_model_file(self, valid_iris_config, bare_iris_config, saved_with_valid_iris_config):
         """ Loads config from a .sav file """
@@ -284,9 +310,34 @@ class TestConfig:
         
         assert new_config == bare_iris_config
         
-        # 3. With a config
+        # 3. With a config: model metadata gets the current runtime credentials.
+        runtime_secret = "runtime-only-password"
+        valid_iris_config.connection.sql_password = runtime_secret
+        saved_with_valid_iris_config.connection.sql_password = runtime_secret
+        valid_iris_config.mode.dark_number_flip_fraction = 0.15
+        saved_with_valid_iris_config.mode.dark_number_flip_fraction = 0.15
         new_config = Config.load_config_from_model_file(filename, valid_iris_config)
+        assert new_config.connection.sql_password == runtime_secret
+        assert new_config.mode.dark_number_flip_fraction == pytest.approx(0.15)
         assert new_config == saved_with_valid_iris_config
+
+    def test_load_config_uses_runtime_password_for_sanitized_file(
+        self, tmp_path, valid_iris_config, monkeypatch
+    ):
+        """A generated config can be reused without writing the password to disk."""
+        p = tmp_path / "runtime_config.py"
+        valid_iris_config.connection.sql_password = "must-not-be-persisted"
+        valid_iris_config.save_to_file(p, "some_fake_name")
+
+        spec = importlib.util.spec_from_file_location("runtime_config", p)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        monkeypatch.setenv(Config.SQL_PASSWORD_ENV, "runtime-environment-password")
+        loaded_config = Config.load_config(module)
+
+        assert module.connection["sql_password"] == ""
+        assert loaded_config.connection.sql_password == "runtime-environment-password"
 
     def test_load_config_from_module(self, valid_iris_config):
         """ While it uses the load_config_from_module, it mainly checks load_config_2 """

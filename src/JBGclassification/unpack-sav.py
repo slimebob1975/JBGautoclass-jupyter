@@ -1,7 +1,9 @@
 import os
 from pathlib import Path
 import sys
-import dill
+
+from JBGModelPersistence import load_model_artifact
+
 
 def main(model_name: str):
     src_dir = Path(os.path.dirname(os.path.realpath(__file__)))
@@ -9,28 +11,25 @@ def main(model_name: str):
     headers = [
         "Config",
         "Text Converter",
-        "Pipeline Names",
+        "Model Components",
         "Pipeline",
-        "N_Features"
+        "Keras Model Name",
+        "N_Features",
     ]
     try:
-        with open(filename, 'rb') as infile:
-            unpacked = dill.load(infile)
+        unpacked = load_model_artifact(filename)
     except Exception as e:
         print(f"Something went wrong on loading model: {e}")
-    
+        return
+
     for i, value in enumerate(unpacked):
-        
-        if i >= len(headers):
-            header = "Undefined" # This lets us know if we've changed the .sav in ways we need to handle
-        else:
-            header = headers[i]
+        header = headers[i] if i < len(headers) else "Undefined"
 
         if i == 0:
             print(f"# {header}")
         else:
             print(f"\n\n# {header}")
-    
+
         print(value)
 
 
@@ -39,4 +38,3 @@ if __name__ == "__main__":
         print("Correct call: python unpack-sav.py <model.sav>")
     else:
         main(sys.argv[1])
-    

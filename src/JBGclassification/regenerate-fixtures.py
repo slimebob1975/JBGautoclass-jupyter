@@ -1,7 +1,7 @@
 import os
-import dill
 from imblearn.pipeline import Pipeline
 from Config import Config
+from JBGModelPersistence import save_model_artifact
 from JBGMeta import (Algorithm, Preprocess, Reduction, ScoreMetric, 
                      AlgorithmTuple, PreprocessTuple, ReductionTuple,
                     Oversampling, Undersampling)
@@ -92,16 +92,15 @@ def save_model_to_file(filename, config):
     undersampler = Undersampling.NUG
     try:
         save_config = config.get_clean_config()
-        data = {
-            "config": save_config,
-            "text_converter": None,
-            "pipeline names": (preprocess, reduction, algorithm),
-            "pipeline": None,
-            "n_features_out": 4
-        }
-        
-        with open(filename, 'wb') as outfile:
-            dill.dump(list(data.values()), outfile)
+        save_model_artifact(
+            filename,
+            save_config,
+            None,
+            (oversampler, undersampler, preprocess, reduction, algorithm),
+            None,
+            None,
+            4,
+        )
     except Exception as e:
         print(f"Something went wrong on saving model to file: {e}")
 

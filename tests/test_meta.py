@@ -1,8 +1,10 @@
+import pickle
+
 import numpy as np
 import pytest
 from scipy import sparse
 
-from JBGMeta import (Algorithm, Detector, Preprocess, Reduction, ScoreMetric)
+from JBGMeta import (Algorithm, Detector, Oversampling, Preprocess, Reduction, ScoreMetric)
 
 class TestDetector:
     """ Tests the Enum Detector functions """
@@ -57,10 +59,43 @@ class TestDetector:
         # When sorted, ALL is first
         assert sorted_list_all_first[0] == ("All", "ALL")
 
+class TestOversampling:
+    @pytest.mark.parametrize(
+        "oversampler",
+        [
+            Oversampling.SME,
+            Oversampling.SNC,
+            Oversampling.ADA,
+            Oversampling.BRD,
+            Oversampling.KMS,
+            Oversampling.SVM,
+        ],
+    )
+    def test_interpolating_oversamplers_require_float_input(self, oversampler):
+        assert oversampler.requires_float_input() is True
+
+    @pytest.mark.parametrize("oversampler", [Oversampling.NOG, Oversampling.RND, Oversampling.SNN])
+    def test_non_interpolating_oversamplers_do_not_require_float_input(self, oversampler):
+        assert oversampler.requires_float_input() is False
+
+    def test_noop_oversampler_is_standard_pickle_compatible(self):
+        transformer = Oversampling.NOG.get_callable_oversampler()
+        restored = pickle.loads(pickle.dumps(transformer))
+
+        values = np.array([[1.0, 2.0]])
+        assert np.array_equal(restored.transform(values), values)
+
+
 class TestAlgorithm:
     """ Tests the Enum Algorithm functions """
     def test_compound_name(self):
         assert Algorithm.LDA.get_compound_name(Preprocess.STA) == "LDA-STA"
+
+    @pytest.mark.parametrize("algorithm", [Algorithm.MNB, Algorithm.BNB, Algorithm.CNB])
+    def test_naive_bayes_estimators_without_feature_importances_are_not_rfe_compatible(
+        self, algorithm
+    ):
+        assert algorithm.rfe_compatible is False
 
     def test_list_callable_algorithms(self):
         """ Class Method that gets all callable algorithms and their function """
@@ -204,6 +239,26 @@ class TestReduction:
         )
 
         assert tsvd.n_components == 93
+
+    def test_fastica_components_do_not_exceed_effective_input_dimension(self):
+        fica = Reduction.FICA.get_FICA(
+            num_samples=128,
+            num_features=13,
+            num_selected_features=None,
+        )
+
+        assert fica.n_components == 13
+        assert fica.max_iter == 1000
+        assert fica.random_state == 1
+
+    def test_fastica_explicit_components_are_capped_to_samples_and_features(self):
+        fica = Reduction.FICA.get_FICA(
+            num_samples=40,
+            num_features=93,
+            num_selected_features=120,
+        )
+
+        assert fica.n_components == 40
 
     def test_get_sorted_list(self):
         """ This function gives a list of tuples: (value, name) """

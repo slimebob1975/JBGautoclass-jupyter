@@ -1,4 +1,5 @@
 from datetime import datetime
+from pickle import PicklingError
 from types import SimpleNamespace
 import warnings
 import numpy as np
@@ -10,7 +11,7 @@ import JBGHandler as handler_module
 from JBGExceptions import DatasetException, HandlerException
 
 from JBGHandler import JBGHandler, DatasetHandler, Model, _SpotCheckState
-from JBGMeta import Algorithm, Preprocess, Reduction
+from JBGMeta import Algorithm, Oversampling, Preprocess, Reduction, Undersampling
 
 # One class per class in the module
 class TestHandler():
@@ -488,6 +489,12 @@ class TestModelHandler():
         path = get_fixture_path() / "model-save.sav"
         assert default_model_handler.load_pipeline_from_file(path) == None
 
+    @pytest.mark.parametrize("algorithm", [Algorithm.MNB, Algorithm.BNB, Algorithm.CNB])
+    def test_rfe_skips_naive_bayes_estimators_without_feature_importances(
+        self, default_model_handler, algorithm
+    ):
+        assert default_model_handler.should_run_computation(Reduction.RFE, algorithm) is False
+
     def test_preflight_skips_degenerate_binarized_candidates(self, default_model_handler):
         X = pandas.DataFrame({
             "a": [1.0, 2.0, 3.0, 4.0],
@@ -599,6 +606,19 @@ class TestModelHandler():
 
         assert reason is None
 
+    def test_preflight_skips_fastica_for_sparse_text_input(self, default_model_handler):
+        X = pandas.DataFrame({
+            "text_token": pandas.arrays.SparseArray([0.0, 1.0, 0.0, 1.0], fill_value=0.0),
+            "priority": [1.0, 2.0, 1.0, 2.0],
+        })
+        scaler = Preprocess.MAX.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.MAX, scaler, Reduction.FICA, Algorithm.LRN, X
+        )
+
+        assert reason == "FastICA requires dense input"
+
     def test_nystroem_components_are_capped_to_smallest_cv_training_fold(
         self, default_model_handler
     ):
@@ -614,6 +634,25 @@ class TestModelHandler():
         assert reducer.n_components == 160
         assert capped is not reducer
         assert capped.n_components == 115
+
+    def test_fastica_components_are_capped_to_smallest_cv_training_fold(
+        self, default_model_handler
+    ):
+        reducer = Reduction.FICA.get_function(num_samples=160, num_features=641)
+        kfold = default_model_handler._create_spot_check_kfold(10)
+
+        capped = default_model_handler._cap_fastica_components_for_cv(
+            feature_reducer=reducer,
+            kfold=kfold,
+            n_train=128,
+            n_features=641,
+        )
+
+        assert reducer.n_components == 160
+        assert capped is not reducer
+        assert capped.n_components == 115
+        assert capped.max_iter == 1000
+        assert capped.random_state == 1
 
     def test_preflight_skip_is_kept_in_results_without_per_candidate_info_output(
         self, default_model_handler
@@ -938,6 +977,89 @@ class TestModelHandler():
         assert np.isnan(cv_results).all()
         assert exception == "RuntimeError: pipeline build failed"
 
+    def test_execute_n_job_preserves_typeerror_and_context(
+        self, monkeypatch, default_model_handler
+    ):
+        monkeypatch.setattr(handler_module.psutil, "cpu_count", lambda logical=True: 8)
+        default_model_handler.handler.STANDARD_DESIRED_N_JOBS = -1
+
+        def fail_with_typeerror(*, n_jobs):
+            raise TypeError(f"unsupported input with {n_jobs} workers")
+
+        with pytest.raises(TypeError, match="unsupported input with 3 workers") as exc_info:
+            default_model_handler.execute_n_job(
+                fail_with_typeerror, n_jobs_desired=3
+            )
+
+        notes = getattr(exc_info.value, "__notes__", [])
+        assert any("func=fail_with_typeerror" in note for note in notes)
+        assert any("n_jobs=3" in note for note in notes)
+
+    def test_execute_n_job_retries_resource_errors_with_fewer_workers(
+        self, monkeypatch, default_model_handler
+    ):
+        monkeypatch.setattr(handler_module.psutil, "cpu_count", lambda logical=True: 8)
+        default_model_handler.handler.STANDARD_DESIRED_N_JOBS = -1
+        attempts = []
+
+        def flaky(*, n_jobs):
+            attempts.append(n_jobs)
+            if len(attempts) < 3:
+                raise MemoryError("temporary memory pressure")
+            return "ok"
+
+        result = default_model_handler.execute_n_job(flaky, n_jobs_desired=8)
+
+        assert result == "ok"
+        assert attempts == [8, 4, 2]
+
+    def test_execute_n_job_re_raises_original_pickling_error_at_one_worker(
+        self, monkeypatch, default_model_handler
+    ):
+        monkeypatch.setattr(handler_module.psutil, "cpu_count", lambda logical=True: 2)
+        default_model_handler.handler.STANDARD_DESIRED_N_JOBS = -1
+        attempts = []
+
+        def never_pickles(*, n_jobs):
+            attempts.append(n_jobs)
+            raise PicklingError("cannot serialize estimator")
+
+        with pytest.raises(PicklingError, match="cannot serialize estimator"):
+            default_model_handler.execute_n_job(never_pickles, n_jobs_desired=2)
+
+        assert attempts == [2, 1]
+
+    def test_execute_n_job_treats_negative_global_limit_as_unlimited(
+        self, monkeypatch, default_model_handler
+    ):
+        monkeypatch.setattr(handler_module.psutil, "cpu_count", lambda logical=True: 8)
+        default_model_handler.handler.STANDARD_DESIRED_N_JOBS = -1
+        observed = []
+
+        def record_workers(*, n_jobs):
+            observed.append(n_jobs)
+            return n_jobs
+
+        result = default_model_handler.execute_n_job(
+            record_workers, n_jobs_desired=3
+        )
+
+        assert result == 3
+        assert observed == [3]
+
+    def test_execute_n_job_honors_positive_global_worker_cap(
+        self, monkeypatch, default_model_handler
+    ):
+        monkeypatch.setattr(handler_module.psutil, "cpu_count", lambda logical=True: 8)
+        default_model_handler.handler.STANDARD_DESIRED_N_JOBS = 2
+
+        def record_workers(*, n_jobs):
+            return n_jobs
+
+        assert default_model_handler.execute_n_job(
+            record_workers, n_jobs_desired=6
+        ) == 2
+
     def test_cross_val_score_serial_fallback_uses_sklearn_n_jobs_keyword(
         self, monkeypatch, default_model_handler
     ):
@@ -1035,6 +1157,45 @@ class TestModelHandler():
         assert validation_calls == []
         assert results[0][-1] == "ValueError: original CV failure"
         assert state.trained_pipeline is None
+
+    def test_smote_pipeline_normalizes_integer_features_to_float_before_sampling(
+        self, default_model_handler
+    ):
+        pipeline = default_model_handler.get_pipeline(
+            reduction=Reduction.NOR,
+            feature_reducer=Reduction.NOR.call_reduction(num_samples=12, num_features=2),
+            algorithm=Algorithm.MLPC,
+            estimator=Algorithm.MLPC.call_algorithm(max_iterations=20, size=12),
+            preprocessor=Preprocess.NOS,
+            scaler=Preprocess.NOS.call_preprocess(),
+            oversampler=Oversampling.SME,
+            undersampler=Undersampling.NUG,
+            max_features=2,
+        )
+
+        step_names = [name for name, _ in pipeline.steps]
+        assert step_names[:4] == ["IMP", "FLT", "SME", "NUG"]
+
+        integer_features = np.array([[0, 0], [1, 1], [10, 10], [11, 11]], dtype=np.int64)
+        transformed = pipeline.named_steps["FLT"].transform(integer_features)
+        assert transformed.dtype == np.float64
+
+    def test_random_oversampling_pipeline_does_not_add_float_normalization(
+        self, default_model_handler
+    ):
+        pipeline = default_model_handler.get_pipeline(
+            reduction=Reduction.NOR,
+            feature_reducer=Reduction.NOR.call_reduction(num_samples=12, num_features=2),
+            algorithm=Algorithm.MLPC,
+            estimator=Algorithm.MLPC.call_algorithm(max_iterations=20, size=12),
+            preprocessor=Preprocess.NOS,
+            scaler=Preprocess.NOS.call_preprocess(),
+            oversampler=Oversampling.RND,
+            undersampler=Undersampling.NUG,
+            max_features=2,
+        )
+
+        assert "FLT" not in dict(pipeline.steps)
 
     def test_validation_fit_falls_back_to_numpy(self, default_model_handler):
         class DataFrameRejectingPipeline:
@@ -1141,6 +1302,83 @@ class TestPredictionsHandler:
         assert not default_predictions_handler.dark_numb_conf_matrix.empty
         assert len(logger.warnings) == 2
         assert all("does not support predict_proba()" in warning for warning in logger.warnings)
+
+
+    def test_dark_numbers_report_three_estimates_with_model_specific_corrections(
+        self, default_predictions_handler, monkeypatch
+    ):
+        from sklearn.base import BaseEstimator
+
+        class FixedProbabilityModel(BaseEstimator):
+            def __init__(self, threshold=2.5):
+                self.threshold = threshold
+
+            def predict(self, X):
+                values = np.asarray(X)[:, 0]
+                return np.where(values > self.threshold, "M", "B")
+
+            def predict_proba(self, X):
+                predicted = self.predict(X)
+                return np.array([
+                    [0.9, 0.1] if value == "B" else [0.1, 0.9]
+                    for value in predicted
+                ])
+
+        class FakeCorrectionEstimator:
+            def __init__(self, estimator, **kwargs):
+                self.estimator = estimator
+                self.correction_factor_ = None
+
+            def fit(self, X, Y):
+                # Cross-trained correction data has four rows; retrained has six.
+                self.correction_factor_ = 1.25 if len(Y) == 4 else 1.75
+                return self
+
+            def score(self, X=None, Y=None):
+                return self.correction_factor_
+
+        class FakeModelHandler:
+            def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
+                return func(*args, n_jobs=1, **kwargs)
+
+        monkeypatch.setattr(handler_module, "DarkNumberCorrectionFactorEstimator", FakeCorrectionEstimator)
+        monkeypatch.setattr(
+            default_predictions_handler.handler,
+            "get_handler",
+            lambda name: FakeModelHandler(),
+        )
+
+        X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]})
+        Y = pandas.Series(["B", "B", "B", "M", "M", "M"])
+        X_cv_training = X.iloc[:4]
+        Y_cv_training = Y.iloc[:4]
+        X_validation = X.iloc[4:]
+        Y_validation = Y.iloc[4:]
+
+        default_predictions_handler.get_dark_numbers(
+            X=X,
+            Y=Y,
+            type="base",
+            models=[FixedProbabilityModel(2.5), FixedProbabilityModel(3.5)],
+            model_names=["Cross", "Retrained"],
+            combine_models=False,
+            X_validation=X_validation,
+            Y_validation=Y_validation,
+            X_cv_training=X_cv_training,
+            Y_cv_training=Y_cv_training,
+        )
+
+        results = default_predictions_handler.dark_numbers.copy()
+        results["Model type"] = results["Model type"].replace("", np.nan).ffill()
+
+        assert set(results["Model type"]) == {
+            "D_cv_test - Cross",
+            "D_cv_full - Cross",
+            "D_retrained_full - Retrained",
+        }
+        assert set(results.loc[results["Model type"].str.startswith("D_cv_"), "corr"]) == {1.25}
+        assert set(results.loc[results["Model type"].str.startswith("D_retrained_"), "corr"]) == {1.75}
+        assert set(results["corr_source"]) == {"direct"}
 
     def test_make_predictions_without_predict_proba_uses_single_warning_and_precision_fallback(
         self, default_predictions_handler

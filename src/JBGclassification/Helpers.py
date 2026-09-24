@@ -51,6 +51,26 @@ def contains_nan(data) -> bool:
     except (TypeError, ValueError):
         return False
 
+def ensure_float64(data):
+    """Return numeric feature data as float64 without densifying sparse matrices.
+
+    Interpolation-based oversamplers such as SMOTE must create fractional synthetic
+    feature values.  If their input is integer-valued, imbalanced-learn preserves the
+    integer dtype and can either truncate those synthetic values or trigger downstream
+    float-to-integer casting failures.  Keep the container type where practical while
+    normalizing only the numeric dtype.
+    """
+    if scipy_sparse.issparse(data):
+        return data.astype(np.float64, copy=False)
+
+    if isinstance(data, pandas.DataFrame):
+        return data.astype(np.float64, copy=False)
+
+    if isinstance(data, pandas.Series):
+        return data.astype(np.float64, copy=False)
+
+    return np.asarray(data, dtype=np.float64)
+
 def create_download_link(filename, title = "Click here to download file: "):  
     with open(filename, "rb") as infile:
         data = infile.read()

@@ -57,6 +57,10 @@ PCA_VARIANCE_EXPLAINED = 0.95
 LOWER_LIMIT_REDUCTION = 100
 NON_LINEAR_REDUCTION_COMPONENTS = 2
 
+def identity_transform(X):
+    """Module-level no-op transform so persisted pipelines remain pickle-friendly."""
+    return X
+
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
     def print_info(self, *args) -> None:
@@ -415,9 +419,9 @@ class Algorithm(MetaEnum):
     RADN = { "full_name": "Radius Neighbors Classifier", "search_params": AlgorithmGridSearchParams.RADN, "rfe_compatible": False, "lib": Library.SCIKIT}
     DTC = { "full_name": "Decision Tree Classifier", "search_params": AlgorithmGridSearchParams.DTC, "rfe_compatible": True, "lib": Library.SCIKIT}
     GNB = { "full_name": "Gaussian Naive Bayes", "search_params": AlgorithmGridSearchParams.GNB, "rfe_compatible": False, "lib": Library.SCIKIT}
-    MNB = { "full_name": "Multinomial Naive Bayes", "search_params": AlgorithmGridSearchParams.MNB, "rfe_compatible": True, "lib": Library.SCIKIT}
-    BNB = { "full_name": "Bernoulli Naive Bayes", "search_params": AlgorithmGridSearchParams.BNB, "rfe_compatible": True, "lib": Library.SCIKIT}
-    CNB = { "full_name": "Complement Naive Bayes", "search_params": AlgorithmGridSearchParams.CNB, "rfe_compatible": True, "lib": Library.SCIKIT}
+    MNB = { "full_name": "Multinomial Naive Bayes", "search_params": AlgorithmGridSearchParams.MNB, "rfe_compatible": False, "lib": Library.SCIKIT}
+    BNB = { "full_name": "Bernoulli Naive Bayes", "search_params": AlgorithmGridSearchParams.BNB, "rfe_compatible": False, "lib": Library.SCIKIT}
+    CNB = { "full_name": "Complement Naive Bayes", "search_params": AlgorithmGridSearchParams.CNB, "rfe_compatible": False, "lib": Library.SCIKIT}
     REC = { "full_name": "Ridge Classifier", "search_params": AlgorithmGridSearchParams.REC, "rfe_compatible": True, "lib": Library.SCIKIT}
     PCN = { "full_name": "Perceptron", "search_params": AlgorithmGridSearchParams.PCN, "rfe_compatible": True, "lib": Library.SCIKIT}
     PAC = { "full_name": "Passive Aggressive Classifier", "search_params": AlgorithmGridSearchParams.PAC, "rfe_compatible": True, "lib": Library.SCIKIT}
@@ -694,12 +698,29 @@ class Oversampling(MetaEnum):
         """
         return self.call_oversampler()
 
+    def requires_float_input(self) -> bool:
+        """Return whether the sampler interpolates continuous feature values.
+
+        SMOTE-family samplers create fractional synthetic samples.  Feeding them an
+        integer feature matrix makes imbalanced-learn cast those samples back to the
+        integer dtype, which loses information and has caused float64-to-int64 failures
+        in final GridSearchCV training.
+        """
+        return self in (
+            Oversampling.SME,
+            Oversampling.SNC,
+            Oversampling.ADA,
+            Oversampling.BRD,
+            Oversampling.KMS,
+            Oversampling.SVM,
+        )
+
     def do_NOG(self) -> NonOversampler:
         """ While this return is superfluos, it helps with the listings of oversamplers """
         return self.NonOversampler()
 
     def NonOversampler(self):
-        return FunctionTransformer(lambda X: X)
+        return FunctionTransformer(identity_transform)
 
     def do_RND(self) -> RandomOverSampler:
         return RandomOverSampler(sampling_strategy = 'auto')
@@ -760,7 +781,7 @@ class Undersampling(MetaEnum):
         return self.NonUndersampler()
 
     def NonUndersampler(self):
-        return FunctionTransformer(lambda X: X)
+        return FunctionTransformer(identity_transform)
 
     def do_RND(self) -> RandomUnderSampler:
         return RandomUnderSampler(sampling_strategy = 'auto')
@@ -826,7 +847,7 @@ class Preprocess(MetaEnum):
         return self.NonScaler()
 
     def NonScaler(self):
-        return FunctionTransformer(lambda X: X)
+        return FunctionTransformer(identity_transform)
 
     def do_STA(self) -> StandardScaler:
         return StandardScaler(with_mean=False)
@@ -916,7 +937,7 @@ class Reduction(MetaEnum):
         return self.NonReduction(X), self.NonReduction()
 
     def NonReduction(self):
-        return FunctionTransformer(lambda X: X)
+        return FunctionTransformer(identity_transform)
     
     # TODO: For now, use temporary fixed argument for estimator. Can be changed later!
     def do_RFE(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
@@ -985,11 +1006,29 @@ class Reduction(MetaEnum):
         return self._do_transformation(logger=logger, X=X, transformation=tf, components=tf.n_components_)
 
     def get_FICA(self, num_samples: int, num_features: int, num_selected_features: int = None):
+        # FastICA requires n_components <= min(n_samples, n_features). The
+        # historical LOWER_LIMIT_REDUCTION floor could therefore request 100
+        # components from compact datasets (for example Wine with 13 input
+        # features), leaving sklearn to auto-cap the value and emit one warning
+        # per CV fit. Cap explicitly so the configured reducer is valid before
+        # cross-validation starts.
+        max_components = max(1, min(int(num_samples), int(num_features)))
         if num_selected_features is not None:
-            components = num_selected_features
+            components = min(int(num_selected_features), max_components)
         else:
-            components = max(LOWER_LIMIT_REDUCTION, min(num_samples,num_features))
-        return FastICA(n_components=components)
+            # After explicit safety capping, this preserves the historical
+            # default behavior: use the full effective dimension.
+            components = max_components
+
+        # Keep sklearn's convergence tolerance/algorithm unchanged for backwards
+        # comparability, but allow substantially more iterations and make the
+        # stochastic initialization reproducible. If warnings still recur in
+        # realistic runs we can tune the algorithm/tolerance with evidence.
+        return FastICA(
+            n_components=max(1, int(components)),
+            max_iter=1000,
+            random_state=1,
+        )
     
     def do_FICA(self, logger: Logger, X: pandas.DataFrame, num_selected_features: int = None):
         tf = self.get_FICA(*X.shape, num_selected_features)

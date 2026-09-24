@@ -4,6 +4,8 @@ from datetime import datetime
 import pandas
 import numpy as np
 from scipy import sparse as scipy_sparse
+from imblearn.over_sampling import SMOTE
+from sklearn.impute import SimpleImputer
 
 import Helpers
 
@@ -213,3 +215,42 @@ def test_contains_nan_handles_sparse_data_without_densifying():
 
     assert not Helpers.contains_nan(clean)
     assert Helpers.contains_nan(dirty)
+
+
+def test_ensure_float64_preserves_dense_dataframe_shape_and_values():
+    frame = pandas.DataFrame({"a": [1, 2], "b": [3, 4]}, dtype=np.int64)
+
+    converted = Helpers.ensure_float64(frame)
+
+    assert isinstance(converted, pandas.DataFrame)
+    assert converted.index.equals(frame.index)
+    assert converted.columns.equals(frame.columns)
+    assert all(dtype == np.dtype("float64") for dtype in converted.dtypes)
+    np.testing.assert_allclose(converted.to_numpy(), frame.to_numpy(dtype=float))
+
+
+def test_ensure_float64_preserves_sparse_representation():
+    matrix = scipy_sparse.csr_matrix(np.array([[1, 0], [0, 2]], dtype=np.int64))
+
+    converted = Helpers.ensure_float64(matrix)
+
+    assert scipy_sparse.isspmatrix_csr(converted)
+    assert converted.dtype == np.float64
+    np.testing.assert_allclose(converted.toarray(), matrix.toarray())
+
+
+def test_float_normalization_preserves_fractional_smote_samples():
+    features = np.array(
+        [[0, 0], [3, 3], [10, 10], [11, 11], [12, 12], [13, 13]],
+        dtype=np.int64,
+    )
+    labels = np.array([1, 1, 0, 0, 0, 0])
+    imputed = SimpleImputer(strategy="constant", fill_value=0).fit_transform(features)
+
+    normalized = Helpers.ensure_float64(imputed)
+    resampled, _ = SMOTE(k_neighbors=1, random_state=1).fit_resample(normalized, labels)
+
+    synthetic = resampled[len(features):]
+    assert resampled.dtype == np.float64
+    assert synthetic.size > 0
+    assert np.any(np.modf(synthetic)[0] != 0.0)

@@ -319,8 +319,17 @@ class TaskRunner:
 
         self.logger.print_progress(message="Get dark numbers")
 
-        self.ph.get_dark_numbers(X = self.dh.X, Y = self.dh.Y, type = "all", models = [cross_trained_model, trained_model], \
-                                 model_names = ["Cross-trained on training data", "Retrained on all data"])
+        self.ph.get_dark_numbers(
+            X=self.dh.X,
+            Y=self.dh.Y,
+            type="all",
+            models=[cross_trained_model, trained_model],
+            model_names=["Cross-trained model", "Retrained model"],
+            X_validation=self.dh.X_validation,
+            Y_validation=self.dh.Y_validation,
+            X_cv_training=self.dh.X_train,
+            Y_cv_training=self.dh.Y_train,
+        )
 
         self.ph.evaluate_dark_numbers(self.config.get_output_filepath("dark_numbers"),
                                       self.config.get_output_filepath("dark_numb_conf_matrix"))

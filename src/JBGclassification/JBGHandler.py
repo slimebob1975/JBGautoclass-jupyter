@@ -1,7 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
 
-import dill
 import time
 import psutil
 import traceback
@@ -19,6 +18,7 @@ from lexicalrichness import LexicalRichness
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import FunctionTransformer
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, make_scorer, f1_score
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split, GridSearchCV, ParameterGrid)
@@ -35,6 +35,7 @@ from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 from JBGDarkNumberCorrectionRegressor import DarkNumberCorrectionFactorRegressor
+from JBGModelPersistence import load_model_artifact, save_model_artifact
 import Helpers
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
@@ -925,9 +926,8 @@ class ModelHandler:
         # Load model from file, but handle Keras models differently since their algorithm was
         # replaced by a path to model training information
         try:
-            with open(filename, 'rb') as infile:
-                config, text_converter, (oversampler, undersampler, preprocess, reduction, algorithm), pipeline, \
-                    keras_name, n_features = dill.load(infile)
+            config, text_converter, (oversampler, undersampler, preprocess, reduction, algorithm), pipeline, \
+                keras_name, n_features = load_model_artifact(filename)
                         
             # Handle Keras models differently
             if (keras_name is not None):
@@ -1197,22 +1197,42 @@ class ModelHandler:
                 score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy())[:, 1], multi_class='ovo')
         return score
         
-    def execute_n_job(self, func, *args, n_jobs_desired=None, backend_desired="loky", **kwargs):
-        """
-        Execute a function with parallelism adapted to available cores.
-        - n_jobs_desired: number of independent tasks (e.g. k folds).
-        If None, defaults to all cores.
-        - Caps n_jobs at available CPU cores and environment variable
-        - Scale down n_jobs on key exceptions.
-        - TODO: Switches to backend threads if pickling fails, but beware of NaN results from inconsistencies
-        """
-
-        max_cores = psutil.cpu_count(logical=True)
+    def _resolve_n_jobs(self, n_jobs_desired, max_cores: int) -> int:
+        """Resolve requested worker count while treating negative configured values as unlimited."""
+        max_cores = max(1, max_cores or 1)
+        configured_cap = self.handler.STANDARD_DESIRED_N_JOBS
 
         if n_jobs_desired is None or n_jobs_desired < 0:
             n_jobs = max_cores
         else:
-            n_jobs = min(n_jobs_desired, max_cores, self.handler.STANDARD_DESIRED_N_JOBS)
+            n_jobs = max(1, min(n_jobs_desired, max_cores))
+
+        if configured_cap is not None and configured_cap > 0:
+            n_jobs = min(n_jobs, configured_cap)
+
+        return max(1, n_jobs)
+
+    @staticmethod
+    def _add_parallel_execution_note(ex: Exception, func, n_jobs: int, backend: str) -> None:
+        """Attach concise execution context without replacing the original exception."""
+        add_note = getattr(ex, "add_note", None)
+        if callable(add_note):
+            func_name = getattr(func, "__name__", type(func).__name__)
+            add_note(
+                f"execute_n_job context: func={func_name}, n_jobs={n_jobs}, backend={backend}"
+            )
+
+    def execute_n_job(self, func, *args, n_jobs_desired=None, backend_desired="loky", **kwargs):
+        """
+        Execute a function with parallelism adapted to available cores.
+
+        Resource/pickling failures are retried with fewer workers. Other exceptions are
+        re-raised unchanged so callers can make type-specific decisions and retain the
+        original traceback. A negative global worker setting means "no additional cap".
+        """
+
+        max_cores = psutil.cpu_count(logical=True) or 1
+        n_jobs = self._resolve_n_jobs(n_jobs_desired, max_cores)
 
         while True:
             if self.handler.config.debug:
@@ -1226,18 +1246,19 @@ class ModelHandler:
 
             except (MemoryError, SystemError, PicklingError) as ex:
                 if n_jobs == 1:
-                    raise MemoryError(
-                        f"n_jobs=1 but not enough memory for {func.__name__}"
-                    ) from ex
-                n_jobs = max(1, n_jobs // 2)
+                    self._add_parallel_execution_note(ex, func, n_jobs, backend_desired)
+                    raise
+
+                next_n_jobs = max(1, n_jobs // 2)
                 self.handler.logger.print_warning(
-                    f"MemoryError/SystemError/PicklingError with {func.__name__}, retrying with n_jobs={n_jobs}. Reason: {str(ex)}"
+                    f"{type(ex).__name__} with {getattr(func, '__name__', type(func).__name__)}, "
+                    f"retrying with n_jobs={next_n_jobs}. Reason: {str(ex)}"
                 )
+                n_jobs = next_n_jobs
 
             except Exception as ex:
-                raise Exception(
-                    f"Could not call {func.__name__} with args {args} and kwargs {kwargs}: {ex}"
-                ) from ex
+                self._add_parallel_execution_note(ex, func, n_jobs, backend_desired)
+                raise
 
             else:
                 end_time = time.time()
@@ -1264,7 +1285,7 @@ class ModelHandler:
 
     def get_preflight_skip_reason(self, preprocessor: Preprocess, scaler: Transform, reduction: Reduction,
                                   algorithm: Algorithm, X_train: pd.DataFrame) -> Union[str, None]:
-        """Return a reason to skip a model candidate when preprocessing removes all feature variance.
+        """Return a reason to skip a known-incompatible candidate before cross-validation.
 
         This is deliberately conservative. If the probe itself cannot inspect a transformer, the
         normal training path is allowed to continue. DummyClassifier without feature reduction is
@@ -1285,6 +1306,12 @@ class ModelHandler:
         # already produce dense arrays. Reject only the known-incompatible sparse paths.
         if sparse_input and algorithm == Algorithm.LDA and reduction in (Reduction.NOR, Reduction.RFE):
             return "LinearDiscriminantAnalysis requires dense input"
+
+        # FastICA rejects SciPy sparse matrices. The text/category pipeline keeps
+        # sparse features sparse through NOS/STA/MAX/NRM/BIN, so skip the known
+        # incompatible path instead of letting every CV fold fail independently.
+        if sparse_input and reduction == Reduction.FICA:
+            return "FastICA requires dense input"
 
         if algorithm == Algorithm.DUMY and reduction == Reduction.NOR:
             return None
@@ -1692,6 +1719,23 @@ class ModelHandler:
         capped_reducer.set_params(n_components=min_fold_train)
         return capped_reducer
 
+    @staticmethod
+    def _cap_fastica_components_for_cv(feature_reducer: Transform, kfold: StratifiedKFold,
+                                       n_train: int, n_features: int) -> Transform:
+        """Keep FastICA within both feature count and the smallest CV training fold."""
+        if feature_reducer is None or not hasattr(feature_reducer, "n_components"):
+            return feature_reducer
+
+        n_splits = max(2, int(kfold.get_n_splits()))
+        min_fold_train = max(1, int(n_train) - ceil(int(n_train) / n_splits))
+        max_components = max(1, min(min_fold_train, int(n_features)))
+        if int(feature_reducer.n_components) <= max_components:
+            return feature_reducer
+
+        capped_reducer = clone(feature_reducer)
+        capped_reducer.set_params(n_components=max_components)
+        return capped_reducer
+
     def _build_spot_check_pipeline(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess,
                                    feature_reducer: Transform, estimator: Estimator, scaler: Transform,
                                    oversampler: Oversampling, undersampler: Undersampling,
@@ -1702,6 +1746,13 @@ class ModelHandler:
                 feature_reducer=feature_reducer,
                 kfold=kfold,
                 n_train=dh.X_train.shape[0],
+            )
+        elif reduction == Reduction.FICA:
+            feature_reducer = self._cap_fastica_components_for_cv(
+                feature_reducer=feature_reducer,
+                kfold=kfold,
+                n_train=dh.X_train.shape[0],
+                n_features=dh.X_train.shape[1],
             )
 
         return self.get_pipeline(
@@ -1757,6 +1808,16 @@ class ModelHandler:
             # Finally, put oversampling and undersampling techniques before everything else
             steps.insert(0, (oversampler.name, oversampler.get_callable_oversampler()))
             steps.insert(1, (undersampler.name, undersampler.get_callable_undersampler()))
+
+            # Interpolation-based SMOTE-family samplers must receive floating-point
+            # features.  With integer input imbalanced-learn preserves the integer dtype
+            # for generated samples, which truncates interpolation and can surface later
+            # as float64-to-int64 failures (notably in MLPC GridSearchCV runs).
+            if oversampler.requires_float_input():
+                float_transformer = FunctionTransformer(
+                    Helpers.ensure_float64, validate=False, accept_sparse=True
+                )
+                steps.insert(0, ("FLT", float_transformer))
 
             # The oversampling or undersampling techniques may require some imputation of NaN values
             if oversampler or undersampler:
@@ -1861,9 +1922,8 @@ class ModelHandler:
                     self.model.n_features_out
                 ]   
                 
-                # Save the data minus the KERAS model
-                with open(filename, 'wb') as outfile:
-                    dill.dump(data, outfile)
+                # Save the data minus the KERAS model using the versioned artifact contract.
+                save_model_artifact(filename, *data)
 
                 # Save the KERAS model separately
                 self.model.pipeline.steps[-1][-1].model_.save(str(filename) + "." + keras_name)
@@ -1880,9 +1940,8 @@ class ModelHandler:
                     self.model.n_features_out
                 ]   
                 
-                # Save the data
-                with open(filename, 'wb') as outfile:
-                    dill.dump(data, outfile)
+                # Save the data using the versioned artifact contract.
+                save_model_artifact(filename, *data)
 
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on saving {self.model.algorithm.lib.get_full_name()} model to file: {e}")
@@ -2430,43 +2489,25 @@ class PredictionsHandler:
             raise ValueError(f"Invalid dark-number correction factor: {corr}")
         return corr
 
-    def get_dark_numbers(self, X: pd.DataFrame, Y: pd.DataFrame, type: str = "all", models: list = [None], \
-                         model_names: list = [None], combine_models=True, random_state=42) -> None:
-        
-        # These DataFrames contain the results
-        self.dark_numbers = pd.DataFrame()
-        self.dark_numb_conf_matrix = pd.DataFrame()
-        estimator_X = Helpers.prepare_estimator_input(X)
-
-        # Combine models to compute a worst case scenario
-        if combine_models:
-            Y_pred_worst = Y.copy(deep=True)
-            Y_prob_pred_worst = pd.Series([0.0 for i in range(Y.size)], index=Y.index)
-
-        # Use these as labels
-        labels = np.sort(Y.unique())
-
-        # Dark-number probability calculations require predict_proba(). Some
-        # otherwise valid classifiers (for example LinearSVC) do not expose it.
-        # We can still produce their confusion matrices, but there is no
-        # probability input from which to calculate dark numbers.
-        supports_predict_proba = [hasattr(model, "predict_proba") for model in models]
-        if not any(supports_predict_proba):
-            for model, model_name in zip(models, model_names):
-                Y_pred = pd.Series(model.predict(estimator_X), index=Y.index)
-                self._update_confusion_matrix(model_name, Y, Y_pred, labels)
-                self.handler.logger.print_warning(
-                    f"Skipping dark number calculations for {model_name}: "
-                    "model does not support predict_proba()."
-                )
-            return None
-        
-        # Find correction numbers for each label and a retrained model
+    def _calculate_dark_number_corrections(self, model, X, Y, labels, flip_fraction, random_state, model_name):
+        """Estimate one correction factor per one-vs-rest target for a specific model/data pairing."""
         corrs = {}
+        corr_sources = {}
+        estimator_X = Helpers.prepare_estimator_input(X)
         mh = self.handler.get_handler("model")
+
+        self.handler.logger.print_info(
+            f"Estimating Dark Number correction factors for {model_name} "
+            f"with {flip_fraction:.0%} injected positive-label noise."
+        )
+
         for label in labels:
+            corr = 1.0
+            corr_source = "fallback/unestimable"
             if DARK_NUMBER_DEBUG_LOGGING:
-                self.handler.logger.print_info(f"[DEBUG] Considering label: {label} among labels: {labels} for corr_estimator")
+                self.handler.logger.print_info(
+                    f"[DEBUG] Considering label: {label} among labels: {labels} for corr_estimator"
+                )
             try:
                 n_splits, n_repeats = self._auto_n_splits_and_repeats(
                     n_jobs_desired=-1,
@@ -2474,31 +2515,51 @@ class PredictionsHandler:
                     min_n_repeats=2,
                     max_multiplier=3
                 )
-                total_jobs = min(n_splits * n_repeats, psutil.cpu_count(logical=True), self.handler.STANDARD_DESIRED_N_JOBS)
+                total_jobs = min(
+                    n_splits * n_repeats,
+                    psutil.cpu_count(logical=True),
+                    self.handler.STANDARD_DESIRED_N_JOBS
+                )
                 if DARK_NUMBER_DEBUG_LOGGING:
-                    self.handler.logger.print_info(f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator")
+                    self.handler.logger.print_info(
+                        f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator"
+                    )
                 try:
                     corr_estimator = DarkNumberCorrectionFactorEstimator(
-                        estimator=clone(models[0]), 
-                        flip_fraction=0.2, 
-                        n_splits=n_splits, 
-                        n_repeats=n_repeats, 
+                        estimator=clone(model),
+                        flip_fraction=flip_fraction,
+                        n_splits=n_splits,
+                        n_repeats=n_repeats,
                         n_jobs=total_jobs,
                         predict_mode='predict',
                         random_state=random_state,
                         positive_class=label,
                         sample_size=1.0,
-                        logger=self.handler.logger 
+                        logger=self.handler.logger
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_estimator, estimator_X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS)
-                    corrs[label] = self._validate_dark_number_correction(corr_estimator.score())
-                    #raise Exception(f"Corr estimator worked for label {label} with result {corrs[label]} but we want to use regressor :-)")
+                    mh.execute_n_job(
+                        ModelHandler.fit_with_n_jobs,
+                        corr_estimator,
+                        estimator_X,
+                        Y,
+                        n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS
+                    )
+                    if not getattr(corr_estimator, "is_valid_for_regression_", True):
+                        raise ValueError(
+                            "Direct correction-factor estimator did not produce an observed estimate "
+                            f"(status={getattr(corr_estimator, 'correction_status_', 'unknown')})."
+                        )
+                    corr = self._validate_dark_number_correction(corr_estimator.score())
+                    corr_source = "direct"
                 except Exception as ex:
-                    self.handler.logger.print_warning(f"Correction number estimator failed: {str(ex)}. Fallback: using regressor.")
+                    self.handler.logger.print_warning(
+                        f"Correction number estimator failed for {model_name}, target {label}: {str(ex)}. "
+                        "Fallback: using regression over valid finite sample estimates."
+                    )
                     corr_regressor = DarkNumberCorrectionFactorRegressor(
-                        estimator=clone(models[0]),
+                        estimator=clone(model),
                         sample_size_list=[0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
-                        flip_fraction=0.2,
+                        flip_fraction=flip_fraction,
                         n_splits=n_splits,
                         n_repeats=n_repeats,
                         n_jobs=total_jobs,
@@ -2508,51 +2569,191 @@ class PredictionsHandler:
                         type='logbounded',
                         logger=self.handler.logger
                     )
-                    mh.execute_n_job(ModelHandler.fit_with_n_jobs, corr_regressor, estimator_X, Y, n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS)
-                    corrs[label] = self._validate_dark_number_correction(corr_regressor.score())
+                    mh.execute_n_job(
+                        ModelHandler.fit_with_n_jobs,
+                        corr_regressor,
+                        estimator_X,
+                        Y,
+                        n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS
+                    )
+                    corr = self._validate_dark_number_correction(corr_regressor.score())
+                    corr_source = "regressed"
+                    invalid_count = len(corr_regressor.invalid_sample_results_ or [])
+                    if invalid_count:
+                        self.handler.logger.print_info(
+                            f"Correction-factor regression for {model_name}, target {label}: "
+                            f"used {len(corr_regressor.valid_sample_results_ or [])} valid sample estimates "
+                            f"and ignored {invalid_count} invalid/unestimable sample estimates."
+                        )
                     if DARK_NUMBER_DEBUG_LOGGING:
-                        self.handler.logger.print_info(f"Correction number regression sample results = {corr_regressor.sample_results_} with result {corrs[label]}")
+                        self.handler.logger.print_info(
+                            f"Correction number regression sample results = {corr_regressor.sample_results_} "
+                            f"with result {corr}"
+                        )
             except Exception as ex:
-                self.handler.logger.print_warning(f"Correction number calculation for label {label} failed. Using 1.0 as fallback. Reason: {str(ex)}")
-                corrs[label] = 1.0
-        
-        # Compute dark number for all models
-        for model, model_name, can_predict_proba in zip(models, model_names, supports_predict_proba):
+                self.handler.logger.print_warning(
+                    f"Correction number calculation for label {label} and {model_name} failed. "
+                    f"Using 1.0 as fallback/unestimable. Reason: {str(ex)}"
+                )
+                corr = 1.0
+                corr_source = "fallback/unestimable"
 
-            # Make prediction for current model
-            Y_pred = pd.Series(model.predict(estimator_X), index=Y.index)
+            corrs[label] = corr
+            corr_sources[label] = corr_source
+            self.handler.logger.print_info(
+                f"Dark Number correction factor for {model_name}, target {label}: "
+                f"{corr:.6g} ({corr_source})."
+            )
 
-            # Update the confusion matrix
-            self._update_confusion_matrix(model_name, Y, Y_pred, labels)
+        return corrs, corr_sources
+
+    def get_dark_numbers(
+        self,
+        X: pd.DataFrame,
+        Y: pd.DataFrame,
+        type: str = "all",
+        models: list = None,
+        model_names: list = None,
+        combine_models: bool = True,
+        random_state: int = 42,
+        X_validation: pd.DataFrame = None,
+        Y_validation: pd.Series = None,
+        X_cv_training: pd.DataFrame = None,
+        Y_cv_training: pd.Series = None,
+        flip_fraction: float = None,
+    ) -> None:
+        """Compute Dark Numbers while keeping CV-test, CV-full and retrained-full estimates distinct."""
+        self.dark_numbers = pd.DataFrame()
+        self.dark_numb_conf_matrix = pd.DataFrame()
+
+        models = [] if models is None else list(models)
+        if model_names is None:
+            model_names = [f"Model {i + 1}" for i in range(len(models))]
+        else:
+            model_names = list(model_names)
+        if len(models) != len(model_names):
+            raise ValueError("models and model_names must have the same length")
+        if not models:
+            return None
+
+        if flip_fraction is None:
+            flip_fraction = self.handler.config.get_dark_number_flip_fraction()
+        flip_fraction = float(flip_fraction)
+        if not 0.0 < flip_fraction < 1.0:
+            raise ValueError("Dark-number flip_fraction must be greater than 0 and less than 1")
+
+        labels = np.sort(Y.unique())
+        supports_predict_proba = [hasattr(model, "predict_proba") for model in models]
+
+        # A correction factor belongs to a model/data pairing. The cross-trained
+        # model was fitted on the 80% training split, while the retrained model was
+        # fitted on all known data. Preserve that distinction instead of sharing the
+        # correction factors from models[0] across every reported estimate.
+        corrs_by_model = {}
+        corr_sources_by_model = {}
+        for model_index, (model, model_name, can_predict_proba) in enumerate(
+            zip(models, model_names, supports_predict_proba)
+        ):
+            if not can_predict_proba:
+                continue
+
+            if model_index == 0 and X_cv_training is not None and Y_cv_training is not None:
+                corr_X, corr_Y = X_cv_training, Y_cv_training
+            else:
+                corr_X, corr_Y = X, Y
+
+            corrs_by_model[model_index], corr_sources_by_model[model_index] = self._calculate_dark_number_corrections(
+                model=model,
+                X=corr_X,
+                Y=corr_Y,
+                labels=labels,
+                flip_fraction=flip_fraction,
+                random_state=random_state,
+                model_name=model_name,
+            )
+
+        full_data_predictions = []
+
+        for model_index, (model, model_name, can_predict_proba) in enumerate(
+            zip(models, model_names, supports_predict_proba)
+        ):
+            if model_index == 0:
+                evaluation_sets = []
+                if (
+                    X_validation is not None
+                    and Y_validation is not None
+                    and len(Y_validation) > 0
+                ):
+                    evaluation_sets.append(("D_cv_test", X_validation, Y_validation, False))
+                evaluation_sets.append(("D_cv_full", X, Y, True))
+            elif model_index == 1:
+                evaluation_sets = [("D_retrained_full", X, Y, True)]
+            else:
+                evaluation_sets = [(f"D_model_{model_index + 1}_full", X, Y, True)]
+
+            for estimate_name, X_eval, Y_eval, include_in_combined in evaluation_sets:
+                estimator_X = Helpers.prepare_estimator_input(X_eval)
+                Y_pred = pd.Series(model.predict(estimator_X), index=Y_eval.index)
+                result_name = f"{estimate_name} - {model_name}"
+
+                self._update_confusion_matrix(result_name, Y_eval, Y_pred, labels)
+
+                if not can_predict_proba:
+                    continue
+
+                Y_prob_pred = pd.Series(
+                    [max(row) for row in model.predict_proba(estimator_X)],
+                    index=Y_eval.index
+                )
+                self._update_dark_numbers(
+                    result_name,
+                    Y_eval,
+                    Y_pred,
+                    Y_prob_pred,
+                    type,
+                    corrs_by_model[model_index],
+                    corr_sources_by_model[model_index]
+                )
+
+                if include_in_combined:
+                    full_data_predictions.append((Y_pred, Y_prob_pred, model_index))
 
             if not can_predict_proba:
                 self.handler.logger.print_warning(
                     f"Skipping dark number calculations for {model_name}: "
                     "model does not support predict_proba()."
                 )
-                continue
-            
-            # Predict probabilities for current predictions
-            Y_prob_pred = pd.Series([max(row) for row in model.predict_proba(estimator_X)], index=Y.index)
 
-            # Compute and update the dark numbers matrix
-            self._update_dark_numbers(model_name, Y, Y_pred, Y_prob_pred, type, corrs)
+        # Retain the historical combined/worst-case output for backward comparison.
+        # Its correction factors deliberately keep the old models[0] convention; the
+        # three named estimates above are the new model-specific results.
+        if combine_models and full_data_predictions:
+            Y_pred_worst = Y.copy(deep=True)
+            Y_prob_pred_worst = pd.Series([0.0 for _ in range(Y.size)], index=Y.index)
 
-            # Combine models processed so far to get worst case scenario by replacing wrong predictions with
-            # the currently worst one
-            if combine_models:
-                Y_pred_worst = Y_pred_worst.mask((Y_pred != Y) & (Y_prob_pred >= Y_prob_pred_worst), Y_pred)
-                Y_prob_pred_worst = Y_prob_pred_worst.mask((Y_pred != Y) & (Y_prob_pred >= Y_prob_pred_worst), Y_prob_pred)      
-        
-        # In case we have combined the models, we need to repeat what we did above
-        if combine_models and not self.dark_numbers.empty:
-            
-            # Update the confusion matrix
-            self._update_confusion_matrix("Combined", Y, Y_pred_worst, labels)
+            for Y_pred, Y_prob_pred, _ in full_data_predictions:
+                replace_mask = (Y_pred != Y) & (Y_prob_pred >= Y_prob_pred_worst)
+                Y_pred_worst = Y_pred_worst.mask(replace_mask, Y_pred)
+                Y_prob_pred_worst = Y_prob_pred_worst.mask(replace_mask, Y_prob_pred)
 
-            # Compute and update the dark numbers matrix
-            self._update_dark_numbers("Combined", Y, Y_pred_worst, Y_prob_pred_worst, type, corrs)
-    
+            self._update_confusion_matrix("Combined (legacy full-data)", Y, Y_pred_worst, labels)
+
+            legacy_corrs = corrs_by_model.get(0)
+            legacy_corr_sources = corr_sources_by_model.get(0)
+            if legacy_corrs is None:
+                first_model_index = full_data_predictions[0][2]
+                legacy_corrs = corrs_by_model[first_model_index]
+                legacy_corr_sources = corr_sources_by_model[first_model_index]
+            self._update_dark_numbers(
+                "Combined (legacy full-data)",
+                Y,
+                Y_pred_worst,
+                Y_prob_pred_worst,
+                type,
+                legacy_corrs,
+                legacy_corr_sources
+            )
+
         return None
 
     def _auto_n_splits_and_repeats(self, n_jobs_desired=None, min_n_splits=1, min_n_repeats=1, max_multiplier=3):
@@ -2582,7 +2783,7 @@ class PredictionsHandler:
     
     def _update_confusion_matrix(self, model_name, Y, Y_pred, labels):
 
-        model_confusion_matrix = pd.DataFrame(confusion_matrix(Y, Y_pred, labels=None), index=labels, columns=labels)
+        model_confusion_matrix = pd.DataFrame(confusion_matrix(Y, Y_pred, labels=labels), index=labels, columns=labels)
 
         # Put together the results for the confusion matrix
         model_name_col = pd.Series([model_name]+["" for i in range(model_confusion_matrix.shape[0]-1)], \
@@ -2596,10 +2797,25 @@ class PredictionsHandler:
 
         return None
 
-    def _update_dark_numbers(self, model_name, Y, Y_pred, Y_prob_pred, type, corrs = None):
+    def _update_dark_numbers(
+        self,
+        model_name,
+        Y,
+        Y_pred,
+        Y_prob_pred,
+        type,
+        corrs=None,
+        corr_sources=None,
+    ):
         
         # Compute dark numbers
         model_dark_numbers = DarkNumberCalculator().compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type, corrs=corrs)
+        if corr_sources is not None:
+            model_dark_numbers.insert(
+                model_dark_numbers.columns.get_loc("corr") + 1,
+                "corr_source",
+                model_dark_numbers["target"].map(corr_sources).fillna("unknown"),
+            )
         
         # Put together the results for the dark numbers
         model_name_col = pd.Series([model_name]+["" for i in range(model_dark_numbers.shape[0]-1)], name="Model type")

@@ -10,10 +10,13 @@
 
 ## Known issues / correctness
 
-- [ ] Sometimes: Conversion problem float64 to int 64 when running SMOTE with MLPC in GridSearchCV.
+- [X] 053 — Normalize feature input to float64 before interpolation-based SMOTE-family oversampling, preventing integer truncation of synthetic samples and the observed float64-to-int64 failure path in MLPC/GridSearchCV. Sparse matrices stay sparse; random/categorical-only oversampling keeps its prior dtype behavior. Runtime integration is verified on Breast Cancer with an `IMP -> FLT -> SMOTE -> ... -> MLPC` GridSearchCV pipeline; that dataset was already float64, so the original integer-input path remains covered by the targeted regression reproducer rather than a real-data rerun.
 - [ ] Review scoring names/semantics for `Balanced F1 Micro/Macro/Weighted`. In single-label classification, micro-F1 closely tracks accuracy and can hide minority-class failure, as the realistic Återkrav run demonstrated.
 - [ ] Review the NumPy compatibility/fallback path for overly broad `TypeError` handling that may mask estimator-internal errors.
-- [ ] Review `execute_n_job` exception wrapping; generic wrapping may make outer `TypeError` fallback handling unreachable.
+- [X] 054 — Make `execute_n_job` exception-safe: preserve original exception types/tracebacks for caller-specific handling, retry only the existing resource/pickling exception classes with reduced worker counts, re-raise the original failure at one worker, and treat a negative global worker setting as unlimited rather than accidentally overriding an explicit positive `n_jobs_desired`. The normal parallel path is runtime-verified on a broad Breast Cancer run through spot-check, GridSearchCV, final fit, evaluation and retraining; the exceptional branches remain covered by targeted regression tests.
+- [X] 055 — Mark Bernoulli/Complement/Multinomial Naive Bayes as RFE-incompatible so the existing spot-check compatibility gate skips those candidates before RFE attempts to read `coef_`/`feature_importances_`. This removes the avoidable RFE failures seen in the broad Breast Cancer stress run.
+- [ ] Add non-negative-feature compatibility preflight for Multinomial/Complement Naive Bayes after preprocessing/reduction; the broad stress run still produced failures when transformations introduced negative values.
+- [ ] Investigate the Keras MLP wrapper/grid shape error (`Cannot convert '100' to a shape`) observed in the broad Breast Cancer stress run.
 
 ## ML methodology
 
@@ -23,17 +26,25 @@
 - [ ] Use realistic datasets with weaker signal, missing values, class imbalance, correlated/irrelevant features, and mixed categorical/numerical data to expose issues that benchmark fixtures may hide.
 - [ ] Later, add a more realistic free-text project with overlapping vocabulary and non-trivial categories; do not add it to the regression suite until it proves useful as a stable regression fixture.
 
+## Dark Numbers / label-noise estimation
+
+- [X] 049 — Froze the published linear Dark Number formula as a compatibility contract and strengthened correctness/observability around it: the one-vs-rest formula is regression-tested, the FP=0/FN>0 alpha bug is fixed, injected-noise fraction is configurable with 20% as the compatibility default, correction factors are estimated separately for the CV and retrained model/data pairings, and `D_cv_test`, `D_cv_full`, and `D_retrained_full` are reported separately while the old combined full-data result is retained as an explicit legacy comparison. Runtime-verified on the Breast Cancer project: both model-specific corr estimations and all three named estimates completed without application exceptions.
+- [X] 050 — Added a standalone validation harness without changing the Dark Number formula: inject known positive-to-negative label noise, compute the known hidden-positive share, run D_cv_test/D_cv_full/D_retrained_full with model-specific correction factors, measure envelope coverage and truth position, summarize correction-factor stability across repeated runs, and quantify probability-ranked enrichment relative to random selection.
+- [X] 051 — Robustified correction-factor estimation without changing the Dark Number formula: non-finite/zero-recovery and synthetic insufficient-sample fallback values are excluded from regression, regression requires enough real finite observations, corr provenance is reported as `direct`, `regressed`, or `fallback/unestimable`, and the validation harness uses the same fallback semantics. Runtime-verified on Wine after 052: all six class/model correction factors were finite `direct` estimates without regressor/fallback use.
+- [ ] Refine the Dark Number correction fallback strategy by failure cause. Keep sample-size regression primarily for resource-constrained execution of the same target estimator (for example memory pressure), rather than treating zero recovery/statistically unestimable correction as a sample-size problem. For statistically unestimable cases, validate an explicit fallback correction classifier in the 050 harness before selecting a default; FUT Voting is an initial candidate because it has been used successfully before. Always report the target model, the model actually used to estimate `corr`, and provenance such as `direct`, `regressed_same_model`, or `fallback_model:<name>`; never present another model's correction factor as if it belonged to the target estimator.
+- [ ] Add dedicated Dark Numbers GUI/config controls and decouple calculation from `Display mispredicted`: a separate enable/disable control plus a mutually exclusive Linear/Non-linear method choice; later expose advanced settings such as injected-noise fraction and alpha variant where useful, and persist/restore them through generated config files and `Repeat last`.
+
 ## Serialization / model persistence
 
-- [ ] Generated `autoclassconfig_*.py` files currently persist `sql_password` in plaintext; remove credential serialization and inject credentials only at runtime.
+- [X] Generated config/model artifacts no longer persist `sql_password`; generated configs use runtime `JBG_SQL_PASSWORD` when needed and loaded models receive the current runtime credentials.
 - [ ] Evaluate whether the project can reduce or remove its dependency on `dill` in favor of standard `pickle` by making pipelines fully pickle-friendly.
-- [ ] Replace local lambdas/functions embedded in `FunctionTransformer` steps with module-level pickle-friendly callables where practical.
-- [ ] Define and test a supported model persistence contract: save, reload in a fresh process, retrain, and predict.
-- [ ] Treat serialized model files as trusted input only; document the security implications of loading pickle/dill artifacts.
+- [X] 055 — Replace the no-op oversampling, undersampling, preprocessing and reduction `FunctionTransformer` lambdas with a shared module-level identity callable so ordinary pipelines no longer depend on dill serializing local lambdas.
+- [X] 055 — Define and test the supported model persistence contract: new `.sav` files use a versioned artifact envelope with required fields and atomic main-file replacement, legacy six-item artifacts remain readable, config loading uses the same parser, fixture regeneration writes the current format, and a fresh-process regression test covers reload, predict, retrain and predict. The contract remains dependency-version-sensitive and trusted-input-only.
+- [X] Documented that serialized pickle/dill model files are trusted-input-only and must not be loaded from untrusted sources.
 
 ## Dependencies / packaging / code structure
 
-- [ ] Clean up duplicate and/or unpinned requirements and make the supported Python/scikit-learn dependency set explicit.
+- [ ] Pin the supported Python/scikit-learn dependency set explicitly; the duplicate `matplotlib` requirement was removed in 048.
 - [ ] Reduce `sys.path` manipulation and direct-import coupling in favor of a clearer package/import structure.
 - [ ] Review hard-coded flags/settings that should instead be configuration values.
 - [ ] Remove or update stale tests/names such as the `Detector`/`Detecter` mismatch when encountered.
@@ -41,11 +52,17 @@
 
 ## Runtime / server / operations
 
-- [ ] Review FastICA sizing/convergence before enabling it in broad runs again. An accumulated server log showed repeated `n_components is too large` auto-capping plus `FastICA did not converge` warnings; cap components to the effective fold/input dimensions and tune or preflight convergence in a future revision.
+- [X] 052 — Hardened FastICA dimensions before broad runs: component counts are capped to the effective input rank and the smallest CV training fold instead of relying on sklearn auto-capping, sparse input is preflight-skipped, initialization is reproducible, and the iteration budget is raised from 200 to 1000 without changing FastICA's algorithm or tolerance. Runtime-verified on Wine: all FICA candidates used 13 components and the old `n_components is too large` warnings disappeared.
+- [ ] FastICA convergence remains open after 052. The Wine verification removed all dimension warnings but still produced repeated `FastICA did not converge` warnings even with `max_iter=1000`, while several FICA candidates remained among the strongest models. Identify the exact preprocessing/fold patterns and evaluate a targeted retry/tolerance/algorithm strategy rather than globally disabling FastICA or merely increasing iterations again.
 - [ ] Investigate intermittent widget-rendering failure after `Reclassification table for most mispredicted`, where the UI only shows `Error displaying widget` without an application crash or explanatory exception. Capture whether the failure originates in widget payload size/content, serialization, frontend rendering, or kernel/frontend state, and make the failure observable in logs.
 - [ ] Investigate the Voilà `_xsrf` shutdown/reload 403 behavior.
 - [ ] Review the local server/kernel communication setup; the current TCP transport has no encryption and should have an explicit trust/security model.
 - [ ] Add possibility of using threads in `execute_n_jobs` when `PicklingError` occurs, but verify NaN handling and estimator thread-safety before enabling it.
+- [ ] Investigate PyTorch estimator concurrency/checkpoint isolation. The broad Breast Cancer stress run produced JSON parse errors, `PytorchStreamReader` read failures, and shape mismatches consistent with parallel workers sharing temporary/checkpoint files. Give each fit/fold an isolated artifact path before considering broader PyTorch parallelism safe.
+- [ ] Preflight-skip `SelfTrainingClassifier` when the training set contains no unlabeled samples; both the broad stress run and the 054 Breast Cancer verification repeatedly emitted `y contains no unlabeled samples`, so the current candidate adds work/noise without exercising semi-supervised behavior.
+- [ ] Trace the remaining broad-run convergence warnings after 045. The 054 Breast Cancer verification confirms that some scikit-learn `MLPClassifier` spot-check instances still report the default `max_iter=500` despite the GUI/configured maximum being 20000; identify the instantiation path that is not receiving the configured value. Liblinear warnings also still occur in some SVC/stacked-SVC paths.
+- [ ] Preflight feature-selection combinations that can select zero features; the broad stress run emitted `No features were selected` warnings and should skip or clearly classify those candidates before downstream fitting.
+- [ ] Investigate the broad-run joblib warning `A worker stopped while some jobs were given to the executor`; determine whether it is timeout/resource pressure or an estimator-specific leak before changing worker settings.
 - [ ] Revisit resource/file-handle warnings only if they reappear in current runtime logs.
 
 ## Regression suite – maintain, do not expand by default
@@ -57,6 +74,13 @@ Current coverage includes numeric binary/multiclass classification, 4/13/30-feat
 
 ## Solved / established
 
+- [X] 054 — `execute_n_job` now preserves original exception types and tracebacks, adds concise parallel-execution context without generic wrapping, scales down workers only for the existing MemoryError/SystemError/PicklingError retry path, re-raises the original failure when one worker still fails, and correctly interprets negative global worker limits as unlimited.
+- [X] 053 — Interpolation-based SMOTE-family samplers now receive float64 feature matrices before resampling, preserving fractional synthetic values and avoiding the integer-cast failure path seen with MLPC/GridSearchCV; sparse inputs remain sparse and non-interpolating samplers are unchanged.
+- [X] 052 — FastICA now caps `n_components` against both input dimensions and the smallest CV training fold, skips sparse input before CV, uses deterministic initialization, and gets a larger iteration budget while preserving sklearn's default ICA algorithm/tolerance.
+- [X] 051 — Correction-factor regression now excludes non-finite/zero-recovery observations and synthetic insufficient-sample fallbacks, requires enough valid points for extrapolation, reports corr provenance (`direct`/`regressed`/`fallback-unestimable`) in Dark Numbers output, and applies the same semantics in the validation harness without changing the published Dark Number formula.
+- [X] 050 — Added a standalone Dark Number validation harness for controlled known-noise experiments, including three-estimate coverage/position, model-specific correction-factor stability, and probability-ranked enrichment versus random selection; production Dark Number calculations are unchanged.
+- [X] 049 — Preserved the published linear Dark Number formula while separating CV-test/CV-full/retrained-full estimates and model-specific correction factors, made the 20% injected-label-noise level configurable, fixed alpha handling for FN-only misclassifications, retained Combined as a labelled legacy comparison, and added focused regression coverage.
+- [X] 048 — Removed SQL passwords from generated Python configs and serialized model metadata, injects current credentials when loading saved models, supports `JBG_SQL_PASSWORD` for command-line runtime injection, documents pickle/dill trust requirements, and removed the duplicate `matplotlib` requirement.
 - [X] 047 — Kept generated persistence-test `.sav` files out of version control: `tests/fixtures/*.sav` is now ignored, the fixture directory documents the local/trusted-artifact policy, and the regeneration helper creates the directory when needed. The final broad Breast Cancer run after 046 completed spot-check, GridSearch, evaluation, retraining, misprediction handling, and Dark Numbers without candidate exceptions; the older accumulated FastICA warning storm is explicitly deferred above.
 - [X] 046 — Fixed class-label normalization in `validate_dataset`: the previous `DataFrame.astype(...)` result was discarded, so numeric known labels could remain numeric despite the loader contract. Known labels are now normalized to strings while `None`/empty labels remain untouched so prediction rows are still recognized as unclassified; added targeted regression coverage.
 - [X] 045 — Removed the repeatedly non-converging `LinearSVC(loss="hinge", dual=True)` branch from the grid. With the project's sparse-compatible `StandardScaler(with_mean=False)`, that branch produced 18 `ConvergenceWarning` messages during the Breast Cancer random-oversampling suite profile even at `max_iter=20000`; the six remaining squared-hinge combinations stay warning-free in targeted regression coverage.

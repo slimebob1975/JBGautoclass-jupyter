@@ -27,6 +27,8 @@ connection = {
     # User information for classification
     # Notice: ignored if trusted_connection = "true".
     "sql_username": "<sql_username>",
+    # Passwords are never persisted in generated config files. For command-line
+    # reuse, provide JBG_SQL_PASSWORD in the process environment at runtime.
     "sql_password": "<sql_password>",
 
     # Database catalog for data to be classified
@@ -79,6 +81,10 @@ mode = {
     # should be used for classification tests (the rest will be
     # used for prediction)
     "test_size": "<test_size>",
+
+    # Fraction of known positives temporarily relabelled when estimating
+    # Dark Number correction factors. 0.20 preserves the published workflow.
+    "dark_number_flip_fraction": "<dark_number_flip_fraction>",
 
     # Use oversampling techniques
     "oversampler": "<oversampler>",

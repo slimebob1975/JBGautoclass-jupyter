@@ -56,7 +56,15 @@ def make_runner(display_mispredicted: bool, regression_suite: bool):
         handler=None,
         regression_suite=regression_suite,
     )
-    runner.dh = SimpleNamespace(X_original="X-original", X="X", Y="Y")
+    runner.dh = SimpleNamespace(
+        X_original="X-original",
+        X="X",
+        Y="Y",
+        X_train="X-train",
+        Y_train="Y-train",
+        X_validation="X-validation",
+        Y_validation="Y-validation",
+    )
     runner.ph = predictions
     return runner, logger, predictions
 
@@ -70,6 +78,10 @@ def test_regression_suite_skips_reclassification_but_keeps_dark_numbers():
     assert predictions.mispredicted_evaluations == []
     assert logger.headers == ["Dark numbers"]
     assert len(predictions.dark_number_calls) == 1
+    assert predictions.dark_number_calls[0]["X_cv_training"] == "X-train"
+    assert predictions.dark_number_calls[0]["Y_cv_training"] == "Y-train"
+    assert predictions.dark_number_calls[0]["X_validation"] == "X-validation"
+    assert predictions.dark_number_calls[0]["Y_validation"] == "Y-validation"
     assert predictions.dark_number_evaluations == [
         ("dark_numbers.csv", "dark_numb_conf_matrix.csv")
     ]

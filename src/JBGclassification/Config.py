@@ -3,13 +3,13 @@ from __future__ import annotations
 import copy
 import enum
 import os
-import dill
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Type, TypeVar, Union
 
 import Helpers
+from JBGModelPersistence import load_model_config
 from JBGExceptions import ConfigException, ODBCDriverException
 from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
                      Reduction, ReductionTuple, ScoreMetric, MetaTuple, Oversampling,
@@ -32,6 +32,7 @@ class Config:
     DEFAULT_MODELS_PATH =  ".\\model\\"
     DEFAULT_MODEL_EXTENSION = ".sav"
     DEFAULT_TRAIN_OPTION = "Train a new model"
+    SQL_PASSWORD_ENV = "JBG_SQL_PASSWORD"
 
     TEXT_DATATYPES = ["nvarchar", "varchar", "char", "text", "enum", "set"]
     INT_DATATYPES = ["bigint", "int", "smallint", "tinyint"]
@@ -61,6 +62,7 @@ class Config:
         "mode.use_categorization": "<use_categorization>",
         "mode.category_text_columns": "<category_text_columns>",
         "mode.test_size": "<test_size>",
+        "mode.dark_number_flip_fraction": "<dark_number_flip_fraction>",
         "mode.oversampler": "<oversampler>",
         "mode.undersampler": "<undersampler>",
         "mode.algorithm": "<algorithm>",
@@ -342,6 +344,7 @@ class Config:
         use_categorization: bool = True
         category_text_columns: list = field(default_factory=list)
         test_size: float = 0.2
+        dark_number_flip_fraction: float = 0.2
         oversampler: Oversampling = field(default_factory=Oversampling.defaultOversampler)
         undersampler: Undersampling = field(default_factory=Undersampling.defaultUndersampler)
         algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple.defaultAlgorithmTuple)        
@@ -400,6 +403,11 @@ class Config:
                 raise TypeError(
                     "Argument test_size must be a float between 0 and 1!")
 
+            if not isinstance(self.dark_number_flip_fraction, float):
+                raise TypeError("Argument dark_number_flip_fraction must be a float between 0 and 1")
+            if not 0.0 < self.dark_number_flip_fraction < 1.0:
+                raise ValueError("Argument dark_number_flip_fraction must be greater than 0 and less than 1")
+
             if not (isinstance(self.algorithm, AlgorithmTuple)):
                 raise TypeError("Argument algorithm is invalid")
 
@@ -447,6 +455,7 @@ class Config:
                 "Categorize text data where applicable": self.use_categorization,
                 "Force categorization to these columns": forced_columns,
                 "Test size for trainings":               self.test_size,
+                "Dark-number injected label-noise fraction": self.dark_number_flip_fraction,
                 "Oversampling technique":                self.oversampler.full_name,
                 "Undersampling technique":               self.undersampler.full_name,
                 "Algorithms of choice":                  self.algorithm.full_name,
@@ -649,6 +658,10 @@ class Config:
         try:
             configuration = Config()
             configuration.connection = copy.deepcopy(self.connection)
+            # Database passwords are runtime credentials and must never be embedded
+            # in serialized model artifacts. Keep the username/connection metadata,
+            # but require the password to be supplied again when the model is used.
+            configuration.connection.sql_password = ""
             configuration.connection.data_catalog = ""
             configuration.connection.data_table = ""
             configuration.mode = copy.deepcopy(self.mode)
@@ -683,6 +696,12 @@ class Config:
                 head = getattr(self, location[0])
                 replace = getattr(head, location[1])
 
+                # SQL passwords are runtime-only credentials. Generated config files
+                # intentionally contain an empty password and may use JBG_SQL_PASSWORD
+                # from the process environment when loaded later.
+                if tag == "connection.sql_password":
+                    replace = ""
+
                 # Exception for class/data username, if given
                 if username is not None and "username" in location[1]:
                     replace = username
@@ -715,9 +734,7 @@ class Config:
     @classmethod
     def load_config_from_model_file(cls: Type[T], filename: str, config: T = None) -> T:
         try:
-            with open(filename, 'rb') as infile:
-                file_values = dill.load(infile)
-            saved_config = file_values[0]
+            saved_config = load_model_config(filename)
         except Exception as e:
             raise ConfigException(f"Something went wrong on loading model from file: {e}")
         
@@ -726,6 +743,11 @@ class Config:
             saved_config.mode.predict = config.mode.predict
             saved_config.mode.mispredicted = config.mode.mispredicted
             saved_config.mode.use_metas = config.mode.use_metas
+            saved_config.mode.dark_number_flip_fraction = config.mode.dark_number_flip_fraction
+            # Saved model metadata deliberately contains no SQL password. Inject the
+            # credentials from the current runtime configuration when loading a model.
+            saved_config.connection.sql_username = config.connection.sql_username
+            saved_config.connection.sql_password = config.connection.sql_password
             saved_config.connection.data_catalog = config.connection.data_catalog
             saved_config.connection.data_table = config.connection.data_table
             saved_config.io.model_name = config.io.model_name
@@ -758,10 +780,14 @@ class Config:
         data_text_columns = Helpers.get_from_string_or_list(module.connection["data_text_columns"])
         data_numerical_columns = Helpers.get_from_string_or_list( module.connection["data_numerical_columns"])
         category_text_columns = Helpers.get_from_string_or_list(module.mode["category_text_columns"])
+        dark_number_flip_fraction = float(module.mode.get("dark_number_flip_fraction", 0.2))
         use_metas = module.mode["predict"]
         if "use_metas" in module.mode:
             use_metas = module.mode["use_metas"]
        
+        configured_password = module.connection.get("sql_password", "")
+        runtime_password = configured_password or os.environ.get(cls.SQL_PASSWORD_ENV, "")
+
         config = cls(
             Config.Connection(
                 odbc_driver=module.connection["odbc_driver"],
@@ -770,7 +796,7 @@ class Config:
                 class_catalog=module.connection["class_catalog"],
                 class_table=module.connection["class_table"],
                 sql_username=module.connection["sql_username"],
-                sql_password=module.connection["sql_password"],
+                sql_password=runtime_password,
                 data_catalog=module.connection["data_catalog"],
                 data_table=module.connection["data_table"],
                 class_column=module.connection["class_column"],
@@ -789,6 +815,7 @@ class Config:
                 use_categorization=module.mode["use_categorization"],
                 category_text_columns=category_text_columns,
                 test_size=float(module.mode["test_size"]),
+                dark_number_flip_fraction=dark_number_flip_fraction,
                 oversampler=Oversampling[module.mode["oversampler"]],
                 undersampler=Undersampling[module.mode["undersampler"]],
                 algorithm=AlgorithmTuple.from_string(module.mode["algorithm"]),
@@ -913,6 +940,10 @@ class Config:
     def get_test_size_percentage(self) -> int:
         """ Gets the test_size as a percentage """
         return int(self.mode.test_size * 100.0)
+
+    def get_dark_number_flip_fraction(self) -> float:
+        """Fraction of positive labels hidden when estimating Dark Number correction factors."""
+        return self.mode.dark_number_flip_fraction
 
     def get_data_limit(self) -> int:
         """ Get the data limit"""

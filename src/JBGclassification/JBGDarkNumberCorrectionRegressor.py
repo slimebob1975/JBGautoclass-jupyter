@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.base import BaseEstimator, clone
@@ -9,8 +11,11 @@ from sklearn.datasets import make_classification, fetch_openml
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPClassifier
 import argparse
+from typing import TYPE_CHECKING
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
-from JBGLogger import JBGLogger
+
+if TYPE_CHECKING:
+    from JBGLogger import JBGLogger
 
 DEBUG_LOGGING = False
 
@@ -44,17 +49,32 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         self.correction_factor_ = None
         self.model_ = None
         self.sample_results_ = None
+        self.valid_sample_results_ = None
+        self.invalid_sample_results_ = None
         self.logger = logger
 
     def fit(self, X, y):
         # Sort ascending to handle smallest memory case first
         sample_sizes = sorted(self.sample_size_list, reverse=False)
 
-        # Run estimator for each sample size
-        self.sample_results_ = self._fit_sample_size_block(X, y, sample_sizes)
+        # Run estimator for each sample size. Keep all observations for audit, but
+        # regress only on finite correction factors produced by a real estimate.
+        (
+            self.sample_results_,
+            self.valid_sample_results_,
+            self.invalid_sample_results_,
+        ) = self._fit_sample_size_block(X, y, sample_sizes)
 
-        X_samples = np.array([r[0] for r in self.sample_results_]).reshape(-1, 1)
-        y_corrs = np.array([r[1] for r in self.sample_results_])
+        required_points = self.poly_degree + 1 if self.type == 'poly' else 2
+        if len(self.valid_sample_results_) < required_points:
+            raise ValueError(
+                "Insufficient valid correction-factor samples for regression: "
+                f"need at least {required_points}, got {len(self.valid_sample_results_)}. "
+                f"Invalid samples: {self.invalid_sample_results_}"
+            )
+
+        X_samples = np.array([r[0] for r in self.valid_sample_results_]).reshape(-1, 1)
+        y_corrs = np.array([r[1] for r in self.valid_sample_results_])
 
         # Fit regression model
         if self.type == 'poly':
@@ -88,10 +108,17 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         else:
             raise ValueError("Unsupported type. Choose from 'poly', 'linear', 'log', or 'logbounded'.")
 
+        if not np.isfinite(self.correction_factor_) or self.correction_factor_ <= 0:
+            raise ValueError(
+                f"Regression produced invalid correction factor: {self.correction_factor_}"
+            )
+
         return self
 
     def _fit_sample_size_block(self, X, y, sample_sizes):
-        results = []
+        all_results = []
+        valid_results = []
+        invalid_results = []
         for s in sample_sizes:
             if self.logger and DEBUG_LOGGING:
                 self.logger.print_info(f"[DEBUG] Running estimator for sample size {s} with n_jobs={self.n_jobs}")
@@ -105,11 +132,23 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
                 random_state=self.random_state,
                 positive_class=self.positive_class,
                 sample_size=s,
-                logger = self.logger
+                logger=self.logger
             )
             estimator.fit(X, y)
-            results.append((s, estimator.score()))
-        return results
+            score = float(estimator.score())
+            status = getattr(estimator, "correction_status_", None) or "estimated"
+            valid = getattr(
+                estimator,
+                "is_valid_for_regression_",
+                np.isfinite(score) and score > 0,
+            )
+            all_results.append((s, score))
+            if valid and np.isfinite(score) and score > 0:
+                valid_results.append((s, score))
+            else:
+                invalid_results.append((s, score, status))
+
+        return all_results, valid_results, invalid_results
 
     def score(self, X=None, y=None):
         return self.correction_factor_
@@ -121,8 +160,11 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         if self.sample_results_ is None:
             raise RuntimeError("Must call fit() before plotting.")
 
-        X_sample = np.array([r[0] for r in self.sample_results_])
-        y_sample = np.array([r[1] for r in self.sample_results_])
+        sample_results = self.valid_sample_results_ or []
+        if not sample_results:
+            raise RuntimeError("No valid correction-factor samples are available to plot.")
+        X_sample = np.array([r[0] for r in sample_results])
+        y_sample = np.array([r[1] for r in sample_results])
         xs = np.linspace(min(X_sample), 1.0, 100)
 
         if self.type == 'poly':
@@ -153,6 +195,8 @@ class DarkNumberCorrectionFactorRegressor(BaseEstimator):
         plt.show()
 
 def main():
+    from JBGLogger import JBGLogger
+
     parser = argparse.ArgumentParser(description="Estimate correction factor using regression extrapolation.")
     parser.add_argument('--dataset', type=str, default='synthetic', choices=['synthetic', 'adult'])
     parser.add_argument('--n_samples', type=int, default=2000)

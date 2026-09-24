@@ -23,4 +23,3 @@ tensorflow
 jax
 optax
 flax
-matplotlib

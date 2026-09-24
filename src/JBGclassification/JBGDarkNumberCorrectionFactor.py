@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 import numpy as np
 from scipy import sparse as scipy_sparse
 from sklearn.base import BaseEstimator, clone
 from sklearn.model_selection import StratifiedKFold, train_test_split
 from joblib import Parallel, delayed
 from pickle import PicklingError
-from JBGLogger import JBGLogger
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from JBGLogger import JBGLogger
 
 DEBUG_LOGGING = False
 BACKEND_PROCESSES = "processes"
@@ -75,6 +80,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         self.positive_class = positive_class
         self.sample_size = sample_size
         self.correction_factor_ = None
+        self.correction_status_ = None
+        self.is_valid_for_regression_ = False
         self.parallel_backend = parallel_backend
         self.logger = logger
 
@@ -112,9 +119,17 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         n_samples = X.shape[0]
         effective_size = min(n_samples, int(n_samples * self.sample_size))
         if effective_size < min_sample_needed:
-            self.logger.print_info(f"[Warning] Sample size {self.sample_size} gives effective size {effective_size}, "
-                  f"less than required {min_sample_needed}. Skipping.")
+            if self.logger:
+                self.logger.print_info(
+                    f"[Warning] Sample size {self.sample_size} gives effective size {effective_size}, "
+                    f"less than required {min_sample_needed}. Skipping."
+                )
+            # Keep the historical score() fallback for direct callers, but mark it as
+            # synthetic so the regression fallback cannot mistake 1.0 for an observed
+            # correction factor.
             self.correction_factor_ = 1.0
+            self.correction_status_ = "insufficient_sample"
+            self.is_valid_for_regression_ = False
             return self
 
         if effective_size < n_samples:
@@ -149,14 +164,25 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
 
         # If result contains NaN values, raise ValueError
         if np.isnan(results).any():
+            self.correction_status_ = "nan_recovery"
+            self.is_valid_for_regression_ = False
             raise NaNValueError("Result contains NaN values, which is not allowed.")
-        else:
-            mean_r = np.mean(results)
-            self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
-            if DEBUG_LOGGING:
-                self.logger.print_info(f"[DEBUG] Correction factor: {self.correction_factor_} from results {results}")
 
-            return self
+        mean_r = np.mean(results)
+        self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
+        if np.isfinite(self.correction_factor_) and self.correction_factor_ > 0:
+            self.correction_status_ = "estimated"
+            self.is_valid_for_regression_ = True
+        else:
+            self.correction_status_ = "zero_recovery" if mean_r <= 0 else "nonfinite"
+            self.is_valid_for_regression_ = False
+
+        if DEBUG_LOGGING and self.logger:
+            self.logger.print_info(
+                f"[DEBUG] Correction factor: {self.correction_factor_} from results {results}"
+            )
+
+        return self
 
     def _run_parallel(self, tasks):
         """

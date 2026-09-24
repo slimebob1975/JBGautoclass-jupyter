@@ -1,11 +1,8 @@
-import numpy as np
 import pandas as pd
 from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
-from JBGStreamedLogger import JBGLogger
-import sys
 
 class DarkNumberCalculator:
     
@@ -43,7 +40,7 @@ class DarkNumberCalculator:
         TPr, TNr = self.compute_posneg_rates(TN, FP, FN, TP)
 
         # Compute the mean certainty of the predictions where real and predicted differ
-        alpha = pred_prob[real != predicted].mean() if (FP > 0) else 1
+        alpha = pred_prob[real != predicted].mean() if (FP + FN > 0) else 1
         
         # Calculate dark number using single alpha correction
         dark_number = corr * alpha * (1 - TNr) * (2 - TPr)
@@ -81,7 +78,7 @@ class DarkNumberCalculator:
 
         # Alpha calculation where real and predicted differs
         if use_alpha:
-            alpha = pred_prob[real != predicted].mean() if (FP > 0) else 1
+            alpha = pred_prob[real != predicted].mean() if (FP + FN > 0) else 1
         else:
             alpha = 1.0
 
