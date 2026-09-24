@@ -633,6 +633,13 @@ class DatasetHandler:
         num_un_pred = self.get_num_unpredicted_rows()
         self.unpredicted_keys = self.keys[-num_un_pred:]
         class_column = self.handler.config.get_class_column_name()
+
+        # Detect truly global all-NaN feature columns on the fetched dataset before
+        # separating known and prediction rows. In prediction-only mode the training
+        # partition is empty, and DataFrame.isna().all() on that empty frame would
+        # otherwise (vacuously) mark every feature column as all-NaN.
+        all_features = self.dataset.drop([class_column], axis=1, inplace=False)
+        all_nan_cols = all_features.columns[all_features.isna().all()]
         
         if num_un_pred > 0:
             self.Y = self.dataset.head(-num_un_pred)[class_column]
@@ -648,8 +655,11 @@ class DatasetHandler:
         self.handler.logger.print_key_value_pair("Data rows with known class label", self.X.shape[0])
         self.handler.logger.print_key_value_pair("Data rows with unknown class label", num_un_pred)
 
-        # --- Drop columns that are globally all-NaN (before split) ---
-        all_nan_cols = self.X.columns[self.X.isna().all()]
+        if self.X_prediction is not None and self.X.empty:
+            non_null_counts = self.X_prediction.notna().sum().to_dict()
+            self.handler.logger.print_info(
+                f"Prediction-only feature non-null counts: {non_null_counts}"
+            )
 
         if len(all_nan_cols) > 0:
             drop_cols = list(all_nan_cols)
@@ -2497,8 +2507,8 @@ class PredictionsHandler:
         mh = self.handler.get_handler("model")
 
         self.handler.logger.print_info(
-            f"Estimating Dark Number correction factors for {model_name} "
-            f"with {flip_fraction:.0%} injected positive-label noise."
+            f"Estimating Dark Number correction factors for {model_name} with "
+            f"{flip_fraction:.0%} of target-positive labels flipped to non-target labels."
         )
 
         for label in labels:

@@ -383,22 +383,41 @@ class DataLayer(DataLayerBase):
         self.logger.end_inline_progress(progress_key, set_100 = False) # This can have a progress less than 100
         return data
 
+    @staticmethod
+    def _count_rows_available_for_mode(data_dist: dict, train: bool, predict: bool) -> int:
+        """Count rows eligible for the SQL filter implied by the current mode."""
+        unknown_rows = sum(data_dist.get(key, 0) for key in ("", "NULL", None))
+        total_rows = sum(data_dist.values())
+
+        if train and not predict:
+            return total_rows - unknown_rows
+        if predict and not train:
+            return unknown_rows
+        return total_rows
+
     def get_dataset(self, num_rows: int = None) -> list:
         """ Gets the needed data from the database """
         
-        # Calculate the maximum number of rows that can be fetched from the database
+        # Treat the configured data limit as an upper bound. A prediction-only run can
+        # legitimately have far fewer unclassified rows than the configured limit.
         num_rows = num_rows if num_rows else self.config.get_data_limit()
+        requested_num_rows = num_rows
         
-        # To be able to fetch the correct number of data rows, we need to find the 
-        # data distribution for each class
+        # To be able to fetch the correct number of data rows, we need to find the
+        # data distribution for each class and apply the same train/predict eligibility
+        # semantics as get_data_query().
         data_dist = self.count_class_distribution()
-
-        # Remove the unpredicted data counts if no predictions should be performed and sum up
-        if self.config.mode.predict == False:
-            for key in ["", "NULL", None]:
-                data_dist.pop(key, None)
-            max_num_rows = sum(data_dist.values())
-            num_rows = min(num_rows, max_num_rows)
+        max_num_rows = self._count_rows_available_for_mode(
+            data_dist,
+            train=self.config.should_train(),
+            predict=self.config.should_predict(),
+        )
+        num_rows = min(num_rows, max_num_rows)
+        if num_rows < requested_num_rows:
+            self.logger.print_formatted_info(
+                f"Current train/predict mode has {max_num_rows} eligible data rows; "
+                f"fetching at most {num_rows} instead of {requested_num_rows}."
+            )
         
         # Start fetching the data from the database
         try:

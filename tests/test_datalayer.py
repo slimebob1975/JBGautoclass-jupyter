@@ -1,4 +1,5 @@
 from collections import OrderedDict
+import numpy as np
 import pytest
 
 class TestDataLayer():
@@ -76,6 +77,52 @@ class TestDataLayer():
         query = default_sqldatalayer.get_data_query(num_rows)
         
         assert query == expectedQuery 
+
+
+    def test_count_rows_available_for_mode(self, default_sqldatalayer) -> None:
+        data_dist = {"setosa": 50, "versicolor": 50, "virginica": 35, "NULL": 15}
+
+        counter = default_sqldatalayer._count_rows_available_for_mode
+        assert counter(data_dist, train=True, predict=False) == 135
+        assert counter(data_dist, train=False, predict=True) == 15
+        assert counter(data_dist, train=True, predict=True) == 150
+        assert counter(data_dist, train=False, predict=False) == 150
+
+    def test_prediction_only_data_limit_is_an_upper_bound(self, default_sqldatalayer, monkeypatch) -> None:
+        class FakeSqlHelper:
+            def __init__(self):
+                self.queries = []
+
+            def execute_query(self, query, get_data=False):
+                self.queries.append(query)
+                return True
+
+            def read_next(self, chunksize=None):
+                return []
+
+            def disconnect(self):
+                return None
+
+        fake_sql = FakeSqlHelper()
+        default_sqldatalayer.config.mode.train = False
+        default_sqldatalayer.config.mode.predict = True
+        monkeypatch.setattr(
+            default_sqldatalayer,
+            "count_class_distribution",
+            lambda: {"setosa": 50, "versicolor": 50, "virginica": 35, "NULL": 15},
+        )
+        monkeypatch.setattr(default_sqldatalayer, "get_connection", lambda: fake_sql)
+        monkeypatch.setattr(
+            default_sqldatalayer,
+            "parse_dataset",
+            lambda num_rows, use_chunks, read_data_func: np.arange(15).reshape(15, 1),
+        )
+
+        data = default_sqldatalayer.get_dataset(num_rows=150)
+
+        assert len(data) == 15
+        assert len(fake_sql.queries) == 1
+        assert "TOP(15)" in fake_sql.queries[0]
 
     def test_mispredicted(self, default_sqldatalayer) -> None:
         """ This is a query in string format """

@@ -407,6 +407,27 @@ class TestDatasetHandler():
 
         
     
+
+    def test_prediction_only_split_keeps_non_null_feature_columns(self, default_dataset_handler):
+        config = default_dataset_handler.handler.config
+        class_column = config.get_class_column_name()
+        feature_columns = config.get_data_column_names()
+        assert feature_columns
+
+        dataset = pandas.DataFrame(
+            {column: [float(i + 1), float(i + 2)] for i, column in enumerate(feature_columns)}
+        )
+        dataset[class_column] = [None, None]
+        dataset.index = [101, 102]
+
+        default_dataset_handler.dataset = dataset
+        default_dataset_handler.keys = pandas.Series([101, 102], index=dataset.index)
+        default_dataset_handler.separate_dataset()
+
+        assert default_dataset_handler.X.empty
+        assert list(default_dataset_handler.X_prediction.columns) == feature_columns
+        assert default_dataset_handler.X_prediction.notna().all().all()
+
     def test_get_num_unpredicted_rows(self, default_dataset_handler):
         """ This can be tested with either a given dataset or one in the handler """
         #get_num_unpredicted_rows(self, dataset: pandas.DataFrame = None) -> int:
