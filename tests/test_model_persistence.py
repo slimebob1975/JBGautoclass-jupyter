@@ -14,11 +14,25 @@ from JBGModelPersistence import (
     MODEL_ARTIFACT_FORMAT,
     MODEL_ARTIFACT_VERSION,
     ModelArtifactError,
+    attach_keras_model_to_pipeline,
+    detach_keras_model_from_pipeline,
+    get_keras_model_sidecar_path,
+    get_legacy_keras_model_sidecar_path,
+    resolve_keras_model_sidecar_path,
     build_model_artifact,
     load_model_artifact,
     load_model_config,
     save_model_artifact,
 )
+
+
+class _FakeFittedKerasWrapper:
+    def __init__(self, model):
+        self.model_ = model
+        self.classes_ = np.array(["B", "M"])
+        self.n_features_in_ = 30
+        self.target_encoder_ = {"fitted": True}
+        self.feature_encoder_ = {"fitted": True}
 
 
 def _payload(pipeline=None):
@@ -30,6 +44,55 @@ def _payload(pipeline=None):
         None,
         2,
     )
+
+
+def test_keras_sidecar_path_uses_native_keras_extension(tmp_path):
+    artifact = tmp_path / "model.sav"
+
+    assert get_keras_model_sidecar_path(artifact, "KERA") == tmp_path / "model.sav.KERA.keras"
+    assert get_legacy_keras_model_sidecar_path(artifact, "KERA") == tmp_path / "model.sav.KERA"
+
+
+def test_keras_sidecar_resolver_prefers_native_and_falls_back_to_legacy(tmp_path):
+    artifact = tmp_path / "model.sav"
+    preferred = get_keras_model_sidecar_path(artifact, "KERA")
+    legacy = get_legacy_keras_model_sidecar_path(artifact, "KERA")
+
+    assert resolve_keras_model_sidecar_path(artifact, "KERA") == preferred
+
+    legacy.touch()
+    assert resolve_keras_model_sidecar_path(artifact, "KERA") == legacy
+
+    preferred.touch()
+    assert resolve_keras_model_sidecar_path(artifact, "KERA") == preferred
+
+
+def test_keras_pipeline_metadata_survives_model_detach_and_reattach():
+    original_model = object()
+    loaded_model = object()
+    wrapper = _FakeFittedKerasWrapper(original_model)
+    pipeline = Pipeline([("scale", StandardScaler()), ("KERA", wrapper)])
+
+    persisted = detach_keras_model_from_pipeline(pipeline, "KERA")
+
+    # Saving must not mutate the live fitted estimator.
+    assert pipeline.named_steps["KERA"].model_ is original_model
+
+    persisted_wrapper = persisted.named_steps["KERA"]
+    assert persisted_wrapper.model_ is None
+    assert persisted_wrapper.classes_.tolist() == ["B", "M"]
+    assert persisted_wrapper.n_features_in_ == 30
+    assert persisted_wrapper.target_encoder_ == {"fitted": True}
+    assert persisted_wrapper.feature_encoder_ == {"fitted": True}
+
+    assert attach_keras_model_to_pipeline(persisted, "KERA", loaded_model) is True
+    assert persisted.named_steps["KERA"].model_ is loaded_model
+
+
+def test_keras_pipeline_attach_rejects_legacy_pipeline_without_wrapper_metadata():
+    pipeline = Pipeline([("scale", StandardScaler())])
+
+    assert attach_keras_model_to_pipeline(pipeline, "KERA", object()) is False
 
 
 def test_model_artifact_round_trip_uses_versioned_envelope(tmp_path):

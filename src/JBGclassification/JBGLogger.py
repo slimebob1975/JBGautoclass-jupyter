@@ -8,7 +8,7 @@ from typing import Protocol, Union
 import IPython.display
 import ipywidgets as widgets
 
-from Helpers import html_wrapper, print_html, save_matrix_as_csv
+from Helpers import build_model_performance_matrix, html_wrapper, print_html, save_matrix_as_csv
 from JBGLogFile import TeeStream, TimestampedLogFile, capture_console_output, normalize_log_level
 
 # Using Protocol to simplify imports
@@ -464,10 +464,7 @@ class JBGLogger(terminal.Logger):
             Prints out the matrix of model test performance, given a list of results
             Both to screen and CSV
         """
-        resultsMatrix = pd.DataFrame(listOfResults,
-            columns=["Preprocessor","Feature Reduction","Algorithm (Library)","Components","Mean cv","Stdev.","Test data","Elapsed Time","Exception"])
-        resultsMatrix.sort_values(by = ["Mean cv","Stdev.","Test data"], axis = 0, ascending = [False, True, False], \
-            inplace = True, ignore_index = True)
+        resultsMatrix = build_model_performance_matrix(listOfResults)
 
         # Save cross validation results to csv file
         save_matrix_as_csv(resultsMatrix, cross_validation_filepath)

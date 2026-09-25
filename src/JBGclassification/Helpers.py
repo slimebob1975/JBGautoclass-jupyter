@@ -18,6 +18,34 @@ from scipy import sparse as scipy_sparse
 DOUBLE_UNDERSCORE = "__"
 EMAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
+MODEL_PERFORMANCE_COLUMNS = [
+    "Preprocessor",
+    "Feature Reduction",
+    "Algorithm (Library)",
+    "Components",
+    "Mean cv",
+    "Stdev.",
+    "Holdout (diagnostic)",
+    "Elapsed Time",
+    "Exception",
+]
+
+def build_model_performance_matrix(results: list) -> pandas.DataFrame:
+    """Build the spot-check report without using holdout performance for ranking.
+
+    Candidate selection is CV-only.  The holdout score is retained strictly as a
+    diagnostic value, so rows are ordered by mean CV score and CV standard
+    deviation only.  Stable sorting preserves evaluation order for exact CV ties
+    rather than silently introducing the holdout as a third tie-breaker.
+    """
+    matrix = pandas.DataFrame(results, columns=MODEL_PERFORMANCE_COLUMNS)
+    return matrix.sort_values(
+        by=["Mean cv", "Stdev."],
+        ascending=[False, True],
+        kind="mergesort",
+        ignore_index=True,
+    )
+
 def dataframe_has_sparse_columns(data) -> bool:
     """Return True when a pandas DataFrame contains one or more SparseDtype columns."""
     return isinstance(data, pandas.DataFrame) and any(

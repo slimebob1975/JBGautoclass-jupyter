@@ -323,7 +323,7 @@
                 "value": true,
                 "disabled": true,
                 "indent": true,
-                "description": "Text: Encryption",
+                "description": "Encryption",
                 "tooltip": "Use encryption on text"
             }
         },
@@ -333,7 +333,7 @@
                 "value": true,
                 "disabled": true,
                 "indent": true,
-                "description": "Text: Categorize",
+                "description": "Categorizer",
                 "tooltip": "Use categorization on text"
             }
         },
@@ -353,7 +353,7 @@
                 "value": false,
                 "disabled": true,
                 "indent": true,
-                "description": "Text: Filter",
+                "description": "Filter",
                 "tooltip": "Filter stop words from non-categorical text variables"
             }
         },
@@ -362,7 +362,7 @@
             "params": {
                 "value": "UNI_GRAM",
                 "disabled": true,
-                "description": "Text: Ngrams",
+                "description": "Ngrams",
                 "tooltip": "Defines the range of n-grams (word sequences) to extract from non-categorical text variables."
             }
         },

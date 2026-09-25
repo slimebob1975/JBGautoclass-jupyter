@@ -226,6 +226,9 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     assert widgets.class_column.value == "target"
     assert widgets.id_column.value == "row_id"
     assert widgets.data_columns.value == ("amount", "age", "comment")
+    assert "N/A" not in widgets.class_column.options
+    assert "N/A" not in widgets.id_column.options
+    assert "N/A" not in widgets.data_columns.options
     assert widgets.text_columns.value == ("comment",)
     assert widgets.train_checkbox.value is False
     assert widgets.predict_checkbox.value is True
@@ -426,6 +429,44 @@ def test_dark_number_checkbox_controls_method_widget_independently_of_mispredict
     assert config.dark_number_alpha is DarkNumberAlpha.SINGLE
 
 
+def test_dark_number_checkbox_still_controls_dependencies_after_continue_locks_observers():
+    widgets = make_widgets()
+    widgets.dark_numbers_checkbox.disabled = False
+    widgets.dark_number_method.disabled = False
+    widgets.dark_number_alpha.disabled = False
+    widgets.eventhandler.lock_observe_1 = True
+
+    widgets.dark_numbers_checkbox.value = False
+    assert widgets.dark_number_method.disabled is True
+    assert widgets.dark_number_alpha.disabled is True
+
+    widgets.dark_numbers_checkbox.value = True
+    assert widgets.dark_number_method.disabled is False
+    assert widgets.dark_number_alpha.disabled is False
+
+
+def test_classifier_activation_preserves_dark_number_dependency_state():
+    widgets = make_widgets()
+    widgets.dark_numbers_checkbox.value = False
+
+    widgets.activate_section("classifier")
+
+    assert widgets.dark_numbers_checkbox.disabled is False
+    assert widgets.dark_number_method.disabled is True
+    assert widgets.dark_number_alpha.disabled is True
+
+
+def test_regression_suite_keeps_dark_number_controls_read_only():
+    widgets = make_widgets()
+
+    widgets.regression_suite_button_actions()
+
+    assert widgets.dark_numbers_checkbox.value is True
+    assert widgets.dark_numbers_checkbox.disabled is True
+    assert widgets.dark_number_method.disabled is True
+    assert widgets.dark_number_alpha.disabled is True
+
+
 def test_dark_number_alpha_options_follow_selected_method_without_inventing_formula():
     widgets = make_widgets()
     widgets.dark_number_method.disabled = False
@@ -462,6 +503,10 @@ def test_legacy_local_settings_labels_are_migrated_without_overriding_custom_tex
     settings = json.loads(settings_path.read_text())
     settings["widgets"]["train_checkbox"]["params"]["description"] = "Mode: Train"
     settings["widgets"]["dark_numbers_checkbox"]["params"]["description"] = "Dark Numbers: Calculate"
+    settings["widgets"]["encryption_checkbox"]["params"]["description"] = "Text: Encryption"
+    settings["widgets"]["categorize_checkbox"]["params"]["description"] = "Text: Categorize"
+    settings["widgets"]["filter_checkbox"]["params"]["description"] = "Text: Filter"
+    settings["widgets"]["ngram_range_dropdown"]["params"]["description"] = "Text: Ngrams"
     settings["widgets"]["predict_checkbox"]["params"]["description"] = "Custom prediction label"
 
     widgets = Widgets(
@@ -473,7 +518,28 @@ def test_legacy_local_settings_labels_are_migrated_without_overriding_custom_tex
 
     assert widgets.train_checkbox.description == "Train"
     assert widgets.dark_numbers_checkbox.description == ""
+    assert widgets.encryption_checkbox.description == "Encryption"
+    assert widgets.categorize_checkbox.description == "Categorizer"
+    assert widgets.filter_checkbox.description == "Filter"
+    assert widgets.ngram_range_dropdown.description == "Ngrams"
     assert widgets.predict_checkbox.description == "Custom prediction label"
+
+
+def test_pre_065_categorize_label_is_migrated_to_categorizer():
+    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    model_path = Path(__file__).parent / "fixtures"
+    settings_path = src_path / "GUI" / "default_settings.json"
+    settings = json.loads(settings_path.read_text())
+    settings["widgets"]["categorize_checkbox"]["params"]["description"] = "Categorize"
+
+    widgets = Widgets(
+        src_path=src_path,
+        GUIhandler=MockGUIHandler(),
+        model_path=model_path,
+        settings=settings,
+    )
+
+    assert widgets.categorize_checkbox.description == "Categorizer"
 
 
 def test_classifier_checkbox_labels_are_scoped_by_section_titles():
@@ -500,7 +566,6 @@ def test_horizontal_forms_have_consistent_titles_and_frames():
         (widgets.data_handling_form, "Training data"),
         (widgets.text_handling_form, "Text processing"),
         (widgets.debug_form, "Run settings"),
-        (widgets.progress_form, "Progress"),
     )
 
     for factory, title in sections:
@@ -512,6 +577,16 @@ def test_horizontal_forms_have_consistent_titles_and_frames():
         assert isinstance(row, ipywidgets.Box)
         assert form.layout.border == "2px solid #d0d0d0"
         assert form.layout.width == "100%"
+
+
+def test_progress_form_has_no_section_title_or_frame():
+    widgets = make_widgets()
+
+    form = widgets.progress_form()
+
+    assert isinstance(form, ipywidgets.HBox)
+    assert tuple(form.children) == (widgets.progress_bar, widgets.progress_label)
+    assert form.layout.border in (None, "")
 
 
 def test_new_model_uses_separated_alpha_by_default():

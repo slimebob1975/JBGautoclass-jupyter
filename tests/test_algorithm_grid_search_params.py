@@ -105,6 +105,68 @@ def test_passive_aggressive_algorithm_uses_sgd_equivalent_without_deprecation_wa
     )
 
 
+def test_sklearn_mlp_variants_honor_configured_max_iterations():
+    configured_max_iterations = 1234
+
+    for algorithm in (Algorithm.MLPC, Algorithm.MLP2):
+        estimator = algorithm.call_algorithm(
+            max_iterations=configured_max_iterations, size=len(_X)
+        )
+        assert estimator.max_iter == configured_max_iterations, algorithm.name
+
+
+def test_fut_stacking_grid_is_bounded_and_routes_only_ensemble_parameters():
+    params = AlgorithmGridSearchParams.FUTS.parameters
+    combinations = list(ParameterGrid(params))
+
+    assert params == {
+        "cv": [5],
+        "passthrough": [False, True],
+        "final_estimator__C": [0.1, 1.0, 10.0],
+    }
+    assert len(combinations) == 6
+    assert not any(key.startswith(("mlpc__", "rfcl__", "abc__")) for key in params)
+
+    estimator = Algorithm.FUTS.call_algorithm(
+        max_iterations=20000, size=len(_X)
+    )
+    for combination in combinations:
+        candidate = estimator.set_params(**combination)
+        assert candidate.cv == 5
+        assert candidate.passthrough == combination["passthrough"]
+        assert candidate.final_estimator.C == combination["final_estimator__C"]
+
+
+def test_keras_mlp_grid_is_bounded_and_defaults_match_search_baseline():
+    params = AlgorithmGridSearchParams.KERA.parameters
+    combinations = list(ParameterGrid(params))
+
+    assert params == {
+        "verbose": [0],
+        "epochs": [50, 100],
+        "optimizer": ["adam"],
+        "optimizer__learning_rate": [0.001, 0.01],
+        "batch_size": [32],
+    }
+    assert len(combinations) == 4
+
+    estimator = Algorithm.KERA.call_algorithm(
+        max_iterations=20000, size=len(_X)
+    )
+    assert estimator.hidden_layer_sizes == (100,)
+    assert estimator.optimizer == "adam"
+    assert estimator.optimizer__learning_rate == 0.001
+    assert estimator.epochs == 50
+    assert estimator.batch_size == 32
+    assert estimator.verbose == 0
+
+    for combination in combinations:
+        candidate = Algorithm.KERA.call_algorithm(
+            max_iterations=20000, size=len(_X)
+        )
+        candidate.set_params(**combination)
+
+
 def test_sgd_classifier_grid_uses_only_current_loss_names():
     params = AlgorithmGridSearchParams.SGDE.parameters
     combinations = list(ParameterGrid(params))

@@ -8,6 +8,11 @@ spot-checking of algorithms for a particular dataset. For the time being JBG is 
 to a Windows and SQL Server environment and works for numerical, categorical and textual
 data. It is partly a Building AI course project.
 
+## Development records
+
+- `CHANGELOG.md` is the append-only history of numbered development revisions and their verification status.
+- `BACKLOG.md` tracks open issues, priorities and deferred work.
+
 ## How to use JBG
 To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 

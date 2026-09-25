@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 
-from JBGTransformers import TextDataToNumbersConverter
+from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 
 class TestTextDataToNumbersConverter():
     """ Tests the transform TextDataToNumbersConverter """
@@ -188,3 +188,14 @@ class TestNNClassifier3PL:
         y_proba = net.predict_proba(X[:5])
         print(y_proba)
         """
+
+class TestMLPKerasClassifier:
+    def test_build_fn_uses_single_feature_axis_tuple(self):
+        classifier = MLPKerasClassifier(hidden_layer_sizes=(16,))
+        classifier.n_features_in_ = 100
+        classifier.target_type_ = "binary"
+        classifier.n_classes_ = 2
+
+        model = classifier._keras_build_fn({"optimizer": "adam"})
+
+        assert model.input_shape == (None, 100)

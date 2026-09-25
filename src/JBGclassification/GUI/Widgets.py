@@ -222,11 +222,9 @@ class EventHandler:
                 self.widgets.metas_checkbox.value = False
 
     def dark_numbers_checkbox(self, change: Bunch) -> None:
-        if change.get("name") != "value" or self.lock_observe_1:
+        if change.get("name") != "value":
             return
-        disabled = not bool(change.get("new"))
-        self.widgets.dark_number_method.disabled = disabled
-        self.widgets.dark_number_alpha.disabled = disabled
+        self.widgets.sync_dark_number_control_state()
 
     def dark_number_method(self, change: Bunch) -> None:
         if change.get("name") != "value":
@@ -414,17 +412,21 @@ class Widgets:
         self.unique_id_columns = []
 
     def _migrate_legacy_widget_labels(self) -> None:
-        """Remove redundant prefixes from exact legacy labels in local settings files."""
+        """Migrate exact legacy labels while preserving user-customized text."""
         replacements = {
-            "train_checkbox": ("Mode: Train", "Train"),
-            "predict_checkbox": ("Mode: Predict", "Predict"),
-            "mispredicted_checkbox": ("Mode: Display mispredictions", "Display mispredictions"),
-            "metas_checkbox": ("Mode: Pass on meta data", "Pass on meta data"),
-            "dark_numbers_checkbox": ("Dark Numbers: Calculate", ""),
+            "train_checkbox": (("Mode: Train",), "Train"),
+            "predict_checkbox": (("Mode: Predict",), "Predict"),
+            "mispredicted_checkbox": (("Mode: Display mispredictions",), "Display mispredictions"),
+            "metas_checkbox": (("Mode: Pass on meta data",), "Pass on meta data"),
+            "dark_numbers_checkbox": (("Dark Numbers: Calculate",), ""),
+            "encryption_checkbox": (("Text: Encryption",), "Encryption"),
+            "categorize_checkbox": (("Text: Categorize", "Categorize"), "Categorizer"),
+            "filter_checkbox": (("Text: Filter",), "Filter"),
+            "ngram_range_dropdown": (("Text: Ngrams",), "Ngrams"),
         }
-        for widget_name, (legacy, current) in replacements.items():
+        for widget_name, (legacy_labels, current) in replacements.items():
             params = self.default_widgets.get(widget_name, {}).get("params", {})
-            if params.get("description") == legacy:
+            if params.get("description") in legacy_labels:
                 params["description"] = current
 
     def field_status(self, type: str) -> widgets.HTML:
@@ -599,6 +601,14 @@ class Widgets:
                 current.append(value)
         return tuple(current)
 
+    @staticmethod
+    def _without_stale_na_placeholder(options) -> tuple:
+        """Drop the initial N/A option once at least one real option is available."""
+        current = tuple(options)
+        if any(option not in (None, "", "N/A") for option in current):
+            return tuple(option for option in current if option != "N/A")
+        return current
+
     def restore_classifier_config(self, config_params: dict) -> None:
         """Restore the visible GUI state for a persisted manual classifier run.
 
@@ -642,14 +652,14 @@ class Widgets:
             self.models_dropdown.options = self._with_saved_options(
                 self.models_dropdown.options, (model_value,)
             )
-            self.class_column.options = self._with_saved_options(
-                self.class_column.options, (connection.class_column,)
+            self.class_column.options = self._without_stale_na_placeholder(
+                self._with_saved_options(self.class_column.options, (connection.class_column,))
             )
-            self.id_column.options = self._with_saved_options(
-                self.id_column.options, (connection.id_column,)
+            self.id_column.options = self._without_stale_na_placeholder(
+                self._with_saved_options(self.id_column.options, (connection.id_column,))
             )
-            self.data_columns.options = self._with_saved_options(
-                self.data_columns.options, selected_columns
+            self.data_columns.options = self._without_stale_na_placeholder(
+                self._with_saved_options(self.data_columns.options, selected_columns)
             )
             self.text_columns.options = selected_columns
             self.categorize_columns.options = text_columns
@@ -710,6 +720,9 @@ class Widgets:
                     widget = self.get_item_or_error(item)
                     if hasattr(widget, "disabled"):
                         setattr(widget, "disabled", False)
+
+        if name == "classifier":
+            self.sync_dark_number_control_state()
 
     def deactivate_section(self, name: str) -> None:
         """ This should probably be a toggle, but for the moment we'll do it this way"""
@@ -1425,7 +1438,7 @@ class Widgets:
         return self.create_section_form("Run settings", self.forms["debug"], widgets.HBox)
     
     def progress_form(self) -> widgets.Box:
-        return self.create_section_form("Progress", self.forms["progress"], widgets.HBox)
+        return self.create_form(self.forms["progress"], widgets.HBox)
     
 
     def create_form(self, children: list, boxtype: Callable, justify_content: str = None) -> widgets.Box:
@@ -1707,6 +1720,12 @@ class Widgets:
     def dark_number_alpha(self) -> widgets.RadioButtons:
         name = sys._getframe().f_code.co_name
         return self._load_widget(name)
+
+    def sync_dark_number_control_state(self) -> None:
+        """Keep Method/Alpha availability aligned with the Dark Numbers checkbox."""
+        disabled = self.dark_numbers_checkbox.disabled or not self.dark_numbers_checkbox.value
+        self.dark_number_method.disabled = disabled
+        self.dark_number_alpha.disabled = disabled
 
     def sync_dark_number_alpha_options(self) -> None:
         """Expose only alpha variants implemented for the selected formula family."""

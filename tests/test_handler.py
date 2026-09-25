@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas
 import pytest
+from sklearn.svm import SVC, LinearSVC
 from conftest import get_fixture_path
 
 import JBGHandler as handler_module
@@ -615,6 +616,146 @@ class TestModelHandler():
 
         assert reason is None
 
+    @pytest.mark.parametrize("algorithm", [Algorithm.MNB, Algorithm.CNB])
+    def test_preflight_skips_non_negative_naive_bayes_when_preprocessed_values_are_negative(
+        self, default_model_handler, algorithm
+    ):
+        X = pandas.DataFrame({
+            "a": [-3.0, -1.0, 1.0, 3.0],
+            "b": [1.0, 2.0, 3.0, 4.0],
+        })
+        scaler = Preprocess.MAX.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.MAX, scaler, Reduction.NOR, algorithm, X
+        )
+
+        assert "requires non-negative features" in reason
+
+    @pytest.mark.parametrize("algorithm", [Algorithm.MNB, Algorithm.CNB])
+    @pytest.mark.parametrize(
+        "reduction",
+        [Reduction.PCA, Reduction.TSVD, Reduction.FICA, Reduction.GRP, Reduction.ISO, Reduction.LLE],
+    )
+    def test_preflight_skips_non_negative_naive_bayes_after_signed_reduction(
+        self, default_model_handler, algorithm, reduction
+    ):
+        X = pandas.DataFrame({
+            "a": [1.0, 2.0, 3.0, 4.0],
+            "b": [4.0, 3.0, 2.0, 1.0],
+        })
+        scaler = Preprocess.MAX.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.MAX, scaler, reduction, algorithm, X
+        )
+
+        assert "may produce negative features" in reason
+
+    @pytest.mark.parametrize("algorithm", [Algorithm.MNB, Algorithm.CNB])
+    def test_preflight_allows_non_negative_naive_bayes_after_minmax(
+        self, default_model_handler, algorithm
+    ):
+        X = pandas.DataFrame({
+            "a": [-3.0, -1.0, 1.0, 3.0],
+            "b": [1.0, 2.0, 3.0, 4.0],
+        })
+        scaler = Preprocess.MIX.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.MIX, scaler, Reduction.NOR, algorithm, X
+        )
+
+        assert reason is None
+
+    def test_preflight_does_not_apply_non_negative_contract_to_bernoulli_nb(
+        self, default_model_handler
+    ):
+        X = pandas.DataFrame({
+            "a": [-3.0, -1.0, 1.0, 3.0],
+            "b": [1.0, 2.0, 3.0, 4.0],
+        })
+        scaler = Preprocess.MAX.call_preprocess()
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.MAX, scaler, Reduction.NOR, Algorithm.BNB, X
+        )
+
+        assert reason is None
+
+    def test_preflight_skips_self_training_without_unlabeled_samples(self, default_model_handler):
+        X = pandas.DataFrame({
+            "a": [0.0, 1.0, 2.0, 3.0],
+            "b": [3.0, 2.0, 1.0, 0.0],
+        })
+        Y = pandas.Series(["B", "M", "B", "M"])
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.NOS, Preprocess.NOS.call_preprocess(), Reduction.NOR,
+            Algorithm.STCL, X, estimator=Algorithm.STCL.call_algorithm(200, len(X)), Y_train=Y
+        )
+
+        assert reason == "SelfTrainingClassifier requires at least one unlabeled sample marked -1"
+
+    @pytest.mark.parametrize("unlabeled_value", [-1, "-1"])
+    def test_preflight_allows_self_training_with_unlabeled_sample(
+        self, default_model_handler, unlabeled_value
+    ):
+        X = pandas.DataFrame({
+            "a": [0.0, 1.0, 2.0, 3.0],
+            "b": [3.0, 2.0, 1.0, 0.0],
+        })
+        Y = pandas.Series(["B", "M", "B", unlabeled_value], dtype=object)
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.NOS, Preprocess.NOS.call_preprocess(), Reduction.NOR,
+            Algorithm.STCL, X, estimator=Algorithm.STCL.call_algorithm(200, len(X)), Y_train=Y
+        )
+
+        assert reason is None
+
+    def test_binary_auc_resolves_to_decision_function_compatible_scorer(self, default_model_handler):
+        default_model_handler.handler.config.get_scoring_mechanism = lambda: 'roc_auc_ovo'
+
+        scorer = default_model_handler._resolve_scoring_mechanism_for_target(
+            pandas.Series([0, 1, 0, 1])
+        )
+
+        assert scorer == 'roc_auc'
+
+    def test_multiclass_auc_keeps_one_vs_one_probability_scorer(self, default_model_handler):
+        default_model_handler.handler.config.get_scoring_mechanism = lambda: 'roc_auc_ovo'
+
+        scorer = default_model_handler._resolve_scoring_mechanism_for_target(
+            pandas.Series([0, 1, 2, 0, 1, 2])
+        )
+
+        assert scorer == 'roc_auc_ovo'
+
+    def test_multiclass_auc_preflight_skips_estimator_without_predict_proba(
+        self, default_model_handler
+    ):
+        default_model_handler.handler.config.get_scoring_mechanism = lambda: 'roc_auc_ovo'
+        X = pandas.DataFrame({
+            "a": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            "b": [5.0, 4.0, 3.0, 2.0, 1.0, 0.0],
+        })
+        Y = pandas.Series([0, 1, 2, 0, 1, 2])
+
+        reason = default_model_handler.get_preflight_skip_reason(
+            Preprocess.NOS, Preprocess.NOS.call_preprocess(), Reduction.NOR,
+            Algorithm.LSVC, X, estimator=LinearSVC(), Y_train=Y
+        )
+
+        assert reason == "multiclass ROC AUC requires predict_proba()"
+
+    def test_svc_factory_exposes_probabilities_for_multiclass_auc(self):
+        estimator = Algorithm.SVC.call_algorithm(max_iterations=200, size=100)
+
+        assert isinstance(estimator, SVC)
+        assert estimator.probability is True
+        assert hasattr(estimator, "predict_proba")
+
     def test_preflight_skips_lda_when_sparse_input_reaches_estimator(self, default_model_handler):
         X = pandas.DataFrame({
             "text_token": pandas.arrays.SparseArray([0.0, 1.0, 0.0, 1.0], fill_value=0.0),
@@ -732,7 +873,7 @@ class TestModelHandler():
             components=4,
             cv_score=0.8,
             cv_stdev=0.1,
-            test_score=0.75,
+            holdout_score=0.75,
             elapsed_time=1.25,
             failure="",
         )
@@ -888,7 +1029,7 @@ class TestModelHandler():
             algorithm=Algorithm.DUMY,
             cv_score=0.8,
             cv_stdev=0.1,
-            test_score=0.8,
+            holdout_score=0.8,
             num_features=3,
             num_components=2,
             failure="",
@@ -902,7 +1043,7 @@ class TestModelHandler():
         assert state.best_algorithm == Algorithm.DUMY
         assert state.best_cv_score == 0.8
         assert state.best_stdev == 0.1
-        assert state.best_test_score == 0.8
+        assert state.best_holdout_score == 0.8
         assert state.best_rfe_feature_selection == 3
         assert state.best_num_components == 2
 
@@ -919,7 +1060,7 @@ class TestModelHandler():
             algorithm=Algorithm.LRN,
             cv_score=0.974178,
             cv_stdev=0.030762,
-            test_score=1.0,
+            holdout_score=1.0,
             num_features=30,
             num_components=30,
             failure="",
@@ -933,7 +1074,7 @@ class TestModelHandler():
             algorithm=Algorithm.LRN,
             cv_score=0.978843,
             cv_stdev=0.022639,
-            test_score=0.90,
+            holdout_score=0.90,
             num_features=22,
             num_components=22,
             failure="",
@@ -944,7 +1085,7 @@ class TestModelHandler():
         assert state.trained_pipeline is second_pipeline
         assert state.best_reduction == Reduction.RFE
         assert state.best_cv_score == 0.978843
-        assert state.best_test_score == 0.90
+        assert state.best_holdout_score == 0.90
 
     def test_spot_check_selection_uses_cv_stdev_as_tiebreaker(self, default_model_handler):
         assert default_model_handler.is_best_run_yet(0.95, 0.02, 0.95, 0.03) is True
@@ -1143,7 +1284,7 @@ class TestModelHandler():
             algorithm=Algorithm.DUMY,
             cv_score=1.0,
             cv_stdev=0.0,
-            test_score=0.9,
+            holdout_score=0.9,
             num_features=4,
             num_components=4,
             failure="existing failure",
@@ -1254,6 +1395,32 @@ class TestModelHandler():
         assert isinstance(pipeline.fit_inputs[0][0], pandas.DataFrame)
         assert isinstance(pipeline.fit_inputs[1][0], np.ndarray)
         assert isinstance(pipeline.fit_inputs[1][1], np.ndarray)
+
+    def test_binary_auc_validation_accepts_svc_decision_function_without_predict_proba(
+        self, default_model_handler
+    ):
+        default_model_handler.handler.config.get_scoring_mechanism = lambda: 'roc_auc_ovo'
+        X_train = pandas.DataFrame({
+            "a": [0.0, 0.2, 0.8, 1.0, 0.1, 0.9],
+            "b": [0.1, 0.0, 1.0, 0.9, 0.2, 0.8],
+        })
+        Y_train = pandas.Series([0, 0, 1, 1, 0, 1])
+        X_validation = pandas.DataFrame({
+            "a": [0.05, 0.95, 0.15, 0.85],
+            "b": [0.05, 0.95, 0.1, 0.9],
+        })
+        Y_validation = pandas.Series([0, 1, 0, 1])
+        pipeline = handler_module.Pipeline([('SVC', SVC(probability=False))])
+        pipeline.fit(X_train.to_numpy(), Y_train.to_numpy())
+        dh = type("Dataset", (), {})()
+        dh.X_train = X_train
+        dh.Y_train = Y_train
+        dh.X_validation = X_validation
+        dh.Y_validation = Y_validation
+
+        score = default_model_handler._score_validation_pipeline(pipeline, dh)
+
+        assert 0.0 <= score <= 1.0
 
     def test_validation_scorer_falls_back_to_numpy(self, default_model_handler):
         score_inputs = []

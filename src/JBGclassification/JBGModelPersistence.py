@@ -11,6 +11,7 @@ execute code and must never be used for untrusted files.
 
 from __future__ import annotations
 
+import copy
 import os
 from pathlib import Path
 from typing import Any, Mapping
@@ -19,6 +20,7 @@ import dill
 
 MODEL_ARTIFACT_FORMAT = "JBGAutoClassification.model"
 MODEL_ARTIFACT_VERSION = 1
+KERAS_MODEL_FILE_EXTENSION = ".keras"
 MODEL_ARTIFACT_FIELDS = (
     "config",
     "text_converter",
@@ -27,6 +29,62 @@ MODEL_ARTIFACT_FIELDS = (
     "keras_name",
     "n_features_out",
 )
+
+
+def get_keras_model_sidecar_path(filename: str | Path, keras_name: str) -> Path:
+    """Return the Keras 3 native sidecar path for a persisted JBG model artifact."""
+    return Path(f"{filename}.{keras_name}{KERAS_MODEL_FILE_EXTENSION}")
+
+
+def get_legacy_keras_model_sidecar_path(filename: str | Path, keras_name: str) -> Path:
+    """Return the pre-Keras-3 sidecar path used by historical JBG model artifacts."""
+    return Path(f"{filename}.{keras_name}")
+
+
+def resolve_keras_model_sidecar_path(filename: str | Path, keras_name: str) -> Path:
+    """Prefer the native `.keras` sidecar while retaining legacy path discovery."""
+    preferred = get_keras_model_sidecar_path(filename, keras_name)
+    if preferred.exists():
+        return preferred
+
+    legacy = get_legacy_keras_model_sidecar_path(filename, keras_name)
+    if legacy.exists():
+        return legacy
+
+    return preferred
+
+
+def detach_keras_model_from_pipeline(pipeline, keras_name: str):
+    """Return a persistable pipeline that keeps fitted SciKeras metadata but not model_."""
+    if pipeline is None or not getattr(pipeline, "steps", None):
+        raise ValueError("Cannot persist Keras metadata from an empty pipeline.")
+
+    step_name, estimator = pipeline.steps[-1]
+    if step_name != keras_name:
+        raise ValueError(
+            f"Expected final pipeline step {keras_name!r}, found {step_name!r}."
+        )
+
+    persisted_pipeline = copy.copy(pipeline)
+    persisted_pipeline.steps = list(pipeline.steps)
+    estimator_stub = copy.copy(estimator)
+    if hasattr(estimator_stub, "model_"):
+        estimator_stub.model_ = None
+    persisted_pipeline.steps[-1] = (step_name, estimator_stub)
+    return persisted_pipeline
+
+
+def attach_keras_model_to_pipeline(pipeline, keras_name: str, keras_model) -> bool:
+    """Attach a loaded Keras model to a persisted fitted SciKeras wrapper, if present."""
+    if pipeline is None or not getattr(pipeline, "steps", None):
+        return False
+
+    step_name, estimator = pipeline.steps[-1]
+    if step_name != keras_name or not hasattr(estimator, "model_"):
+        return False
+
+    estimator.model_ = keras_model
+    return True
 
 
 class ModelArtifactError(ValueError):

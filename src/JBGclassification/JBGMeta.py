@@ -365,19 +365,29 @@ class AlgorithmGridSearchParams(MetaEnum):
     PYNN = {"parameters": {'activation': ('relu', 'tanh', 'sigmoid'), 'optimizer': ('adam', 'sgd'), \
                            'learning_rate': [0.01, 0.05, 0.1], 'max_epochs': [10, 30, 50], 'dropout_prob': [0.1, 0.3, 0.5], \
                            'num_hidden_layers': [2, 3], 'hidden_layer_size': [16, 48, 100], 'train_split': [True, False]}}
-    KERA = {"parameters": {'verbose': [1], 'epochs': [10, 50, 100, 200], 'optimizer': ["adam", "rmsprop"], \
-                           'optimizer__learning_rate': [0.001, 0.01, 0.1]}}
+    KERA = {"parameters": {
+            'verbose': [0],
+            'epochs': [50, 100],
+            'optimizer': ["adam"],
+            'optimizer__learning_rate': [0.001, 0.01],
+            'batch_size': [32],
+        }
+    }
     #FUTV = {"parameters": \
     #    {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
     #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
     #    {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
     #    }
     FUTV = {"parameters": {}}
-    FUTS =  {"parameters": {'cv': (5, 10, 20)}  | \
-        {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-        {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
-        {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
-        }
+    # Stacking already nests three non-trivial base estimators. Re-tuning all
+    # constituent grids here creates a Cartesian-product explosion (31,104
+    # combinations before outer CV). Keep the default FUTS search focused on
+    # ensemble-level choices and the logistic meta-estimator instead.
+    FUTS = {"parameters": {
+        'cv': [5],
+        'passthrough': [False, True],
+        'final_estimator__C': [0.1, 1.0, 10.0],
+    }}
     FLAX = {"parameters": {'hidden_size': [16, 32, 64], 'num_layers': [3, 5, 10], 'learning_rate': [0.001, 0.01, 0.1], \
                            'num_epochs': [10, 20, 50, 100], 'batch_size': (32,64) }}
     
@@ -582,7 +592,10 @@ class Algorithm(MetaEnum):
 
     def do_SVC(self, max_iterations: int, size: int):
         if size < self.limit:
-            return SVC(max_iter=max_iterations)
+            # Keep probability estimates available for multiclass ROC-AUC scoring and
+            # downstream probability-based diagnostics. Binary AUC may still use the
+            # cheaper decision_function path through the scoring resolver.
+            return SVC(max_iter=max_iterations, probability=True)
         
         # TODO: communicate with terminal to warn? 
         # print("\nNotice: SVC model was exchange for LinearSVC since n_samples > {0}\n".format(self.LIMIT_SVC))
@@ -626,7 +639,9 @@ class Algorithm(MetaEnum):
         return MLPClassifier(max_iter=max_iterations)
 
     def do_MLP2(self, max_iterations: int, size: int)-> MLPClassifier:
-        return MLPClassifier(max_iter=500)
+        # Keep the "Light" variant light through its smaller search grid, not
+        # by silently overriding the configured iteration budget.
+        return MLPClassifier(max_iter=max_iterations)
 
     def do_GPC(self, max_iterations: int, size: int)-> GaussianProcessClassifier:
         return GaussianProcessClassifier(max_iter_predict=max_iterations)

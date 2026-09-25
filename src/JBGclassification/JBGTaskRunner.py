@@ -193,7 +193,8 @@ class TaskRunner:
         if os.path.exists(model_path):
             
             self.mh.load_model(model_path)
-            #self.mh.load_model(model_path, self.dh) # Probably a bug, found 2024-02-15
+            if self.mh.model is None:
+                raise ModelException(f"Could not load trained model from {model_path}")
 
             return {"print": "We will reload and use old model"}
         

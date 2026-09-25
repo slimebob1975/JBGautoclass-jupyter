@@ -19,7 +19,7 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import RFE
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import FunctionTransformer
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, make_scorer, f1_score
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, make_scorer, f1_score, get_scorer
 from sklearn.model_selection import (StratifiedKFold, cross_val_score,
                                      train_test_split, GridSearchCV, ParameterGrid)
 from tensorflow import keras
@@ -35,7 +35,14 @@ from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
 from JBGDarkNumberCorrectionRegressor import DarkNumberCorrectionFactorRegressor
-from JBGModelPersistence import load_model_artifact, save_model_artifact
+from JBGModelPersistence import (
+    attach_keras_model_to_pipeline,
+    detach_keras_model_from_pipeline,
+    get_keras_model_sidecar_path,
+    load_model_artifact,
+    resolve_keras_model_sidecar_path,
+    save_model_artifact,
+)
 import Helpers
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
@@ -902,7 +909,7 @@ class _SpotCheckState:
     best_rfe_feature_selection: int
     best_cv_score: float = 0.0
     best_stdev: float = 1.0
-    best_test_score: float = 0.0
+    best_holdout_score: float = 0.0
     trained_pipeline: Pipeline = None
     best_algorithm: Algorithm = None
     best_preprocessor: Preprocess = None
@@ -951,23 +958,34 @@ class ModelHandler:
                         
             # Handle Keras models differently
             if (keras_name is not None):
-                
-                if dh is None:
-                    raise ModelInitializationException("Could not initialize Keras model: no training or prediction data available!")
-                keras_model = keras.models.load_model(str(filename) + "." + keras_name)
-                
-                try:
-                    # TODO: change explicit MLPKerasClassifier constructor to dynamic KERAS model constructor
-                    # Note: we need to apply the preceeding transforms to data before initializing the Keras model
+                keras_sidecar = resolve_keras_model_sidecar_path(filename, keras_name)
+                keras_model = keras.models.load_model(str(keras_sidecar))
+
+                # Current artifacts retain the fitted SciKeras wrapper metadata in the
+                # pipeline and only externalize its native Keras model_. Reattaching the
+                # sidecar is enough for prediction and does not require live training data.
+                if not attach_keras_model_to_pipeline(pipeline, keras_name, keras_model):
+                    # Backwards compatibility for older artifacts that saved only the
+                    # pre-Keras pipeline. Those can still be restored when labelled data
+                    # is available (for example during the in-process retraining path),
+                    # but prediction-only after a restart requires a model saved by 073+.
+                    if dh is None:
+                        raise ModelInitializationException(
+                            "Legacy Keras artifact lacks fitted SciKeras wrapper metadata; "
+                            "retrain and save the model with revision 073 or later."
+                        )
+
                     try:
-                        keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_train), dh.Y_train)
+                        # TODO: change explicit MLPKerasClassifier constructor to dynamic KERAS model constructor
+                        # Note: we need to apply the preceding transforms to data before initializing the Keras model
+                        try:
+                            keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_train), dh.Y_train)
+                        except Exception:
+                            keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_prediction), dh.Y_prediction)
                     except Exception as e:
-                        keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_prediction), dh.Y_prediction)
-                except Exception as e:
-                    raise ModelInitializationException(str(e))
-    
-                # Load the rest of steps of Pipeline and add keras_model
-                pipeline = Pipeline(steps=pipeline.steps + [(keras_name, keras_step)])
+                        raise ModelInitializationException(str(e))
+
+                    pipeline = Pipeline(steps=pipeline.steps + [(keras_name, keras_step)])
             
             the_model = Model(
                 text_converter=text_converter,
@@ -1123,8 +1141,8 @@ class ModelHandler:
             # Make a stratified kfold
             kfold = StratifiedKFold(n_splits=n_splits, random_state=1, shuffle=True)
 
-            # Create correct scoring mechanism
-            scorer = self.handler.config.get_scoring_mechanism()
+            # Create a scoring mechanism compatible with the observed target shape.
+            scorer = self._resolve_scoring_mechanism_for_target(Y)
 
             # Compute how many independent jobs we really have
             n_param_combos = len(ParameterGrid(search_params))
@@ -1178,19 +1196,40 @@ class ModelHandler:
         except TypeError:
             pipeline.fit(dh.X_train.to_numpy(), dh.Y_train.to_numpy())
 
+    def _resolve_scoring_mechanism_for_target(self, Y) -> Union[str, Callable]:
+        """Resolve scoring aliases whose estimator requirements depend on class count.
+
+        The configured AUC scorer is ``roc_auc_ovo`` so multiclass classification keeps
+        the intended one-vs-one semantics. Scikit-learn's multiclass scorer requires
+        ``predict_proba()``, while binary ROC AUC can use either probabilities or a
+        ``decision_function()``. Resolve binary targets to ``roc_auc`` so margin-based
+        estimators remain valid candidates instead of failing on a missing probability API.
+        """
+        scorer = self.handler.config.get_scoring_mechanism()
+        if scorer != 'roc_auc_ovo':
+            return scorer
+
+        labels = np.unique(np.asarray(Y).reshape(-1))
+        return 'roc_auc' if labels.size <= 2 else scorer
+
     def _score_validation_pipeline(self, pipeline: Pipeline, dh: DatasetHandler) -> float:
         """Score an already fitted spot-check pipeline on the validation split."""
-        scorer = self.handler.config.get_scoring_mechanism()
+        target_Y = getattr(dh, 'Y_train', dh.Y_validation)
+        scorer = self._resolve_scoring_mechanism_for_target(target_Y)
+        estimator_X = Helpers.prepare_estimator_input(dh.X_validation)
 
         if not isinstance(scorer, str):
-            estimator_X = Helpers.prepare_estimator_input(dh.X_validation)
             try:
                 return scorer(pipeline, estimator_X, dh.Y_validation)
             except TypeError:
                 return scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
 
-        if scorer == 'roc_auc_ovo':
-            return self.generate_roc_auc_score(pipeline, dh)
+        if scorer in ('roc_auc', 'roc_auc_ovo'):
+            scorer_callable = get_scorer(scorer)
+            try:
+                return scorer_callable(pipeline, estimator_X, dh.Y_validation)
+            except TypeError:
+                return scorer_callable(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
 
         raise MissingScorerException("Scorer {0} is not supported".format(scorer))
 
@@ -1200,22 +1239,23 @@ class ModelHandler:
             return str("{0}: {1}".format(type(ex).__name__, ','.join(ex.args)))
         return str(traceback.format_exc())
 
-    # Train and evaluate picked model (warning for overfitting)
+    # Fit a spot-check candidate on the training split and score the untouched holdout diagnostically.
     def train_and_evaluate_picked_model(self, pipeline: Pipeline, dh: DatasetHandler):
+        """Return a fitted candidate plus a holdout diagnostic that never selects the winner."""
 
         exception = ""
-        test_score = -1.0
+        holdout_score = -1.0
         try:
             self._fit_pipeline_for_validation(pipeline, dh)
 
             if dh.X_validation is not None and dh.Y_validation is not None:
-                test_score = self._score_validation_pipeline(pipeline, dh)
+                holdout_score = self._score_validation_pipeline(pipeline, dh)
 
         except Exception as ex:
-            test_score = np.nan
+            holdout_score = np.nan
             exception = self._format_captured_exception(ex)
 
-        return pipeline, test_score, exception
+        return pipeline, holdout_score, exception
     
     # Help function for generating roc_auc_score in the general case
     def generate_roc_auc_score(self, pipeline: Pipeline, dh: DatasetHandler):
@@ -1322,7 +1362,8 @@ class ModelHandler:
             return True
 
     def get_preflight_skip_reason(self, preprocessor: Preprocess, scaler: Transform, reduction: Reduction,
-                                  algorithm: Algorithm, X_train: pd.DataFrame) -> Union[str, None]:
+                                  algorithm: Algorithm, X_train: pd.DataFrame, estimator: Estimator = None,
+                                  Y_train: pd.Series = None) -> Union[str, None]:
         """Return a reason to skip a known-incompatible candidate before cross-validation.
 
         This is deliberately conservative. If the probe itself cannot inspect a transformer, the
@@ -1351,6 +1392,30 @@ class ModelHandler:
         if sparse_input and reduction == Reduction.FICA:
             return "FastICA requires dense input"
 
+        # SelfTrainingClassifier only adds value when y contains at least one unlabeled
+        # sample marked with sklearn's -1 sentinel. The normal supervised training split
+        # contains only known labels, so skip this candidate before CV instead of fitting
+        # the base estimator repeatedly while sklearn warns that there is nothing to label.
+        if algorithm == Algorithm.STCL and Y_train is not None:
+            labels = np.asarray(Y_train, dtype=object).reshape(-1)
+            has_unlabeled = any(
+                (isinstance(label, str) and label.strip() == "-1")
+                or (not isinstance(label, str) and not pd.isna(label) and label == -1)
+                for label in labels
+            )
+            if not has_unlabeled:
+                return "SelfTrainingClassifier requires at least one unlabeled sample marked -1"
+
+        # Multiclass one-vs-one ROC AUC requires probability estimates in sklearn.
+        # Binary AUC is resolved to ``roc_auc`` elsewhere and can therefore use a
+        # decision_function(), but multiclass candidates without predict_proba()
+        # are known-incompatible and should not spend a full CV run failing.
+        if estimator is not None and Y_train is not None \
+                and self.handler.config.get_scoring_mechanism() == 'roc_auc_ovo':
+            labels = np.unique(np.asarray(Y_train).reshape(-1))
+            if labels.size > 2 and not hasattr(estimator, "predict_proba"):
+                return "multiclass ROC AUC requires predict_proba()"
+
         if algorithm == Algorithm.DUMY and reduction == Reduction.NOR:
             return None
 
@@ -1377,6 +1442,44 @@ class ModelHandler:
             informative_features = np.isfinite(variances) & (variances > np.finfo(float).eps)
             if not np.any(informative_features):
                 return f"no feature variance after preprocessing {preprocessor.name}"
+
+            # MultinomialNB and ComplementNB require non-negative estimator input.
+            # Some reductions (for example PCA/TSVD/FastICA) are allowed to emit signed
+            # components even when their input is non-negative, so those combinations are
+            # intrinsically unsafe for these estimators. Other reductions used here either
+            # preserve non-negativity (NOR/NMF) or, with the configured defaults, generate
+            # non-negative features (Nystroem with the RBF kernel).
+            if algorithm in (Algorithm.MNB, Algorithm.CNB):
+                signed_reductions = {
+                    Reduction.PCA,
+                    Reduction.TSVD,
+                    Reduction.FICA,
+                    Reduction.GRP,
+                    Reduction.ISO,
+                    Reduction.LLE,
+                }
+                if reduction in signed_reductions:
+                    return (
+                        f"{reduction.full_name} may produce negative features, "
+                        f"which are incompatible with {algorithm.full_name}"
+                    )
+
+                # NMF itself requires non-negative input and returns non-negative
+                # components. NOR simply forwards the preprocessed values. Nystroem's
+                # configured RBF kernel returns non-negative similarities regardless of
+                # the sign of its input, so only NOR/NMF need the actual value check.
+                if reduction in (Reduction.NOR, Reduction.NMF):
+                    finite_probe = probe[np.isfinite(probe)]
+                    if finite_probe.size and np.min(finite_probe) < -np.finfo(float).eps:
+                        stage = (
+                            "before Non-Negative Matrix Factorization"
+                            if reduction == Reduction.NMF
+                            else "after preprocessing"
+                        )
+                        return (
+                            f"{algorithm.full_name} requires non-negative features; "
+                            f"negative values remain {stage} {preprocessor.name}"
+                        )
         except Exception:
             # Preflight must never reject a candidate merely because the probe cannot inspect it.
             return None
@@ -1398,7 +1501,7 @@ class ModelHandler:
         return f"{algorithm.name} - {algorithm.full_name} ({algorithm.lib.full_name})"
 
     def _build_spot_check_result(self, preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
-                                 components: int, cv_score: float, cv_stdev: float, test_score: float,
+                                 components: int, cv_score: float, cv_stdev: float, holdout_score: float,
                                  elapsed_time: float, failure: str) -> list:
         return [
             preprocessor.name,
@@ -1407,7 +1510,7 @@ class ModelHandler:
             components,
             cv_score,
             cv_stdev,
-            test_score,
+            holdout_score,
             elapsed_time,
             failure,
         ]
@@ -1425,7 +1528,7 @@ class ModelHandler:
 
     def _update_spot_check_best_state(self, state: _SpotCheckState, pipeline: Pipeline,
                                       preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
-                                      cv_score: float, cv_stdev: float, test_score: float,
+                                      cv_score: float, cv_stdev: float, holdout_score: float,
                                       num_features: int, num_components: int) -> None:
         state.trained_pipeline = pipeline
         state.best_reduction = reduction
@@ -1433,13 +1536,13 @@ class ModelHandler:
         state.best_preprocessor = preprocessor
         state.best_cv_score = cv_score
         state.best_stdev = cv_stdev
-        state.best_test_score = test_score
+        state.best_holdout_score = holdout_score
         state.best_rfe_feature_selection = num_features
         state.best_num_components = num_components
 
     def _consider_spot_check_candidate(self, state: _SpotCheckState, pipeline: Pipeline,
                                        preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
-                                       cv_score: float, cv_stdev: float, test_score: float,
+                                       cv_score: float, cv_stdev: float, holdout_score: float,
                                        num_features: int, num_components: int, failure: str) -> tuple[str, bool]:
         candidate_success = (
             pipeline is not None
@@ -1461,7 +1564,7 @@ class ModelHandler:
                 algorithm=algorithm,
                 cv_score=cv_score,
                 cv_stdev=cv_stdev,
-                test_score=test_score,
+                holdout_score=holdout_score,
                 num_features=num_features,
                 num_components=num_components,
             )
@@ -1475,7 +1578,8 @@ class ModelHandler:
                                        undersampler: Undersampling, kfold: StratifiedKFold,
                                        state: _SpotCheckState) -> tuple[list[list], bool]:
         skip_reason = self.get_preflight_skip_reason(
-            preprocessor, preprocessor_callable, reduction, algorithm, dh.X_train
+            preprocessor, preprocessor_callable, reduction, algorithm, dh.X_train,
+            estimator=algorithm_callable, Y_train=dh.Y_train
         )
         if skip_reason:
             failure = f"SKIPPED: {skip_reason}"
@@ -1486,7 +1590,7 @@ class ModelHandler:
                 components=dh.X_train.shape[1],
                 cv_score=np.nan,
                 cv_stdev=np.nan,
-                test_score=np.nan,
+                holdout_score=np.nan,
                 elapsed_time=0.0,
                 failure=failure,
             )], False
@@ -1541,10 +1645,10 @@ class ModelHandler:
 
                 # Do not let a secondary validation attempt hide the original CV
                 # failure. A candidate that did not complete CV is already invalid.
-                tmp_test_score = np.nan if failure else 0.0
+                tmp_holdout_score = np.nan if failure else 0.0
                 if not failure and current_pipeline is not None \
                         and dh.X_validation is not None and dh.Y_validation is not None:
-                    current_pipeline, tmp_test_score, validation_failure = \
+                    current_pipeline, tmp_holdout_score, validation_failure = \
                         self.train_and_evaluate_picked_model(current_pipeline, dh)
                     if validation_failure:
                         failure = validation_failure
@@ -1580,7 +1684,7 @@ class ModelHandler:
                 algorithm=algorithm,
                 cv_score=temp_cv_score,
                 cv_stdev=temp_cv_stdev,
-                test_score=tmp_test_score,
+                holdout_score=tmp_holdout_score,
                 num_features=num_features,
                 num_components=num_components,
                 failure=failure,
@@ -1595,7 +1699,7 @@ class ModelHandler:
                 components=min(num_components, num_features),
                 cv_score=temp_cv_score,
                 cv_stdev=temp_cv_stdev,
-                test_score=tmp_test_score,
+                holdout_score=tmp_holdout_score,
                 elapsed_time=elapsed_time,
                 failure=failure,
             ))
@@ -1907,7 +2011,7 @@ class ModelHandler:
     def get_cross_val_score(self, pipeline: Pipeline, dh: DatasetHandler, kfold: StratifiedKFold, algorithm: Algorithm) -> np.ndarray:
        
         # Now make kfolded cross evaluation. Notice that fit_params are not used right now (just placeholder for future revisions)
-        scorer_mechanism = self.handler.config.get_scoring_mechanism()
+        scorer_mechanism = self._resolve_scoring_mechanism_for_target(dh.Y_train)
 
         fit_params = {}
         
@@ -1951,11 +2055,16 @@ class ModelHandler:
                 
                 # Prepare the data to save
                 keras_name = self.model.pipeline.steps[-1][0]
+                persisted_pipeline = detach_keras_model_from_pipeline(
+                    self.model.pipeline,
+                    keras_name,
+                )
+
                 data = [
                     save_config,
                     self.model.text_converter,
                     (self.model.oversampler, self.model.undersampler, self.model.preprocess, self.model.reduction, self.model.algorithm),
-                    Pipeline(steps=self.model.pipeline.steps[:-1]),
+                    persisted_pipeline,
                     keras_name,
                     self.model.n_features_out
                 ]   
@@ -1964,7 +2073,8 @@ class ModelHandler:
                 save_model_artifact(filename, *data)
 
                 # Save the KERAS model separately
-                self.model.pipeline.steps[-1][-1].model_.save(str(filename) + "." + keras_name)
+                keras_sidecar = get_keras_model_sidecar_path(filename, keras_name)
+                self.model.pipeline.steps[-1][-1].model_.save(str(keras_sidecar))
 
             else: # Non KERAS models
                 

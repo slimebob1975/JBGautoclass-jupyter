@@ -279,7 +279,7 @@ def widget_parameters() -> dict:
                 "value": True,
                 "disabled": True,
                 "indent": True,
-                "description": "Text: Encryption",
+                "description": "Encryption",
                 "tooltip": "Use encryption on text"
             }
         },
@@ -288,7 +288,7 @@ def widget_parameters() -> dict:
                 "value": True,
                 "disabled": True,
                 "indent": True,
-                "description": "Text: Categorize",
+                "description": "Categorizer",
                 "tooltip": "Use categorization on text"
             }
         },
@@ -306,7 +306,7 @@ def widget_parameters() -> dict:
                 "value": False,
                 "disabled": True,
                 "indent": True,
-                "description": "Text: Filter",
+                "description": "Filter",
                 "tooltip": "Use Better Tooltip"
             }
         },
