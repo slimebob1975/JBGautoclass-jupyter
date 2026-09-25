@@ -517,6 +517,16 @@ class DatasetHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not convert to integer: {e}")
+
+        duplicate_mask = keys.duplicated(keep=False)
+        if duplicate_mask.any():
+            duplicate_values = list(dict.fromkeys(keys.loc[duplicate_mask].tolist()))[:5]
+            examples = ", ".join(str(value) for value in duplicate_values)
+            raise DatasetException(
+                f"Configured unique id column '{id_column}' is not unique in the fetched dataset; "
+                f"duplicate value(s) include: {examples}. Select a column with one unique, non-null "
+                "identifier per source row."
+            )
             
         
         try:
@@ -1086,6 +1096,24 @@ class ModelHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model: {str(e)}")
+
+    def retrain_picked_model(self, model: Pipeline, X: pd.DataFrame, Y: pd.DataFrame) -> Pipeline:
+        """Fit a fresh clone of the selected pipeline on the complete training dataset.
+
+        Final retraining is a new fit, not a continuation of the cross-trained fit.
+        Reusing the fitted pipeline breaks that contract for estimators with
+        ``warm_start=True`` (for example BaggingClassifier), because a second fit
+        can intentionally retain the previously fitted ensemble instead of fitting
+        the full dataset from scratch.  Cloning resets fitted state for every step
+        while preserving the selected/grid-searched hyperparameters.
+        """
+        try:
+            retraining_model = clone(model)
+        except Exception as e:
+            self.handler.logger.print_dragon(exception=e)
+            raise ModelException(f"Could not clone selected model for full-data retraining: {str(e)}")
+
+        return self.train_picked_model(retraining_model, X, Y)
         
     
     # For pipelines with a specified fit search parameters list, do like this instead

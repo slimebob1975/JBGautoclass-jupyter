@@ -82,6 +82,16 @@ mode = {
     # used for prediction)
     "test_size": "<test_size>",
 
+    # Calculate Dark Numbers independently of whether mispredictions are displayed.
+    "calculate_dark_numbers": <calculate_dark_numbers>,
+
+    # Published linear formula by default; NON_LINEAR selects the explicit alternative.
+    "dark_number_method": "<dark_number_method>",
+
+    # Alpha adjustment: NONE, SINGLE, or SEPARATED. SEPARATED is available only
+    # with the linear method because no non-linear separated-alpha formula exists.
+    "dark_number_alpha": "<dark_number_alpha>",
+
     # Fraction of known positives temporarily relabelled when estimating
     # Dark Number correction factors. 0.20 preserves the published workflow.
     "dark_number_flip_fraction": "<dark_number_flip_fraction>",

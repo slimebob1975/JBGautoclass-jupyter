@@ -37,6 +37,38 @@ class TestDataLayer():
 
         assert query == expectedQuery
 
+    def test_unique_int_id_columns_filter_non_unique_and_nullable_candidates(
+        self, default_sqldatalayer, monkeypatch
+    ) -> None:
+        queries = []
+
+        def get_data(query):
+            queries.append(query)
+            # total; id nonnull/distinct; priority nonnull/distinct; nullable nonnull/distinct
+            return [(160, 160, 160, 160, 3, 159, 159)]
+
+        monkeypatch.setattr(default_sqldatalayer, "get_data_list_from_query", get_data)
+
+        result = default_sqldatalayer.get_unique_int_id_columns(
+            "DatabaseTwo", "InputTable", ["id", "priority", "nullable_key"]
+        )
+
+        assert result == ["id"]
+        assert len(queries) == 1
+        assert "COUNT(DISTINCT [id])" in queries[0]
+        assert "COUNT(DISTINCT [priority])" in queries[0]
+        assert "COUNT(DISTINCT [nullable_key])" in queries[0]
+
+    def test_run_query_uses_configured_unique_id_in_join(self, default_sqldatalayer) -> None:
+        default_sqldatalayer.config.connection.id_column = "case_key"
+        default_sqldatalayer.config.connection.data_numerical_columns = ["sepal-length"]
+
+        query = default_sqldatalayer.get_run_query(run_id=10)
+
+        assert "A.[case_key] = RR.[unique_key]" in query
+        assert "ORDER BY A.[case_key]" in query
+        assert "A.[id] = RR.[unique_key]" not in query
+
     def test_class_distribution_query(self, default_sqldatalayer) -> None:
         """ This is a query in string format """
         query = default_sqldatalayer.get_class_distribution_query()

@@ -22,6 +22,8 @@ class MockDataLayer:
     def get_id_columns(self, **kwargs) -> list:
         """ Used in the GUI, gets name and type for columns """
 
+    def get_unique_int_id_columns(self, data_catalog, data_table, int_columns):
+        return list(int_columns)
 
 
 class MockGUIhandler:
@@ -170,7 +172,7 @@ def widget_parameters() -> dict:
                 "value": False,
                 "disabled": True,
                 "indent": True,
-                "description": "Mode: Train",
+                "description": "Train",
                 "tooltip": "A new model will be trained"
             }
         },
@@ -179,7 +181,7 @@ def widget_parameters() -> dict:
                 "value": False,
                 "disabled": True,
                 "indent": True,
-                "description": "Mode: Predict",
+                "description": "Predict",
                 "tooltip": "The model of choice will be used to make predictions"
             }
         },
@@ -188,7 +190,7 @@ def widget_parameters() -> dict:
                 "value": False,
                 "disabled": True,
                 "indent": True,
-                "description": "Mode: Display mispredictions",
+                "description": "Display mispredictions",
                 "tooltip": "The classifier will display mispredicted training data for manual inspection and correction"
             }
         },
@@ -763,5 +765,30 @@ class TestWidgets:
         assert isinstance(progress, tuple)
         assert isinstance(progress[0], ipywidgets.FloatProgress)
         assert isinstance(progress[1], ipywidgets.HTML)
-       
-        
+
+
+def test_unique_id_options_exclude_non_unique_integer_columns(widgets):
+    from types import SimpleNamespace
+
+    datalayer = MockDataLayer()
+    datalayer.get_id_columns = lambda *args, **kwargs: {
+        "class": "varchar",
+        "id": "int",
+        "priority": "int",
+        "message": "nvarchar",
+    }
+    datalayer.get_unique_int_id_columns = lambda catalog, table, columns: ["id"]
+    widgets.guihandler = SimpleNamespace(datalayer=datalayer)
+    widgets.eventhandler.lock_observe_1 = True
+    widgets.data_catalogs_dropdown.options = ["catalog"]
+    widgets.data_catalogs_dropdown.value = "catalog"
+    widgets.data_tables_dropdown.options = ["table"]
+    widgets.data_tables_dropdown.value = "table"
+
+    widgets.update_class_id_data_columns()
+
+    assert list(widgets.id_column.options) == ["id"]
+    assert "priority" not in widgets.id_column.options
+    widgets.class_column.value = "id"
+    widgets.update_id_column()
+    assert list(widgets.id_column.options) == []

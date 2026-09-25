@@ -167,7 +167,7 @@
                 "value": false,
                 "disabled": true,
                 "indent": true,
-                "description": "Mode: Train",
+                "description": "Train",
                 "tooltip": "A new model will be trained"
             }
         },
@@ -177,7 +177,7 @@
                 "value": false,
                 "disabled": true,
                 "indent": true,
-                "description": "Mode: Predict",
+                "description": "Predict",
                 "tooltip": "The model of choice will be used to make predictions"
             }
         },
@@ -187,7 +187,7 @@
                 "value": false,
                 "disabled": true,
                 "indent": true,
-                "description": "Mode: Display mispredictions",
+                "description": "Display mispredictions",
                 "tooltip": "The classifier will display mispredicted training data for manual inspection and correction"
             }
         },
@@ -197,8 +197,38 @@
                 "value": false,
                 "disabled": true,
                 "indent": true,
-                "description": "Mode: Pass on meta data",
+                "description": "Pass on meta data",
                 "tooltip": "The classifier will pass on non-selected data columns as meta information when making new predictions"
+            }
+        },
+        "dark_numbers_checkbox": {
+            "type": "Checkbox",
+            "params": {
+                "value": true,
+                "disabled": true,
+                "indent": true,
+                "description": "",
+                "tooltip": "Calculate Dark Number estimates independently of displaying mispredicted rows"
+            }
+        },
+        "dark_number_method": {
+            "type": "RadioButtons",
+            "params": {
+                "options": [["Linear", "LINEAR"], ["Non-linear", "NON_LINEAR"]],
+                "value": "LINEAR",
+                "disabled": true,
+                "description": "Method:",
+                "tooltip": "Choose the published linear Dark Number formula or the explicit non-linear alternative"
+            }
+        },
+        "dark_number_alpha": {
+            "type": "RadioButtons",
+            "params": {
+                "options": [["None", "NONE"], ["Single", "SINGLE"], ["Separated", "SEPARATED"]],
+                "value": "SEPARATED",
+                "disabled": true,
+                "description": "Alpha:",
+                "tooltip": "Choose no alpha adjustment, one shared alpha, or separate FP/FN alpha values; separated alpha is available only with the linear method"
             }
         },
         "algorithm_dropdown": {
@@ -437,6 +467,7 @@
         "class_summary",
         "continuation_form",
         "checkboxes_form",
+        "dark_numbers_form",
         "algorithm_form",
         "data_handling_form",
         "text_handling_form",
@@ -470,6 +501,9 @@
             "predict_checkbox",
             "mispredicted_checkbox",
             "metas_checkbox",
+            "dark_numbers_checkbox",
+            "dark_number_method",
+            "dark_number_alpha",
             "algorithm_dropdown",
             "preprocess_dropdown",
             "scoremetric_dropdown",

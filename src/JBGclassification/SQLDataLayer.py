@@ -270,17 +270,35 @@ class DataLayer(DataLayerBase):
             raise DataLayerException(f"Uniqueness stats failed for column '{column}': {str(e)}")
         
     def get_unique_int_id_columns(self, data_catalog: str, data_table: str, int_columns: list[str]) -> list[str]:
+        """Filter integer columns to globally non-null/distinct identifier candidates.
+
+        Evaluate all candidates in one aggregate query. The GUI calls this when a
+        table is selected, so one table scan is preferable to one COUNT/DISTINCT
+        round-trip per numeric column on large datasets.
         """
-        Filters int_columns to those that have exactly one unique, non-null value per row.
-        """
+        if not int_columns:
+            return []
+
         try:
-            total_rows = self.count_data_rows(data_catalog, data_table)  # använder get_count-endQuery :contentReference[oaicite:1]{index=1}
-            ok = []
-            for col in int_columns:
-                stats = self.get_column_uniqueness_stats(data_catalog, data_table, col)
-                if stats["total"] == total_rows and stats["nonnull"] == total_rows and stats["distinct"] == total_rows:
-                    ok.append(col)
-            return ok
+            table = f"[{period_to_brackets(data_catalog)}].[{period_to_brackets(data_table)}]"
+            aggregates = ["COUNT(*) AS total"]
+            for index, column in enumerate(int_columns):
+                aggregates.extend([
+                    f"COUNT([{column}]) AS nonnull_{index}",
+                    f"COUNT(DISTINCT [{column}]) AS distinct_{index}",
+                ])
+
+            query = f"SELECT {', '.join(aggregates)} FROM {table}"
+            row = self.get_data_list_from_query(query)[0]
+            total_rows = int(row[0])
+
+            unique_columns = []
+            for index, column in enumerate(int_columns):
+                nonnull = int(row[1 + index * 2])
+                distinct_count = int(row[2 + index * 2])
+                if nonnull == total_rows and distinct_count == total_rows:
+                    unique_columns.append(column)
+            return unique_columns
         except Exception as e:
             self.logger.print_dragon(e)
             raise DataLayerException(f"Finding unique id columns failed: {str(e)}")
@@ -752,7 +770,7 @@ class DataLayer(DataLayerBase):
 
         query_strings = [
             f"SELECT {columns} FROM {dataTable}",
-            f"INNER JOIN {predictionTables['row']} RR ON A.[id] = RR.[unique_key]",
+            f"INNER JOIN {predictionTables['row']} RR ON A.[{id_column}] = RR.[unique_key]",
             f"INNER JOIN {predictionTables['header']} RH ON RR.[run_id] = RH.[run_id]",
             f"WHERE RH.[run_id] = {run_id}",
             f"ORDER BY A.[{id_column}]"

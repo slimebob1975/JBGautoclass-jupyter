@@ -4,7 +4,7 @@ import importlib.util
 import pytest
 from conftest import get_fixture_path
 
-from Config import Config
+from Config import Config, DarkNumberAlpha, DarkNumberMethod
 from imblearn.over_sampling import oversampler
 from imblearn.under_sampling import RandomUnderSampler
 from JBGExceptions import ConfigException
@@ -206,6 +206,53 @@ class TestConfig:
         with pytest.raises(ConfigException):
             valid_iris_config.get_attribute("mode.does_not_exist")
 
+    def test_dark_number_controls_default_to_linear_separated_alpha(self):
+        config = Config()
+
+        assert config.should_calculate_dark_numbers() is True
+        assert config.get_dark_number_method() is DarkNumberMethod.LINEAR
+        assert config.get_dark_number_alpha() is DarkNumberAlpha.SEPARATED
+        assert config.get_dark_number_calculation_type() == "separated_alpha"
+
+    def test_non_linear_method_without_explicit_alpha_defaults_to_none(self):
+        config = Config(mode=Config.Mode(dark_number_method=DarkNumberMethod.NON_LINEAR))
+
+        assert config.get_dark_number_alpha() is DarkNumberAlpha.NONE
+        assert config.get_dark_number_calculation_type() == "non_linear"
+
+    def test_legacy_dark_number_controls_follow_mispredicted_and_linear_method(self):
+        config = Config(mode=Config.Mode(mispredicted=False))
+        del config.mode.calculate_dark_numbers
+        del config.mode.dark_number_method
+        del config.mode.dark_number_alpha
+
+        assert config.should_calculate_dark_numbers() is False
+        assert config.get_dark_number_method() is DarkNumberMethod.LINEAR
+        assert config.get_dark_number_alpha() is DarkNumberAlpha.NONE
+
+
+    @pytest.mark.parametrize(
+        "method,alpha,calculation_type",
+        [
+            (DarkNumberMethod.LINEAR, DarkNumberAlpha.NONE, "base"),
+            (DarkNumberMethod.LINEAR, DarkNumberAlpha.SINGLE, "single_alpha"),
+            (DarkNumberMethod.LINEAR, DarkNumberAlpha.SEPARATED, "separated_alpha"),
+            (DarkNumberMethod.NON_LINEAR, DarkNumberAlpha.NONE, "non_linear"),
+            (DarkNumberMethod.NON_LINEAR, DarkNumberAlpha.SINGLE, "non_linear_alpha"),
+        ],
+    )
+    def test_dark_number_method_and_alpha_map_to_existing_calculators(self, method, alpha, calculation_type):
+        config = Config(mode=Config.Mode(dark_number_method=method, dark_number_alpha=alpha))
+
+        assert config.get_dark_number_calculation_type() == calculation_type
+
+    def test_non_linear_separated_alpha_is_rejected(self):
+        with pytest.raises(ValueError, match="Separated alpha"):
+            Config(mode=Config.Mode(
+                dark_number_method=DarkNumberMethod.NON_LINEAR,
+                dark_number_alpha=DarkNumberAlpha.SEPARATED,
+            ))
+
     def test_dark_number_flip_fraction_defaults_to_published_20_percent(self):
         config = Config()
 
@@ -327,6 +374,9 @@ class TestConfig:
         """A generated config can be reused without writing the password to disk."""
         p = tmp_path / "runtime_config.py"
         valid_iris_config.connection.sql_password = "must-not-be-persisted"
+        valid_iris_config.mode.calculate_dark_numbers = False
+        valid_iris_config.mode.dark_number_method = DarkNumberMethod.NON_LINEAR
+        valid_iris_config.mode.dark_number_alpha = DarkNumberAlpha.SINGLE
         valid_iris_config.save_to_file(p, "some_fake_name")
 
         spec = importlib.util.spec_from_file_location("runtime_config", p)
@@ -337,7 +387,13 @@ class TestConfig:
         loaded_config = Config.load_config(module)
 
         assert module.connection["sql_password"] == ""
+        assert module.mode["calculate_dark_numbers"] is False
+        assert module.mode["dark_number_method"] == "NON_LINEAR"
+        assert module.mode["dark_number_alpha"] == "SINGLE"
         assert loaded_config.connection.sql_password == "runtime-environment-password"
+        assert loaded_config.should_calculate_dark_numbers() is False
+        assert loaded_config.get_dark_number_method() is DarkNumberMethod.NON_LINEAR
+        assert loaded_config.get_dark_number_alpha() is DarkNumberAlpha.SINGLE
 
     def test_load_config_from_module(self, valid_iris_config):
         """ While it uses the load_config_from_module, it mainly checks load_config_2 """

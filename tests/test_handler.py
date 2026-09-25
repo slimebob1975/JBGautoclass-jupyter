@@ -408,6 +408,20 @@ class TestDatasetHandler():
         
     
 
+    def test_split_keys_rejects_duplicate_unique_ids(self, default_dataset_handler):
+        column_names = default_dataset_handler.handler.config.get_column_names()
+        id_column = default_dataset_handler.handler.config.get_id_column_name()
+        data = [
+            ["Karan", 23, "odd", 1],
+            ["Rohit", 22, "even", 1],
+            ["Sahil", 21, "odd", 3],
+            ["Aryan", 24, "even", 4],
+        ]
+        input_dataset = pandas.DataFrame(data, columns=column_names)
+
+        with pytest.raises(DatasetException, match="is not unique"):
+            default_dataset_handler.split_keys_from_dataset(input_dataset, id_column)
+
     def test_prediction_only_split_keeps_non_null_feature_columns(self, default_dataset_handler):
         config = default_dataset_handler.handler.config
         class_column = config.get_class_column_name()
@@ -1466,3 +1480,33 @@ class TestPredictionsHandler:
         assert default_predictions_handler.get_prediction_results(keys) == expected_list
 
     # Again, somewhat too complicated to test, so will postpone
+
+
+def test_full_data_retraining_clones_warm_start_pipeline():
+    from imblearn.pipeline import Pipeline
+    from sklearn.ensemble import BaggingClassifier
+    from JBGHandler import ModelHandler
+
+    class Logger:
+        def print_dragon(self, exception):
+            raise AssertionError(exception)
+
+    model_handler = ModelHandler.__new__(ModelHandler)
+    model_handler.handler = type("Handler", (), {"logger": Logger()})()
+
+    X_initial = pandas.DataFrame({"x": [0.0, 0.1, 1.0, 1.1]})
+    y_initial = pandas.Series([0, 0, 1, 1])
+    pipeline = Pipeline([
+        ("BGC", BaggingClassifier(n_estimators=3, warm_start=True, random_state=1)),
+    ])
+    pipeline.fit(X_initial, y_initial)
+    original_estimator_ids = [id(estimator) for estimator in pipeline.named_steps["BGC"].estimators_]
+
+    X_full = pandas.DataFrame({"x": [0.0, 0.1, 0.2, 1.0, 1.1, 1.2]})
+    y_full = pandas.Series([0, 0, 0, 1, 1, 1])
+    retrained = model_handler.retrain_picked_model(pipeline, X_full, y_full)
+
+    assert retrained is not pipeline
+    assert retrained.named_steps["BGC"].warm_start is True
+    assert len(retrained.named_steps["BGC"].estimators_) == 3
+    assert [id(estimator) for estimator in retrained.named_steps["BGC"].estimators_] != original_estimator_ids

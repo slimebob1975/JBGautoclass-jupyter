@@ -13,7 +13,7 @@ from sklearn.utils import Bunch
 
 from Config import (Config, Reduction, ReductionTuple, Algorithm, 
                     AlgorithmTuple, Preprocess, PreprocessTuple, 
-                    ScoreMetric, Oversampling, Undersampling, NgramRange)
+                    ScoreMetric, Oversampling, Undersampling, NgramRange, DarkNumberAlpha, DarkNumberMethod)
 from JBGTransformers import TextDataToNumbersConverter
         
 from JBGExceptions import GuiWidgetsException
@@ -101,8 +101,9 @@ class EventHandler:
             Events:
                 value_change: Triggers several changes when model is set
         """
-        # Change to default values below if it's changing in ways
-        if change.name != "index":
+        # Programmatic Repeat Last restoration must not reload model metadata over
+        # the persisted run state that is being made visible.
+        if self.lock_observe_1 or change.name != "index":
             return
         
         if change.new == 0: # Moves to the empty value
@@ -134,6 +135,12 @@ class EventHandler:
             Events:
                 value_change: Changes the id and data columns, updates summary
         """
+        # Programmatic state restoration mutates options/value while the GUI can
+        # still contain the default ``N/A`` selection. Do not query the database
+        # until the persisted dataset/class state has been restored completely.
+        if self.lock_observe_1:
+            return
+
         if change.name not in ["index", "disabled"]:
             return
         
@@ -214,6 +221,18 @@ class EventHandler:
                 self.widgets.metas_checkbox.disabled = True
                 self.widgets.metas_checkbox.value = False
 
+    def dark_numbers_checkbox(self, change: Bunch) -> None:
+        if change.get("name") != "value" or self.lock_observe_1:
+            return
+        disabled = not bool(change.get("new"))
+        self.widgets.dark_number_method.disabled = disabled
+        self.widgets.dark_number_alpha.disabled = disabled
+
+    def dark_number_method(self, change: Bunch) -> None:
+        if change.get("name") != "value":
+            return
+        self.widgets.sync_dark_number_alpha_options()
+
     def continuation_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
         self.lock_observe_1 = True
@@ -277,6 +296,9 @@ class DataLayer(Protocol):
 
     def get_id_columns(self, **kwargs) -> dict:
         """ Used in the GUI, gets name and type for columns """
+
+    def get_unique_int_id_columns(self, data_catalog: str, data_table: str, int_columns: list[str]) -> list[str]:
+        """ Return integer columns that are globally non-null and unique. """
 
     def get_table_columns(self, database: str, table: str) -> dict:
         """ Used by the regression suite to inspect tables across catalogs """
@@ -359,6 +381,7 @@ class Widgets:
         self.model_path = model_path if model_path else src_path / Config.DEFAULT_MODELS_PATH
         
         self.default_widgets = self.settings.get("widgets")
+        self._migrate_legacy_widget_labels()
         self.sections = self.settings.get("sections")
         self.logo_image =  self.get_sibling_file_path(self.settings.get("logo"))
         self.field_statuses = {}
@@ -377,6 +400,7 @@ class Widgets:
             "models": [self.models_dropdown, self.field_status("models")],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
+            "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_method, self.dark_number_alpha],
             "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.oversampler_dropdown, self.undersampler_dropdown, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.ngram_range_dropdown],
@@ -384,8 +408,24 @@ class Widgets:
             "progress": [self.progress_bar, self.progress_label]
         }
 
-        # We need a dictionary to keep track of datatypes
+        # We need a dictionary to keep track of datatypes and the subset that
+        # satisfies the GUI's "Unique id" contract for the current table.
         self.datatype_dict = None
+        self.unique_id_columns = []
+
+    def _migrate_legacy_widget_labels(self) -> None:
+        """Remove redundant prefixes from exact legacy labels in local settings files."""
+        replacements = {
+            "train_checkbox": ("Mode: Train", "Train"),
+            "predict_checkbox": ("Mode: Predict", "Predict"),
+            "mispredicted_checkbox": ("Mode: Display mispredictions", "Display mispredictions"),
+            "metas_checkbox": ("Mode: Pass on meta data", "Pass on meta data"),
+            "dark_numbers_checkbox": ("Dark Numbers: Calculate", ""),
+        }
+        for widget_name, (legacy, current) in replacements.items():
+            params = self.default_widgets.get(widget_name, {}).get("params", {})
+            if params.get("description") == legacy:
+                params["description"] = current
 
     def field_status(self, type: str) -> widgets.HTML:
         """ HTML fields for issues, connected to a particular field """
@@ -535,6 +575,9 @@ class Widgets:
             "testdata_slider": config.get_test_size_percentage(),
             "oversampler_dropdown": config.get_oversampler_abbreviation(),
             "undersampler_dropdown": config.get_undersampler_abbreviation(),
+            "dark_numbers_checkbox": config.should_calculate_dark_numbers(),
+            "dark_number_method": config.get_dark_number_method().name,
+            "dark_number_alpha": config.get_dark_number_alpha().name,
         })
         
         # Disabled items:
@@ -547,6 +590,115 @@ class Widgets:
         self.disable_button("start_button")
             
         
+    @staticmethod
+    def _with_saved_options(options, values) -> tuple:
+        """Include persisted values in widget options without discarding current choices."""
+        current = list(options)
+        for value in values:
+            if value not in (None, "") and value not in current:
+                current.append(value)
+        return tuple(current)
+
+    def restore_classifier_config(self, config_params: dict) -> None:
+        """Restore the visible GUI state for a persisted manual classifier run.
+
+        Current SQL credentials are deliberately left untouched. Repeat Last executes
+        the persisted Config objects directly, while this synchronization also makes a
+        subsequent ordinary Rerun reflect the same table/model/settings in the GUI.
+        """
+        connection = config_params["connection"]
+        mode = config_params["mode"]
+        io = config_params["io"]
+        debug = config_params["debug"]
+
+        configured_columns = list(connection.data_numerical_columns) + list(connection.data_text_columns)
+        selected_columns = [
+            column for column in self.data_columns.options if column in configured_columns
+        ]
+        selected_columns.extend(
+            column for column in configured_columns if column not in selected_columns
+        )
+        selected_columns = tuple(selected_columns)
+        text_columns = tuple(connection.data_text_columns)
+        category_columns = tuple(
+            column for column in mode.category_text_columns if column in text_columns
+        )
+
+        model_value = Config.DEFAULT_TRAIN_OPTION
+        if not mode.train:
+            model_value = str(io.model_name)
+            if not model_value.endswith(Config.DEFAULT_MODEL_EXTENSION):
+                model_value += Config.DEFAULT_MODEL_EXTENSION
+
+        previous_lock = self.eventhandler.lock_observe_1
+        self.eventhandler.lock_observe_1 = True
+        try:
+            self.data_catalogs_dropdown.options = self._with_saved_options(
+                self.data_catalogs_dropdown.options, (connection.data_catalog,)
+            )
+            self.data_tables_dropdown.options = self._with_saved_options(
+                self.data_tables_dropdown.options, (connection.data_table,)
+            )
+            self.models_dropdown.options = self._with_saved_options(
+                self.models_dropdown.options, (model_value,)
+            )
+            self.class_column.options = self._with_saved_options(
+                self.class_column.options, (connection.class_column,)
+            )
+            self.id_column.options = self._with_saved_options(
+                self.id_column.options, (connection.id_column,)
+            )
+            self.data_columns.options = self._with_saved_options(
+                self.data_columns.options, selected_columns
+            )
+            self.text_columns.options = selected_columns
+            self.categorize_columns.options = text_columns
+
+            self.update_values({
+                "project": config_params["name"],
+                "data_catalogs_dropdown": connection.data_catalog,
+                "data_tables_dropdown": connection.data_table,
+                "class_column": connection.class_column,
+                "id_column": connection.id_column,
+                "data_columns": selected_columns,
+                "text_columns": text_columns,
+                "models_dropdown": model_value,
+                "train_checkbox": mode.train,
+                "predict_checkbox": mode.predict,
+                "mispredicted_checkbox": mode.mispredicted,
+                "metas_checkbox": mode.use_metas,
+                "dark_numbers_checkbox": getattr(mode, "calculate_dark_numbers", mode.mispredicted),
+                "dark_number_method": DarkNumberMethod.from_config_value(
+                    getattr(mode, "dark_number_method", "LINEAR")
+                ).name,
+                "dark_number_alpha": DarkNumberAlpha.from_config_value(
+                    getattr(mode, "dark_number_alpha", "NONE")
+                ).name,
+                "algorithm_dropdown": tuple(mode.algorithm.get_abbreviations()),
+                "preprocess_dropdown": tuple(mode.preprocessor.get_abbreviations()),
+                "reduction_dropdown": tuple(mode.feature_selection.get_abbreviations()),
+                "scoremetric_dropdown": mode.scoring.name,
+                "oversampler_dropdown": mode.oversampler.name,
+                "undersampler_dropdown": mode.undersampler.name,
+                "testdata_slider": int(round(float(mode.test_size) * 100)),
+                "iterations_slider": mode.max_iterations,
+                "encryption_checkbox": mode.hex_encode,
+                "categorize_checkbox": mode.use_categorization,
+                "categorize_columns": category_columns,
+                "filter_checkbox": mode.use_stop_words,
+                "ngram_range_dropdown": mode.ngram_range.name,
+                "data_limit": debug.data_limit,
+                "show_info_checkbox": io.verbose,
+                "num_variables": len(selected_columns),
+            })
+        finally:
+            self.eventhandler.lock_observe_1 = previous_lock
+
+        # Repeat Last executes immediately. Keep restored values visible but read-only
+        # during execution; set_rerun() reopens the intended controls afterwards.
+        self.deactivate_section("data")
+        self.deactivate_section("classifier")
+
     def activate_section(self, name: str) -> None:
         """ This should probably be a toggle, but for the moment we'll do it this way"""
 
@@ -589,7 +741,10 @@ class Widgets:
         if new_model:
             self.enable_items([
                 "train_checkbox",
-                "mispredicted_checkbox"
+                "mispredicted_checkbox",
+                "dark_numbers_checkbox",
+                "dark_number_method",
+                "dark_number_alpha",
             ])
 
             if self.source_can_be_predicted():
@@ -605,18 +760,27 @@ class Widgets:
             self.update_values({
                 "train_checkbox": True,
                 "predict_checkbox": False,
-                "mispredicted_checkbox": True
+                "mispredicted_checkbox": True,
+                "dark_numbers_checkbox": True,
+                "dark_number_method": "LINEAR",
+                "dark_number_alpha": "SEPARATED",
             })
         else:
             self.disable_items([
                 "train_checkbox",
                 "predict_checkbox",
-                "mispredicted_checkbox"
+                "mispredicted_checkbox",
+                "dark_numbers_checkbox",
+                "dark_number_method",
+                "dark_number_alpha",
             ])
             self.update_values({
                 "train_checkbox": False,
                 "predict_checkbox": True,
-                "mispredicted_checkbox": False
+                "mispredicted_checkbox": False,
+                "dark_numbers_checkbox": False,
+                "dark_number_method": "LINEAR",
+                "dark_number_alpha": "NONE",
             })
             
     def apply_regression_test_profile(self) -> None:
@@ -668,12 +832,18 @@ class Widgets:
         # selected dataset can be predicted, which queries the manual class column.
         # A suite run intentionally has no manual dataset/class selection yet.
         self.enable_items(["train_checkbox"])
-        self.disable_items(["predict_checkbox", "mispredicted_checkbox", "metas_checkbox"])
+        self.disable_items([
+            "predict_checkbox", "mispredicted_checkbox", "metas_checkbox",
+            "dark_numbers_checkbox", "dark_number_method", "dark_number_alpha",
+        ])
         self.update_values({
             "train_checkbox": True,
             "predict_checkbox": False,
             "mispredicted_checkbox": False,
             "metas_checkbox": False,
+            "dark_numbers_checkbox": True,
+            "dark_number_method": "LINEAR",
+            "dark_number_alpha": "NONE",
         })
         self.categorize_columns.options = ()
 
@@ -852,6 +1022,9 @@ class Widgets:
                 use_categorization = self.categorize_checkbox.value,
                 category_text_columns = list(self.categorize_columns.value),
                 test_size = float(self.testdata_slider.value) / 100.0,
+                calculate_dark_numbers = self.dark_numbers_checkbox.value,
+                dark_number_method = DarkNumberMethod[self.dark_number_method.value],
+                dark_number_alpha = DarkNumberAlpha[self.dark_number_alpha.value],
                 oversampler = Oversampling[self.oversampler_dropdown.value],
                 undersampler = Undersampling[self.undersampler_dropdown.value],
                 algorithm = AlgorithmTuple(self.algorithm_dropdown.value),
@@ -1006,8 +1179,18 @@ class Widgets:
         else:
             self.class_column.value = None
         
-        self.id_column.options =  \
-            [var for var in columns_list if self.datatype_dict[var] in Config.INT_DATATYPES and var != self.class_column.value]
+        integer_columns = [
+            var for var in columns_list if self.datatype_dict[var] in Config.INT_DATATYPES
+        ]
+        self.unique_id_columns = (
+            self.datalayer.get_unique_int_id_columns(
+                self.data_catalogs_dropdown.value, self.data_tables_dropdown.value, integer_columns
+            )
+            if integer_columns else []
+        )
+        self.id_column.options = [
+            var for var in self.unique_id_columns if var != self.class_column.value
+        ]
         if self.id_column.options:
             self.id_column.value = self.id_column.options[0]
         else:
@@ -1085,8 +1268,9 @@ class Widgets:
     def update_id_column(self) -> None:
         """ Removes class_column from the id_column options """
 
-        self.id_column.options = \
-            [var for var in list(self.datatype_dict.keys()) if var != self.class_column.value and self.datatype_dict[var] in Config.INT_DATATYPES]
+        self.id_column.options = [
+            var for var in self.unique_id_columns if var != self.class_column.value
+        ]
        
     
     def update_data_columns(self) -> None:
@@ -1184,7 +1368,7 @@ class Widgets:
 
     
     def models_form(self) -> widgets.Box:
-        return self.create_form(self.forms["models"], widgets.HBox)
+        return self.create_section_form("Model", self.forms["models"], widgets.HBox)
 
     
     @property
@@ -1199,53 +1383,89 @@ class Widgets:
         return True
 
     def connection_form(self) -> widgets.Box:
-        return self.create_form(self.forms["connection"], widgets.Box)    
+        return self.create_section_form("Database connection", self.forms["connection"], widgets.Box)
 
     def data_form(self) -> widgets.Box:
-        return self.create_form(self.forms["data"], widgets.Box)
+        return self.create_section_form("Dataset columns", self.forms["data"], widgets.Box)
 
     def regression_suite_form(self) -> widgets.Box:
-        """Display connection-level repeat and regression-suite actions together."""
-        return widgets.HBox(
+        """Keep Repeat Last left-aligned and the regression suite right-aligned."""
+        return self.create_section_form(
+            "Run history & regression",
             [self.repeat_last_run_button, self.regression_suite_button],
-            layout=widgets.Layout(display="flex", justify_content="flex-end", width="100%"),
+            widgets.HBox,
+            justify_content="space-between",
         )
 
     def continuation_form(self) -> widgets.Box:
         """Display actions that depend on the manually selected dataset."""
-        return widgets.HBox(
+        return self.create_section_form(
+            "Dataset actions",
             [self.continuation_button, self.test_profile_button],
-            layout=widgets.Layout(display="flex", justify_content="space-between", width="100%"),
+            widgets.HBox,
+            justify_content="space-between",
         )
     
     def checkboxes_form(self) -> widgets.Box:
-        return self.create_form(self.forms["checkboxes"], widgets.HBox)
+        return self.create_section_form("Mode", self.forms["checkboxes"], widgets.HBox)
+
+    def dark_numbers_form(self) -> widgets.Box:
+        return self.create_section_form("Dark Numbers", self.forms["dark_numbers"], widgets.HBox)
     
     def algorithm_form(self) -> widgets.Box:
-        return self.create_form(self.forms["algorithm"], widgets.Box)
+        return self.create_section_form("Model selection", self.forms["algorithm"], widgets.Box)
     
     def data_handling_form(self) -> widgets.Box:
-        return self.create_form(self.forms["data_handling"], widgets.HBox)
+        return self.create_section_form("Training data", self.forms["data_handling"], widgets.HBox)
     
     def text_handling_form(self) -> widgets.Box:
-        return self.create_form(self.forms["text_handling"], widgets.HBox)
+        return self.create_section_form("Text processing", self.forms["text_handling"], widgets.HBox)
     
     def debug_form(self) -> widgets.Box:
-        return self.create_form(self.forms["debug"], widgets.HBox)
+        return self.create_section_form("Run settings", self.forms["debug"], widgets.HBox)
     
     def progress_form(self) -> widgets.Box:
-        return self.create_form(self.forms["progress"], widgets.HBox)
+        return self.create_section_form("Progress", self.forms["progress"], widgets.HBox)
     
 
-    def create_form(self, children: list, boxtype: Callable) -> widgets.Box:
-        #print(f"Creating form: {str(type(self))}, with children: {children}")
+    def create_form(self, children: list, boxtype: Callable, justify_content: str = None) -> widgets.Box:
+        """Create one horizontal row while preserving the existing widget grouping semantics."""
         if boxtype == widgets.Box:
-            return boxtype(children, layout=self.get_box_layout())
-        
-        if boxtype == widgets.HBox:
-            return boxtype(children)
-        
-        raise ValueError(f"boxtype needs to be a Box or HBox")
+            layout = self.get_box_layout()
+        elif boxtype == widgets.HBox:
+            layout = widgets.Layout(width="100%") if justify_content else None
+            if layout and justify_content:
+                layout.justify_content = justify_content
+        else:
+            raise ValueError("boxtype needs to be a Box or HBox")
+
+        return boxtype(children, layout=layout) if layout else boxtype(children)
+
+    def create_section_form(
+        self,
+        title: str,
+        children: list,
+        boxtype: Callable,
+        justify_content: str = None,
+    ) -> widgets.VBox:
+        """Wrap a horizontal form row in a consistently titled, framed GUI section."""
+        row = self.create_form(children, boxtype, justify_content=justify_content)
+        row.add_class("jbg-section-row")
+
+        heading = widgets.HTML(value=f"<strong>{title}</strong>")
+        heading.add_class("jbg-section-title")
+
+        section = widgets.VBox(
+            [heading, row],
+            layout=widgets.Layout(
+                border="2px solid #d0d0d0",
+                padding="6px 8px 8px 8px",
+                margin="4px 0 4px 0",
+                width="100%",
+            ),
+        )
+        section.add_class("jbg-section")
+        return section
     
     def get_box_layout(self) -> widgets.Layout:
         return widgets.Layout(
@@ -1472,6 +1692,33 @@ class Widgets:
     def metas_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
         return self._load_widget(name)
+
+    @property
+    def dark_numbers_checkbox(self) -> widgets.Checkbox:
+        name = sys._getframe().f_code.co_name
+        return self._load_widget(name, handler=self.eventhandler.dark_numbers_checkbox)
+
+    @property
+    def dark_number_method(self) -> widgets.RadioButtons:
+        name = sys._getframe().f_code.co_name
+        return self._load_widget(name, handler=self.eventhandler.dark_number_method)
+
+    @property
+    def dark_number_alpha(self) -> widgets.RadioButtons:
+        name = sys._getframe().f_code.co_name
+        return self._load_widget(name)
+
+    def sync_dark_number_alpha_options(self) -> None:
+        """Expose only alpha variants implemented for the selected formula family."""
+        current = self.dark_number_alpha.value
+        if self.dark_number_method.value == "NON_LINEAR":
+            options = (("None", "NONE"), ("Single", "SINGLE"))
+            if current == "SEPARATED":
+                current = "NONE"
+        else:
+            options = (("None", "NONE"), ("Single", "SINGLE"), ("Separated", "SEPARATED"))
+        self.dark_number_alpha.options = options
+        self.dark_number_alpha.value = current if current in dict(options).values() else "NONE"
     
     @property
     def algorithm_dropdown(self) -> widgets.Dropdown:

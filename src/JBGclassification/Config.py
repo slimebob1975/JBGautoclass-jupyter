@@ -20,6 +20,53 @@ T = TypeVar('T', bound='Config')
 ODBC_drivers = ["SQL Server", "ODBC Driver 13 for SQL Server", "ODBC Driver 17 for SQL Server", "ODBC Driver 18 for SQL Server"]
 
 
+class DarkNumberAlpha(enum.Enum):
+    NONE = "none"
+    SINGLE = "single"
+    SEPARATED = "separated"
+
+    @property
+    def display_name(self) -> str:
+        return {
+            DarkNumberAlpha.NONE: "None",
+            DarkNumberAlpha.SINGLE: "Single",
+            DarkNumberAlpha.SEPARATED: "Separated",
+        }[self]
+
+    @classmethod
+    def from_config_value(cls, value) -> "DarkNumberAlpha":
+        if isinstance(value, cls):
+            return value
+        text = str(value or "NONE").strip()
+        if text in cls.__members__:
+            return cls[text]
+        for alpha in cls:
+            if text == alpha.value:
+                return alpha
+        raise ValueError(f"Unsupported Dark Number alpha mode: {value}")
+
+
+class DarkNumberMethod(enum.Enum):
+    LINEAR = "base"
+    NON_LINEAR = "non_linear"
+
+    @property
+    def display_name(self) -> str:
+        return "Linear" if self is DarkNumberMethod.LINEAR else "Non-linear"
+
+    @classmethod
+    def from_config_value(cls, value) -> "DarkNumberMethod":
+        if isinstance(value, cls):
+            return value
+        text = str(value or "LINEAR").strip()
+        if text in cls.__members__:
+            return cls[text]
+        for method in cls:
+            if text == method.value:
+                return method
+        raise ValueError(f"Unsupported Dark Number method: {value}")
+
+
 @dataclass
 class Config:
     
@@ -62,6 +109,9 @@ class Config:
         "mode.use_categorization": "<use_categorization>",
         "mode.category_text_columns": "<category_text_columns>",
         "mode.test_size": "<test_size>",
+        "mode.calculate_dark_numbers": "<calculate_dark_numbers>",
+        "mode.dark_number_method": "<dark_number_method>",
+        "mode.dark_number_alpha": "<dark_number_alpha>",
         "mode.dark_number_flip_fraction": "<dark_number_flip_fraction>",
         "mode.oversampler": "<oversampler>",
         "mode.undersampler": "<undersampler>",
@@ -344,6 +394,9 @@ class Config:
         use_categorization: bool = True
         category_text_columns: list = field(default_factory=list)
         test_size: float = 0.2
+        calculate_dark_numbers: bool = True
+        dark_number_method: DarkNumberMethod = field(default_factory=lambda: DarkNumberMethod.LINEAR)
+        dark_number_alpha: DarkNumberAlpha = None
         dark_number_flip_fraction: float = 0.2
         oversampler: Oversampling = field(default_factory=Oversampling.defaultOversampler)
         undersampler: Undersampling = field(default_factory=Undersampling.defaultUndersampler)
@@ -353,6 +406,17 @@ class Config:
         num_selected_features: int = None
         scoring: ScoreMetric = field(default_factory=ScoreMetric.defaultScoreMetric)
         max_iterations: int = None
+
+        def __post_init__(self) -> None:
+            # New configurations default to the separated alpha adjustment for
+            # the published linear method. The non-linear family has no
+            # separated-alpha implementation, so its implicit default remains none.
+            if self.dark_number_alpha is None:
+                self.dark_number_alpha = (
+                    DarkNumberAlpha.SEPARATED
+                    if self.dark_number_method is DarkNumberMethod.LINEAR
+                    else DarkNumberAlpha.NONE
+                )
 
         def validate(self) -> None:
             """ Throws TypeError if invalid """
@@ -402,6 +466,17 @@ class Config:
             else:
                 raise TypeError(
                     "Argument test_size must be a float between 0 and 1!")
+
+            if not isinstance(self.calculate_dark_numbers, bool):
+                raise TypeError("Argument calculate_dark_numbers must be True or False")
+
+            if not isinstance(self.dark_number_method, DarkNumberMethod):
+                raise TypeError("Argument dark_number_method is invalid")
+
+            if not isinstance(self.dark_number_alpha, DarkNumberAlpha):
+                raise TypeError("Argument dark_number_alpha is invalid")
+            if self.dark_number_method is DarkNumberMethod.NON_LINEAR and self.dark_number_alpha is DarkNumberAlpha.SEPARATED:
+                raise ValueError("Separated alpha is only supported by the linear Dark Number method")
 
             if not isinstance(self.dark_number_flip_fraction, float):
                 raise TypeError("Argument dark_number_flip_fraction must be a float between 0 and 1")
@@ -455,6 +530,9 @@ class Config:
                 "Categorize text data where applicable": self.use_categorization,
                 "Force categorization to these columns": forced_columns,
                 "Test size for trainings":               self.test_size,
+                "Calculate Dark Numbers":                  self.calculate_dark_numbers,
+                "Dark Number method":                      self.dark_number_method.display_name,
+                "Dark Number alpha":                       self.dark_number_alpha.display_name,
                 "Dark-number injected label-noise fraction": self.dark_number_flip_fraction,
                 "Oversampling technique":                self.oversampler.full_name,
                 "Undersampling technique":               self.undersampler.full_name,
@@ -737,12 +815,30 @@ class Config:
             saved_config = load_model_config(filename)
         except Exception as e:
             raise ConfigException(f"Something went wrong on loading model from file: {e}")
+
+        # Model artifacts created before 059 do not have dedicated Dark Number
+        # controls. Preserve their historical semantics when normalizing them.
+        if not hasattr(saved_config.mode, "calculate_dark_numbers"):
+            legacy_mispredicted = getattr(saved_config.mode, "mispredicted", None)
+            # Clean model metadata historically blanked the runtime misprediction flag,
+            # so None cannot tell us whether Dark Numbers were enabled. Use the new
+            # published-linear default there; an actual runtime config overrides it.
+            saved_config.mode.calculate_dark_numbers = (
+                True if legacy_mispredicted is None else bool(legacy_mispredicted)
+            )
+        if not hasattr(saved_config.mode, "dark_number_method"):
+            saved_config.mode.dark_number_method = DarkNumberMethod.LINEAR
+        if not hasattr(saved_config.mode, "dark_number_alpha"):
+            saved_config.mode.dark_number_alpha = DarkNumberAlpha.NONE
         
         if config is not None:
             saved_config.mode.train = config.mode.train
             saved_config.mode.predict = config.mode.predict
             saved_config.mode.mispredicted = config.mode.mispredicted
             saved_config.mode.use_metas = config.mode.use_metas
+            saved_config.mode.calculate_dark_numbers = config.mode.calculate_dark_numbers
+            saved_config.mode.dark_number_method = config.mode.dark_number_method
+            saved_config.mode.dark_number_alpha = config.mode.dark_number_alpha
             saved_config.mode.dark_number_flip_fraction = config.mode.dark_number_flip_fraction
             # Saved model metadata deliberately contains no SQL password. Inject the
             # credentials from the current runtime configuration when loading a model.
@@ -780,6 +876,9 @@ class Config:
         data_text_columns = Helpers.get_from_string_or_list(module.connection["data_text_columns"])
         data_numerical_columns = Helpers.get_from_string_or_list( module.connection["data_numerical_columns"])
         category_text_columns = Helpers.get_from_string_or_list(module.mode["category_text_columns"])
+        calculate_dark_numbers = bool(module.mode.get("calculate_dark_numbers", module.mode["mispredicted"]))
+        dark_number_method = DarkNumberMethod.from_config_value(module.mode.get("dark_number_method", "LINEAR"))
+        dark_number_alpha = DarkNumberAlpha.from_config_value(module.mode.get("dark_number_alpha", "NONE"))
         dark_number_flip_fraction = float(module.mode.get("dark_number_flip_fraction", 0.2))
         use_metas = module.mode["predict"]
         if "use_metas" in module.mode:
@@ -815,6 +914,9 @@ class Config:
                 use_categorization=module.mode["use_categorization"],
                 category_text_columns=category_text_columns,
                 test_size=float(module.mode["test_size"]),
+                calculate_dark_numbers=calculate_dark_numbers,
+                dark_number_method=dark_number_method,
+                dark_number_alpha=dark_number_alpha,
                 dark_number_flip_fraction=dark_number_flip_fraction,
                 oversampler=Oversampling[module.mode["oversampler"]],
                 undersampler=Undersampling[module.mode["undersampler"]],
@@ -940,6 +1042,40 @@ class Config:
     def get_test_size_percentage(self) -> int:
         """ Gets the test_size as a percentage """
         return int(self.mode.test_size * 100.0)
+
+    def should_calculate_dark_numbers(self) -> bool:
+        """Whether Dark Number estimation is enabled for this run.
+
+        Older serialized configs predate the dedicated switch; for those, retain
+        the historical behavior where Dark Numbers followed misprediction output.
+        """
+        return bool(getattr(self.mode, "calculate_dark_numbers", self.mode.mispredicted))
+
+    def get_dark_number_method(self) -> DarkNumberMethod:
+        """Return the configured Dark Number formula family."""
+        return DarkNumberMethod.from_config_value(getattr(self.mode, "dark_number_method", "LINEAR"))
+
+    def get_dark_number_alpha(self) -> DarkNumberAlpha:
+        """Return the configured Dark Number alpha adjustment."""
+        return DarkNumberAlpha.from_config_value(getattr(self.mode, "dark_number_alpha", "NONE"))
+
+    def get_dark_number_calculation_type(self) -> str:
+        """Return the calculator type used by JBGDarkNumbers."""
+        method = self.get_dark_number_method()
+        alpha = self.get_dark_number_alpha()
+        calculation_types = {
+            (DarkNumberMethod.LINEAR, DarkNumberAlpha.NONE): "base",
+            (DarkNumberMethod.LINEAR, DarkNumberAlpha.SINGLE): "single_alpha",
+            (DarkNumberMethod.LINEAR, DarkNumberAlpha.SEPARATED): "separated_alpha",
+            (DarkNumberMethod.NON_LINEAR, DarkNumberAlpha.NONE): "non_linear",
+            (DarkNumberMethod.NON_LINEAR, DarkNumberAlpha.SINGLE): "non_linear_alpha",
+        }
+        try:
+            return calculation_types[(method, alpha)]
+        except KeyError as exc:
+            raise ValueError(
+                f"Unsupported Dark Number method/alpha combination: {method.display_name}/{alpha.display_name}"
+            ) from exc
 
     def get_dark_number_flip_fraction(self) -> float:
         """Fraction of positive labels hidden when estimating Dark Number correction factors."""

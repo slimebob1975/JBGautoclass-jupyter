@@ -69,6 +69,12 @@ class Config(Protocol):
     def should_display_mispredicted(self) -> bool:
         """ Returns if this is a misprediction config """
 
+    def should_calculate_dark_numbers(self) -> bool:
+        """ Returns whether Dark Number estimation is enabled """
+
+    def get_dark_number_calculation_type(self) -> str:
+        """ Returns the selected Dark Number calculator type """
+
     def get_model_filename(self, pwd: Path = None) -> str:
         """ Set the filename based on prediction or training """
 
@@ -295,7 +301,10 @@ class TaskRunner:
         if cross_trained_model is None:
             self.handler.logger.print_warning(f"Could not load model for retraining from file: {filename}. Using previoulsy trained model as fallback.")
             cross_trained_model = self.mh.model.pipeline
-        trained_model = self.mh.train_picked_model( self.mh.model.pipeline, self.dh.X, self.dh.Y)
+        trained_model = self.mh.retrain_picked_model(self.mh.model.pipeline, self.dh.X, self.dh.Y)
+        # retrain_picked_model deliberately returns a fresh clone. Keep ModelHandler's
+        # active pipeline in sync so the persisted artifact is the full-data retrain.
+        self.mh.model.pipeline = trained_model
             
         self.mh.save_model_to_file(self.config.get_model_filename())
 
@@ -303,8 +312,11 @@ class TaskRunner:
 
     
     def display_mispredicted__task(self, cross_trained_model: Pipeline, trained_model: Pipeline) -> dict:
-        """Compute reclassification output when requested and retain suite dark-number coverage."""
-        if self.config.should_display_mispredicted():
+        """Compute reclassification and Dark Numbers as independent training outputs."""
+        display_mispredicted = self.config.should_display_mispredicted()
+        calculate_dark_numbers = self.regression_suite or self.config.should_calculate_dark_numbers()
+
+        if display_mispredicted:
             self.logger.print_task_header(title="Calculating mispredictions")
             self.logger.print_progress(message="Calculating most mispredicted")
 
@@ -312,17 +324,20 @@ class TaskRunner:
                 self.dh.X_original, trained_model, cross_trained_model, self.dh.X, self.dh.Y
             )
             self.ph.evaluate_mispredictions(self.config.get_output_filepath("misplaced"))
-        elif not self.regression_suite:
+
+        if not calculate_dark_numbers:
             return {}
-        else:
+
+        if not display_mispredicted:
             self.logger.print_task_header(title="Dark numbers")
 
+        calculation_type = "all" if self.regression_suite else self.config.get_dark_number_calculation_type()
         self.logger.print_progress(message="Get dark numbers")
 
         self.ph.get_dark_numbers(
             X=self.dh.X,
             Y=self.dh.Y,
-            type="all",
+            type=calculation_type,
             models=[cross_trained_model, trained_model],
             model_names=["Cross-trained model", "Retrained model"],
             X_validation=self.dh.X_validation,

@@ -25,7 +25,7 @@ from JBGExceptions import DataLayerException
 import JBGTaskRunner
 from JBGStreamedLogger import JBGLogger
 from AutomaticClassifier import AutomaticClassifier as autoclass
-from Config import Config
+from Config import Config, DarkNumberAlpha, DarkNumberMethod
 from JBGMeta import (
     AlgorithmTuple, NgramRange, Oversampling, PreprocessTuple, ReductionTuple,
     ScoreMetric, Undersampling,
@@ -272,6 +272,9 @@ class GUIHandler:
                 "use_categorization": mode.use_categorization,
                 "category_text_columns": list(mode.category_text_columns),
                 "test_size": mode.test_size,
+                "calculate_dark_numbers": mode.calculate_dark_numbers,
+                "dark_number_method": mode.dark_number_method.name,
+                "dark_number_alpha": mode.dark_number_alpha.name,
                 "dark_number_flip_fraction": mode.dark_number_flip_fraction,
                 "oversampler": mode.oversampler.name,
                 "undersampler": mode.undersampler.name,
@@ -329,6 +332,9 @@ class GUIHandler:
                 use_categorization=mode["use_categorization"],
                 category_text_columns=list(mode["category_text_columns"]),
                 test_size=mode["test_size"],
+                calculate_dark_numbers=mode.get("calculate_dark_numbers", mode["mispredicted"]),
+                dark_number_method=DarkNumberMethod.from_config_value(mode.get("dark_number_method", "LINEAR")),
+                dark_number_alpha=DarkNumberAlpha.from_config_value(mode.get("dark_number_alpha", "NONE")),
                 dark_number_flip_fraction=mode.get("dark_number_flip_fraction", 0.2),
                 oversampler=Oversampling[mode["oversampler"]],
                 undersampler=Undersampling[mode["undersampler"]],
@@ -378,6 +384,7 @@ class GUIHandler:
     ):
         """Rerun the persisted manual classifier configuration with current credentials."""
         config_params = self.load_last_classifier_run(sql_username, sql_password)
+        self.widgets.restore_classifier_config(config_params)
         connection = config_params["connection"]
         with output, self.logger.capture_console_output():
             self.logger.print_info(
