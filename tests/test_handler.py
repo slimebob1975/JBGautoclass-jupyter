@@ -873,7 +873,6 @@ class TestModelHandler():
             components=4,
             cv_score=0.8,
             cv_stdev=0.1,
-            holdout_score=0.75,
             elapsed_time=1.25,
             failure="",
         )
@@ -885,7 +884,6 @@ class TestModelHandler():
             4,
             0.8,
             0.1,
-            0.75,
             1.25,
             "",
         ]
@@ -1029,7 +1027,6 @@ class TestModelHandler():
             algorithm=Algorithm.DUMY,
             cv_score=0.8,
             cv_stdev=0.1,
-            holdout_score=0.8,
             num_features=3,
             num_components=2,
             failure="",
@@ -1043,11 +1040,10 @@ class TestModelHandler():
         assert state.best_algorithm == Algorithm.DUMY
         assert state.best_cv_score == 0.8
         assert state.best_stdev == 0.1
-        assert state.best_holdout_score == 0.8
         assert state.best_rfe_feature_selection == 3
         assert state.best_num_components == 2
 
-    def test_spot_check_candidate_prefers_higher_cv_over_holdout(self, default_model_handler):
+    def test_spot_check_candidate_prefers_higher_cv(self, default_model_handler):
         state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)
         first_pipeline = object()
         second_pipeline = object()
@@ -1060,7 +1056,6 @@ class TestModelHandler():
             algorithm=Algorithm.LRN,
             cv_score=0.974178,
             cv_stdev=0.030762,
-            holdout_score=1.0,
             num_features=30,
             num_components=30,
             failure="",
@@ -1074,7 +1069,6 @@ class TestModelHandler():
             algorithm=Algorithm.LRN,
             cv_score=0.978843,
             cv_stdev=0.022639,
-            holdout_score=0.90,
             num_features=22,
             num_components=22,
             failure="",
@@ -1085,7 +1079,6 @@ class TestModelHandler():
         assert state.trained_pipeline is second_pipeline
         assert state.best_reduction == Reduction.RFE
         assert state.best_cv_score == 0.978843
-        assert state.best_holdout_score == 0.90
 
     def test_spot_check_selection_uses_cv_stdev_as_tiebreaker(self, default_model_handler):
         assert default_model_handler.is_best_run_yet(0.95, 0.02, 0.95, 0.03) is True
@@ -1284,7 +1277,6 @@ class TestModelHandler():
             algorithm=Algorithm.DUMY,
             cv_score=1.0,
             cv_stdev=0.0,
-            holdout_score=0.9,
             num_features=4,
             num_components=4,
             failure="existing failure",
@@ -1294,11 +1286,12 @@ class TestModelHandler():
         assert stable is False
         assert state.trained_pipeline is None
 
-    def test_spot_check_cv_failure_is_not_overwritten_by_validation(self, default_model_handler):
+    def test_spot_check_never_touches_final_holdout(self, default_model_handler):
         dh = SimpleNamespace(
             X=pandas.DataFrame(np.zeros((8, 4))),
             X_train=pandas.DataFrame(np.zeros((8, 4))),
-            X_validation=pandas.DataFrame(np.zeros((2, 4))),
+            Y_train=pandas.Series([0, 1, 0, 1, 0, 1, 0, 1]),
+            X_validation=pandas.DataFrame(np.ones((2, 4))),
             Y_validation=pandas.Series([0, 1]),
         )
         state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)
@@ -1307,8 +1300,8 @@ class TestModelHandler():
         default_model_handler.get_preflight_skip_reason = lambda *args, **kwargs: None
         default_model_handler.create_pipeline_and_cv = lambda *args, **kwargs: (
             object(),
-            np.array([np.nan]),
-            "ValueError: original CV failure",
+            np.array([0.8, 0.9]),
+            "",
         )
         default_model_handler.train_and_evaluate_picked_model = \
             lambda *args, **kwargs: validation_calls.append(True)
@@ -1329,10 +1322,10 @@ class TestModelHandler():
             state=state,
         )
 
-        assert success is False
+        assert success is True
         assert validation_calls == []
-        assert results[0][-1] == "ValueError: original CV failure"
-        assert state.trained_pipeline is None
+        assert results[0][-1] == ""
+        assert state.trained_pipeline is not None
 
     def test_smote_pipeline_normalizes_integer_features_to_float_before_sampling(
         self, default_model_handler
@@ -1469,6 +1462,187 @@ class TestPredictionsHandler:
         assert result == float(correction)
         assert isinstance(result, float)
 
+    def test_dark_number_zero_recovery_does_not_trigger_sample_size_regression(
+        self, default_predictions_handler, monkeypatch
+    ):
+        default_predictions_handler.handler.config.mode.experimental_perturbed_dark_number_fallback = False
+
+        class FakeDirectEstimator:
+            def __init__(self, *args, **kwargs):
+                self.is_valid_for_regression_ = False
+                self.correction_status_ = "zero_recovery"
+
+            def fit(self, X, Y):
+                return self
+
+            def score(self, X=None, Y=None):
+                return np.inf
+
+        class ForbiddenRegressor:
+            def __init__(self, *args, **kwargs):
+                raise AssertionError("zero recovery must not trigger sample-size regression")
+
+        class FakeModelHandler:
+            def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
+                return func(*args, n_jobs=1, **kwargs)
+
+        monkeypatch.setattr(handler_module, "DarkNumberCorrectionFactorEstimator", FakeDirectEstimator)
+        monkeypatch.setattr(handler_module, "DarkNumberCorrectionFactorRegressor", ForbiddenRegressor)
+        monkeypatch.setattr(
+            default_predictions_handler.handler,
+            "get_handler",
+            lambda name: FakeModelHandler(),
+        )
+        monkeypatch.setattr(
+            default_predictions_handler,
+            "_auto_n_splits_and_repeats",
+            lambda **kwargs: (2, 1),
+        )
+
+        X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0, 3.0]})
+        Y = pandas.Series(["B", "B", "M", "M"])
+        corrs, sources, corr_models = default_predictions_handler._calculate_dark_number_corrections(
+            model=SVC(probability=True),
+            X=X,
+            Y=Y,
+            labels=["B"],
+            flip_fraction=0.2,
+            random_state=42,
+            model_name="Target model",
+        )
+
+        assert corrs == {"B": 1.0}
+        assert sources == {"B": "fallback/unestimable"}
+        assert corr_models == {"B": "Target model"}
+
+    def test_dark_number_zero_recovery_uses_experimental_perturbed_fallback_when_enabled(
+        self, default_predictions_handler, monkeypatch
+    ):
+        class FakeDirectEstimator:
+            def __init__(self, *args, **kwargs):
+                self.is_valid_for_regression_ = False
+                self.correction_status_ = "zero_recovery"
+
+            def fit(self, X, Y):
+                return self
+
+            def score(self, X=None, Y=None):
+                return np.inf
+
+        class FakeModelHandler:
+            def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
+                return func(*args, n_jobs=1, **kwargs)
+
+        details = {
+            "accepted": True,
+            "reason": "accepted",
+            "clone_count": 5,
+            "valid_clone_count": 5,
+            "clone_corrections": [3.0, 3.1, 3.2, 3.3, 3.4],
+            "clone_results": [],
+            "median": 3.2,
+            "mean": 3.2,
+            "std": 0.1,
+            "cv": 0.03125,
+            "min": 3.0,
+            "max": 3.4,
+        }
+
+        monkeypatch.setattr(handler_module, "DarkNumberCorrectionFactorEstimator", FakeDirectEstimator)
+        monkeypatch.setattr(
+            handler_module,
+            "estimate_perturbed_same_model_correction",
+            lambda *args, **kwargs: (3.2, "perturbed_same_model", details),
+        )
+        monkeypatch.setattr(
+            default_predictions_handler.handler,
+            "get_handler",
+            lambda name: FakeModelHandler(),
+        )
+        monkeypatch.setattr(
+            default_predictions_handler,
+            "_auto_n_splits_and_repeats",
+            lambda **kwargs: (2, 1),
+        )
+        default_predictions_handler.handler.config.mode.experimental_perturbed_dark_number_fallback = True
+
+        X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0, 3.0]})
+        Y = pandas.Series(["B", "B", "M", "M"])
+        corrs, sources, corr_models = default_predictions_handler._calculate_dark_number_corrections(
+            model=SVC(probability=True),
+            X=X,
+            Y=Y,
+            labels=["B"],
+            flip_fraction=0.2,
+            random_state=42,
+            model_name="Target model",
+        )
+
+        assert corrs == {"B": pytest.approx(3.2)}
+        assert sources == {"B": "perturbed_same_model"}
+        assert corr_models == {"B": "Target model"}
+        events = default_predictions_handler.dark_number_fallback_events
+        assert len(events) == 1
+        assert events.iloc[0]["accepted"] == True
+        assert events.iloc[0]["direct_status"] == "zero_recovery"
+        assert events.iloc[0]["corr_source"] == "perturbed_same_model"
+
+    def test_dark_number_resource_failure_uses_same_model_regression(
+        self, default_predictions_handler, monkeypatch
+    ):
+        class ResourceFailingDirectEstimator:
+            def __init__(self, *args, **kwargs):
+                self.is_valid_for_regression_ = True
+                self.correction_status_ = "unknown"
+
+            def fit(self, X, Y):
+                raise MemoryError("simulated memory pressure")
+
+        class FakeRegressor:
+            def __init__(self, *args, **kwargs):
+                self.invalid_sample_results_ = []
+                self.valid_sample_results_ = []
+                self.sample_results_ = []
+
+            def fit(self, X, Y):
+                return self
+
+            def score(self, X=None, Y=None):
+                return 2.25
+
+        class FakeModelHandler:
+            def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
+                return func(*args, n_jobs=1, **kwargs)
+
+        monkeypatch.setattr(handler_module, "DarkNumberCorrectionFactorEstimator", ResourceFailingDirectEstimator)
+        monkeypatch.setattr(handler_module, "DarkNumberCorrectionFactorRegressor", FakeRegressor)
+        monkeypatch.setattr(
+            default_predictions_handler.handler,
+            "get_handler",
+            lambda name: FakeModelHandler(),
+        )
+        monkeypatch.setattr(
+            default_predictions_handler,
+            "_auto_n_splits_and_repeats",
+            lambda **kwargs: (2, 1),
+        )
+
+        X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0, 3.0]})
+        Y = pandas.Series(["B", "B", "M", "M"])
+        corrs, sources, corr_models = default_predictions_handler._calculate_dark_number_corrections(
+            model=SVC(probability=True),
+            X=X,
+            Y=Y,
+            labels=["B"],
+            flip_fraction=0.2,
+            random_state=42,
+            model_name="Target model",
+        )
+
+        assert corrs == {"B": pytest.approx(2.25)}
+        assert sources == {"B": "regressed_same_model"}
+        assert corr_models == {"B": "Target model"}
+
     def test_dark_numbers_skip_models_without_predict_proba(self, default_predictions_handler):
         class PredictOnlyModel:
             def __init__(self, predictions):
@@ -1580,6 +1754,9 @@ class TestPredictionsHandler:
         }
         assert set(results.loc[results["Model type"].str.startswith("D_cv_"), "corr"]) == {1.25}
         assert set(results.loc[results["Model type"].str.startswith("D_retrained_"), "corr"]) == {1.75}
+        assert set(results.loc[results["Model type"].str.startswith("D_cv_"), "corr_model"]) == {"Cross"}
+        assert set(results.loc[results["Model type"].str.startswith("D_retrained_"), "corr_model"]) == {"Retrained"}
+        assert set(results["corr_source"]) == {"direct"}
         assert set(results["corr_source"]) == {"direct"}
 
     def test_make_predictions_without_predict_proba_uses_single_warning_and_precision_fallback(

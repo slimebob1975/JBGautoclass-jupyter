@@ -258,6 +258,16 @@ class TestConfig:
 
         assert config.get_dark_number_flip_fraction() == pytest.approx(0.2)
 
+    def test_experimental_perturbed_dark_number_fallback_defaults_on(self):
+        config = Config()
+
+        assert config.should_use_experimental_perturbed_dark_number_fallback() is True
+
+    def test_experimental_perturbed_dark_number_fallback_can_be_disabled(self):
+        config = Config(mode=Config.Mode(experimental_perturbed_dark_number_fallback=False))
+
+        assert config.should_use_experimental_perturbed_dark_number_fallback() is False
+
     @pytest.mark.parametrize("value", [0.0, 1.0, -0.1, 1.1])
     def test_dark_number_flip_fraction_must_be_between_zero_and_one(self, value):
         with pytest.raises(ValueError, match="dark_number_flip_fraction"):
@@ -377,6 +387,7 @@ class TestConfig:
         valid_iris_config.mode.calculate_dark_numbers = False
         valid_iris_config.mode.dark_number_method = DarkNumberMethod.NON_LINEAR
         valid_iris_config.mode.dark_number_alpha = DarkNumberAlpha.SINGLE
+        valid_iris_config.mode.experimental_perturbed_dark_number_fallback = False
         valid_iris_config.save_to_file(p, "some_fake_name")
 
         spec = importlib.util.spec_from_file_location("runtime_config", p)
@@ -390,10 +401,12 @@ class TestConfig:
         assert module.mode["calculate_dark_numbers"] is False
         assert module.mode["dark_number_method"] == "NON_LINEAR"
         assert module.mode["dark_number_alpha"] == "SINGLE"
+        assert module.mode["experimental_perturbed_dark_number_fallback"] is False
         assert loaded_config.connection.sql_password == "runtime-environment-password"
         assert loaded_config.should_calculate_dark_numbers() is False
         assert loaded_config.get_dark_number_method() is DarkNumberMethod.NON_LINEAR
         assert loaded_config.get_dark_number_alpha() is DarkNumberAlpha.SINGLE
+        assert loaded_config.should_use_experimental_perturbed_dark_number_fallback() is False
 
     def test_load_config_from_module(self, valid_iris_config):
         """ While it uses the load_config_from_module, it mainly checks load_config_2 """

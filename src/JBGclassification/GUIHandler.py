@@ -276,6 +276,7 @@ class GUIHandler:
                 "dark_number_method": mode.dark_number_method.name,
                 "dark_number_alpha": mode.dark_number_alpha.name,
                 "dark_number_flip_fraction": mode.dark_number_flip_fraction,
+                "experimental_perturbed_dark_number_fallback": mode.experimental_perturbed_dark_number_fallback,
                 "oversampler": mode.oversampler.name,
                 "undersampler": mode.undersampler.name,
                 "algorithm": mode.algorithm.get_abbreviations(),
@@ -336,6 +337,9 @@ class GUIHandler:
                 dark_number_method=DarkNumberMethod.from_config_value(mode.get("dark_number_method", "LINEAR")),
                 dark_number_alpha=DarkNumberAlpha.from_config_value(mode.get("dark_number_alpha", "NONE")),
                 dark_number_flip_fraction=mode.get("dark_number_flip_fraction", 0.2),
+                experimental_perturbed_dark_number_fallback=mode.get(
+                    "experimental_perturbed_dark_number_fallback", True
+                ),
                 oversampler=Oversampling[mode["oversampler"]],
                 undersampler=Undersampling[mode["undersampler"]],
                 algorithm=AlgorithmTuple(mode["algorithm"]),

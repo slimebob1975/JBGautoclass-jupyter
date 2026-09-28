@@ -229,3 +229,183 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
 
     def score(self, X=None, y=None):
         return self.correction_factor_
+
+
+def estimate_perturbed_same_model_correction(
+    estimator,
+    X,
+    y,
+    *,
+    flip_fraction: float,
+    n_splits: int,
+    n_repeats: int,
+    random_state: int,
+    positive_class,
+    perturbation_clones: int = 5,
+    perturbation_min_valid: int = 3,
+    perturbation_max_cv: float = 0.50,
+    logger=None,
+):
+    """Estimate a correction factor from stable perturbed clones of the same model.
+
+    This is the production counterpart of the 087/088 validation experiment. Each
+    shadow clone keeps the estimator family and ordinary hyperparameters, but receives
+    a different random seed and a class-stratified bootstrap sample. The candidate is
+    accepted only when enough clones independently produce finite hard-recovery
+    correction factors and their coefficient of variation is bounded.
+
+    Returns ``(corr, source, details)``. ``details`` contains only aggregate/clone
+    correction metadata; no source rows or raw text are retained.
+    """
+    if perturbation_clones < 1:
+        raise ValueError("perturbation_clones must be at least 1")
+    if perturbation_min_valid < 1 or perturbation_min_valid > perturbation_clones:
+        raise ValueError("perturbation_min_valid must be between 1 and perturbation_clones")
+    if not np.isfinite(perturbation_max_cv) or perturbation_max_cv < 0:
+        raise ValueError("perturbation_max_cv must be finite and non-negative")
+
+    y_array = np.asarray(y)
+    valid_corrs: list[float] = []
+    clone_results: list[dict] = []
+
+    def take_rows(data, indices):
+        if hasattr(data, "iloc"):
+            return data.iloc[indices]
+        if scipy_sparse.issparse(data):
+            return data[indices]
+        return np.asarray(data)[indices]
+
+    def perturbed_clone(source, seed: int):
+        shadow = clone(source)
+        try:
+            params = shadow.get_params(deep=True)
+        except AttributeError:
+            return shadow
+        updates = {
+            name: int(seed)
+            for name in params
+            if name.endswith("random_state")
+        }
+        if updates:
+            shadow.set_params(**updates)
+        return shadow
+
+    def stratified_bootstrap_indices(seed: int) -> np.ndarray:
+        rng = np.random.default_rng(int(seed))
+        sampled = []
+        for label in np.unique(y_array):
+            class_indices = np.flatnonzero(y_array == label)
+            sampled.append(rng.choice(class_indices, size=class_indices.size, replace=True))
+        indices = np.concatenate(sampled)
+        rng.shuffle(indices)
+        return indices.astype(int, copy=False)
+
+    for clone_index in range(int(perturbation_clones)):
+        perturb_seed = int(random_state) + 1009 * (clone_index + 1)
+        indices = stratified_bootstrap_indices(perturb_seed)
+        X_boot = take_rows(X, indices)
+        y_boot = y_array[indices]
+        shadow = perturbed_clone(estimator, perturb_seed)
+        correction_estimator = DarkNumberCorrectionFactorEstimator(
+            estimator=shadow,
+            flip_fraction=float(flip_fraction),
+            n_splits=int(n_splits),
+            n_repeats=int(n_repeats),
+            n_jobs=1,
+            predict_mode="predict",
+            random_state=perturb_seed,
+            positive_class=positive_class,
+            sample_size=1.0,
+            parallel_backend=BACKEND_THREADS,
+            logger=logger,
+        )
+        try:
+            correction_estimator.fit(X_boot, y_boot)
+            if not getattr(correction_estimator, "is_valid_for_regression_", True):
+                raise ValueError(
+                    "shadow-clone correction estimator did not produce an observed estimate "
+                    f"(status={getattr(correction_estimator, 'correction_status_', 'unknown')})"
+                )
+            corr = float(correction_estimator.score())
+            if not np.isfinite(corr) or corr <= 0:
+                raise ValueError(f"invalid shadow-clone correction factor: {corr}")
+        except Exception as error:
+            clone_results.append({
+                "clone": clone_index + 1,
+                "seed": perturb_seed,
+                "status": "unusable",
+                "reason": str(error),
+            })
+            if logger:
+                logger.print_info(
+                    f"EXPERIMENTAL perturbed same-model clone {clone_index + 1}/"
+                    f"{perturbation_clones} was not usable: {error}"
+                )
+            continue
+
+        valid_corrs.append(corr)
+        clone_results.append({
+            "clone": clone_index + 1,
+            "seed": perturb_seed,
+            "status": "estimated",
+            "corr": corr,
+        })
+
+    details = {
+        "clone_count": int(perturbation_clones),
+        "valid_clone_count": len(valid_corrs),
+        "min_valid": int(perturbation_min_valid),
+        "max_cv": float(perturbation_max_cv),
+        "clone_corrections": list(valid_corrs),
+        "clone_results": clone_results,
+        "accepted": False,
+        "reason": "insufficient_valid_clones",
+    }
+
+    if len(valid_corrs) < perturbation_min_valid:
+        if logger:
+            logger.print_warning(
+                "EXPERIMENTAL perturbed same-model fallback rejected: requires at least "
+                f"{perturbation_min_valid} valid shadow-clone correction factors; got "
+                f"{len(valid_corrs)} of {perturbation_clones}."
+            )
+        return 1.0, "fallback/unestimable", details
+
+    values = np.asarray(valid_corrs, dtype=float)
+    mean = float(values.mean())
+    std = float(values.std(ddof=0))
+    coefficient_of_variation = std / mean if mean > 0 else float("inf")
+    median = float(np.median(values))
+    details.update({
+        "median": median,
+        "mean": mean,
+        "std": std,
+        "cv": coefficient_of_variation,
+        "min": float(values.min()),
+        "max": float(values.max()),
+    })
+
+    if (
+        not np.isfinite(median)
+        or median <= 0
+        or not np.isfinite(coefficient_of_variation)
+        or coefficient_of_variation > perturbation_max_cv
+    ):
+        details["reason"] = "unstable_correction_factors"
+        if logger:
+            logger.print_warning(
+                "EXPERIMENTAL perturbed same-model fallback rejected as unstable: "
+                f"values={[round(value, 6) for value in valid_corrs]}, "
+                f"cv={coefficient_of_variation:.6f}, limit={perturbation_max_cv:.6f}."
+            )
+        return 1.0, "fallback/unestimable", details
+
+    details["accepted"] = True
+    details["reason"] = "accepted"
+    if logger:
+        logger.print_warning(
+            "EXPERIMENTAL perturbed same-model fallback accepted stable shadow-clone "
+            f"correction factors {[round(value, 6) for value in valid_corrs]}; "
+            f"median={median:.6f}, cv={coefficient_of_variation:.6f}."
+        )
+    return median, "perturbed_same_model", details

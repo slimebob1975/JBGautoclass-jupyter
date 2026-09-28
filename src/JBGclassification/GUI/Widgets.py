@@ -398,7 +398,7 @@ class Widgets:
             "models": [self.models_dropdown, self.field_status("models")],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
-            "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_method, self.dark_number_alpha],
+            "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_method, self.dark_number_alpha, self.dark_number_perturbed_fallback_checkbox],
             "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.oversampler_dropdown, self.undersampler_dropdown, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.ngram_range_dropdown],
@@ -580,6 +580,7 @@ class Widgets:
             "dark_numbers_checkbox": config.should_calculate_dark_numbers(),
             "dark_number_method": config.get_dark_number_method().name,
             "dark_number_alpha": config.get_dark_number_alpha().name,
+            "dark_number_perturbed_fallback_checkbox": config.should_use_experimental_perturbed_dark_number_fallback(),
         })
         
         # Disabled items:
@@ -684,6 +685,9 @@ class Widgets:
                 "dark_number_alpha": DarkNumberAlpha.from_config_value(
                     getattr(mode, "dark_number_alpha", "NONE")
                 ).name,
+                "dark_number_perturbed_fallback_checkbox": getattr(
+                    mode, "experimental_perturbed_dark_number_fallback", True
+                ),
                 "algorithm_dropdown": tuple(mode.algorithm.get_abbreviations()),
                 "preprocess_dropdown": tuple(mode.preprocessor.get_abbreviations()),
                 "reduction_dropdown": tuple(mode.feature_selection.get_abbreviations()),
@@ -758,6 +762,7 @@ class Widgets:
                 "dark_numbers_checkbox",
                 "dark_number_method",
                 "dark_number_alpha",
+                "dark_number_perturbed_fallback_checkbox",
             ])
 
             if self.source_can_be_predicted():
@@ -777,6 +782,7 @@ class Widgets:
                 "dark_numbers_checkbox": True,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "SEPARATED",
+                "dark_number_perturbed_fallback_checkbox": True,
             })
         else:
             self.disable_items([
@@ -786,6 +792,7 @@ class Widgets:
                 "dark_numbers_checkbox",
                 "dark_number_method",
                 "dark_number_alpha",
+                "dark_number_perturbed_fallback_checkbox",
             ])
             self.update_values({
                 "train_checkbox": False,
@@ -794,6 +801,7 @@ class Widgets:
                 "dark_numbers_checkbox": False,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "NONE",
+                "dark_number_perturbed_fallback_checkbox": True,
             })
             
     def apply_regression_test_profile(self) -> None:
@@ -848,6 +856,7 @@ class Widgets:
         self.disable_items([
             "predict_checkbox", "mispredicted_checkbox", "metas_checkbox",
             "dark_numbers_checkbox", "dark_number_method", "dark_number_alpha",
+            "dark_number_perturbed_fallback_checkbox",
         ])
         self.update_values({
             "train_checkbox": True,
@@ -857,6 +866,7 @@ class Widgets:
             "dark_numbers_checkbox": True,
             "dark_number_method": "LINEAR",
             "dark_number_alpha": "NONE",
+            "dark_number_perturbed_fallback_checkbox": True,
         })
         self.categorize_columns.options = ()
 
@@ -1038,6 +1048,7 @@ class Widgets:
                 calculate_dark_numbers = self.dark_numbers_checkbox.value,
                 dark_number_method = DarkNumberMethod[self.dark_number_method.value],
                 dark_number_alpha = DarkNumberAlpha[self.dark_number_alpha.value],
+                experimental_perturbed_dark_number_fallback = self.dark_number_perturbed_fallback_checkbox.value,
                 oversampler = Oversampling[self.oversampler_dropdown.value],
                 undersampler = Undersampling[self.undersampler_dropdown.value],
                 algorithm = AlgorithmTuple(self.algorithm_dropdown.value),
@@ -1721,11 +1732,32 @@ class Widgets:
         name = sys._getframe().f_code.co_name
         return self._load_widget(name)
 
+    @property
+    def dark_number_perturbed_fallback_checkbox(self) -> widgets.Checkbox:
+        name = sys._getframe().f_code.co_name
+        if name not in self.default_widgets:
+            # Keep older local settings.json files compatible with the new experiment control.
+            self.default_widgets[name] = {
+                "type": "Checkbox",
+                "params": {
+                    "value": True,
+                    "disabled": True,
+                    "indent": True,
+                    "description": "Experimental perturbed fallback",
+                    "tooltip": (
+                        "When the ordinary Dark Number correction estimate is statistically "
+                        "unestimable, try stable perturbed shadow-clones of the same model"
+                    ),
+                },
+            }
+        return self._load_widget(name)
+
     def sync_dark_number_control_state(self) -> None:
-        """Keep Method/Alpha availability aligned with the Dark Numbers checkbox."""
+        """Keep dependent Dark Number controls aligned with the Dark Numbers checkbox."""
         disabled = self.dark_numbers_checkbox.disabled or not self.dark_numbers_checkbox.value
         self.dark_number_method.disabled = disabled
         self.dark_number_alpha.disabled = disabled
+        self.dark_number_perturbed_fallback_checkbox.disabled = disabled
 
     def sync_dark_number_alpha_options(self) -> None:
         """Expose only alpha variants implemented for the selected formula family."""

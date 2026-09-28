@@ -200,6 +200,7 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
             calculate_dark_numbers=False,
             dark_number_method=DarkNumberMethod.NON_LINEAR,
             dark_number_alpha=DarkNumberAlpha.SINGLE,
+            experimental_perturbed_dark_number_fallback=False,
             oversampler=Oversampling.RND,
             undersampler=Undersampling.NUG,
             algorithm=AlgorithmTuple(("LRN", "RFCL")),
@@ -237,6 +238,7 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     assert widgets.dark_numbers_checkbox.value is False
     assert widgets.dark_number_method.value == "NON_LINEAR"
     assert widgets.dark_number_alpha.value == "SINGLE"
+    assert widgets.dark_number_perturbed_fallback_checkbox.value is False
     assert widgets.algorithm_dropdown.value == ("LRN", "RFCL")
     assert widgets.preprocess_dropdown.value == ("NOS", "STA")
     assert widgets.reduction_dropdown.value == ("NOR", "PCA")
@@ -269,6 +271,7 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     assert rerun["mode"].calculate_dark_numbers is False
     assert rerun["mode"].dark_number_method is DarkNumberMethod.NON_LINEAR
     assert rerun["mode"].dark_number_alpha is DarkNumberAlpha.SINGLE
+    assert rerun["mode"].experimental_perturbed_dark_number_fallback is False
     assert rerun["io"].model_name == "saved_model"
     assert rerun["debug"].data_limit == 321
 
@@ -410,16 +413,20 @@ def test_dark_number_checkbox_controls_method_widget_independently_of_mispredict
     widgets.dark_numbers_checkbox.disabled = False
     widgets.dark_number_method.disabled = False
     widgets.dark_number_alpha.disabled = False
+    widgets.dark_number_perturbed_fallback_checkbox.disabled = False
     widgets.mispredicted_checkbox.value = True
 
     widgets.dark_numbers_checkbox.value = False
     assert widgets.dark_number_method.disabled is True
     assert widgets.dark_number_alpha.disabled is True
+    assert widgets.dark_number_perturbed_fallback_checkbox.disabled is True
     assert widgets.mispredicted_checkbox.value is True
 
     widgets.dark_numbers_checkbox.value = True
     assert widgets.dark_number_method.disabled is False
     assert widgets.dark_number_alpha.disabled is False
+    assert widgets.dark_number_perturbed_fallback_checkbox.disabled is False
+    assert widgets.dark_number_perturbed_fallback_checkbox.value is True
     widgets.dark_number_method.value = "NON_LINEAR"
     widgets.dark_number_alpha.value = "SINGLE"
 
@@ -427,6 +434,7 @@ def test_dark_number_checkbox_controls_method_widget_independently_of_mispredict
     assert config.calculate_dark_numbers is True
     assert config.dark_number_method is DarkNumberMethod.NON_LINEAR
     assert config.dark_number_alpha is DarkNumberAlpha.SINGLE
+    assert config.experimental_perturbed_dark_number_fallback is True
 
 
 def test_dark_number_checkbox_still_controls_dependencies_after_continue_locks_observers():
@@ -523,6 +531,28 @@ def test_legacy_local_settings_labels_are_migrated_without_overriding_custom_tex
     assert widgets.filter_checkbox.description == "Filter"
     assert widgets.ngram_range_dropdown.description == "Ngrams"
     assert widgets.predict_checkbox.description == "Custom prediction label"
+
+
+def test_legacy_local_settings_without_perturbed_fallback_checkbox_get_default_on_control():
+    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    model_path = Path(__file__).parent / "fixtures"
+    settings_path = src_path / "GUI" / "default_settings.json"
+    settings = json.loads(settings_path.read_text())
+    del settings["widgets"]["dark_number_perturbed_fallback_checkbox"]
+    settings["sections"]["classifier"] = [
+        item for item in settings["sections"]["classifier"]
+        if item != "dark_number_perturbed_fallback_checkbox"
+    ]
+
+    widgets = Widgets(
+        src_path=src_path,
+        GUIhandler=MockGUIHandler(),
+        model_path=model_path,
+        settings=settings,
+    )
+
+    assert widgets.dark_number_perturbed_fallback_checkbox.value is True
+    assert widgets.dark_number_perturbed_fallback_checkbox.description == "Experimental perturbed fallback"
 
 
 def test_pre_065_categorize_label_is_migrated_to_categorizer():

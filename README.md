@@ -53,6 +53,17 @@ Generated config files deliberately do **not** contain the SQL password. Supply 
 `JBG_SQL_PASSWORD` process environment variable (or enter it in the GUI). Saved `.sav` model files likewise omit
 the SQL password; when a model is loaded through the application, the current runtime credentials are injected.
 
+Revisions 084-088 provide a validation runner that reuses the most recent manual/Repeat Last configuration and compares the hard/direct baseline with `perturbed_same_model`; revision 088 adds robustness summaries and uses nine paired seeds by default. Revision 089 also exposes that same shadow-clone method in the normal Dark Number path through the default-on `Experimental perturbed fallback` checkbox. Direct correction still wins whenever it is estimable; the experimental path is attempted only for recovery-level statistical failures and remains explicitly marked with `corr_source=perturbed_same_model`. Run the validation harness from the repository root after a model-training run:
+
+```text
+python .\src\JBGclassification\JBGDarkNumberValidationRunner.py --sql-username <username> --runs 9
+```
+
+The runner reads `.jbg_last_run.json`, uses `JBG_SQL_PASSWORD` if set (otherwise it prompts without echo), reloads the
+saved model's fitted text/category converter, normalizes sparse text features to SciPy CSR, and writes paired
+baseline-vs-`perturbed_same_model` CSV/JSON evidence under `src\JBGclassification\output\csvs`. Its log is
+written separately as `jbg-dark-number-validation_*.log`. The perturbation defaults are five shadow clones, at least three valid clone estimates, and maximum correction-factor CV 0.50; these can be adjusted with `--perturbation-clones`, `--perturbation-min-valid`, and `--perturbation-max-cv`. Normal production runs keep those validated 5/3/0.50 guardrails fixed for now and, whenever the experimental fallback is attempted, write aggregate provenance to `dark_number_experimental_fallback_*` without raw source rows.
+
 Go into `src\JBGclassification` and run `python JBGautomaticClassifier.py -f <path-to-file>`. The path to the file needs to
 be on the format of `.config\filename.py`, so assuming that the config-file is `autoclassconfig_iris_abc0123.py` 
 (check the `config` directory for the right name), the command is: `python JBGautomaticClassifier.py -f autoclassconfig_iris_abc0123.py`

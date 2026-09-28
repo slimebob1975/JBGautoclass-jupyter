@@ -231,6 +231,16 @@
                 "tooltip": "Choose no alpha adjustment, one shared alpha, or separate FP/FN alpha values; separated alpha is available only with the linear method"
             }
         },
+        "dark_number_perturbed_fallback_checkbox": {
+            "type": "Checkbox",
+            "params": {
+                "value": true,
+                "disabled": true,
+                "indent": true,
+                "description": "Experimental perturbed fallback",
+                "tooltip": "When the ordinary Dark Number correction estimate is statistically unestimable, try stable perturbed shadow-clones of the same model"
+            }
+        },
         "algorithm_dropdown": {
             "type": "SelectMultiple",
             "params": {
@@ -504,6 +514,7 @@
             "dark_numbers_checkbox",
             "dark_number_method",
             "dark_number_alpha",
+            "dark_number_perturbed_fallback_checkbox",
             "algorithm_dropdown",
             "preprocess_dropdown",
             "scoremetric_dropdown",

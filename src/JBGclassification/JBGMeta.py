@@ -373,12 +373,13 @@ class AlgorithmGridSearchParams(MetaEnum):
             'batch_size': [32],
         }
     }
-    #FUTV = {"parameters": \
-    #    {"mlpc__" + str(key): val for key, val in MLPC["parameters"].items()} | \
-    #    {"rfcl__" + str(key): val for key, val in RFCL["parameters"].items()} | \
-    #    {"abc__" + str(key): val for key, val in ABC["parameters"].items()} 
-    #    }
-    FUTV = {"parameters": {}}
+    # Voting already combines three non-trivial base estimators. Keep the
+    # default search focused on ensemble weighting instead of multiplying the
+    # constituent MLP/RandomForest/AdaBoost grids together. Soft voting remains
+    # fixed in do_FUTV() so probability-based diagnostics/Dark Numbers work.
+    FUTV = {"parameters": {
+        'weights': [None, (2, 1, 1), (1, 2, 1), (1, 1, 2)],
+    }}
     # Stacking already nests three non-trivial base estimators. Re-tuning all
     # constituent grids here creates a Cartesian-product explosion (31,104
     # combinations before outer CV). Keep the default FUTS search focused on

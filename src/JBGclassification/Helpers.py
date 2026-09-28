@@ -25,18 +25,17 @@ MODEL_PERFORMANCE_COLUMNS = [
     "Components",
     "Mean cv",
     "Stdev.",
-    "Holdout (diagnostic)",
     "Elapsed Time",
     "Exception",
 ]
 
 def build_model_performance_matrix(results: list) -> pandas.DataFrame:
-    """Build the spot-check report without using holdout performance for ranking.
+    """Build the CV-only spot-check report.
 
-    Candidate selection is CV-only.  The holdout score is retained strictly as a
-    diagnostic value, so rows are ordered by mean CV score and CV standard
-    deviation only.  Stable sorting preserves evaluation order for exact CV ties
-    rather than silently introducing the holdout as a third tie-breaker.
+    The final holdout is intentionally absent from candidate reporting so it stays
+    untouched until the selected and tuned model reaches final evaluation. Rows are
+    ordered by mean CV score and CV standard deviation only; stable sorting preserves
+    evaluation order for exact CV ties.
     """
     matrix = pandas.DataFrame(results, columns=MODEL_PERFORMANCE_COLUMNS)
     return matrix.sort_values(

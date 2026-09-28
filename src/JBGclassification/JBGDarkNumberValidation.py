@@ -68,6 +68,12 @@ class DarkNumberValidationHarness:
         correction_n_splits: int = 5,
         correction_n_repeats: int = 2,
         random_state: int = 42,
+        enable_soft_same_model_fallback: bool = False,
+        enable_adaptive_noise_fallback: bool = False,
+        enable_perturbed_same_model_fallback: bool = False,
+        perturbation_clones: int = 5,
+        perturbation_min_valid: int = 3,
+        perturbation_max_cv: float = 0.50,
         logger=None,
     ):
         self.estimator = estimator
@@ -79,6 +85,12 @@ class DarkNumberValidationHarness:
         self.correction_n_splits = int(correction_n_splits)
         self.correction_n_repeats = int(correction_n_repeats)
         self.random_state = int(random_state)
+        self.enable_soft_same_model_fallback = bool(enable_soft_same_model_fallback)
+        self.enable_adaptive_noise_fallback = bool(enable_adaptive_noise_fallback)
+        self.enable_perturbed_same_model_fallback = bool(enable_perturbed_same_model_fallback)
+        self.perturbation_clones = int(perturbation_clones)
+        self.perturbation_min_valid = int(perturbation_min_valid)
+        self.perturbation_max_cv = float(perturbation_max_cv)
         self.logger = logger or _NullLogger()
 
         for name, value in (
@@ -92,6 +104,72 @@ class DarkNumberValidationHarness:
             raise ValueError("correction_n_splits must be at least 2")
         if self.correction_n_repeats < 1:
             raise ValueError("correction_n_repeats must be at least 1")
+        if self.perturbation_clones < 1:
+            raise ValueError("perturbation_clones must be at least 1")
+        if self.perturbation_min_valid < 1 or self.perturbation_min_valid > self.perturbation_clones:
+            raise ValueError("perturbation_min_valid must be between 1 and perturbation_clones")
+        if not np.isfinite(self.perturbation_max_cv) or self.perturbation_max_cv < 0:
+            raise ValueError("perturbation_max_cv must be finite and non-negative")
+
+    @staticmethod
+    def _clone_for_validation(estimator, random_state: int):
+        """Clone an estimator and seed otherwise-unset random_state parameters.
+
+        Paired validation must not let stochastic initialization differ between the
+        baseline and fallback candidate. Explicitly configured random_state values
+        are preserved; only None-valued parameters are filled with the validation
+        seed.
+        """
+        seeded = clone(estimator)
+        try:
+            params = seeded.get_params(deep=True)
+        except AttributeError:
+            return seeded
+
+        updates = {
+            name: int(random_state)
+            for name, value in params.items()
+            if name.endswith("random_state") and value is None
+        }
+        if updates:
+            seeded.set_params(**updates)
+        return seeded
+
+    @staticmethod
+    def _clone_for_perturbation(estimator, random_state: int):
+        """Clone an estimator and deliberately perturb all random_state parameters.
+
+        This helper is validation-only. Unlike ``_clone_for_validation``, explicit
+        seeds are overwritten because the purpose is to sample nearby stochastic
+        realizations of the same estimator family and hyperparameters.
+        """
+        perturbed = clone(estimator)
+        try:
+            params = perturbed.get_params(deep=True)
+        except AttributeError:
+            return perturbed
+
+        updates = {
+            name: int(random_state)
+            for name in params
+            if name.endswith("random_state")
+        }
+        if updates:
+            perturbed.set_params(**updates)
+        return perturbed
+
+    @staticmethod
+    def _stratified_bootstrap_indices(y, random_state: int) -> np.ndarray:
+        """Bootstrap each observed class independently while preserving class counts."""
+        y_array = np.asarray(y)
+        rng = np.random.default_rng(int(random_state))
+        sampled = []
+        for label in pd.unique(y_array):
+            class_indices = np.flatnonzero(y_array == label)
+            sampled.append(rng.choice(class_indices, size=class_indices.size, replace=True))
+        indices = np.concatenate(sampled)
+        rng.shuffle(indices)
+        return indices.astype(int, copy=False)
 
     @staticmethod
     def _take_rows(X, indices):
@@ -142,11 +220,81 @@ class DarkNumberValidationHarness:
 
         return y_noisy, hidden_mask, negative_class, true_dark_number
 
-    def _estimate_correction(self, model, X, y, random_state: int) -> tuple[float, str]:
+    def _new_correction_estimator(self, model, random_state: int, predict_mode: str):
+        return DarkNumberCorrectionFactorEstimator(
+            estimator=clone(model),
+            flip_fraction=self.correction_flip_fraction,
+            n_splits=self.correction_n_splits,
+            n_repeats=self.correction_n_repeats,
+            n_jobs=1,
+            predict_mode=predict_mode,
+            random_state=random_state,
+            positive_class=self.positive_class,
+            sample_size=1.0,
+            parallel_backend="threads",
+            logger=self.logger,
+        )
+
+    @staticmethod
+    def _validated_correction(estimator, label: str) -> float:
+        if not getattr(estimator, "is_valid_for_regression_", True):
+            raise ValueError(
+                f"{label} correction-factor estimator did not produce an observed estimate "
+                f"(status={getattr(estimator, 'correction_status_', 'unknown')})."
+            )
+        corr = float(estimator.score())
+        if not np.isfinite(corr) or corr <= 0:
+            raise ValueError(f"Invalid {label.lower()} correction factor: {corr}")
+        return corr
+
+    def _estimate_soft_same_model_correction(self, model, X, y, random_state: int) -> tuple[float, str]:
+        if not hasattr(model, "predict_proba"):
+            self.logger.print_warning(
+                "Soft same-model correction fallback is unavailable because the target estimator "
+                "does not expose predict_proba(); using 1.0 as fallback/unestimable."
+            )
+            return 1.0, "fallback/unestimable"
+
+        estimator = self._new_correction_estimator(
+            model, random_state=random_state, predict_mode="predict_proba"
+        )
         try:
+            estimator.fit(X, y)
+            corr = self._validated_correction(estimator, "Soft same-model")
+            return corr, "soft_same_model"
+        except Exception as soft_error:
+            self.logger.print_warning(
+                f"Soft same-model correction fallback failed: {soft_error}. "
+                "Using 1.0 as fallback/unestimable."
+            )
+            return 1.0, "fallback/unestimable"
+
+    def _adaptive_noise_candidate_fractions(self) -> list[float]:
+        """Return lower hard-label noise levels used to estimate the target response curve."""
+        multipliers = (0.50, 0.625, 0.75, 0.875)
+        return sorted({
+            round(self.correction_flip_fraction * multiplier, 6)
+            for multiplier in multipliers
+            if 0.0 < self.correction_flip_fraction * multiplier < self.correction_flip_fraction
+        })
+
+    def _estimate_adaptive_noise_same_model_correction(
+        self, model, X, y, random_state: int
+    ) -> tuple[float, str]:
+        """Estimate target hard-recovery correction from lower same-model noise levels.
+
+        The method deliberately keeps the estimator, hard class decisions, data, CV
+        structure and seeds unchanged. Only the injected correction-noise fraction is
+        reduced. Recovery rates (1 / correction factor) are fitted against noise level
+        and linearly extrapolated to the configured target noise. No estimate is emitted
+        unless at least three lower-noise points are observed and the extrapolated
+        recovery remains in the physical interval (0, 1].
+        """
+        points: list[tuple[float, float]] = []
+        for flip_fraction in self._adaptive_noise_candidate_fractions():
             estimator = DarkNumberCorrectionFactorEstimator(
                 estimator=clone(model),
-                flip_fraction=self.correction_flip_fraction,
+                flip_fraction=flip_fraction,
                 n_splits=self.correction_n_splits,
                 n_repeats=self.correction_n_repeats,
                 n_jobs=1,
@@ -157,22 +305,205 @@ class DarkNumberValidationHarness:
                 parallel_backend="threads",
                 logger=self.logger,
             )
-            estimator.fit(X, y)
-            if not getattr(estimator, "is_valid_for_regression_", True):
-                raise ValueError(
-                    "Direct correction-factor estimator did not produce an observed estimate "
-                    f"(status={getattr(estimator, 'correction_status_', 'unknown')})."
+            try:
+                estimator.fit(X, y)
+                corr = self._validated_correction(
+                    estimator, f"Adaptive-noise {flip_fraction:.3f}"
                 )
-            corr = float(estimator.score())
-            if not np.isfinite(corr) or corr <= 0:
-                raise ValueError(f"Invalid direct correction factor: {corr}")
+            except Exception as error:
+                self.logger.print_info(
+                    f"Adaptive-noise same-model point {flip_fraction:.3f} was not usable: {error}"
+                )
+                continue
+
+            recovery = 1.0 / corr
+            if np.isfinite(recovery) and 0.0 < recovery <= 1.0:
+                points.append((float(flip_fraction), float(recovery)))
+
+        if len(points) < 3:
+            self.logger.print_warning(
+                "Adaptive-noise same-model fallback requires at least three valid lower-noise "
+                f"hard-recovery points; got {len(points)}. Using 1.0 as fallback/unestimable."
+            )
+            return 1.0, "fallback/unestimable"
+
+        fractions = np.asarray([point[0] for point in points], dtype=float)
+        recoveries = np.asarray([point[1] for point in points], dtype=float)
+        slope, intercept = np.polyfit(fractions, recoveries, 1)
+        predicted_recovery = float(slope * self.correction_flip_fraction + intercept)
+
+        if not np.isfinite(predicted_recovery) or not 0.0 < predicted_recovery <= 1.0:
+            self.logger.print_warning(
+                "Adaptive-noise same-model extrapolation did not produce a physical recovery "
+                f"rate at target noise {self.correction_flip_fraction:.3f}: "
+                f"{predicted_recovery}. Using 1.0 as fallback/unestimable."
+            )
+            return 1.0, "fallback/unestimable"
+
+        corr = 1.0 / predicted_recovery
+        self.logger.print_info(
+            "Adaptive-noise same-model fallback used hard-recovery points "
+            f"{[(round(f, 6), round(r, 6)) for f, r in points]} and extrapolated "
+            f"target recovery={predicted_recovery:.6f}, corr={corr:.6f}."
+        )
+        return float(corr), "adaptive_noise_same_model"
+
+    def _estimate_perturbed_same_model_correction(
+        self, model, X, y, random_state: int
+    ) -> tuple[float, str]:
+        """Estimate correction from stable local shadow-clones of the same model.
+
+        Each shadow clone keeps the estimator family and all ordinary hyperparameters,
+        but receives a different random seed and a class-stratified bootstrap sample of
+        the same size. The fallback is accepted only when enough clones independently
+        produce finite hard-recovery correction factors and their relative dispersion
+        is bounded. The robust median is returned; otherwise the result remains
+        unestimable.
+        """
+        valid_corrs: list[float] = []
+        for clone_index in range(self.perturbation_clones):
+            perturb_seed = int(random_state) + 1009 * (clone_index + 1)
+            indices = self._stratified_bootstrap_indices(y, perturb_seed)
+            X_boot = self._take_rows(X, indices)
+            y_boot = np.asarray(y)[indices]
+            shadow = self._clone_for_perturbation(model, perturb_seed)
+            estimator = DarkNumberCorrectionFactorEstimator(
+                estimator=shadow,
+                flip_fraction=self.correction_flip_fraction,
+                n_splits=self.correction_n_splits,
+                n_repeats=self.correction_n_repeats,
+                n_jobs=1,
+                predict_mode="predict",
+                random_state=perturb_seed,
+                positive_class=self.positive_class,
+                sample_size=1.0,
+                parallel_backend="threads",
+                logger=self.logger,
+            )
+            try:
+                estimator.fit(X_boot, y_boot)
+                corr = self._validated_correction(
+                    estimator, f"Perturbed same-model clone {clone_index + 1}"
+                )
+            except Exception as error:
+                self.logger.print_info(
+                    f"Perturbed same-model clone {clone_index + 1}/{self.perturbation_clones} "
+                    f"was not usable: {error}"
+                )
+                continue
+            valid_corrs.append(float(corr))
+
+        if len(valid_corrs) < self.perturbation_min_valid:
+            self.logger.print_warning(
+                "Perturbed same-model fallback requires at least "
+                f"{self.perturbation_min_valid} valid shadow-clone correction factors; "
+                f"got {len(valid_corrs)} of {self.perturbation_clones}. "
+                "Using 1.0 as fallback/unestimable."
+            )
+            return 1.0, "fallback/unestimable"
+
+        values = np.asarray(valid_corrs, dtype=float)
+        mean = float(values.mean())
+        std = float(values.std(ddof=0))
+        coefficient_of_variation = std / mean if mean > 0 else float("inf")
+        median = float(np.median(values))
+        if (
+            not np.isfinite(median)
+            or median <= 0
+            or not np.isfinite(coefficient_of_variation)
+            or coefficient_of_variation > self.perturbation_max_cv
+        ):
+            self.logger.print_warning(
+                "Perturbed same-model correction factors were not stable enough: "
+                f"values={[round(value, 6) for value in valid_corrs]}, "
+                f"cv={coefficient_of_variation:.6f}, limit={self.perturbation_max_cv:.6f}. "
+                "Using 1.0 as fallback/unestimable."
+            )
+            return 1.0, "fallback/unestimable"
+
+        self.logger.print_info(
+            "Perturbed same-model fallback accepted stable shadow-clone correction factors "
+            f"{[round(value, 6) for value in valid_corrs]}; "
+            f"median={median:.6f}, cv={coefficient_of_variation:.6f}."
+        )
+        return median, "perturbed_same_model"
+
+    def _estimate_correction(self, model, X, y, random_state: int) -> tuple[float, str]:
+        recovery_level_unestimable_statuses = {
+            "zero_recovery",
+            "nonfinite",
+            "nan_recovery",
+        }
+        statistically_unestimable_statuses = recovery_level_unestimable_statuses | {
+            "insufficient_sample",
+        }
+        estimator = self._new_correction_estimator(
+            model, random_state=random_state, predict_mode="predict"
+        )
+
+        direct_error = None
+        try:
+            estimator.fit(X, y)
+            corr = self._validated_correction(estimator, "Direct")
             return corr, "direct"
-        except Exception as direct_error:
+        except Exception as ex:
+            direct_error = ex
+
+        status = getattr(estimator, "correction_status_", "unknown")
+        if status in statistically_unestimable_statuses:
+            if (
+                self.enable_perturbed_same_model_fallback
+                and status in recovery_level_unestimable_statuses
+            ):
+                self.logger.print_warning(
+                    f"Direct correction-factor estimate is statistically unestimable (status={status}). "
+                    "Trying perturbed shadow-clones with hard predictions from the same target estimator."
+                )
+                return self._estimate_perturbed_same_model_correction(
+                    model, X, y, random_state
+                )
+
+            if (
+                self.enable_adaptive_noise_fallback
+                and status in recovery_level_unestimable_statuses
+            ):
+                self.logger.print_warning(
+                    f"Direct correction-factor estimate is statistically unestimable (status={status}). "
+                    "Trying lower injected-noise levels with hard predictions from the same target estimator."
+                )
+                return self._estimate_adaptive_noise_same_model_correction(
+                    model, X, y, random_state
+                )
+
+            if (
+                self.enable_soft_same_model_fallback
+                and status in recovery_level_unestimable_statuses
+            ):
+                self.logger.print_warning(
+                    f"Direct correction-factor estimate is statistically unestimable (status={status}). "
+                    "Trying soft probability recovery with the same target estimator."
+                )
+                return self._estimate_soft_same_model_correction(model, X, y, random_state)
+
+            self.logger.print_warning(
+                f"Direct correction-factor estimate is statistically unestimable (status={status}). "
+                "No validation-only statistical same-model fallback is enabled; "
+                "using 1.0 as fallback/unestimable."
+            )
+            return 1.0, "fallback/unestimable"
+
+        if not isinstance(direct_error, (MemoryError, SystemError)):
             self.logger.print_warning(
                 f"Direct correction-factor estimate failed: {direct_error}. "
-                "Trying regression over valid finite sample estimates."
+                "Sample-size regression was not attempted because the failure was not classified "
+                "as resource-constrained; using 1.0 as fallback/unestimable."
             )
+            return 1.0, "fallback/unestimable"
 
+        self.logger.print_warning(
+            f"Direct correction-factor estimate hit a resource/execution failure: {direct_error}. "
+            "Trying regression over valid finite sample estimates with the same target estimator."
+        )
         try:
             regressor = DarkNumberCorrectionFactorRegressor(
                 estimator=clone(model),
@@ -191,7 +522,7 @@ class DarkNumberValidationHarness:
             corr = float(regressor.score())
             if not np.isfinite(corr) or corr <= 0:
                 raise ValueError(f"Invalid regressed correction factor: {corr}")
-            return corr, "regressed"
+            return corr, "regressed_same_model"
         except Exception as regression_error:
             self.logger.print_warning(
                 f"Correction-factor regression failed: {regression_error}. "
@@ -254,10 +585,10 @@ class DarkNumberValidationHarness:
         y_train = y_noisy[train_idx]
         y_test = y_noisy[test_idx]
 
-        cv_model = clone(self.estimator)
+        cv_model = self._clone_for_validation(self.estimator, seed)
         cv_model.fit(X_train, y_train)
 
-        retrained_model = clone(self.estimator)
+        retrained_model = self._clone_for_validation(self.estimator, seed)
         retrained_model.fit(X, y_noisy)
 
         corr_cv, corr_cv_source = self._estimate_correction(cv_model, X_train, y_train, seed)
@@ -317,6 +648,369 @@ class DarkNumberValidationHarness:
         ]
         runs = pd.DataFrame(rows)
         return runs, self.summarize_runs(runs)
+
+    def _spawn(
+        self, *, enable_soft_same_model_fallback: bool = False,
+        enable_adaptive_noise_fallback: bool = False,
+        enable_perturbed_same_model_fallback: bool = False,
+    ):
+        return DarkNumberValidationHarness(
+            estimator=self.estimator,
+            positive_class=self.positive_class,
+            negative_class=self.negative_class,
+            injected_noise_fraction=self.injected_noise_fraction,
+            correction_flip_fraction=self.correction_flip_fraction,
+            test_size=self.test_size,
+            correction_n_splits=self.correction_n_splits,
+            correction_n_repeats=self.correction_n_repeats,
+            random_state=self.random_state,
+            enable_soft_same_model_fallback=enable_soft_same_model_fallback,
+            enable_adaptive_noise_fallback=enable_adaptive_noise_fallback,
+            enable_perturbed_same_model_fallback=enable_perturbed_same_model_fallback,
+            perturbation_clones=self.perturbation_clones,
+            perturbation_min_valid=self.perturbation_min_valid,
+            perturbation_max_cv=self.perturbation_max_cv,
+            logger=self.logger,
+        )
+
+    def compare_soft_same_model_fallback(self, X, y, n_runs: int = 5):
+        """Run paired seeds with and without the validation-only soft fallback.
+
+        The candidate path is allowed to differ from baseline only when the normal
+        hard/direct correction is statistically unestimable. The same validation
+        seed is also injected into otherwise-unset estimator random_state parameters
+        so stochastic initialization cannot confound the comparison. Production
+        behavior is not changed by this helper.
+        """
+        baseline_runs, baseline_summary = self._spawn(
+            enable_soft_same_model_fallback=False
+        ).run_repeated(X, y, n_runs=n_runs)
+        candidate_runs, candidate_summary = self._spawn(
+            enable_soft_same_model_fallback=True
+        ).run_repeated(X, y, n_runs=n_runs)
+
+        if not baseline_runs["random_state"].equals(candidate_runs["random_state"]):
+            raise RuntimeError("Paired Dark Number validation runs must use identical random states")
+
+        paired = pd.DataFrame(
+            {
+                "random_state": baseline_runs["random_state"],
+                "true_dark_number": baseline_runs["true_dark_number"],
+                "baseline_corr_cv_source": baseline_runs["corr_cv_source"],
+                "candidate_corr_cv_source": candidate_runs["corr_cv_source"],
+                "baseline_corr_retrained_source": baseline_runs["corr_retrained_source"],
+                "candidate_corr_retrained_source": candidate_runs["corr_retrained_source"],
+                "baseline_interval_covered": baseline_runs["interval_covered"],
+                "candidate_interval_covered": candidate_runs["interval_covered"],
+            }
+        )
+
+        estimate_columns = ("d_cv_test", "d_cv_full", "d_retrained_full")
+        baseline_mae = {}
+        candidate_mae = {}
+        truth = pd.to_numeric(baseline_runs["true_dark_number"], errors="coerce")
+        for column in estimate_columns:
+            baseline_values = pd.to_numeric(baseline_runs[column], errors="coerce")
+            candidate_values = pd.to_numeric(candidate_runs[column], errors="coerce")
+            paired[f"baseline_{column}"] = baseline_values
+            paired[f"candidate_{column}"] = candidate_values
+            paired[f"baseline_abs_error_{column}"] = (baseline_values - truth).abs()
+            paired[f"candidate_abs_error_{column}"] = (candidate_values - truth).abs()
+            baseline_mae[column] = float(paired[f"baseline_abs_error_{column}"].mean())
+            candidate_mae[column] = float(paired[f"candidate_abs_error_{column}"].mean())
+
+        candidate_sources = pd.concat(
+            [candidate_runs["corr_cv_source"], candidate_runs["corr_retrained_source"]],
+            ignore_index=True,
+        )
+        baseline_sources = pd.concat(
+            [baseline_runs["corr_cv_source"], baseline_runs["corr_retrained_source"]],
+            ignore_index=True,
+        )
+        baseline_unestimable_rate = float(
+            (baseline_sources == "fallback/unestimable").mean()
+        )
+        candidate_unestimable_rate = float(
+            (candidate_sources == "fallback/unestimable").mean()
+        )
+        comparison_summary = {
+            "n_runs": int(n_runs),
+            "baseline": baseline_summary,
+            "soft_same_model": candidate_summary,
+            "baseline_mean_absolute_error": baseline_mae,
+            "soft_same_model_mean_absolute_error": candidate_mae,
+            "mean_absolute_error_delta": {
+                column: candidate_mae[column] - baseline_mae[column]
+                for column in estimate_columns
+            },
+            "coverage_rate_delta": baseline_unestimable_rate - candidate_unestimable_rate,
+            "estimability_rate_delta": baseline_unestimable_rate - candidate_unestimable_rate,
+            "interval_coverage_rate_delta": (
+                candidate_summary["coverage_rate"] - baseline_summary["coverage_rate"]
+            ),
+            "soft_same_model_activation_rate": float(
+                (candidate_sources == "soft_same_model").mean()
+            ),
+            "baseline_unestimable_rate": baseline_unestimable_rate,
+            "candidate_unestimable_rate": candidate_unestimable_rate,
+        }
+        return paired, comparison_summary
+
+    def compare_adaptive_noise_fallback(self, X, y, n_runs: int = 5):
+        """Run paired hard/direct baseline versus adaptive-noise same-model candidate."""
+        baseline_runs, baseline_summary = self._spawn().run_repeated(X, y, n_runs=n_runs)
+        candidate_runs, candidate_summary = self._spawn(
+            enable_adaptive_noise_fallback=True
+        ).run_repeated(X, y, n_runs=n_runs)
+
+        if not baseline_runs["random_state"].equals(candidate_runs["random_state"]):
+            raise RuntimeError("Paired Dark Number validation runs must use identical random states")
+
+        paired = pd.DataFrame({
+            "random_state": baseline_runs["random_state"],
+            "true_dark_number": baseline_runs["true_dark_number"],
+            "baseline_corr_cv": baseline_runs["corr_cv"],
+            "candidate_corr_cv": candidate_runs["corr_cv"],
+            "baseline_corr_cv_source": baseline_runs["corr_cv_source"],
+            "candidate_corr_cv_source": candidate_runs["corr_cv_source"],
+            "baseline_corr_retrained": baseline_runs["corr_retrained"],
+            "candidate_corr_retrained": candidate_runs["corr_retrained"],
+            "baseline_corr_retrained_source": baseline_runs["corr_retrained_source"],
+            "candidate_corr_retrained_source": candidate_runs["corr_retrained_source"],
+            "baseline_interval_covered": baseline_runs["interval_covered"],
+            "candidate_interval_covered": candidate_runs["interval_covered"],
+        })
+
+        estimate_columns = ("d_cv_test", "d_cv_full", "d_retrained_full")
+        baseline_mae = {}
+        candidate_mae = {}
+        truth = pd.to_numeric(baseline_runs["true_dark_number"], errors="coerce")
+        for column in estimate_columns:
+            baseline_values = pd.to_numeric(baseline_runs[column], errors="coerce")
+            candidate_values = pd.to_numeric(candidate_runs[column], errors="coerce")
+            paired[f"baseline_{column}"] = baseline_values
+            paired[f"candidate_{column}"] = candidate_values
+            paired[f"baseline_abs_error_{column}"] = (baseline_values - truth).abs()
+            paired[f"candidate_abs_error_{column}"] = (candidate_values - truth).abs()
+            baseline_mae[column] = float(paired[f"baseline_abs_error_{column}"].mean())
+            candidate_mae[column] = float(paired[f"candidate_abs_error_{column}"].mean())
+
+        candidate_sources = pd.concat(
+            [candidate_runs["corr_cv_source"], candidate_runs["corr_retrained_source"]],
+            ignore_index=True,
+        )
+        baseline_sources = pd.concat(
+            [baseline_runs["corr_cv_source"], baseline_runs["corr_retrained_source"]],
+            ignore_index=True,
+        )
+        baseline_unestimable_rate = float(
+            (baseline_sources == "fallback/unestimable").mean()
+        )
+        candidate_unestimable_rate = float(
+            (candidate_sources == "fallback/unestimable").mean()
+        )
+        summary = {
+            "n_runs": int(n_runs),
+            "baseline": baseline_summary,
+            "adaptive_noise_same_model": candidate_summary,
+            "baseline_mean_absolute_error": baseline_mae,
+            "adaptive_noise_same_model_mean_absolute_error": candidate_mae,
+            "mean_absolute_error_delta": {
+                column: candidate_mae[column] - baseline_mae[column]
+                for column in estimate_columns
+            },
+            "coverage_rate_delta": baseline_unestimable_rate - candidate_unestimable_rate,
+            "estimability_rate_delta": baseline_unestimable_rate - candidate_unestimable_rate,
+            "interval_coverage_rate_delta": (
+                candidate_summary["coverage_rate"] - baseline_summary["coverage_rate"]
+            ),
+            "adaptive_noise_activation_rate": float(
+                (candidate_sources == "adaptive_noise_same_model").mean()
+            ),
+            "baseline_unestimable_rate": baseline_unestimable_rate,
+            "candidate_unestimable_rate": candidate_unestimable_rate,
+        }
+        return paired, summary
+
+    @staticmethod
+    def _estimable_error_profile(values, truth, estimable_mask) -> dict:
+        """Summarize truth error only where the candidate produced an estimate.
+
+        ``fallback/unestimable`` uses 1.0 as an internal sentinel in the validation
+        harness. Robustness metrics must therefore exclude those rows rather than
+        accidentally treating the sentinel as a real estimate.
+        """
+        numeric_values = pd.to_numeric(values, errors="coerce")
+        numeric_truth = pd.to_numeric(truth, errors="coerce")
+        mask = pd.Series(estimable_mask, index=numeric_values.index).astype(bool)
+        mask &= numeric_values.notna() & numeric_truth.notna()
+        signed_error = (numeric_values - numeric_truth)[mask]
+        absolute_error = signed_error.abs()
+        count = int(mask.sum())
+        total = int(len(mask))
+        if count == 0:
+            return {
+                "estimable_count": 0,
+                "total_count": total,
+                "estimable_rate": 0.0 if total else float("nan"),
+                "mean_absolute_error": float("nan"),
+                "median_absolute_error": float("nan"),
+                "p90_absolute_error": float("nan"),
+                "mean_signed_error": float("nan"),
+                "signed_error_std": float("nan"),
+            }
+        return {
+            "estimable_count": count,
+            "total_count": total,
+            "estimable_rate": count / total if total else float("nan"),
+            "mean_absolute_error": float(absolute_error.mean()),
+            "median_absolute_error": float(absolute_error.median()),
+            "p90_absolute_error": float(absolute_error.quantile(0.90)),
+            "mean_signed_error": float(signed_error.mean()),
+            "signed_error_std": float(signed_error.std(ddof=0)),
+        }
+
+    @staticmethod
+    def _correction_stability_profile(values, sources, accepted_source: str) -> dict:
+        numeric_values = pd.to_numeric(values, errors="coerce")
+        source_values = pd.Series(sources, index=numeric_values.index)
+        accepted = numeric_values[(source_values == accepted_source) & numeric_values.notna()]
+        count = int(len(accepted))
+        total = int(len(numeric_values))
+        if count == 0:
+            return {
+                "accepted_count": 0,
+                "total_count": total,
+                "activation_rate": 0.0 if total else float("nan"),
+                "mean": float("nan"),
+                "median": float("nan"),
+                "std": float("nan"),
+                "coefficient_of_variation": float("nan"),
+                "iqr": float("nan"),
+                "min": float("nan"),
+                "max": float("nan"),
+            }
+        mean = float(accepted.mean())
+        std = float(accepted.std(ddof=0))
+        q25 = float(accepted.quantile(0.25))
+        q75 = float(accepted.quantile(0.75))
+        return {
+            "accepted_count": count,
+            "total_count": total,
+            "activation_rate": count / total if total else float("nan"),
+            "mean": mean,
+            "median": float(accepted.median()),
+            "std": std,
+            "coefficient_of_variation": std / mean if mean != 0 else float("nan"),
+            "iqr": q75 - q25,
+            "min": float(accepted.min()),
+            "max": float(accepted.max()),
+        }
+
+    def compare_perturbed_same_model_fallback(self, X, y, n_runs: int = 5):
+        """Run paired hard/direct baseline versus perturbed same-model candidate."""
+        baseline_runs, baseline_summary = self._spawn().run_repeated(X, y, n_runs=n_runs)
+        candidate_runs, candidate_summary = self._spawn(
+            enable_perturbed_same_model_fallback=True
+        ).run_repeated(X, y, n_runs=n_runs)
+
+        if not baseline_runs["random_state"].equals(candidate_runs["random_state"]):
+            raise RuntimeError("Paired Dark Number validation runs must use identical random states")
+
+        paired = pd.DataFrame({
+            "random_state": baseline_runs["random_state"],
+            "true_dark_number": baseline_runs["true_dark_number"],
+            "baseline_corr_cv": baseline_runs["corr_cv"],
+            "candidate_corr_cv": candidate_runs["corr_cv"],
+            "baseline_corr_cv_source": baseline_runs["corr_cv_source"],
+            "candidate_corr_cv_source": candidate_runs["corr_cv_source"],
+            "baseline_corr_retrained": baseline_runs["corr_retrained"],
+            "candidate_corr_retrained": candidate_runs["corr_retrained"],
+            "baseline_corr_retrained_source": baseline_runs["corr_retrained_source"],
+            "candidate_corr_retrained_source": candidate_runs["corr_retrained_source"],
+            "baseline_interval_covered": baseline_runs["interval_covered"],
+            "candidate_interval_covered": candidate_runs["interval_covered"],
+        })
+
+        estimate_columns = ("d_cv_test", "d_cv_full", "d_retrained_full")
+        baseline_mae = {}
+        candidate_mae = {}
+        truth = pd.to_numeric(baseline_runs["true_dark_number"], errors="coerce")
+        for column in estimate_columns:
+            baseline_values = pd.to_numeric(baseline_runs[column], errors="coerce")
+            candidate_values = pd.to_numeric(candidate_runs[column], errors="coerce")
+            paired[f"baseline_{column}"] = baseline_values
+            paired[f"candidate_{column}"] = candidate_values
+            paired[f"baseline_abs_error_{column}"] = (baseline_values - truth).abs()
+            paired[f"candidate_abs_error_{column}"] = (candidate_values - truth).abs()
+            baseline_mae[column] = float(paired[f"baseline_abs_error_{column}"].mean())
+            candidate_mae[column] = float(paired[f"candidate_abs_error_{column}"].mean())
+
+        candidate_sources = pd.concat(
+            [candidate_runs["corr_cv_source"], candidate_runs["corr_retrained_source"]],
+            ignore_index=True,
+        )
+        baseline_sources = pd.concat(
+            [baseline_runs["corr_cv_source"], baseline_runs["corr_retrained_source"]],
+            ignore_index=True,
+        )
+        baseline_unestimable_rate = float(
+            (baseline_sources == "fallback/unestimable").mean()
+        )
+        candidate_unestimable_rate = float(
+            (candidate_sources == "fallback/unestimable").mean()
+        )
+        cv_estimable = candidate_runs["corr_cv_source"] != "fallback/unestimable"
+        retrained_estimable = candidate_runs["corr_retrained_source"] != "fallback/unestimable"
+        robust_error_profiles = {
+            "d_cv_test": self._estimable_error_profile(
+                candidate_runs["d_cv_test"], truth, cv_estimable
+            ),
+            "d_cv_full": self._estimable_error_profile(
+                candidate_runs["d_cv_full"], truth, cv_estimable
+            ),
+            "d_retrained_full": self._estimable_error_profile(
+                candidate_runs["d_retrained_full"], truth, retrained_estimable
+            ),
+        }
+        correction_stability = {
+            "corr_cv": self._correction_stability_profile(
+                candidate_runs["corr_cv"],
+                candidate_runs["corr_cv_source"],
+                "perturbed_same_model",
+            ),
+            "corr_retrained": self._correction_stability_profile(
+                candidate_runs["corr_retrained"],
+                candidate_runs["corr_retrained_source"],
+                "perturbed_same_model",
+            ),
+        }
+
+        summary = {
+            "n_runs": int(n_runs),
+            "baseline": baseline_summary,
+            "perturbed_same_model": candidate_summary,
+            "baseline_mean_absolute_error": baseline_mae,
+            "perturbed_same_model_mean_absolute_error": candidate_mae,
+            "mean_absolute_error_delta": {
+                column: candidate_mae[column] - baseline_mae[column]
+                for column in estimate_columns
+            },
+            "perturbed_estimable_error_profile": robust_error_profiles,
+            "perturbed_correction_stability": correction_stability,
+            "primary_full_data_metric": "d_cv_full",
+            "coverage_rate_delta": baseline_unestimable_rate - candidate_unestimable_rate,
+            "estimability_rate_delta": baseline_unestimable_rate - candidate_unestimable_rate,
+            "interval_coverage_rate_delta": (
+                candidate_summary["coverage_rate"] - baseline_summary["coverage_rate"]
+            ),
+            "perturbed_same_model_activation_rate": float(
+                (candidate_sources == "perturbed_same_model").mean()
+            ),
+            "baseline_unestimable_rate": baseline_unestimable_rate,
+            "candidate_unestimable_rate": candidate_unestimable_rate,
+        }
+        return paired, summary
 
     @staticmethod
     def summarize_runs(runs: pd.DataFrame) -> dict:

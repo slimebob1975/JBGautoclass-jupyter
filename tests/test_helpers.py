@@ -256,25 +256,23 @@ def test_float_normalization_preserves_fractional_smote_samples():
     assert np.any(np.modf(synthetic)[0] != 0.0)
 
 
-def test_model_performance_matrix_labels_holdout_as_diagnostic_and_does_not_rank_by_it():
+def test_model_performance_matrix_excludes_final_holdout_from_spot_check_report():
     results = [
-        ["MAX", "PCA", "A", 4, 0.95, 0.02, 0.70, 1.0, ""],
-        ["MAX", "PCA", "B", 4, 0.95, 0.02, 0.99, 1.0, ""],
-        ["MAX", "PCA", "C", 4, 0.94, 0.01, 1.00, 1.0, ""],
+        ["MAX", "PCA", "A", 4, 0.95, 0.02, 1.0, ""],
+        ["MAX", "PCA", "B", 4, 0.95, 0.02, 1.0, ""],
+        ["MAX", "PCA", "C", 4, 0.94, 0.01, 1.0, ""],
     ]
 
     matrix = Helpers.build_model_performance_matrix(results)
 
-    assert "Holdout (diagnostic)" in matrix.columns
+    assert "Holdout (diagnostic)" not in matrix.columns
     assert "Test data" not in matrix.columns
     assert matrix["Algorithm (Library)"].tolist() == ["A", "B", "C"]
-    assert matrix["Holdout (diagnostic)"].tolist() == [0.70, 0.99, 1.00]
-
 
 def test_model_performance_matrix_uses_cv_stdev_as_only_tiebreaker():
     results = [
-        ["MAX", "PCA", "wider", 4, 0.95, 0.03, 1.00, 1.0, ""],
-        ["MAX", "PCA", "tighter", 4, 0.95, 0.01, 0.50, 1.0, ""],
+        ["MAX", "PCA", "wider", 4, 0.95, 0.03, 1.0, ""],
+        ["MAX", "PCA", "tighter", 4, 0.95, 0.01, 1.0, ""],
     ]
 
     matrix = Helpers.build_model_performance_matrix(results)

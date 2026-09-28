@@ -9,6 +9,7 @@ from datetime import datetime
 from math import ceil
 from typing import Callable, Protocol, Union, Any
 import os
+import json
 
 import langdetect
 import numpy as np
@@ -33,7 +34,10 @@ from JBGExceptions import (DatasetException, MissingScorerException, ModelExcept
     PipelineException)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
-from JBGDarkNumberCorrectionFactor import DarkNumberCorrectionFactorEstimator
+from JBGDarkNumberCorrectionFactor import (
+    DarkNumberCorrectionFactorEstimator,
+    estimate_perturbed_same_model_correction,
+)
 from JBGDarkNumberCorrectionRegressor import DarkNumberCorrectionFactorRegressor
 from JBGModelPersistence import (
     attach_keras_model_to_pipeline,
@@ -909,7 +913,6 @@ class _SpotCheckState:
     best_rfe_feature_selection: int
     best_cv_score: float = 0.0
     best_stdev: float = 1.0
-    best_holdout_score: float = 0.0
     trained_pipeline: Pipeline = None
     best_algorithm: Algorithm = None
     best_preprocessor: Preprocess = None
@@ -1239,24 +1242,6 @@ class ModelHandler:
             return str("{0}: {1}".format(type(ex).__name__, ','.join(ex.args)))
         return str(traceback.format_exc())
 
-    # Fit a spot-check candidate on the training split and score the untouched holdout diagnostically.
-    def train_and_evaluate_picked_model(self, pipeline: Pipeline, dh: DatasetHandler):
-        """Return a fitted candidate plus a holdout diagnostic that never selects the winner."""
-
-        exception = ""
-        holdout_score = -1.0
-        try:
-            self._fit_pipeline_for_validation(pipeline, dh)
-
-            if dh.X_validation is not None and dh.Y_validation is not None:
-                holdout_score = self._score_validation_pipeline(pipeline, dh)
-
-        except Exception as ex:
-            holdout_score = np.nan
-            exception = self._format_captured_exception(ex)
-
-        return pipeline, holdout_score, exception
-    
     # Help function for generating roc_auc_score in the general case
     def generate_roc_auc_score(self, pipeline: Pipeline, dh: DatasetHandler):
         
@@ -1501,7 +1486,7 @@ class ModelHandler:
         return f"{algorithm.name} - {algorithm.full_name} ({algorithm.lib.full_name})"
 
     def _build_spot_check_result(self, preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
-                                 components: int, cv_score: float, cv_stdev: float, holdout_score: float,
+                                 components: int, cv_score: float, cv_stdev: float,
                                  elapsed_time: float, failure: str) -> list:
         return [
             preprocessor.name,
@@ -1510,7 +1495,6 @@ class ModelHandler:
             components,
             cv_score,
             cv_stdev,
-            holdout_score,
             elapsed_time,
             failure,
         ]
@@ -1528,7 +1512,7 @@ class ModelHandler:
 
     def _update_spot_check_best_state(self, state: _SpotCheckState, pipeline: Pipeline,
                                       preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
-                                      cv_score: float, cv_stdev: float, holdout_score: float,
+                                      cv_score: float, cv_stdev: float,
                                       num_features: int, num_components: int) -> None:
         state.trained_pipeline = pipeline
         state.best_reduction = reduction
@@ -1536,13 +1520,12 @@ class ModelHandler:
         state.best_preprocessor = preprocessor
         state.best_cv_score = cv_score
         state.best_stdev = cv_stdev
-        state.best_holdout_score = holdout_score
         state.best_rfe_feature_selection = num_features
         state.best_num_components = num_components
 
     def _consider_spot_check_candidate(self, state: _SpotCheckState, pipeline: Pipeline,
                                        preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
-                                       cv_score: float, cv_stdev: float, holdout_score: float,
+                                       cv_score: float, cv_stdev: float,
                                        num_features: int, num_components: int, failure: str) -> tuple[str, bool]:
         candidate_success = (
             pipeline is not None
@@ -1564,7 +1547,6 @@ class ModelHandler:
                 algorithm=algorithm,
                 cv_score=cv_score,
                 cv_stdev=cv_stdev,
-                holdout_score=holdout_score,
                 num_features=num_features,
                 num_components=num_components,
             )
@@ -1590,7 +1572,6 @@ class ModelHandler:
                 components=dh.X_train.shape[1],
                 cv_score=np.nan,
                 cv_stdev=np.nan,
-                holdout_score=np.nan,
                 elapsed_time=0.0,
                 failure=failure,
             )], False
@@ -1643,15 +1624,8 @@ class ModelHandler:
                     preprocessor_callable, oversampler, undersampler, kfold, dh, num_features
                 )
 
-                # Do not let a secondary validation attempt hide the original CV
-                # failure. A candidate that did not complete CV is already invalid.
-                tmp_holdout_score = np.nan if failure else 0.0
-                if not failure and current_pipeline is not None \
-                        and dh.X_validation is not None and dh.Y_validation is not None:
-                    current_pipeline, tmp_holdout_score, validation_failure = \
-                        self.train_and_evaluate_picked_model(current_pipeline, dh)
-                    if validation_failure:
-                        failure = validation_failure
+                # Spot-checking is CV-only. Do not fit candidates against or score the
+                # final holdout here; it remains untouched until final evaluation.
 
                 if current_pipeline is not None:
                     num_components = self.get_components_from_pipeline(
@@ -1684,7 +1658,6 @@ class ModelHandler:
                 algorithm=algorithm,
                 cv_score=temp_cv_score,
                 cv_stdev=temp_cv_stdev,
-                holdout_score=tmp_holdout_score,
                 num_features=num_features,
                 num_components=num_components,
                 failure=failure,
@@ -1699,7 +1672,6 @@ class ModelHandler:
                 components=min(num_components, num_features),
                 cv_score=temp_cv_score,
                 cv_stdev=temp_cv_stdev,
-                holdout_score=tmp_holdout_score,
                 elapsed_time=elapsed_time,
                 failure=failure,
             ))
@@ -1784,7 +1756,6 @@ class ModelHandler:
                         if not self.should_run_computation(reduction, algorithm):
                             continue
 
-                        dh.split_dataset_for_training_and_validation()
                         self.handler.logger.print_progress(
                             message=f"{standard_progress_text} ({preprocessor.name}-{reduction.name}-{algorithm.name})"
                         )
@@ -2111,6 +2082,7 @@ class PredictionsHandler:
     X_most_mispredicted: pd.DataFrame = field(init=False)
     dark_numbers: pd.DataFrame = field(init=False)
     dark_numb_conf_matrix: pd.DataFrame = field(init=False)
+    dark_number_fallback_events: pd.DataFrame = field(init=False)
     model: str = field(init=False)
     class_report: dict = field(init=False)
 
@@ -2637,12 +2609,51 @@ class PredictionsHandler:
             raise ValueError(f"Invalid dark-number correction factor: {corr}")
         return corr
 
+    def _record_dark_number_fallback_event(
+        self, *, model_name, target, direct_status, flip_fraction, corr, corr_source, details
+    ) -> None:
+        """Record aggregate experimental fallback telemetry without source-row content."""
+        if not hasattr(self, "dark_number_fallback_events") or self.dark_number_fallback_events is None:
+            self.dark_number_fallback_events = pd.DataFrame()
+        event = {
+            "model": model_name,
+            "target": target,
+            "direct_status": direct_status,
+            "flip_fraction": float(flip_fraction),
+            "corr": float(corr),
+            "corr_source": corr_source,
+            "accepted": bool(details.get("accepted", False)),
+            "reason": details.get("reason", "unknown"),
+            "clone_count": details.get("clone_count"),
+            "valid_clone_count": details.get("valid_clone_count"),
+            "median": details.get("median"),
+            "mean": details.get("mean"),
+            "std": details.get("std"),
+            "cv": details.get("cv"),
+            "min": details.get("min"),
+            "max": details.get("max"),
+            "clone_corrections": json.dumps(details.get("clone_corrections", [])),
+            "clone_results": json.dumps(details.get("clone_results", []), default=str),
+        }
+        self.dark_number_fallback_events = pd.concat(
+            [self.dark_number_fallback_events, pd.DataFrame([event])], ignore_index=True
+        )
+
     def _calculate_dark_number_corrections(self, model, X, Y, labels, flip_fraction, random_state, model_name):
         """Estimate one correction factor per one-vs-rest target for a specific model/data pairing."""
         corrs = {}
         corr_sources = {}
+        corr_models = {}
         estimator_X = Helpers.prepare_estimator_input(X)
         mh = self.handler.get_handler("model")
+        recovery_level_unestimable_statuses = {
+            "zero_recovery",
+            "nonfinite",
+            "nan_recovery",
+        }
+        statistically_unestimable_statuses = recovery_level_unestimable_statuses | {
+            "insufficient_sample",
+        }
 
         self.handler.logger.print_info(
             f"Estimating Dark Number correction factors for {model_name} with "
@@ -2652,108 +2663,186 @@ class PredictionsHandler:
         for label in labels:
             corr = 1.0
             corr_source = "fallback/unestimable"
+            corr_model = model_name
             if DARK_NUMBER_DEBUG_LOGGING:
                 self.handler.logger.print_info(
                     f"[DEBUG] Considering label: {label} among labels: {labels} for corr_estimator"
                 )
+
+            n_splits, n_repeats = self._auto_n_splits_and_repeats(
+                n_jobs_desired=-1,
+                min_n_splits=4,
+                min_n_repeats=2,
+                max_multiplier=3
+            )
+            total_jobs = min(
+                n_splits * n_repeats,
+                psutil.cpu_count(logical=True),
+                self.handler.STANDARD_DESIRED_N_JOBS
+            )
+            if DARK_NUMBER_DEBUG_LOGGING:
+                self.handler.logger.print_info(
+                    f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator"
+                )
+
+            corr_estimator = DarkNumberCorrectionFactorEstimator(
+                estimator=clone(model),
+                flip_fraction=flip_fraction,
+                n_splits=n_splits,
+                n_repeats=n_repeats,
+                n_jobs=total_jobs,
+                predict_mode='predict',
+                random_state=random_state,
+                positive_class=label,
+                sample_size=1.0,
+                logger=self.handler.logger
+            )
+
+            direct_error = None
             try:
-                n_splits, n_repeats = self._auto_n_splits_and_repeats(
-                    n_jobs_desired=-1,
-                    min_n_splits=4,
-                    min_n_repeats=2,
-                    max_multiplier=3
+                mh.execute_n_job(
+                    ModelHandler.fit_with_n_jobs,
+                    corr_estimator,
+                    estimator_X,
+                    Y,
+                    n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS
                 )
-                total_jobs = min(
-                    n_splits * n_repeats,
-                    psutil.cpu_count(logical=True),
-                    self.handler.STANDARD_DESIRED_N_JOBS
-                )
-                if DARK_NUMBER_DEBUG_LOGGING:
-                    self.handler.logger.print_info(
-                        f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator"
+                if not getattr(corr_estimator, "is_valid_for_regression_", True):
+                    raise ValueError(
+                        "Direct correction-factor estimator did not produce an observed estimate "
+                        f"(status={getattr(corr_estimator, 'correction_status_', 'unknown')})."
                     )
-                try:
-                    corr_estimator = DarkNumberCorrectionFactorEstimator(
-                        estimator=clone(model),
-                        flip_fraction=flip_fraction,
-                        n_splits=n_splits,
-                        n_repeats=n_repeats,
-                        n_jobs=total_jobs,
-                        predict_mode='predict',
-                        random_state=random_state,
-                        positive_class=label,
-                        sample_size=1.0,
-                        logger=self.handler.logger
-                    )
-                    mh.execute_n_job(
-                        ModelHandler.fit_with_n_jobs,
-                        corr_estimator,
-                        estimator_X,
-                        Y,
-                        n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS
-                    )
-                    if not getattr(corr_estimator, "is_valid_for_regression_", True):
-                        raise ValueError(
-                            "Direct correction-factor estimator did not produce an observed estimate "
-                            f"(status={getattr(corr_estimator, 'correction_status_', 'unknown')})."
-                        )
-                    corr = self._validate_dark_number_correction(corr_estimator.score())
-                    corr_source = "direct"
-                except Exception as ex:
-                    self.handler.logger.print_warning(
-                        f"Correction number estimator failed for {model_name}, target {label}: {str(ex)}. "
-                        "Fallback: using regression over valid finite sample estimates."
-                    )
-                    corr_regressor = DarkNumberCorrectionFactorRegressor(
-                        estimator=clone(model),
-                        sample_size_list=[0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
-                        flip_fraction=flip_fraction,
-                        n_splits=n_splits,
-                        n_repeats=n_repeats,
-                        n_jobs=total_jobs,
-                        predict_mode='predict',
-                        random_state=random_state,
-                        positive_class=label,
-                        type='logbounded',
-                        logger=self.handler.logger
-                    )
-                    mh.execute_n_job(
-                        ModelHandler.fit_with_n_jobs,
-                        corr_regressor,
-                        estimator_X,
-                        Y,
-                        n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS
-                    )
-                    corr = self._validate_dark_number_correction(corr_regressor.score())
-                    corr_source = "regressed"
-                    invalid_count = len(corr_regressor.invalid_sample_results_ or [])
-                    if invalid_count:
-                        self.handler.logger.print_info(
-                            f"Correction-factor regression for {model_name}, target {label}: "
-                            f"used {len(corr_regressor.valid_sample_results_ or [])} valid sample estimates "
-                            f"and ignored {invalid_count} invalid/unestimable sample estimates."
-                        )
-                    if DARK_NUMBER_DEBUG_LOGGING:
-                        self.handler.logger.print_info(
-                            f"Correction number regression sample results = {corr_regressor.sample_results_} "
-                            f"with result {corr}"
-                        )
+                corr = self._validate_dark_number_correction(corr_estimator.score())
+                corr_source = "direct"
             except Exception as ex:
-                self.handler.logger.print_warning(
-                    f"Correction number calculation for label {label} and {model_name} failed. "
-                    f"Using 1.0 as fallback/unestimable. Reason: {str(ex)}"
-                )
-                corr = 1.0
-                corr_source = "fallback/unestimable"
+                direct_error = ex
+
+            if direct_error is not None:
+                status = getattr(corr_estimator, "correction_status_", "unknown")
+                if status in statistically_unestimable_statuses:
+                    if (
+                        status in recovery_level_unestimable_statuses
+                        and self.handler.config.should_use_experimental_perturbed_dark_number_fallback()
+                    ):
+                        self.handler.logger.print_warning(
+                            f"Correction number estimator is statistically unestimable for {model_name}, "
+                            f"target {label} (status={status}). EXPERIMENTAL fallback: trying stable "
+                            "perturbed shadow-clones of the same target estimator."
+                        )
+                        try:
+                            corr, corr_source, fallback_details = estimate_perturbed_same_model_correction(
+                                model,
+                                estimator_X,
+                                Y,
+                                flip_fraction=flip_fraction,
+                                n_splits=n_splits,
+                                n_repeats=n_repeats,
+                                random_state=random_state,
+                                positive_class=label,
+                                perturbation_clones=5,
+                                perturbation_min_valid=3,
+                                perturbation_max_cv=0.50,
+                                logger=self.handler.logger,
+                            )
+                        except Exception as fallback_error:
+                            self.handler.logger.print_warning(
+                                f"EXPERIMENTAL perturbed same-model fallback failed for {model_name}, "
+                                f"target {label}: {fallback_error}. Using 1.0 as fallback/unestimable."
+                            )
+                            corr = 1.0
+                            corr_source = "fallback/unestimable"
+                            fallback_details = {
+                                "accepted": False,
+                                "reason": f"fallback_exception: {fallback_error}",
+                                "clone_count": 5,
+                                "valid_clone_count": 0,
+                                "clone_corrections": [],
+                                "clone_results": [],
+                            }
+                        self._record_dark_number_fallback_event(
+                            model_name=model_name,
+                            target=label,
+                            direct_status=status,
+                            flip_fraction=flip_fraction,
+                            corr=corr,
+                            corr_source=corr_source,
+                            details=fallback_details,
+                        )
+                    else:
+                        reason = (
+                            "experimental perturbed fallback is disabled"
+                            if status in recovery_level_unestimable_statuses
+                            else "the sample is insufficient for correction estimation"
+                        )
+                        self.handler.logger.print_warning(
+                            f"Correction number estimator is statistically unestimable for {model_name}, "
+                            f"target {label} (status={status}); {reason}. Sample-size regression is not "
+                            "applicable; using 1.0 as fallback/unestimable."
+                        )
+                elif isinstance(direct_error, (MemoryError, SystemError)):
+                    self.handler.logger.print_warning(
+                        f"Correction number estimator hit a resource/execution failure for {model_name}, "
+                        f"target {label}: {str(direct_error)}. Fallback: using sample-size regression "
+                        "with the same target estimator."
+                    )
+                    try:
+                        corr_regressor = DarkNumberCorrectionFactorRegressor(
+                            estimator=clone(model),
+                            sample_size_list=[0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5],
+                            flip_fraction=flip_fraction,
+                            n_splits=n_splits,
+                            n_repeats=n_repeats,
+                            n_jobs=total_jobs,
+                            predict_mode='predict',
+                            random_state=random_state,
+                            positive_class=label,
+                            type='logbounded',
+                            logger=self.handler.logger
+                        )
+                        mh.execute_n_job(
+                            ModelHandler.fit_with_n_jobs,
+                            corr_regressor,
+                            estimator_X,
+                            Y,
+                            n_jobs_desired=self.handler.STANDARD_DESIRED_N_JOBS
+                        )
+                        corr = self._validate_dark_number_correction(corr_regressor.score())
+                        corr_source = "regressed_same_model"
+                        invalid_count = len(corr_regressor.invalid_sample_results_ or [])
+                        if invalid_count:
+                            self.handler.logger.print_info(
+                                f"Correction-factor regression for {model_name}, target {label}: "
+                                f"used {len(corr_regressor.valid_sample_results_ or [])} valid sample estimates "
+                                f"and ignored {invalid_count} invalid/unestimable sample estimates."
+                            )
+                        if DARK_NUMBER_DEBUG_LOGGING:
+                            self.handler.logger.print_info(
+                                f"Correction number regression sample results = {corr_regressor.sample_results_} "
+                                f"with result {corr}"
+                            )
+                    except Exception as regression_error:
+                        self.handler.logger.print_warning(
+                            f"Correction number regression for label {label} and {model_name} failed. "
+                            f"Using 1.0 as fallback/unestimable. Reason: {str(regression_error)}"
+                        )
+                        corr = 1.0
+                        corr_source = "fallback/unestimable"
+                else:
+                    self.handler.logger.print_warning(
+                        f"Correction number estimator failed for {model_name}, target {label}: "
+                        f"{str(direct_error)}. Sample-size regression was not attempted because the failure "
+                        "was not classified as resource-constrained; using 1.0 as fallback/unestimable."
+                    )
 
             corrs[label] = corr
             corr_sources[label] = corr_source
+            corr_models[label] = corr_model
             self.handler.logger.print_info(
                 f"Dark Number correction factor for {model_name}, target {label}: "
-                f"{corr:.6g} ({corr_source})."
+                f"{corr:.6g} ({corr_source}; corr_model={corr_model})."
             )
 
-        return corrs, corr_sources
+        return corrs, corr_sources, corr_models
 
     def get_dark_numbers(
         self,
@@ -2773,6 +2862,7 @@ class PredictionsHandler:
         """Compute Dark Numbers while keeping CV-test, CV-full and retrained-full estimates distinct."""
         self.dark_numbers = pd.DataFrame()
         self.dark_numb_conf_matrix = pd.DataFrame()
+        self.dark_number_fallback_events = pd.DataFrame()
 
         models = [] if models is None else list(models)
         if model_names is None:
@@ -2799,6 +2889,7 @@ class PredictionsHandler:
         # correction factors from models[0] across every reported estimate.
         corrs_by_model = {}
         corr_sources_by_model = {}
+        corr_models_by_model = {}
         for model_index, (model, model_name, can_predict_proba) in enumerate(
             zip(models, model_names, supports_predict_proba)
         ):
@@ -2810,7 +2901,11 @@ class PredictionsHandler:
             else:
                 corr_X, corr_Y = X, Y
 
-            corrs_by_model[model_index], corr_sources_by_model[model_index] = self._calculate_dark_number_corrections(
+            (
+                corrs_by_model[model_index],
+                corr_sources_by_model[model_index],
+                corr_models_by_model[model_index],
+            ) = self._calculate_dark_number_corrections(
                 model=model,
                 X=corr_X,
                 Y=corr_Y,
@@ -2860,7 +2955,8 @@ class PredictionsHandler:
                     Y_prob_pred,
                     type,
                     corrs_by_model[model_index],
-                    corr_sources_by_model[model_index]
+                    corr_sources_by_model[model_index],
+                    corr_models_by_model[model_index]
                 )
 
                 if include_in_combined:
@@ -2888,10 +2984,12 @@ class PredictionsHandler:
 
             legacy_corrs = corrs_by_model.get(0)
             legacy_corr_sources = corr_sources_by_model.get(0)
+            legacy_corr_models = corr_models_by_model.get(0)
             if legacy_corrs is None:
                 first_model_index = full_data_predictions[0][2]
                 legacy_corrs = corrs_by_model[first_model_index]
                 legacy_corr_sources = corr_sources_by_model[first_model_index]
+                legacy_corr_models = corr_models_by_model[first_model_index]
             self._update_dark_numbers(
                 "Combined (legacy full-data)",
                 Y,
@@ -2899,7 +2997,8 @@ class PredictionsHandler:
                 Y_prob_pred_worst,
                 type,
                 legacy_corrs,
-                legacy_corr_sources
+                legacy_corr_sources,
+                legacy_corr_models
             )
 
         return None
@@ -2954,13 +3053,21 @@ class PredictionsHandler:
         type,
         corrs=None,
         corr_sources=None,
+        corr_models=None,
     ):
         
         # Compute dark numbers
         model_dark_numbers = DarkNumberCalculator().compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type, corrs=corrs)
-        if corr_sources is not None:
+        if corr_models is not None:
             model_dark_numbers.insert(
                 model_dark_numbers.columns.get_loc("corr") + 1,
+                "corr_model",
+                model_dark_numbers["target"].map(corr_models).fillna("unknown"),
+            )
+        if corr_sources is not None:
+            corr_source_position = model_dark_numbers.columns.get_loc("corr_model") + 1 if "corr_model" in model_dark_numbers else model_dark_numbers.columns.get_loc("corr") + 1
+            model_dark_numbers.insert(
+                corr_source_position,
                 "corr_source",
                 model_dark_numbers["target"].map(corr_sources).fillna("unknown"),
             )
@@ -2993,6 +3100,14 @@ class PredictionsHandler:
         )
 
         self.handler.logger.print_code("Get dark numbers calculations", Helpers.create_download_link(dark_numbers_filepath, title = ""))
+
+        if hasattr(self, "dark_number_fallback_events") and not self.dark_number_fallback_events.empty:
+            fallback_events_filepath = self.handler.config.get_output_filepath("dark_number_fallback_events")
+            Helpers.save_matrix_as_csv(self.dark_number_fallback_events, fallback_events_filepath)
+            self.handler.logger.print_code(
+                "Get experimental Dark Number fallback events",
+                Helpers.create_download_link(fallback_events_filepath, title=""),
+            )
 
         return None
     

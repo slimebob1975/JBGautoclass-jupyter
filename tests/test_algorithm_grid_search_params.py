@@ -115,6 +115,29 @@ def test_sklearn_mlp_variants_honor_configured_max_iterations():
         assert estimator.max_iter == configured_max_iterations, algorithm.name
 
 
+def test_fut_voting_grid_is_bounded_to_soft_voting_weight_profiles():
+    params = AlgorithmGridSearchParams.FUTV.parameters
+    combinations = list(ParameterGrid(params))
+
+    assert params == {
+        "weights": [None, (2, 1, 1), (1, 2, 1), (1, 1, 2)],
+    }
+    assert len(combinations) == 4
+    assert not any(key.startswith(("mlpc__", "rfcl__", "abc__")) for key in params)
+    assert "voting" not in params
+
+    estimator = Algorithm.FUTV.call_algorithm(
+        max_iterations=20000, size=len(_X)
+    )
+    assert estimator.voting == "soft"
+    assert [name for name, _ in estimator.estimators] == ["mlpc", "rfcl", "abc"]
+
+    for combination in combinations:
+        candidate = estimator.set_params(**combination)
+        assert candidate.voting == "soft"
+        assert candidate.weights == combination["weights"]
+
+
 def test_fut_stacking_grid_is_bounded_and_routes_only_ensemble_parameters():
     params = AlgorithmGridSearchParams.FUTS.parameters
     combinations = list(ParameterGrid(params))
