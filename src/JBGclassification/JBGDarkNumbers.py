@@ -5,7 +5,56 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import confusion_matrix
 
 class DarkNumberCalculator:
-    
+
+    FORMULA_LATEX = {
+        "base": r"D = c\,(1 - TN_r)\,(2 - TP_r)",
+        "single_alpha": r"D = c\,\alpha\,(1 - TN_r)\,(2 - TP_r)",
+        "separated_alpha": r"D = c\,\alpha_{FP}\,(1 - TN_r)\,\alpha_{FN}\,(2 - TP_r)",
+        "non_linear": r"D = c\,(1 - TN_r^{1/k})\,(2 - TP_r^{1/k})",
+        "non_linear_alpha": r"D = c\,\alpha\,(1 - TN_r^{1/k})\,(2 - TP_r^{1/k})",
+    }
+
+    FORMULA_ALPHA_NOTES = {
+        "base": "No alpha",
+        "single_alpha": "alpha: mean certainty on errors",
+        "separated_alpha": "alpha_FP / alpha_FN: mean certainty on FP / FN",
+        "non_linear": "No alpha",
+        "non_linear_alpha": "alpha: mean certainty on errors",
+    }
+
+    @classmethod
+    def resolve_calculation_type(cls, method, alpha) -> str:
+        """Resolve the GUI/config Method + Alpha choice to the implemented calculator branch."""
+        method_name = getattr(method, "name", method)
+        alpha_name = getattr(alpha, "name", alpha)
+        method_name = str(method_name).strip().upper()
+        alpha_name = str(alpha_name).strip().upper()
+        calculation_types = {
+            ("LINEAR", "NONE"): "base",
+            ("LINEAR", "SINGLE"): "single_alpha",
+            ("LINEAR", "SEPARATED"): "separated_alpha",
+            ("NON_LINEAR", "NONE"): "non_linear",
+            ("NON_LINEAR", "SINGLE"): "non_linear_alpha",
+        }
+        try:
+            return calculation_types[(method_name, alpha_name)]
+        except KeyError as exc:
+            raise ValueError(
+                f"Unsupported Dark Number method/alpha combination: {method_name}/{alpha_name}"
+            ) from exc
+
+    @classmethod
+    def get_formula_spec(cls, method, alpha, root_degree: int = 3) -> dict:
+        """Return display metadata for the exact calculator branch selected by Method + Alpha."""
+        calculation_type = cls.resolve_calculation_type(method, alpha)
+        latex = cls.FORMULA_LATEX[calculation_type].replace("1/k", f"1/{int(root_degree)}")
+        return {
+            "calculation_type": calculation_type,
+            "latex": latex,
+            "alpha_note": cls.FORMULA_ALPHA_NOTES[calculation_type],
+            "root_degree": int(root_degree),
+        }
+
     def __init__(self):
         pass
 

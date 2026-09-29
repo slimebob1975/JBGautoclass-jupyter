@@ -538,7 +538,11 @@ class Config:
                 "Calculate Dark Numbers":                  self.calculate_dark_numbers,
                 "Dark Number method":                      self.dark_number_method.display_name,
                 "Dark Number alpha":                       self.dark_number_alpha.display_name,
-                "Experimental perturbed fallback":           self.experimental_perturbed_dark_number_fallback,
+                "Correction failure handling":               (
+                    "Experimental fallback"
+                    if self.experimental_perturbed_dark_number_fallback
+                    else "Controlled failure"
+                ),
                 "Dark-number injected label-noise fraction": self.dark_number_flip_fraction,
                 "Oversampling technique":                self.oversampler.full_name,
                 "Undersampling technique":               self.undersampler.full_name,
@@ -1075,22 +1079,13 @@ class Config:
         return DarkNumberAlpha.from_config_value(getattr(self.mode, "dark_number_alpha", "NONE"))
 
     def get_dark_number_calculation_type(self) -> str:
-        """Return the calculator type used by JBGDarkNumbers."""
-        method = self.get_dark_number_method()
-        alpha = self.get_dark_number_alpha()
-        calculation_types = {
-            (DarkNumberMethod.LINEAR, DarkNumberAlpha.NONE): "base",
-            (DarkNumberMethod.LINEAR, DarkNumberAlpha.SINGLE): "single_alpha",
-            (DarkNumberMethod.LINEAR, DarkNumberAlpha.SEPARATED): "separated_alpha",
-            (DarkNumberMethod.NON_LINEAR, DarkNumberAlpha.NONE): "non_linear",
-            (DarkNumberMethod.NON_LINEAR, DarkNumberAlpha.SINGLE): "non_linear_alpha",
-        }
-        try:
-            return calculation_types[(method, alpha)]
-        except KeyError as exc:
-            raise ValueError(
-                f"Unsupported Dark Number method/alpha combination: {method.display_name}/{alpha.display_name}"
-            ) from exc
+        """Return the calculator branch used by JBGDarkNumbers."""
+        from JBGDarkNumbers import DarkNumberCalculator
+
+        return DarkNumberCalculator.resolve_calculation_type(
+            self.get_dark_number_method(),
+            self.get_dark_number_alpha(),
+        )
 
     def should_use_experimental_perturbed_dark_number_fallback(self) -> bool:
         """Whether statistical Dark Number failures may use the experimental shadow-clone fallback."""

@@ -65,3 +65,25 @@ def test_non_linear_alpha_uses_false_negative_probability_when_fp_is_zero():
     )
 
     assert alpha == pytest.approx(0.70)
+
+
+@pytest.mark.parametrize(
+    ("method", "alpha", "calculation_type", "fragment"),
+    [
+        ("LINEAR", "NONE", "base", r"(1 - TN_r)"),
+        ("LINEAR", "SINGLE", "single_alpha", r"\alpha"),
+        ("LINEAR", "SEPARATED", "separated_alpha", r"\alpha_{FP}"),
+        ("NON_LINEAR", "NONE", "non_linear", r"TN_r^{1/3}"),
+        ("NON_LINEAR", "SINGLE", "non_linear_alpha", r"\alpha"),
+    ],
+)
+def test_formula_spec_resolves_to_implemented_calculator_branch(method, alpha, calculation_type, fragment):
+    spec = DarkNumberCalculator.get_formula_spec(method, alpha, root_degree=3)
+
+    assert spec["calculation_type"] == calculation_type
+    assert fragment in spec["latex"]
+
+
+def test_formula_spec_rejects_unimplemented_non_linear_separated_alpha():
+    with pytest.raises(ValueError, match="Unsupported Dark Number method/alpha combination"):
+        DarkNumberCalculator.get_formula_spec("NON_LINEAR", "SEPARATED")

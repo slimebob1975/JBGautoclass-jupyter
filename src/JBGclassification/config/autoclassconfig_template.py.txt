@@ -96,8 +96,8 @@ mode = {
     # Dark Number correction factors. 0.20 preserves the published workflow.
     "dark_number_flip_fraction": "<dark_number_flip_fraction>",
 
-    # Experimental fallback: when the ordinary correction estimator is statistically
-    # unestimable, try stable perturbed shadow-clones of the same model.
+    # Correction-failure handling. True corresponds to the GUI's default
+    # "Experimental fallback" choice; False corresponds to "Controlled failure".
     "experimental_perturbed_dark_number_fallback": <experimental_perturbed_dark_number_fallback>,
 
     # Use oversampling techniques

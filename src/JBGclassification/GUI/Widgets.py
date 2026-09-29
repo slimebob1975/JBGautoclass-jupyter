@@ -15,6 +15,7 @@ from Config import (Config, Reduction, ReductionTuple, Algorithm,
                     AlgorithmTuple, Preprocess, PreprocessTuple, 
                     ScoreMetric, Oversampling, Undersampling, NgramRange, DarkNumberAlpha, DarkNumberMethod)
 from JBGTransformers import TextDataToNumbersConverter
+from JBGDarkNumbers import DarkNumberCalculator
         
 from JBGExceptions import GuiWidgetsException
 import Helpers
@@ -230,6 +231,17 @@ class EventHandler:
         if change.get("name") != "value":
             return
         self.widgets.sync_dark_number_alpha_options()
+        self.widgets.sync_dark_number_equation()
+
+    def dark_number_alpha(self, change: Bunch) -> None:
+        if change.get("name") != "value":
+            return
+        self.widgets.sync_dark_number_equation()
+
+    def dark_number_failure_mode(self, change: Bunch) -> None:
+        if change.get("name") != "value":
+            return
+        self.widgets.sync_dark_number_equation()
 
     def continuation_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
@@ -398,7 +410,7 @@ class Widgets:
             "models": [self.models_dropdown, self.field_status("models")],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
-            "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_method, self.dark_number_alpha, self.dark_number_perturbed_fallback_checkbox],
+            "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_method, self.dark_number_alpha, self.dark_number_failure_mode],
             "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.oversampler_dropdown, self.undersampler_dropdown, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.ngram_range_dropdown],
@@ -413,12 +425,62 @@ class Widgets:
 
     def _migrate_legacy_widget_labels(self) -> None:
         """Migrate exact legacy labels while preserving user-customized text."""
+        legacy_fallback = self.default_widgets.pop("dark_number_perturbed_fallback_checkbox", None)
+        for section_name, section_items in self.settings.get("sections", {}).items():
+            self.settings["sections"][section_name] = [
+                "dark_number_failure_mode"
+                if item == "dark_number_perturbed_fallback_checkbox"
+                else item
+                for item in section_items
+            ]
+        classifier_items = self.settings.get("sections", {}).get("classifier")
+        if classifier_items is not None and "dark_number_failure_mode" not in classifier_items:
+            insert_at = (
+                classifier_items.index("dark_number_alpha") + 1
+                if "dark_number_alpha" in classifier_items
+                else len(classifier_items)
+            )
+            classifier_items.insert(insert_at, "dark_number_failure_mode")
+        if "dark_number_failure_mode" not in self.default_widgets:
+            legacy_value = True
+            if legacy_fallback is not None:
+                legacy_value = bool(legacy_fallback.get("params", {}).get("value", True))
+            self.default_widgets["dark_number_failure_mode"] = {
+                "type": "RadioButtons",
+                "params": {
+                    "options": [["No fallback", False], ["Experimental", True]],
+                    "value": legacy_value,
+                    "disabled": True,
+                    "description": "Failure:",
+                    "tooltip": (
+                        "Choose no fallback or the experimental perturbed same-model fallback "
+                        "when ordinary correction is statistically unestimable"
+                    ),
+                    "layout": widgets.Layout(width="210px", min_width="210px", margin="0 0 0 8px"),
+                    "style": {"description_width": "initial"},
+                },
+            }
+
+        failure_widget = self.default_widgets.get("dark_number_failure_mode")
+        if failure_widget is not None:
+            params = failure_widget.setdefault("params", {})
+            params["options"] = [["No fallback", False], ["Experimental", True]]
+            params["description"] = "Failure:"
+            params["tooltip"] = (
+                "Choose no fallback or the experimental perturbed same-model fallback "
+                "when ordinary correction is statistically unestimable"
+            )
+            params["layout"] = widgets.Layout(
+                width="210px", min_width="210px", margin="0 0 0 8px"
+            )
+            params["style"] = {"description_width": "initial"}
+
         replacements = {
             "train_checkbox": (("Mode: Train",), "Train"),
             "predict_checkbox": (("Mode: Predict",), "Predict"),
             "mispredicted_checkbox": (("Mode: Display mispredictions",), "Display mispredictions"),
             "metas_checkbox": (("Mode: Pass on meta data",), "Pass on meta data"),
-            "dark_numbers_checkbox": (("Dark Numbers: Calculate",), ""),
+            "dark_numbers_checkbox": (("Dark Numbers: Calculate", ""), "Estimate"),
             "encryption_checkbox": (("Text: Encryption",), "Encryption"),
             "categorize_checkbox": (("Text: Categorize", "Categorize"), "Categorizer"),
             "filter_checkbox": (("Text: Filter",), "Filter"),
@@ -580,7 +642,7 @@ class Widgets:
             "dark_numbers_checkbox": config.should_calculate_dark_numbers(),
             "dark_number_method": config.get_dark_number_method().name,
             "dark_number_alpha": config.get_dark_number_alpha().name,
-            "dark_number_perturbed_fallback_checkbox": config.should_use_experimental_perturbed_dark_number_fallback(),
+            "dark_number_failure_mode": config.should_use_experimental_perturbed_dark_number_fallback(),
         })
         
         # Disabled items:
@@ -685,7 +747,7 @@ class Widgets:
                 "dark_number_alpha": DarkNumberAlpha.from_config_value(
                     getattr(mode, "dark_number_alpha", "NONE")
                 ).name,
-                "dark_number_perturbed_fallback_checkbox": getattr(
+                "dark_number_failure_mode": getattr(
                     mode, "experimental_perturbed_dark_number_fallback", True
                 ),
                 "algorithm_dropdown": tuple(mode.algorithm.get_abbreviations()),
@@ -762,7 +824,7 @@ class Widgets:
                 "dark_numbers_checkbox",
                 "dark_number_method",
                 "dark_number_alpha",
-                "dark_number_perturbed_fallback_checkbox",
+                "dark_number_failure_mode",
             ])
 
             if self.source_can_be_predicted():
@@ -782,7 +844,7 @@ class Widgets:
                 "dark_numbers_checkbox": True,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "SEPARATED",
-                "dark_number_perturbed_fallback_checkbox": True,
+                "dark_number_failure_mode": True,
             })
         else:
             self.disable_items([
@@ -792,7 +854,7 @@ class Widgets:
                 "dark_numbers_checkbox",
                 "dark_number_method",
                 "dark_number_alpha",
-                "dark_number_perturbed_fallback_checkbox",
+                "dark_number_failure_mode",
             ])
             self.update_values({
                 "train_checkbox": False,
@@ -801,7 +863,7 @@ class Widgets:
                 "dark_numbers_checkbox": False,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "NONE",
-                "dark_number_perturbed_fallback_checkbox": True,
+                "dark_number_failure_mode": True,
             })
             
     def apply_regression_test_profile(self) -> None:
@@ -856,7 +918,7 @@ class Widgets:
         self.disable_items([
             "predict_checkbox", "mispredicted_checkbox", "metas_checkbox",
             "dark_numbers_checkbox", "dark_number_method", "dark_number_alpha",
-            "dark_number_perturbed_fallback_checkbox",
+            "dark_number_failure_mode",
         ])
         self.update_values({
             "train_checkbox": True,
@@ -866,7 +928,7 @@ class Widgets:
             "dark_numbers_checkbox": True,
             "dark_number_method": "LINEAR",
             "dark_number_alpha": "NONE",
-            "dark_number_perturbed_fallback_checkbox": True,
+            "dark_number_failure_mode": True,
         })
         self.categorize_columns.options = ()
 
@@ -1048,7 +1110,7 @@ class Widgets:
                 calculate_dark_numbers = self.dark_numbers_checkbox.value,
                 dark_number_method = DarkNumberMethod[self.dark_number_method.value],
                 dark_number_alpha = DarkNumberAlpha[self.dark_number_alpha.value],
-                experimental_perturbed_dark_number_fallback = self.dark_number_perturbed_fallback_checkbox.value,
+                experimental_perturbed_dark_number_fallback = bool(self.dark_number_failure_mode.value),
                 oversampler = Oversampling[self.oversampler_dropdown.value],
                 undersampler = Undersampling[self.undersampler_dropdown.value],
                 algorithm = AlgorithmTuple(self.algorithm_dropdown.value),
@@ -1434,7 +1496,24 @@ class Widgets:
         return self.create_section_form("Mode", self.forms["checkboxes"], widgets.HBox)
 
     def dark_numbers_form(self) -> widgets.Box:
-        return self.create_section_form("Dark Numbers", self.forms["dark_numbers"], widgets.HBox)
+        controls = widgets.HBox(
+            self.forms["dark_numbers"],
+            layout=widgets.Layout(
+                width="68%",
+                justify_content="flex-start",
+                align_items="flex-start",
+            ),
+        )
+        controls.add_class("dark-number-controls")
+
+        form = self.create_section_form(
+            "Dark Numbers",
+            [controls, self.dark_number_equation],
+            widgets.HBox,
+            justify_content="space-between",
+        )
+        form.children[1].layout.align_items = "flex-start"
+        return form
     
     def algorithm_form(self) -> widgets.Box:
         return self.create_section_form("Model selection", self.forms["algorithm"], widgets.Box)
@@ -1725,39 +1804,107 @@ class Widgets:
     @property
     def dark_number_method(self) -> widgets.RadioButtons:
         name = sys._getframe().f_code.co_name
-        return self._load_widget(name, handler=self.eventhandler.dark_number_method)
+        widget = self._load_widget(name, handler=self.eventhandler.dark_number_method)
+        widget.layout.width = "150px"
+        widget.layout.min_width = "150px"
+        widget.style.description_width = "initial"
+        return widget
 
     @property
     def dark_number_alpha(self) -> widgets.RadioButtons:
         name = sys._getframe().f_code.co_name
-        return self._load_widget(name)
+        widget = self._load_widget(name, handler=self.eventhandler.dark_number_alpha)
+        widget.layout.width = "145px"
+        widget.layout.min_width = "145px"
+        widget.style.description_width = "initial"
+        return widget
 
     @property
-    def dark_number_perturbed_fallback_checkbox(self) -> widgets.Checkbox:
+    def dark_number_failure_mode(self) -> widgets.RadioButtons:
         name = sys._getframe().f_code.co_name
         if name not in self.default_widgets:
-            # Keep older local settings.json files compatible with the new experiment control.
+            # Older local settings may predate the radio control entirely. Keep the
+            # production default on the experimental fallback while exposing the choice.
             self.default_widgets[name] = {
-                "type": "Checkbox",
+                "type": "RadioButtons",
                 "params": {
+                    "options": (("No fallback", False), ("Experimental", True)),
                     "value": True,
                     "disabled": True,
-                    "indent": True,
-                    "description": "Experimental perturbed fallback",
+                    "description": "Failure:",
                     "tooltip": (
-                        "When the ordinary Dark Number correction estimate is statistically "
-                        "unestimable, try stable perturbed shadow-clones of the same model"
+                        "Choose no fallback or the experimental perturbed same-model fallback "
+                        "when ordinary correction is statistically unestimable"
                     ),
+                    "layout": widgets.Layout(width="210px", min_width="210px", margin="0 0 0 8px"),
+                    "style": {"description_width": "initial"},
                 },
             }
-        return self._load_widget(name)
+        widget = self._load_widget(name)
+        current_value = bool(widget.value)
+        widget.options = (("No fallback", False), ("Experimental", True))
+        widget.value = current_value
+        widget.description = "Failure:"
+        widget.layout.width = "210px"
+        widget.layout.min_width = "210px"
+        widget.layout.margin = "0 0 0 8px"
+        widget.style.description_width = "initial"
+        if not getattr(widget, "_jbg_failure_handler_attached", False):
+            widget.observe(self.eventhandler.dark_number_failure_mode)
+            widget._jbg_failure_handler_attached = True
+        return widget
+
+    @property
+    def dark_number_equation(self) -> widgets.HTMLMath:
+        """Read-only formula card kept outside persisted widget settings."""
+        name = sys._getframe().f_code.co_name
+        if name not in self.widgets:
+            self.widgets[name] = widgets.HTMLMath(
+                value="",
+                layout=widgets.Layout(width="28%", min_width="220px", margin="0 0 0 28px", overflow_x="auto"),
+            )
+            self.widgets[name].add_class("dark-number-equation")
+            self.sync_dark_number_equation()
+        return self.widgets[name]
 
     def sync_dark_number_control_state(self) -> None:
         """Keep dependent Dark Number controls aligned with the Dark Numbers checkbox."""
         disabled = self.dark_numbers_checkbox.disabled or not self.dark_numbers_checkbox.value
         self.dark_number_method.disabled = disabled
         self.dark_number_alpha.disabled = disabled
-        self.dark_number_perturbed_fallback_checkbox.disabled = disabled
+        self.dark_number_failure_mode.disabled = disabled
+        self.sync_dark_number_equation()
+
+    def sync_dark_number_equation(self) -> None:
+        """Render the selected calculator formula and correction-failure policy."""
+        equation = self.widgets.get("dark_number_equation")
+        if equation is None:
+            return
+
+        spec = DarkNumberCalculator.get_formula_spec(
+            self.dark_number_method.value,
+            self.dark_number_alpha.value,
+            root_degree=3,
+        )
+        failure_mode = "Experimental" if self.dark_number_failure_mode.value else "None"
+        enabled = bool(self.dark_numbers_checkbox.value)
+        opacity = "1.0" if enabled else "0.38"
+        state_note = "" if enabled else "<div style='margin-top:4px'><em>Estimate is off</em></div>"
+        root_note = (
+            " &middot; root=3"
+            if spec["calculation_type"].startswith("non_linear")
+            else ""
+        )
+        equation.value = (
+            f"<div style='border-left:1px solid #d0d0d0;padding:1px 0 1px 12px;opacity:{opacity};font-size:0.88em'>"
+            "<div style='font-weight:600;margin-bottom:2px'>Formula</div>"
+            f"<div style='font-size:0.94em'>\\({spec['latex']}\\)</div>"
+            f"<div style='margin-top:4px;font-size:0.78em'>{spec['alpha_note']}{root_note}</div>"
+            "<div style='margin-top:2px;font-size:0.78em'>c: correction &middot; TN<sub>r</sub>/TP<sub>r</sub>: true-neg/true-pos rate</div>"
+            f"<div style='margin-top:2px;font-size:0.78em'>Failure: {failure_mode}</div>"
+            f"{state_note}"
+            "</div>"
+        )
 
     def sync_dark_number_alpha_options(self) -> None:
         """Expose only alpha variants implemented for the selected formula family."""
