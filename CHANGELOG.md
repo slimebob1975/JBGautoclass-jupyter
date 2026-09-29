@@ -1,5 +1,11 @@
 # Revision log – JBGAutoClassification
 
+## 094 — Track Keras/NumPy terminal-only deprecation warnings
+
+- BACKLOG-only follow-up from real runtime feedback: repeated Keras/TensorFlow NumPy 2 `__array__(copy=...)` `DeprecationWarning` messages are visible in the launching terminal but are not captured in the `jbg-server` log.
+- Expanded the existing dependency-compatibility backlog item to cover both parts of the issue: establish a tested NumPy/TensorFlow/Keras/SciKeras version contract before suppressing the warning, and investigate third-party warning/stderr routing so the same diagnostics are observable in server logs without duplicating normal application logging.
+- No runtime or model behavior changes in this revision.
+
 ## 093 — Compact Dark Number panel layout
 
 - Runtime feedback on 092: the dynamic equation card worked technically in the real GUI, but the initial 60/36 split compressed the Method/Alpha/failure radio controls enough that option labels and radio markers wrapped awkwardly.

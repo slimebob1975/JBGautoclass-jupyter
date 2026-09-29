@@ -89,7 +89,7 @@
 
 ## Dependencies / packaging / code structure
 
-- [ ] Pin the supported Python/scikit-learn dependency set explicitly; the duplicate `matplotlib` requirement was removed in 048. Extend this to a tested NumPy/TensorFlow/Keras/SciKeras compatibility set: current Keras/TensorFlow execution emits NumPy 2 `__array__(copy=...)` deprecation warnings from the Keras backend. Do not suppress the warning before the compatible version contract is known.
+- [ ] Pin the supported Python/scikit-learn dependency set explicitly; the duplicate `matplotlib` requirement was removed in 048. Extend this to a tested NumPy/TensorFlow/Keras/SciKeras compatibility set: current Keras/TensorFlow execution emits repeated NumPy 2 `__array__(copy=...)` deprecation warnings from `keras/src/backend/tensorflow/core.py` (`return np.array(x)`). Do not suppress the warning before the compatible version contract is known. The latest runtime observation also shows these warnings reaching the launching terminal/stderr but not `jbg-server` logging; investigate warning/stderr routing so third-party runtime warnings are observable in the server log without duplicating normal application logs.
 - [ ] Reduce `sys.path` manipulation and direct-import coupling in favor of a clearer package/import structure.
 - [ ] Review hard-coded flags/settings that should instead be configuration values.
 - [ ] Remove or update stale tests/names such as the `Detector`/`Detecter` mismatch when encountered.
