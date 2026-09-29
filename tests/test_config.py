@@ -225,10 +225,12 @@ class TestConfig:
         del config.mode.calculate_dark_numbers
         del config.mode.dark_number_method
         del config.mode.dark_number_alpha
+        del config.mode.dark_number_target
 
         assert config.should_calculate_dark_numbers() is False
         assert config.get_dark_number_method() is DarkNumberMethod.LINEAR
         assert config.get_dark_number_alpha() is DarkNumberAlpha.NONE
+        assert config.get_dark_number_target() == ""
 
 
     @pytest.mark.parametrize(
@@ -257,6 +259,18 @@ class TestConfig:
         config = Config()
 
         assert config.get_dark_number_flip_fraction() == pytest.approx(0.2)
+
+    def test_dark_number_target_defaults_to_all_classes(self):
+        config = Config()
+
+        assert config.get_dark_number_target() == ""
+        assert config.mode.to_dict()["Dark Number target"] == "All classes"
+
+    def test_dark_number_target_can_select_specific_class(self):
+        config = Config(mode=Config.Mode(dark_number_target="Ja"))
+
+        assert config.get_dark_number_target() == "Ja"
+        assert config.mode.to_dict()["Dark Number target"] == "Ja"
 
     def test_experimental_perturbed_dark_number_fallback_defaults_on(self):
         config = Config()
@@ -387,6 +401,7 @@ class TestConfig:
         valid_iris_config.mode.calculate_dark_numbers = False
         valid_iris_config.mode.dark_number_method = DarkNumberMethod.NON_LINEAR
         valid_iris_config.mode.dark_number_alpha = DarkNumberAlpha.SINGLE
+        valid_iris_config.mode.dark_number_target = "positive"
         valid_iris_config.mode.experimental_perturbed_dark_number_fallback = False
         valid_iris_config.save_to_file(p, "some_fake_name")
 
@@ -401,11 +416,13 @@ class TestConfig:
         assert module.mode["calculate_dark_numbers"] is False
         assert module.mode["dark_number_method"] == "NON_LINEAR"
         assert module.mode["dark_number_alpha"] == "SINGLE"
+        assert module.mode["dark_number_target"] == "positive"
         assert module.mode["experimental_perturbed_dark_number_fallback"] is False
         assert loaded_config.connection.sql_password == "runtime-environment-password"
         assert loaded_config.should_calculate_dark_numbers() is False
         assert loaded_config.get_dark_number_method() is DarkNumberMethod.NON_LINEAR
         assert loaded_config.get_dark_number_alpha() is DarkNumberAlpha.SINGLE
+        assert loaded_config.get_dark_number_target() == "positive"
         assert loaded_config.should_use_experimental_perturbed_dark_number_fallback() is False
 
     def test_load_config_from_module(self, valid_iris_config):

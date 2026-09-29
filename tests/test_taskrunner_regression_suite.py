@@ -4,10 +4,11 @@ from JBGTaskRunner import TaskRunner, get_tasks
 
 
 class StubConfig:
-    def __init__(self, display_mispredicted: bool, calculate_dark_numbers: bool = False, dark_number_type: str = "base"):
+    def __init__(self, display_mispredicted: bool, calculate_dark_numbers: bool = False, dark_number_type: str = "base", dark_number_target: str = ""):
         self.display_mispredicted = display_mispredicted
         self.calculate_dark_numbers = calculate_dark_numbers
         self.dark_number_type = dark_number_type
+        self.dark_number_target = dark_number_target
 
     def should_display_mispredicted(self) -> bool:
         return self.display_mispredicted
@@ -17,6 +18,9 @@ class StubConfig:
 
     def get_dark_number_calculation_type(self) -> str:
         return self.dark_number_type
+
+    def get_dark_number_target(self) -> str:
+        return self.dark_number_target
 
     def get_output_filepath(self, kind: str) -> str:
         return f"{kind}.csv"
@@ -54,12 +58,12 @@ class StubPredictions:
         self.dark_number_evaluations.append((calculations_filepath, confusion_filepath))
 
 
-def make_runner(display_mispredicted: bool, regression_suite: bool, calculate_dark_numbers: bool = False, dark_number_type: str = "base"):
+def make_runner(display_mispredicted: bool, regression_suite: bool, calculate_dark_numbers: bool = False, dark_number_type: str = "base", dark_number_target: str = ""):
     logger = StubLogger()
     predictions = StubPredictions()
     runner = TaskRunner(
         datalayer=None,
-        config=StubConfig(display_mispredicted, calculate_dark_numbers, dark_number_type),
+        config=StubConfig(display_mispredicted, calculate_dark_numbers, dark_number_type, dark_number_target),
         logger=logger,
         handler=None,
         regression_suite=regression_suite,
@@ -91,6 +95,7 @@ def test_regression_suite_skips_reclassification_but_keeps_dark_numbers():
     assert predictions.dark_number_calls[0]["X_validation"] == "X-validation"
     assert predictions.dark_number_calls[0]["Y_validation"] == "Y-validation"
     assert predictions.dark_number_calls[0]["type"] == "all"
+    assert predictions.dark_number_calls[0]["target_class"] is None
     assert predictions.dark_number_evaluations == [
         ("dark_numbers.csv", "dark_numb_conf_matrix.csv")
     ]
@@ -137,6 +142,7 @@ def test_regular_run_can_calculate_dark_numbers_without_displaying_misprediction
         regression_suite=False,
         calculate_dark_numbers=True,
         dark_number_type="non_linear",
+        dark_number_target="positive",
     )
 
     runner.display_mispredicted__task(cross_trained_model="cross", trained_model="retrained")
@@ -144,6 +150,7 @@ def test_regular_run_can_calculate_dark_numbers_without_displaying_misprediction
     assert predictions.mispredicted_calls == []
     assert logger.headers == ["Dark numbers"]
     assert predictions.dark_number_calls[0]["type"] == "non_linear"
+    assert predictions.dark_number_calls[0]["target_class"] == "positive"
     assert predictions.dark_number_evaluations == [
         ("dark_numbers.csv", "dark_numb_conf_matrix.csv")
     ]

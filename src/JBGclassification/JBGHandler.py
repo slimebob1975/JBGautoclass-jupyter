@@ -55,6 +55,7 @@ import inspect
 
 GIVE_EXCEPTION_TRACEBACK = False
 DARK_NUMBER_DEBUG_LOGGING = False
+DARK_NUMBER_LOW_RECOVERY_WARNING_THRESHOLD = 0.05
 
 class Logger(Protocol):
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
@@ -2714,6 +2715,18 @@ class PredictionsHandler:
                     )
                 corr = self._validate_dark_number_correction(corr_estimator.score())
                 corr_source = "direct"
+                mean_recovery = getattr(corr_estimator, "mean_recovery_", None)
+                if (
+                    mean_recovery is not None
+                    and np.isfinite(mean_recovery)
+                    and 0 < mean_recovery < DARK_NUMBER_LOW_RECOVERY_WARNING_THRESHOLD
+                ):
+                    self.handler.logger.print_warning(
+                        f"Direct Dark Number correction for {model_name}, target {label} is based on "
+                        f"very low mean recovery ({mean_recovery:.2%}; corr={corr:.6g}). "
+                        f"The direct result is retained unchanged, but may be statistically unstable "
+                        f"(warning threshold={DARK_NUMBER_LOW_RECOVERY_WARNING_THRESHOLD:.0%})."
+                    )
             except Exception as ex:
                 direct_error = ex
 
@@ -2858,6 +2871,7 @@ class PredictionsHandler:
         X_cv_training: pd.DataFrame = None,
         Y_cv_training: pd.Series = None,
         flip_fraction: float = None,
+        target_class: str = None,
     ) -> None:
         """Compute Dark Numbers while keeping CV-test, CV-full and retrained-full estimates distinct."""
         self.dark_numbers = pd.DataFrame()
@@ -2880,7 +2894,18 @@ class PredictionsHandler:
         if not 0.0 < flip_fraction < 1.0:
             raise ValueError("Dark-number flip_fraction must be greater than 0 and less than 1")
 
-        labels = np.sort(Y.unique())
+        all_labels = np.sort(Y.unique())
+        selected_target = str(target_class or "")
+        if selected_target:
+            matching_labels = [label for label in all_labels if str(label) == selected_target]
+            if not matching_labels:
+                raise ValueError(
+                    f"Configured Dark Number target {selected_target!r} is not present in known class labels: "
+                    f"{[str(label) for label in all_labels]}"
+                )
+            target_labels = np.asarray(matching_labels, dtype=object)
+        else:
+            target_labels = all_labels
         supports_predict_proba = [hasattr(model, "predict_proba") for model in models]
 
         # A correction factor belongs to a model/data pairing. The cross-trained
@@ -2909,7 +2934,7 @@ class PredictionsHandler:
                 model=model,
                 X=corr_X,
                 Y=corr_Y,
-                labels=labels,
+                labels=target_labels,
                 flip_fraction=flip_fraction,
                 random_state=random_state,
                 model_name=model_name,
@@ -2939,7 +2964,7 @@ class PredictionsHandler:
                 Y_pred = pd.Series(model.predict(estimator_X), index=Y_eval.index)
                 result_name = f"{estimate_name} - {model_name}"
 
-                self._update_confusion_matrix(result_name, Y_eval, Y_pred, labels)
+                self._update_confusion_matrix(result_name, Y_eval, Y_pred, all_labels)
 
                 if not can_predict_proba:
                     continue
@@ -2956,7 +2981,8 @@ class PredictionsHandler:
                     type,
                     corrs_by_model[model_index],
                     corr_sources_by_model[model_index],
-                    corr_models_by_model[model_index]
+                    corr_models_by_model[model_index],
+                    targets=target_labels,
                 )
 
                 if include_in_combined:
@@ -2980,7 +3006,7 @@ class PredictionsHandler:
                 Y_pred_worst = Y_pred_worst.mask(replace_mask, Y_pred)
                 Y_prob_pred_worst = Y_prob_pred_worst.mask(replace_mask, Y_prob_pred)
 
-            self._update_confusion_matrix("Combined (legacy full-data)", Y, Y_pred_worst, labels)
+            self._update_confusion_matrix("Combined (legacy full-data)", Y, Y_pred_worst, all_labels)
 
             legacy_corrs = corrs_by_model.get(0)
             legacy_corr_sources = corr_sources_by_model.get(0)
@@ -2998,7 +3024,8 @@ class PredictionsHandler:
                 type,
                 legacy_corrs,
                 legacy_corr_sources,
-                legacy_corr_models
+                legacy_corr_models,
+                targets=target_labels,
             )
 
         return None
@@ -3054,10 +3081,13 @@ class PredictionsHandler:
         corrs=None,
         corr_sources=None,
         corr_models=None,
+        targets=None,
     ):
         
         # Compute dark numbers
-        model_dark_numbers = DarkNumberCalculator().compute_dark_numbers(Y, Y_pred, Y_prob_pred, type=type, corrs=corrs)
+        model_dark_numbers = DarkNumberCalculator().compute_dark_numbers(
+            Y, Y_pred, Y_prob_pred, type=type, corrs=corrs, targets=targets
+        )
         if corr_models is not None:
             model_dark_numbers.insert(
                 model_dark_numbers.columns.get_loc("corr") + 1,

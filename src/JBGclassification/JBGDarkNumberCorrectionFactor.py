@@ -82,6 +82,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         self.correction_factor_ = None
         self.correction_status_ = None
         self.is_valid_for_regression_ = False
+        self.recovery_results_ = None
+        self.mean_recovery_ = None
         self.parallel_backend = parallel_backend
         self.logger = logger
 
@@ -130,6 +132,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
             self.correction_factor_ = 1.0
             self.correction_status_ = "insufficient_sample"
             self.is_valid_for_regression_ = False
+            self.recovery_results_ = None
+            self.mean_recovery_ = None
             return self
 
         if effective_size < n_samples:
@@ -161,6 +165,7 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
 
         # Try running tasks with retry logic
         results = self._run_parallel(tasks)
+        self.recovery_results_ = [float(value) for value in results]
 
         # If result contains NaN values, raise ValueError
         if np.isnan(results).any():
@@ -168,7 +173,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
             self.is_valid_for_regression_ = False
             raise NaNValueError("Result contains NaN values, which is not allowed.")
 
-        mean_r = np.mean(results)
+        mean_r = float(np.mean(results))
+        self.mean_recovery_ = mean_r
         self.correction_factor_ = 1.0 / mean_r if mean_r > 0 else np.inf
         if np.isfinite(self.correction_factor_) and self.correction_factor_ > 0:
             self.correction_status_ = "estimated"

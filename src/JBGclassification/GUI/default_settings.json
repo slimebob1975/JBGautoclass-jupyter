@@ -1,4 +1,5 @@
-{   "logo": "assets/logo.png",
+{
+    "logo": "assets/logo.png",
     "stylesheets": [
         "assets/base.css"
     ],
@@ -49,7 +50,9 @@
         "data_catalogs_dropdown": {
             "type": "Dropdown",
             "params": {
-                "options": ["N/A"],
+                "options": [
+                    "N/A"
+                ],
                 "value": "N/A",
                 "disabled": true,
                 "description": "Catalogs:",
@@ -59,7 +62,9 @@
         "data_tables_dropdown": {
             "type": "Dropdown",
             "params": {
-                "options": ["N/A"],
+                "options": [
+                    "N/A"
+                ],
                 "value": "N/A",
                 "disabled": true,
                 "description": "Tables:",
@@ -69,7 +74,9 @@
         "models_dropdown": {
             "type": "Dropdown",
             "params": {
-                "options": ["N/A"],
+                "options": [
+                    "N/A"
+                ],
                 "value": "N/A",
                 "description": "Models:",
                 "disabled": true,
@@ -79,7 +86,9 @@
         "class_column": {
             "type": "RadioButtons",
             "params": {
-                "options": ["N/A"],
+                "options": [
+                    "N/A"
+                ],
                 "value": "N/A",
                 "disabled": true,
                 "description": "Class:",
@@ -89,7 +98,9 @@
         "id_column": {
             "type": "RadioButtons",
             "params": {
-                "options": ["N/A"],
+                "options": [
+                    "N/A"
+                ],
                 "value": "N/A",
                 "disabled": true,
                 "description": "Unique id:",
@@ -99,7 +110,9 @@
         "data_columns": {
             "type": "SelectMultiple",
             "params": {
-                "options": ["N/A"],
+                "options": [
+                    "N/A"
+                ],
                 "value": [],
                 "disabled": true,
                 "description": "Data:",
@@ -109,7 +122,9 @@
         "text_columns": {
             "type": "SelectMultiple",
             "params": {
-                "options": ["N/A"],
+                "options": [
+                    "N/A"
+                ],
                 "disabled": true,
                 "description": "Is text:",
                 "tooltip": "Mark the data columns to be interpreted as text (some are marked by default from their SQL datatype)"
@@ -125,10 +140,10 @@
             "type": "Button",
             "params": {
                 "description": "Continue",
-                "button_style": "primary", 
+                "button_style": "primary",
                 "disabled": true,
                 "tooltip": "Continue with the process using these settings",
-                "icon": "forward" 
+                "icon": "forward"
             }
         },
         "test_profile_button": {
@@ -214,7 +229,16 @@
         "dark_number_method": {
             "type": "RadioButtons",
             "params": {
-                "options": [["Linear", "LINEAR"], ["Non-linear", "NON_LINEAR"]],
+                "options": [
+                    [
+                        "Linear",
+                        "LINEAR"
+                    ],
+                    [
+                        "Non-linear",
+                        "NON_LINEAR"
+                    ]
+                ],
                 "value": "LINEAR",
                 "disabled": true,
                 "description": "Method:",
@@ -224,29 +248,82 @@
         "dark_number_alpha": {
             "type": "RadioButtons",
             "params": {
-                "options": [["None", "NONE"], ["Single", "SINGLE"], ["Separated", "SEPARATED"]],
+                "options": [
+                    [
+                        "None",
+                        "NONE"
+                    ],
+                    [
+                        "Single",
+                        "SINGLE"
+                    ],
+                    [
+                        "Separated",
+                        "SEPARATED"
+                    ]
+                ],
                 "value": "SEPARATED",
                 "disabled": true,
                 "description": "Alpha:",
                 "tooltip": "Choose no alpha adjustment, one shared alpha, or separate FP/FN alpha values; separated alpha is available only with the linear method"
             }
         },
+        "dark_number_target": {
+            "type": "RadioButtons",
+            "params": {
+                "options": [
+                    [
+                        "All classes",
+                        ""
+                    ]
+                ],
+                "value": "",
+                "disabled": true,
+                "description": "Target:",
+                "tooltip": "Choose which class to estimate Dark Numbers for, or keep all classes",
+                "layout": {
+                    "width": "170px",
+                    "min_width": "170px",
+                    "margin": "0 0 0 6px"
+                },
+                "style": {
+                    "description_width": "initial"
+                }
+            }
+        },
         "dark_number_failure_mode": {
             "type": "RadioButtons",
             "params": {
-                "options": [["No fallback", false], ["Experimental", true]],
+                "options": [
+                    [
+                        "No fallback",
+                        false
+                    ],
+                    [
+                        "Experimental",
+                        true
+                    ]
+                ],
                 "value": true,
                 "disabled": true,
                 "description": "Failure:",
                 "tooltip": "Choose no fallback or the experimental perturbed same-model fallback when ordinary correction is statistically unestimable",
-                "layout": {"width": "210px", "min_width": "210px", "margin": "0 0 0 8px"},
-                "style": {"description_width": "initial"}
+                "layout": {
+                    "width": "210px",
+                    "min_width": "210px",
+                    "margin": "0 0 0 8px"
+                },
+                "style": {
+                    "description_width": "initial"
+                }
             }
         },
         "algorithm_dropdown": {
             "type": "SelectMultiple",
             "params": {
-                "value": ["DUMY"],
+                "value": [
+                    "DUMY"
+                ],
                 "description": "Algorithm:",
                 "disabled": true,
                 "tooltip": "Pick which algorithms to use"
@@ -255,7 +332,9 @@
         "preprocess_dropdown": {
             "type": "SelectMultiple",
             "params": {
-                "value": ["NOS"],
+                "value": [
+                    "NOS"
+                ],
                 "description": "Preprocess:",
                 "disabled": true,
                 "tooltip": "Pick which data preprocessors to use"
@@ -273,7 +352,9 @@
         "reduction_dropdown": {
             "type": "SelectMultiple",
             "params": {
-                "value": ["NOR"],
+                "value": [
+                    "NOR"
+                ],
                 "description": "Reduction:",
                 "disabled": true,
                 "tooltip": "Pick by which methods the number of features (variables) are reduced"
@@ -352,7 +433,9 @@
         "categorize_columns": {
             "type": "SelectMultiple",
             "params": {
-                "options": ["N/A"],
+                "options": [
+                    "N/A"
+                ],
                 "value": [],
                 "disabled": true,
                 "description": "Categorize:",
@@ -410,10 +493,10 @@
             "type": "Button",
             "params": {
                 "description": "Start",
-                "button_style": "primary", 
+                "button_style": "primary",
                 "disabled": true,
                 "tooltip": "Run the classifier using the current settings",
-                "icon": "check" 
+                "icon": "check"
             }
         },
         "progress_bar": {
@@ -451,8 +534,6 @@
                 }
             },
             "class": "result-display"
-        
-            
         },
         "mispredicted_output": {
             "type": "Output",
@@ -514,6 +595,7 @@
             "mispredicted_checkbox",
             "metas_checkbox",
             "dark_numbers_checkbox",
+            "dark_number_target",
             "dark_number_method",
             "dark_number_alpha",
             "dark_number_failure_mode",

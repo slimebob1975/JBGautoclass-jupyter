@@ -1,5 +1,6 @@
 from __future__ import annotations
 from enum import Enum
+import html
 import os
 from pathlib import Path
 import sys
@@ -238,6 +239,11 @@ class EventHandler:
             return
         self.widgets.sync_dark_number_equation()
 
+    def dark_number_target(self, change: Bunch) -> None:
+        if change.get("name") != "value":
+            return
+        self.widgets.sync_dark_number_equation()
+
     def dark_number_failure_mode(self, change: Bunch) -> None:
         if change.get("name") != "value":
             return
@@ -410,7 +416,7 @@ class Widgets:
             "models": [self.models_dropdown, self.field_status("models")],
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
-            "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_method, self.dark_number_alpha, self.dark_number_failure_mode],
+            "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_target, self.dark_number_method, self.dark_number_alpha, self.dark_number_failure_mode],
             "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.oversampler_dropdown, self.undersampler_dropdown, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.ngram_range_dropdown],
@@ -434,6 +440,30 @@ class Widgets:
                 for item in section_items
             ]
         classifier_items = self.settings.get("sections", {}).get("classifier")
+        if classifier_items is not None:
+            # Keep the target choice immediately after the main Estimate checkbox,
+            # including for locally persisted settings created before revision 097.
+            classifier_items[:] = [item for item in classifier_items if item != "dark_number_target"]
+            insert_at = (
+                classifier_items.index("dark_numbers_checkbox") + 1
+                if "dark_numbers_checkbox" in classifier_items
+                else len(classifier_items)
+            )
+            classifier_items.insert(insert_at, "dark_number_target")
+        if "dark_number_target" not in self.default_widgets:
+            self.default_widgets["dark_number_target"] = {
+                "type": "RadioButtons",
+                "params": {
+                    "options": [["All classes", ""]],
+                    "value": "",
+                    "disabled": True,
+                    "description": "Target:",
+                    "tooltip": "Choose which class to estimate Dark Numbers for, or keep all classes",
+                    "layout": widgets.Layout(width="170px", min_width="170px", margin="0 0 0 6px"),
+                    "style": {"description_width": "initial"},
+                },
+            }
+
         if classifier_items is not None and "dark_number_failure_mode" not in classifier_items:
             insert_at = (
                 classifier_items.index("dark_number_alpha") + 1
@@ -620,6 +650,11 @@ class Widgets:
         """ Sets values based on the config in the chosen model """
         config = self.load_model_config(model)
         self.categorize_columns.options = config.get_text_column_names()
+        saved_dark_number_target = config.get_dark_number_target()
+        if saved_dark_number_target:
+            self.dark_number_target.options = self._with_saved_options(
+                self.dark_number_target.options, (saved_dark_number_target,)
+            )
             
         # Values from config
         self.update_values({
@@ -642,6 +677,7 @@ class Widgets:
             "dark_numbers_checkbox": config.should_calculate_dark_numbers(),
             "dark_number_method": config.get_dark_number_method().name,
             "dark_number_alpha": config.get_dark_number_alpha().name,
+            "dark_number_target": config.get_dark_number_target(),
             "dark_number_failure_mode": config.should_use_experimental_perturbed_dark_number_fallback(),
         })
         
@@ -726,6 +762,11 @@ class Widgets:
             )
             self.text_columns.options = selected_columns
             self.categorize_columns.options = text_columns
+            saved_dark_number_target = str(getattr(mode, "dark_number_target", "") or "")
+            if saved_dark_number_target:
+                self.dark_number_target.options = self._with_saved_options(
+                    self.dark_number_target.options, (saved_dark_number_target,)
+                )
 
             self.update_values({
                 "project": config_params["name"],
@@ -747,6 +788,7 @@ class Widgets:
                 "dark_number_alpha": DarkNumberAlpha.from_config_value(
                     getattr(mode, "dark_number_alpha", "NONE")
                 ).name,
+                "dark_number_target": str(getattr(mode, "dark_number_target", "") or ""),
                 "dark_number_failure_mode": getattr(
                     mode, "experimental_perturbed_dark_number_fallback", True
                 ),
@@ -824,6 +866,7 @@ class Widgets:
                 "dark_numbers_checkbox",
                 "dark_number_method",
                 "dark_number_alpha",
+                "dark_number_target",
                 "dark_number_failure_mode",
             ])
 
@@ -844,6 +887,7 @@ class Widgets:
                 "dark_numbers_checkbox": True,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "SEPARATED",
+                "dark_number_target": "",
                 "dark_number_failure_mode": True,
             })
         else:
@@ -854,6 +898,7 @@ class Widgets:
                 "dark_numbers_checkbox",
                 "dark_number_method",
                 "dark_number_alpha",
+                "dark_number_target",
                 "dark_number_failure_mode",
             ])
             self.update_values({
@@ -863,6 +908,7 @@ class Widgets:
                 "dark_numbers_checkbox": False,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "NONE",
+                "dark_number_target": "",
                 "dark_number_failure_mode": True,
             })
             
@@ -918,7 +964,7 @@ class Widgets:
         self.disable_items([
             "predict_checkbox", "mispredicted_checkbox", "metas_checkbox",
             "dark_numbers_checkbox", "dark_number_method", "dark_number_alpha",
-            "dark_number_failure_mode",
+            "dark_number_target", "dark_number_failure_mode",
         ])
         self.update_values({
             "train_checkbox": True,
@@ -928,6 +974,7 @@ class Widgets:
             "dark_numbers_checkbox": True,
             "dark_number_method": "LINEAR",
             "dark_number_alpha": "NONE",
+            "dark_number_target": "",
             "dark_number_failure_mode": True,
         })
         self.categorize_columns.options = ()
@@ -1110,6 +1157,7 @@ class Widgets:
                 calculate_dark_numbers = self.dark_numbers_checkbox.value,
                 dark_number_method = DarkNumberMethod[self.dark_number_method.value],
                 dark_number_alpha = DarkNumberAlpha[self.dark_number_alpha.value],
+                dark_number_target = str(self.dark_number_target.value or ""),
                 experimental_perturbed_dark_number_fallback = bool(self.dark_number_failure_mode.value),
                 oversampler = Oversampling[self.oversampler_dropdown.value],
                 undersampler = Undersampling[self.undersampler_dropdown.value],
@@ -1332,6 +1380,7 @@ class Widgets:
         current_class = self.class_column.value
         
         distribution = self.guihandler.get_class_distribution(self.data_settings, current_class)
+        self.sync_dark_number_target_options(distribution)
         number_of_categories = len(distribution)
         
         dist_items = '; '.join(f'{key} ({value})' for key, value in distribution.items())
@@ -1499,9 +1548,10 @@ class Widgets:
         controls = widgets.HBox(
             self.forms["dark_numbers"],
             layout=widgets.Layout(
-                width="68%",
+                width="72%",
                 justify_content="flex-start",
                 align_items="flex-start",
+                flex_flow="row nowrap",
             ),
         )
         controls.add_class("dark-number-controls")
@@ -1820,6 +1870,31 @@ class Widgets:
         return widget
 
     @property
+    def dark_number_target(self) -> widgets.RadioButtons:
+        name = sys._getframe().f_code.co_name
+        if name not in self.default_widgets:
+            self.default_widgets[name] = {
+                "type": "RadioButtons",
+                "params": {
+                    "options": (("All classes", ""),),
+                    "value": "",
+                    "disabled": True,
+                    "description": "Target:",
+                    "tooltip": "Choose which class to estimate Dark Numbers for, or keep all classes",
+                },
+            }
+        widget = self._load_widget(name)
+        widget.description = "Target:"
+        widget.layout.width = "170px"
+        widget.layout.min_width = "170px"
+        widget.layout.margin = "0 0 0 6px"
+        widget.style.description_width = "initial"
+        if not getattr(widget, "_jbg_target_handler_attached", False):
+            widget.observe(self.eventhandler.dark_number_target)
+            widget._jbg_target_handler_attached = True
+        return widget
+
+    @property
     def dark_number_failure_mode(self) -> widgets.RadioButtons:
         name = sys._getframe().f_code.co_name
         if name not in self.default_widgets:
@@ -1861,7 +1936,7 @@ class Widgets:
         if name not in self.widgets:
             self.widgets[name] = widgets.HTMLMath(
                 value="",
-                layout=widgets.Layout(width="28%", min_width="220px", margin="0 0 0 28px", overflow_x="auto"),
+                layout=widgets.Layout(width="24%", min_width="200px", margin="0 0 0 28px", overflow_x="auto"),
             )
             self.widgets[name].add_class("dark-number-equation")
             self.sync_dark_number_equation()
@@ -1872,6 +1947,7 @@ class Widgets:
         disabled = self.dark_numbers_checkbox.disabled or not self.dark_numbers_checkbox.value
         self.dark_number_method.disabled = disabled
         self.dark_number_alpha.disabled = disabled
+        self.dark_number_target.disabled = disabled
         self.dark_number_failure_mode.disabled = disabled
         self.sync_dark_number_equation()
 
@@ -1887,6 +1963,7 @@ class Widgets:
             root_degree=3,
         )
         failure_mode = "Experimental" if self.dark_number_failure_mode.value else "None"
+        target_mode = html.escape(str(self.dark_number_target.value or "All classes"))
         enabled = bool(self.dark_numbers_checkbox.value)
         opacity = "1.0" if enabled else "0.38"
         state_note = "" if enabled else "<div style='margin-top:4px'><em>Estimate is off</em></div>"
@@ -1901,10 +1978,25 @@ class Widgets:
             f"<div style='font-size:0.94em'>\\({spec['latex']}\\)</div>"
             f"<div style='margin-top:4px;font-size:0.78em'>{spec['alpha_note']}{root_note}</div>"
             "<div style='margin-top:2px;font-size:0.78em'>c: correction &middot; TN<sub>r</sub>/TP<sub>r</sub>: true-neg/true-pos rate</div>"
+            f"<div style='margin-top:2px;font-size:0.78em'>Target: {target_mode}</div>"
             f"<div style='margin-top:2px;font-size:0.78em'>Failure: {failure_mode}</div>"
             f"{state_note}"
             "</div>"
         )
+
+    def sync_dark_number_target_options(self, distribution: dict | None = None) -> None:
+        """Populate target choices from the selected class column while preserving All classes."""
+        if distribution is None:
+            distribution = {}
+        labels = [
+            str(label) for label in distribution.keys()
+            if label is not None and str(label).strip() != ""
+        ]
+        options = [("All classes", "")] + [(label, label) for label in labels]
+        current = str(self.dark_number_target.value or "")
+        self.dark_number_target.options = tuple(options)
+        self.dark_number_target.value = current if current in {value for _, value in options} else ""
+        self.sync_dark_number_equation()
 
     def sync_dark_number_alpha_options(self) -> None:
         """Expose only alpha variants implemented for the selected formula family."""

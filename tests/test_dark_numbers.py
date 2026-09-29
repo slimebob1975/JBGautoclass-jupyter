@@ -38,6 +38,35 @@ def test_multiclass_dark_numbers_use_one_vs_rest_for_each_target():
         assert actual == pytest.approx(expected)
 
 
+def test_dark_numbers_can_be_restricted_to_one_target_class():
+    real = pd.Series(["Ja", "Ja", "Nej", "Nej"])
+    predicted = pd.Series(["Ja", "Nej", "Nej", "Nej"])
+    probabilities = pd.Series([0.9, 0.7, 0.95, 0.9])
+
+    results = DarkNumberCalculator().compute_dark_numbers(
+        real,
+        predicted,
+        probabilities,
+        type="base",
+        corrs={"Ja": 2.0},
+        targets=["Ja"],
+    )
+
+    assert results["target"].tolist() == ["Ja"]
+    assert results["corr"].tolist() == [2.0]
+
+
+def test_dark_numbers_reject_unknown_target_class():
+    real = pd.Series(["Ja", "Nej"])
+    predicted = pd.Series(["Ja", "Nej"])
+    probabilities = pd.Series([0.9, 0.9])
+
+    with pytest.raises(ValueError, match="not present"):
+        DarkNumberCalculator().compute_dark_numbers(
+            real, predicted, probabilities, type="base", corrs={}, targets=["Missing"]
+        )
+
+
 def test_single_alpha_uses_false_negative_probability_when_fp_is_zero():
     real = pd.Series([0, 0, 1, 1])
     predicted = pd.Series([0, 0, 0, 1])

@@ -138,7 +138,7 @@ class DarkNumberCalculator:
 
     # Unified interface for calculating dark numbers
     def compute_dark_numbers(self, real_target: pd.Series, pred_target: pd.Series, prob_pred: pd.Series, \
-                            type="base", root_degree=3, corrs=None):
+                            type="base", root_degree=3, corrs=None, targets=None):
         """
         corrs should be a dictionary with correction factors for each class in real_target 
         """
@@ -152,11 +152,17 @@ class DarkNumberCalculator:
         else:
             types = [type]
 
+        selected_targets = list(real_target.unique()) if targets is None else list(targets)
+        available_targets = set(real_target.unique())
+        missing_targets = [target for target in selected_targets if target not in available_targets]
+        if missing_targets:
+            raise ValueError(f"Dark Number target(s) not present in data: {missing_targets}")
+
         # Compute dark number for each type
         for type in types:
         
         # Compute dark number for each target in the classification
-            for target in real_target.unique():
+            for target in selected_targets:
                 
                 try:
                     corr = corrs[target]

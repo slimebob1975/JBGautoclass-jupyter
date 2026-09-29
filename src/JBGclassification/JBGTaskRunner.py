@@ -345,6 +345,7 @@ class TaskRunner:
             Y_validation=self.dh.Y_validation,
             X_cv_training=self.dh.X_train,
             Y_cv_training=self.dh.Y_train,
+            target_class=None if self.regression_suite else self.config.get_dark_number_target(),
         )
 
         self.ph.evaluate_dark_numbers(self.config.get_output_filepath("dark_numbers"),

@@ -50,6 +50,20 @@ Use `--target <class>` one or more times to restrict the one-vs-rest targets. Th
 `JBG_SQL_PASSWORD` when available or requested interactively. The command creates a dedicated validation log and
 paired CSV/JSON outputs; it does not modify the saved model or production Dark Number settings.
 
+## Dark Number correction-noise sensitivity runner
+
+Revision 099 adds a second validation-only runner that holds one fetched dataset, deterministic split and cross-trained model fixed while varying only the correction flip fraction and seed. Defaults are 5/10/15/20% and nine seeds. It writes detailed and summary CSVs plus metadata fingerprints and leaves the 20% production default unchanged.
+
+```text
+python .\src\JBGclassification\JBGDarkNumberNoiseSensitivityRunner.py --sql-username <username>
+```
+
+Focused tests cover target/default resolution, hard flipped/recovered count reconstruction, sentinel-safe stability summaries, fingerprints, output persistence, and revision-100 source/fixed pipeline identity reporting used by long-run observability.
+
 ### 089 experimental perturbed Dark Number fallback
 
-The production Dark Number path exposes correction-failure handling as a radio choice backed by the existing boolean config contract. Revision 093 uses compact GUI copy (`No fallback` / default `Experimental`) while preserving the same controlled-failure and experimental-perturbed semantics. Focused tests cover config default/opt-out, migration from the revision-089 checkbox, generated-config/Repeat Last persistence, dependency on the main Dark Numbers control, and routing of recovery-level direct failures into `perturbed_same_model`. Revisions 092-093 also test the live equation card, all implemented Method+Alpha branches, the 68/28 control/formula layout, protected radio minimum widths, dynamic correction-policy annotation and Estimate-off dimming. The displayed branch resolution and LaTeX come from `JBGDarkNumbers.py`.
+The production Dark Number path exposes correction-failure handling as a radio choice backed by the existing boolean config contract. Revision 093 uses compact GUI copy (`No fallback` / default `Experimental`) while preserving the same controlled-failure and experimental-perturbed semantics. Focused tests cover config default/opt-out, migration from the revision-089 checkbox, generated-config/Repeat Last persistence, dependency on the main Dark Numbers control, and routing of recovery-level direct failures into `perturbed_same_model`. Revisions 092-093 also test the live equation card and all implemented Method+Alpha branches. Revision 095 adds target-specific coverage: dynamic `All classes`/observed-class radio options, target persistence/Repeat Last, equation-card target annotation, calculator/handler target restriction, and TaskRunner propagation. The panel now uses a 72/24 control/formula split so Target/Method/Alpha/Failure remain together. The displayed branch resolution and LaTeX come from `JBGDarkNumbers.py`.
+
+### Revision 097
+
+Dark Number regression coverage now also verifies that the control order is `Estimate -> Target -> Method -> Alpha -> Failure`, that local settings are migrated to the same target-first ordering, that direct correction estimators retain their per-split/mean recovery diagnostics, and that mean recovery below 5% emits a warning without changing the direct correction factor or corr source.

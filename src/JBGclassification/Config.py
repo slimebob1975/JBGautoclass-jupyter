@@ -112,6 +112,7 @@ class Config:
         "mode.calculate_dark_numbers": "<calculate_dark_numbers>",
         "mode.dark_number_method": "<dark_number_method>",
         "mode.dark_number_alpha": "<dark_number_alpha>",
+        "mode.dark_number_target": "<dark_number_target>",
         "mode.dark_number_flip_fraction": "<dark_number_flip_fraction>",
         "mode.experimental_perturbed_dark_number_fallback": "<experimental_perturbed_dark_number_fallback>",
         "mode.oversampler": "<oversampler>",
@@ -398,6 +399,7 @@ class Config:
         calculate_dark_numbers: bool = True
         dark_number_method: DarkNumberMethod = field(default_factory=lambda: DarkNumberMethod.LINEAR)
         dark_number_alpha: DarkNumberAlpha = None
+        dark_number_target: str = ""
         dark_number_flip_fraction: float = 0.2
         experimental_perturbed_dark_number_fallback: bool = True
         oversampler: Oversampling = field(default_factory=Oversampling.defaultOversampler)
@@ -480,6 +482,9 @@ class Config:
             if self.dark_number_method is DarkNumberMethod.NON_LINEAR and self.dark_number_alpha is DarkNumberAlpha.SEPARATED:
                 raise ValueError("Separated alpha is only supported by the linear Dark Number method")
 
+            if not isinstance(self.dark_number_target, str):
+                raise TypeError("Argument dark_number_target must be a string")
+
             if not isinstance(self.experimental_perturbed_dark_number_fallback, bool):
                 raise TypeError("Argument experimental_perturbed_dark_number_fallback must be True or False")
 
@@ -538,6 +543,7 @@ class Config:
                 "Calculate Dark Numbers":                  self.calculate_dark_numbers,
                 "Dark Number method":                      self.dark_number_method.display_name,
                 "Dark Number alpha":                       self.dark_number_alpha.display_name,
+                "Dark Number target":                      self.dark_number_target or "All classes",
                 "Correction failure handling":               (
                     "Experimental fallback"
                     if self.experimental_perturbed_dark_number_fallback
@@ -844,6 +850,8 @@ class Config:
             saved_config.mode.dark_number_method = DarkNumberMethod.LINEAR
         if not hasattr(saved_config.mode, "dark_number_alpha"):
             saved_config.mode.dark_number_alpha = DarkNumberAlpha.NONE
+        if not hasattr(saved_config.mode, "dark_number_target"):
+            saved_config.mode.dark_number_target = ""
         if not hasattr(saved_config.mode, "experimental_perturbed_dark_number_fallback"):
             saved_config.mode.experimental_perturbed_dark_number_fallback = True
         
@@ -855,6 +863,7 @@ class Config:
             saved_config.mode.calculate_dark_numbers = config.mode.calculate_dark_numbers
             saved_config.mode.dark_number_method = config.mode.dark_number_method
             saved_config.mode.dark_number_alpha = config.mode.dark_number_alpha
+            saved_config.mode.dark_number_target = config.mode.dark_number_target
             saved_config.mode.experimental_perturbed_dark_number_fallback = config.mode.experimental_perturbed_dark_number_fallback
             saved_config.mode.dark_number_flip_fraction = config.mode.dark_number_flip_fraction
             # Saved model metadata deliberately contains no SQL password. Inject the
@@ -896,6 +905,7 @@ class Config:
         calculate_dark_numbers = bool(module.mode.get("calculate_dark_numbers", module.mode["mispredicted"]))
         dark_number_method = DarkNumberMethod.from_config_value(module.mode.get("dark_number_method", "LINEAR"))
         dark_number_alpha = DarkNumberAlpha.from_config_value(module.mode.get("dark_number_alpha", "NONE"))
+        dark_number_target = str(module.mode.get("dark_number_target", "") or "")
         dark_number_flip_fraction = float(module.mode.get("dark_number_flip_fraction", 0.2))
         experimental_perturbed_dark_number_fallback = bool(module.mode.get("experimental_perturbed_dark_number_fallback", True))
         use_metas = module.mode["predict"]
@@ -935,6 +945,7 @@ class Config:
                 calculate_dark_numbers=calculate_dark_numbers,
                 dark_number_method=dark_number_method,
                 dark_number_alpha=dark_number_alpha,
+                dark_number_target=dark_number_target,
                 dark_number_flip_fraction=dark_number_flip_fraction,
                 experimental_perturbed_dark_number_fallback=experimental_perturbed_dark_number_fallback,
                 oversampler=Oversampling[module.mode["oversampler"]],
@@ -1086,6 +1097,10 @@ class Config:
             self.get_dark_number_method(),
             self.get_dark_number_alpha(),
         )
+
+    def get_dark_number_target(self) -> str:
+        """Return the selected Dark Number target class, or an empty string for all classes."""
+        return str(getattr(self.mode, "dark_number_target", "") or "")
 
     def should_use_experimental_perturbed_dark_number_fallback(self) -> bool:
         """Whether statistical Dark Number failures may use the experimental shadow-clone fallback."""

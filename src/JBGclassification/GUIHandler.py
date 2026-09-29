@@ -275,6 +275,7 @@ class GUIHandler:
                 "calculate_dark_numbers": mode.calculate_dark_numbers,
                 "dark_number_method": mode.dark_number_method.name,
                 "dark_number_alpha": mode.dark_number_alpha.name,
+                "dark_number_target": mode.dark_number_target,
                 "dark_number_flip_fraction": mode.dark_number_flip_fraction,
                 "experimental_perturbed_dark_number_fallback": mode.experimental_perturbed_dark_number_fallback,
                 "oversampler": mode.oversampler.name,
@@ -336,6 +337,7 @@ class GUIHandler:
                 calculate_dark_numbers=mode.get("calculate_dark_numbers", mode["mispredicted"]),
                 dark_number_method=DarkNumberMethod.from_config_value(mode.get("dark_number_method", "LINEAR")),
                 dark_number_alpha=DarkNumberAlpha.from_config_value(mode.get("dark_number_alpha", "NONE")),
+                dark_number_target=str(mode.get("dark_number_target", "") or ""),
                 dark_number_flip_fraction=mode.get("dark_number_flip_fraction", 0.2),
                 experimental_perturbed_dark_number_fallback=mode.get(
                     "experimental_perturbed_dark_number_fallback", True

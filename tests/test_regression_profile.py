@@ -201,6 +201,7 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
             calculate_dark_numbers=False,
             dark_number_method=DarkNumberMethod.NON_LINEAR,
             dark_number_alpha=DarkNumberAlpha.SINGLE,
+            dark_number_target="positive",
             experimental_perturbed_dark_number_fallback=False,
             oversampler=Oversampling.RND,
             undersampler=Undersampling.NUG,
@@ -239,6 +240,7 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     assert widgets.dark_numbers_checkbox.value is False
     assert widgets.dark_number_method.value == "NON_LINEAR"
     assert widgets.dark_number_alpha.value == "SINGLE"
+    assert widgets.dark_number_target.value == "positive"
     assert widgets.dark_number_failure_mode.value is False
     assert widgets.algorithm_dropdown.value == ("LRN", "RFCL")
     assert widgets.preprocess_dropdown.value == ("NOS", "STA")
@@ -272,6 +274,7 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     assert rerun["mode"].calculate_dark_numbers is False
     assert rerun["mode"].dark_number_method is DarkNumberMethod.NON_LINEAR
     assert rerun["mode"].dark_number_alpha is DarkNumberAlpha.SINGLE
+    assert rerun["mode"].dark_number_target == "positive"
     assert rerun["mode"].experimental_perturbed_dark_number_fallback is False
     assert rerun["io"].model_name == "saved_model"
     assert rerun["debug"].data_limit == 321
@@ -414,18 +417,21 @@ def test_dark_number_checkbox_controls_method_widget_independently_of_mispredict
     widgets.dark_numbers_checkbox.disabled = False
     widgets.dark_number_method.disabled = False
     widgets.dark_number_alpha.disabled = False
+    widgets.dark_number_target.disabled = False
     widgets.dark_number_failure_mode.disabled = False
     widgets.mispredicted_checkbox.value = True
 
     widgets.dark_numbers_checkbox.value = False
     assert widgets.dark_number_method.disabled is True
     assert widgets.dark_number_alpha.disabled is True
+    assert widgets.dark_number_target.disabled is True
     assert widgets.dark_number_failure_mode.disabled is True
     assert widgets.mispredicted_checkbox.value is True
 
     widgets.dark_numbers_checkbox.value = True
     assert widgets.dark_number_method.disabled is False
     assert widgets.dark_number_alpha.disabled is False
+    assert widgets.dark_number_target.disabled is False
     assert widgets.dark_number_failure_mode.disabled is False
     assert widgets.dark_number_failure_mode.value is True
     widgets.dark_number_method.value = "NON_LINEAR"
@@ -435,6 +441,7 @@ def test_dark_number_checkbox_controls_method_widget_independently_of_mispredict
     assert config.calculate_dark_numbers is True
     assert config.dark_number_method is DarkNumberMethod.NON_LINEAR
     assert config.dark_number_alpha is DarkNumberAlpha.SINGLE
+    assert config.dark_number_target == ""
     assert config.experimental_perturbed_dark_number_fallback is True
 
 
@@ -455,11 +462,19 @@ def test_dark_number_failure_mode_is_compact_left_aligned_radio_with_experimenta
 
     _, row = widgets.dark_numbers_form().children
     controls, equation = row.children
+    assert controls.children == (
+        widgets.dark_numbers_checkbox,
+        widgets.dark_number_target,
+        widgets.dark_number_method,
+        widgets.dark_number_alpha,
+        widgets.dark_number_failure_mode,
+    )
     assert row.layout.justify_content == "space-between"
     assert row.layout.width == "100%"
     assert controls.layout.justify_content == "flex-start"
-    assert controls.layout.width == "68%"
-    assert equation.layout.width == "28%"
+    assert controls.layout.width == "72%"
+    assert controls.layout.flex_flow == "row nowrap"
+    assert equation.layout.width == "24%"
     assert equation.layout.margin == "0 0 0 28px"
 
 
@@ -474,6 +489,7 @@ def test_dark_number_equation_card_tracks_method_alpha_failure_mode_and_estimate
     assert isinstance(equation, ipywidgets.HTMLMath)
     assert "Formula" in equation.value
     assert r"\alpha_{FP}" in equation.value
+    assert "Target: All classes" in equation.value
     assert "Failure: Experimental" in equation.value
 
     widgets.dark_number_alpha.value = "SINGLE"
@@ -490,6 +506,26 @@ def test_dark_number_equation_card_tracks_method_alpha_failure_mode_and_estimate
     widgets.dark_numbers_checkbox.value = False
     assert "Estimate is off" in equation.value
     assert "opacity:0.38" in equation.value
+
+
+def test_dark_number_target_radio_is_dynamic_and_updates_config_and_equation():
+    widgets = make_widgets()
+    widgets.activate_section("classifier")
+
+    widgets.sync_dark_number_target_options({"Ja": 69, "Nej": 4511})
+
+    assert tuple(widgets.dark_number_target.options) == (
+        ("All classes", ""), ("Ja", "Ja"), ("Nej", "Nej")
+    )
+    assert widgets.dark_number_target.value == ""
+    assert widgets.dark_number_target.description == "Target:"
+    assert widgets.dark_number_target.layout.min_width == "170px"
+
+    widgets.dark_number_target.value = "Ja"
+    config = widgets.get_config_params()["mode"]
+
+    assert config.dark_number_target == "Ja"
+    assert "Target: Ja" in widgets.dark_number_equation.value
 
 
 def test_dark_number_equation_uses_same_branch_resolver_as_config():
@@ -509,15 +545,18 @@ def test_dark_number_checkbox_still_controls_dependencies_after_continue_locks_o
     widgets.dark_numbers_checkbox.disabled = False
     widgets.dark_number_method.disabled = False
     widgets.dark_number_alpha.disabled = False
+    widgets.dark_number_target.disabled = False
     widgets.eventhandler.lock_observe_1 = True
 
     widgets.dark_numbers_checkbox.value = False
     assert widgets.dark_number_method.disabled is True
     assert widgets.dark_number_alpha.disabled is True
+    assert widgets.dark_number_target.disabled is True
 
     widgets.dark_numbers_checkbox.value = True
     assert widgets.dark_number_method.disabled is False
     assert widgets.dark_number_alpha.disabled is False
+    assert widgets.dark_number_target.disabled is False
 
 
 def test_classifier_activation_preserves_dark_number_dependency_state():
@@ -529,6 +568,7 @@ def test_classifier_activation_preserves_dark_number_dependency_state():
     assert widgets.dark_numbers_checkbox.disabled is False
     assert widgets.dark_number_method.disabled is True
     assert widgets.dark_number_alpha.disabled is True
+    assert widgets.dark_number_target.disabled is True
 
 
 def test_regression_suite_keeps_dark_number_controls_read_only():
@@ -540,6 +580,7 @@ def test_regression_suite_keeps_dark_number_controls_read_only():
     assert widgets.dark_numbers_checkbox.disabled is True
     assert widgets.dark_number_method.disabled is True
     assert widgets.dark_number_alpha.disabled is True
+    assert widgets.dark_number_target.disabled is True
 
 
 def test_dark_number_alpha_options_follow_selected_method_without_inventing_formula():
@@ -657,6 +698,51 @@ def test_local_settings_without_any_failure_mode_control_default_to_experimental
     assert widgets.dark_number_failure_mode.value is True
     assert widgets.dark_number_failure_mode.description == "Failure:"
     assert "dark_number_failure_mode" in widgets.sections["classifier"]
+
+
+def test_local_settings_move_existing_dark_number_target_after_estimate():
+    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    model_path = Path(__file__).parent / "fixtures"
+    settings_path = src_path / "GUI" / "default_settings.json"
+    settings = json.loads(settings_path.read_text())
+    classifier_items = settings["sections"]["classifier"]
+    classifier_items.remove("dark_number_target")
+    classifier_items.insert(classifier_items.index("dark_number_alpha") + 1, "dark_number_target")
+
+    widgets = Widgets(
+        src_path=src_path,
+        GUIhandler=MockGUIHandler(),
+        model_path=model_path,
+        settings=settings,
+    )
+
+    classifier_items = widgets.sections["classifier"]
+    assert classifier_items.index("dark_number_target") == (
+        classifier_items.index("dark_numbers_checkbox") + 1
+    )
+
+
+def test_local_settings_without_dark_number_target_get_all_classes_default():
+    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    model_path = Path(__file__).parent / "fixtures"
+    settings_path = src_path / "GUI" / "default_settings.json"
+    settings = json.loads(settings_path.read_text())
+    del settings["widgets"]["dark_number_target"]
+    settings["sections"]["classifier"] = [
+        item for item in settings["sections"]["classifier"]
+        if item != "dark_number_target"
+    ]
+
+    widgets = Widgets(
+        src_path=src_path,
+        GUIhandler=MockGUIHandler(),
+        model_path=model_path,
+        settings=settings,
+    )
+
+    assert tuple(widgets.dark_number_target.options) == (("All classes", ""),)
+    assert widgets.dark_number_target.value == ""
+    assert "dark_number_target" in widgets.sections["classifier"]
 
 
 def test_pre_065_categorize_label_is_migrated_to_categorizer():

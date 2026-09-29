@@ -1462,6 +1462,69 @@ class TestPredictionsHandler:
         assert result == float(correction)
         assert isinstance(result, float)
 
+
+    def test_dark_number_direct_low_recovery_warns_but_keeps_direct_result(
+        self, default_predictions_handler, monkeypatch
+    ):
+        class LowRecoveryDirectEstimator:
+            def __init__(self, *args, **kwargs):
+                self.is_valid_for_regression_ = True
+                self.correction_status_ = "estimated"
+                self.mean_recovery_ = 0.01
+
+            def fit(self, X, Y):
+                return self
+
+            def score(self, X=None, Y=None):
+                return 100.0
+
+        class FakeModelHandler:
+            def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
+                return func(*args, n_jobs=1, **kwargs)
+
+        class WarningLogger:
+            def __init__(self):
+                self.warnings = []
+
+            def print_info(self, *_args, **_kwargs):
+                return None
+
+            def print_warning(self, message):
+                self.warnings.append(message)
+
+        logger = WarningLogger()
+        default_predictions_handler.handler.logger = logger
+        monkeypatch.setattr(handler_module, "DarkNumberCorrectionFactorEstimator", LowRecoveryDirectEstimator)
+        monkeypatch.setattr(
+            default_predictions_handler.handler,
+            "get_handler",
+            lambda name: FakeModelHandler(),
+        )
+        monkeypatch.setattr(
+            default_predictions_handler,
+            "_auto_n_splits_and_repeats",
+            lambda **kwargs: (2, 1),
+        )
+
+        X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0, 3.0]})
+        Y = pandas.Series(["B", "B", "M", "M"])
+        corrs, sources, corr_models = default_predictions_handler._calculate_dark_number_corrections(
+            model=SVC(probability=True),
+            X=X,
+            Y=Y,
+            labels=["B"],
+            flip_fraction=0.2,
+            random_state=42,
+            model_name="Target model",
+        )
+
+        assert corrs == {"B": 100.0}
+        assert sources == {"B": "direct"}
+        assert corr_models == {"B": "Target model"}
+        assert len(logger.warnings) == 1
+        assert "very low mean recovery (1.00%; corr=100)" in logger.warnings[0]
+        assert "retained unchanged" in logger.warnings[0]
+
     def test_dark_number_zero_recovery_does_not_trigger_sample_size_regression(
         self, default_predictions_handler, monkeypatch
     ):
@@ -1642,6 +1705,56 @@ class TestPredictionsHandler:
         assert corrs == {"B": pytest.approx(2.25)}
         assert sources == {"B": "regressed_same_model"}
         assert corr_models == {"B": "Target model"}
+
+    def test_dark_numbers_specific_target_skips_other_class_corrections(
+        self, default_predictions_handler, monkeypatch
+    ):
+        class FixedModel:
+            def predict(self, X):
+                values = np.asarray(X)[:, 0]
+                return np.where(values >= 2.0, "M", "B")
+
+            def predict_proba(self, X):
+                predicted = self.predict(X)
+                return np.array([
+                    [0.9, 0.1] if value == "B" else [0.1, 0.9]
+                    for value in predicted
+                ])
+
+        seen_labels = []
+
+        def fake_corrections(*, model, X, Y, labels, flip_fraction, random_state, model_name):
+            labels = list(labels)
+            seen_labels.append(labels)
+            return (
+                {label: 2.0 for label in labels},
+                {label: "direct" for label in labels},
+                {label: model_name for label in labels},
+            )
+
+        monkeypatch.setattr(
+            default_predictions_handler,
+            "_calculate_dark_number_corrections",
+            fake_corrections,
+        )
+
+        X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0, 3.0]})
+        Y = pandas.Series(["B", "B", "M", "M"])
+
+        default_predictions_handler.get_dark_numbers(
+            X=X,
+            Y=Y,
+            type="base",
+            models=[FixedModel()],
+            model_names=["Target model"],
+            combine_models=False,
+            target_class="M",
+        )
+
+        assert seen_labels == [["M"]]
+        assert set(default_predictions_handler.dark_numbers["target"]) == {"M"}
+        assert "B" in default_predictions_handler.dark_numb_conf_matrix.columns
+        assert "M" in default_predictions_handler.dark_numb_conf_matrix.columns
 
     def test_dark_numbers_skip_models_without_predict_proba(self, default_predictions_handler):
         class PredictOnlyModel:

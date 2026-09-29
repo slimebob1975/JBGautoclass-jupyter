@@ -37,6 +37,30 @@ def test_zero_recovery_is_nonfinite_and_invalid_for_regression():
     assert estimator.is_valid_for_regression_ is False
 
 
+def test_estimator_exposes_mean_recovery_for_direct_diagnostics():
+    X = np.arange(40, dtype=float).reshape(20, 2)
+    y = np.array([0, 1] * 10)
+    estimator = DarkNumberCorrectionFactorEstimator(
+        estimator=LogisticRegression(),
+        flip_fraction=0.5,
+        n_splits=2,
+        n_repeats=1,
+        n_jobs=1,
+        positive_class=1,
+        sample_size=1.0,
+        logger=_NullLogger(),
+    )
+    estimator._run_parallel = lambda _tasks: [0.02, 0.04]
+
+    estimator.fit(X, y)
+
+    assert estimator.recovery_results_ == [0.02, 0.04]
+    assert estimator.mean_recovery_ == pytest.approx(0.03)
+    assert estimator.score() == pytest.approx(1.0 / 0.03)
+    assert estimator.correction_status_ == "estimated"
+    assert estimator.is_valid_for_regression_ is True
+
+
 def test_insufficient_sample_fallback_is_not_a_regression_observation():
     X = np.arange(20, dtype=float).reshape(10, 2)
     y = np.array([1] + [0] * 9)

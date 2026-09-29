@@ -113,6 +113,7 @@ def config_from_last_run_snapshot(
             dark_number_alpha=DarkNumberAlpha.from_config_value(
                 mode.get("dark_number_alpha", "NONE")
             ),
+            dark_number_target=str(mode.get("dark_number_target", "") or ""),
             dark_number_flip_fraction=float(mode.get("dark_number_flip_fraction", 0.2)),
             experimental_perturbed_dark_number_fallback=bool(
                 mode.get("experimental_perturbed_dark_number_fallback", True)

@@ -92,6 +92,9 @@ mode = {
     # with the linear method because no non-linear separated-alpha formula exists.
     "dark_number_alpha": "<dark_number_alpha>",
 
+    # Target class to estimate. Empty string preserves the historical all-class behavior.
+    "dark_number_target": "<dark_number_target>",
+
     # Fraction of known positives temporarily relabelled when estimating
     # Dark Number correction factors. 0.20 preserves the published workflow.
     "dark_number_flip_fraction": "<dark_number_flip_fraction>",

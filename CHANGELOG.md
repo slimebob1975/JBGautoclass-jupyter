@@ -1,5 +1,50 @@
 # Revision log – JBGAutoClassification
 
+## 100 — Dark Number sensitivity evidence and runner observability
+
+- Runtime-validated revision 099 on the realistic Återkrav/FUTV `Target=Ja` case with one fixed dataset/split/model across nine seeds per fraction. At 5% every run was `insufficient_sample` (two planned positive flips per correction fit). At 10/15/20%, all runs were direct and fallback-free; corr CV was about 0.234/0.192/0.190 respectively. The 15% and 20% levels were therefore similarly stable, while 20% produced the higher mean corr (about 5.14 versus 4.40 at 15%).
+- Added the Breast Cancer control study (569 rows, targets B/M) as a second sensitivity datapoint. For the operationally interesting `M` class all 5/10/15/20% cells were direct with no fallback or low-recovery warning; corr CV was about 0.065/0.038/0.044/0.041 while mean corr increased monotonically from about 1.18 to 1.38 as the perturbation increased. This shows that flip fraction can shift the correction-factor level even when stability remains good.
+- Methodology decision: retain the production 20% compatibility default for now. Treat 15% as the leading lower-perturbation candidate because it was close to 20% in stability on Återkrav and Breast Cancer, but do not change the global default until the same fixed-basis study has been run on another genuinely imbalanced real dataset (roughly 2-10% target support). Do not introduce an adaptive fraction rule without cross-dataset evidence.
+- Improved the validation runner's observability for long studies: every completed fraction×seed cell now reports `[n/N]`, resolved target classes are logged explicitly, and both the loaded source pipeline and the deterministic fixed sensitivity pipeline are logged with step/final-estimator identity. Full source/fixed model identity, including estimator repr, is also persisted in the metadata JSON. This makes it clear which model was studied and whether an unset target expanded a 36-cell run to multiple target classes.
+- Added focused regression coverage for pipeline/final-estimator identity formatting and updated the runner documentation. A standalone identity-format smoke and `py_compile` pass; `git diff --check` and clean `git apply --check` against revision 099 pass. Targeted pytest collection remains blocked before the test module by the existing missing `dill` dependency.
+
+## 099 — Reproducible Dark Number correction-noise sensitivity runner
+
+- Added `JBGDarkNumberNoiseSensitivityRunner.py`, a validation-only real-data experiment that reads the latest Repeat Last state/model, fetches the dataset once, creates one deterministic train/test split and one fixed cross-trained pipeline, then varies only correction flip fraction and correction seed. Defaults are 5%, 10%, 15%, 20% and nine seeds. Production Dark Number defaults and model artifacts are not changed.
+- The detailed CSV records target support, correction status, reconstructed hard flipped/recovered counts, mean/pooled recovery, recovery spread, direct corr, low-recovery-warning state, fallback eligibility/activation/acceptance, final corr provenance and configured-formula `D_cv_full`. Unestimable 1.0 sentinels remain visible in detailed output but are excluded from corr/Dark Number stability summaries.
+- Added dataset and split SHA-256 fingerprints plus fixed split/model seeding so every fraction/seed cell in one study can be audited as sharing the same data, split and fitted cross-trained model. The runner defaults to the configured revision-095 Dark Number target; if the target is unset it studies all observed labels.
+- Preserved `dark_number_target` when reconstructing the validation-only `Config` from `.jbg_last_run.json`; the older validation runner previously omitted that post-095 field.
+- Added focused regression coverage for the requested fraction grid/nine-seed defaults, target resolution, hard recovery-count reconstruction (including planned flip counts when preflight skips before recovery), exclusion of unestimable sentinels from stability summaries, experiment fingerprints, and output artifacts. A direct synthetic smoke completed a fixed-dataset/fixed-split/fixed-model 10%/20% grid and produced distinct recovery/corr stability summaries as expected. `py_compile` and `git diff --check` pass; targeted pytest collection remains blocked by the existing missing `dill` dependency. Runtime-verified on 2026-09-29 with the fixed Återkrav/FUTV `Target=Ja` study: 5% was unestimable in all nine seeds, while 10/15/20% were fully direct and fallback-free with corr CV about 0.234/0.192/0.190. The current 20% production default remains deliberately unchanged pending further cross-dataset evidence.
+
+## 098 — Track Dark Number label-noise sensitivity study
+
+- Added a methodology backlog item to validate the correction estimator's configured target-positive label-noise fraction before changing the current 20% compatibility default. On rare target classes, 20% may be an overly strong perturbation, while much smaller fractions may yield too few flipped/recovered observations for a stable correction estimate.
+- The planned experiment keeps model/dataset pairs fixed and compares 5%, 10%, 15%, and 20% across repeated seeds, recording absolute flipped/recovered counts, recovery fraction, correction-factor stability, fallback activation, and downstream Dark Number behavior. A later adaptive percentage-plus-absolute-count rule is only a candidate if the sensitivity evidence supports it.
+- Documentation only: no Dark Number formula, correction routing, default noise fraction, GUI behavior, or model runtime behavior changes in this revision.
+
+## 097 — Dark Number target-first layout and low-recovery warning
+
+- Runtime verification of 095: a real FUTV/Återkrav run with `Dark Number target = Ja` estimated correction factors only for `Ja` (`4.92308` cross-trained and `5.33333` retrained, both direct), emitted only `Ja` Dark Number rows, and still retained both classes in the diagnostic confusion matrices.
+- Reordered the Dark Numbers controls to `Estimate -> Target -> Method -> Alpha -> Failure`, including migration of locally persisted widget-section order.
+- Added direct-correction recovery diagnostics to `DarkNumberCorrectionFactorEstimator` (`recovery_results_` and `mean_recovery_`).
+- Added a warning-only guard for very low but non-zero direct recovery: below 5% mean recovery (`corr > 20`) the log now warns that the direct estimate may be statistically unstable. The corr value remains `direct` and is neither clamped nor redirected to the experimental fallback.
+- Added regression coverage for target-first widget order, persisted-settings migration, recovery diagnostics, and warning-without-behavior-change semantics.
+- Runtime verification on the 2026-09-29 Återkrav/FUTV Repeat Last run: `Target=Ja` persisted correctly and direct corr remained moderate (`5.64706` cross-trained, `4.8` retrained), so no low-recovery warning was expected or emitted. The ordinary non-warning direct path is therefore runtime-verified; the actual `<5%` warning branch still awaits a real selected-target high-corr case.
+- Static validation: `py_compile`, JSON parse, and `git diff --check` pass. Targeted pytest collection is blocked in this container by the existing missing `dill` dependency (`ModuleNotFoundError: No module named 'dill'`). Clean `git apply --check` against revision 096 is verified during patch packaging.
+
+## 096 — Dark Number control-order backlog item
+
+- Added a presentation-only backlog item to move `Target` directly after the `Estimate` checkbox in the Dark Numbers panel, with the intended order `Estimate -> Target -> Method -> Alpha -> Failure`. No runtime or calculation code is changed in this revision.
+
+## 095 — Target-specific Dark Number estimation
+
+- Added a `Target:` radio group to the Dark Numbers panel. It is populated from the selected class column and offers `All classes` plus each observed non-empty class label; `All classes` remains the backwards-compatible default.
+- A specific target now limits the expensive Dark Number path itself: correction-factor estimation, recovery-level `perturbed_same_model` fallback, provenance and Dark Number rows are produced only for that target. Confusion matrices deliberately retain all classes as model diagnostics. A persisted target that no longer exists in the known labels fails explicitly rather than silently reverting to another class.
+- Persisted the target through generated configs, saved-model config normalization and Repeat Last. Older configs/artifacts/local GUI settings default to `All classes`, while Repeat Last can restore a specific target before the class-distribution widget has been repopulated. The configuration summary now reports `Dark Number target`.
+- Updated the live formula card with the current target and widened the control side from 68% to 72% (equation card 24%) so the additional radio group stays with Method/Alpha/Failure without reintroducing the wrapping fixed in 093.
+- Motivation from the realistic `Training_data_weekly_2025_44` runs: RFCL produced an extreme direct correction for the negative `Nej` class while the positive `Ja` target required the experimental fallback; a subsequent FUTV-only run produced moderate direct corrections for both classes. Because the operational Dark Number question is target-specific, unused negative-class correction behavior should not drive or consume the estimate.
+- Added focused regression coverage for config/default/legacy persistence, dynamic target options, Repeat Last restoration, equation-card target annotation, calculator target restriction, TaskRunner propagation, and handler-level proof that an `M` target never requests correction for `B`. Static validation: changed Python files compile and the standalone calculator target smoke passes. Project pytest collection remains blocked in this container by missing `dill` in `tests/conftest.py`; real-GUI/runtime verification is pending.
+
 ## 094 — Track Keras/NumPy terminal-only deprecation warnings
 
 - BACKLOG-only follow-up from real runtime feedback: repeated Keras/TensorFlow NumPy 2 `__array__(copy=...)` `DeprecationWarning` messages are visible in the launching terminal but are not captured in the `jbg-server` log.
@@ -12,7 +57,7 @@
 - Increased the Dark Number control area to 68% and reduced the equation card to 28%, with a 28px left gap so the formula sits visibly farther to the right. Method and Alpha now have explicit 150px/145px minimum widths and the failure group 210px, preventing the equation card from squeezing the radio controls.
 - Shortened the visible failure-policy copy to `Failure:` with `No fallback` / `Experimental`; the persisted boolean semantics are unchanged (`False` still means controlled immediate unestimable handling and `True` still means the experimental perturbed fallback). Existing local settings are normalized to the compact labels while preserving the saved value.
 - Reduced the equation-card typography and copy: `Formula` replaces `Current equation`, alpha notes are abbreviated, the symbol legend is condensed, non-linear root text becomes `root=3`, and the card allows horizontal overflow rather than forcing surrounding controls to collapse. Calculation/formula selection remains unchanged.
-- Updated focused UI tests for the new widths, labels and compact equation text. Static validation: `py_compile` and `git diff --check` pass; runtime visual verification remains to be confirmed in the real Voilà GUI.
+- Updated focused UI tests for the new widths, labels and compact equation text. Static validation: `py_compile` and `git diff --check` pass. Runtime visual verification: confirmed in the real Voilà GUI before 094/095.
 
 ## 092 — Dynamic Dark Number equation card
 
