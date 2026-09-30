@@ -1,5 +1,10 @@
 # Revision log – JBGAutoClassification
 
+## 101 — Track GridSearch runtime estimation
+
+- Added a BACKLOG item to estimate final GridSearchCV wall-clock duration before execution from the already observed k-fold training time and the known number of grid combinations/fits. The planned UI/log output should present an approximate hours/minutes duration, fit count and relevant assumptions, accounting for effective parallelism where the measured timing supports it.
+- Documentation only: no training, GridSearchCV, scheduling or runtime behavior changes in this revision.
+
 ## 100 — Dark Number sensitivity evidence and runner observability
 
 - Runtime-validated revision 099 on the realistic Återkrav/FUTV `Target=Ja` case with one fixed dataset/split/model across nine seeds per fraction. At 5% every run was `insufficient_sample` (two planned positive flips per correction fit). At 10/15/20%, all runs were direct and fallback-free; corr CV was about 0.234/0.192/0.190 respectively. The 15% and 20% levels were therefore similarly stable, while 20% produced the higher mean corr (about 5.14 versus 4.40 at 15%).
