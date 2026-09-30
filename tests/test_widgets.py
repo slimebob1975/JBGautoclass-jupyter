@@ -3,6 +3,7 @@ import pytest
 import ipywidgets
 
 from GUI.Widgets import Widgets
+from JBGScoring import score_metric_help
 
 class MockDataLayer:
     """ The minimum amount of datalayer needed for the Widgets """
@@ -561,7 +562,7 @@ class TestWidgets:
         assert scoremetric_dropdown.value == widget_parameters["scoremetric_dropdown"]["pre__load"]["value"]
         assert scoremetric_dropdown.disabled == widget_parameters["scoremetric_dropdown"]["pre__load"]["disabled"]
         assert scoremetric_dropdown.description == widget_parameters["scoremetric_dropdown"]["pre__load"]["description"]
-        assert scoremetric_dropdown.tooltip == widget_parameters["scoremetric_dropdown"]["pre__load"]["tooltip"]
+        assert scoremetric_dropdown.tooltip == score_metric_help(scoremetric_dropdown.value)
         
         # Reduction, SelectMultiple
         reduction_dropdown = widgets.reduction_dropdown
@@ -792,3 +793,14 @@ def test_unique_id_options_exclude_non_unique_integer_columns(widgets):
     widgets.class_column.value = "id"
     widgets.update_id_column()
     assert list(widgets.id_column.options) == []
+
+
+def test_scoremetric_labels_and_help_survive_programmatic_locked_restoration(widgets):
+    dropdown = widgets.scoremetric_dropdown
+    widgets.eventhandler.lock_observe_1 = True
+    widgets.eventhandler.lock_observe_2 = True
+    for metric, label in [("f1_micro", "F1 Micro"), ("f1_macro", "F1 Macro"), ("f1_weighted", "F1 Weighted")]:
+        dropdown.value = metric
+        assert dropdown.label == label
+        assert dropdown.tooltip == score_metric_help(metric)
+        assert widgets.scoremetric_dropdown is dropdown

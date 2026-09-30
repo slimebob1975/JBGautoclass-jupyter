@@ -10,6 +10,7 @@ import ipywidgets as widgets
 from io import StringIO
 from Helpers import build_model_performance_matrix, html_wrapper, print_html, save_matrix_as_csv
 from JBGLogFile import TeeStream, TimestampedLogFile, capture_console_output, normalize_log_level
+from JBGScoring import evaluation_diagnostics
 import re
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -248,6 +249,7 @@ class JBGLogger(terminal.Logger):
             rate_string = "Mean: {0:5.3f}, std.dev: {1:5.3f}".format(*sample_rates)
             evaluation_dict["Sample prediction probability rate"] = rate_string
         evaluation_dict["Accuracy score for evaluation data"] = str(accuracy_score)
+        evaluation_dict.update({name: str(value) for name, value in evaluation_diagnostics(confusion_matrix).items()})
     
         self.display_matrix("Evaluation information", pd.DataFrame.from_dict(data=evaluation_dict, orient="index", columns=[""]))
         self.display_matrix(f"Confusion matrix for evaluation data", pd.DataFrame(confusion_matrix, columns=class_labels, index=class_labels))

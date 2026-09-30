@@ -298,7 +298,7 @@ class TestScoreMetric:
         sorted_list_all_first = ScoreMetric.get_sorted_list()
 
         assert sorted_list_default == sorted_list_all_first
-        assert len(sorted_list_default) == 16
+        assert len(sorted_list_default) == 17
         
         # They are a list of tuples
         assert all(isinstance(x,tuple) for x in sorted_list_default)
@@ -312,3 +312,40 @@ class TestScoreMetric:
 
         # When sorted, accuracy is first
         assert sorted_list_default[0] == ("Accuracy", "accuracy")
+    @pytest.mark.parametrize("metric,label,legacy_label", [
+        ("f1_micro", "F1 Micro", "Balanced F1 Micro"),
+        ("f1_macro", "F1 Macro", "Balanced F1 Macro"),
+        ("f1_weighted", "F1 Weighted", "Balanced F1 Weighted"),
+    ])
+    def test_f1_display_labels_preserve_legacy_enum_values_and_scorers(self, metric, label, legacy_label):
+        from sklearn.metrics import f1_score
+
+        member = ScoreMetric[metric]
+        legacy_value = {"full_name": legacy_label, "callable": f1_score,
+                        "kwargs": {"average": metric.removeprefix("f1_"), "pos_label": None}}
+        assert member.full_name == member.get_full_name() == label
+        assert member.value == legacy_value
+        assert ScoreMetric(legacy_value) is member
+        assert pickle.loads(pickle.dumps(member)) is member
+        assert (label, metric) in ScoreMetric.get_sorted_list()
+        assert member.callable is f1_score
+        assert ScoreMetric.defaultScoreMetric() is ScoreMetric.accuracy
+
+    def test_legacy_value_based_pickle_loads_as_current_f1_enum(self):
+        from sklearn.metrics import f1_score
+
+        class LegacyValuePickle:
+            def __reduce__(self):
+                return (ScoreMetric, ({"full_name": "Balanced F1 Micro", "callable": f1_score,
+                                       "kwargs": {"average": "micro", "pos_label": None}},))
+
+        assert pickle.loads(pickle.dumps(LegacyValuePickle())) is ScoreMetric.f1_micro
+
+    def test_micro_f1_scorer_retains_accuracy_semantics_on_imbalanced_labels(self):
+        from sklearn.dummy import DummyClassifier
+        from sklearn.metrics import accuracy_score
+
+        X = np.zeros((100, 1))
+        y = np.array(["0"] * 99 + ["1"])
+        model = DummyClassifier(strategy="most_frequent").fit(X, y)
+        assert ScoreMetric.f1_micro.get_parametrized_scorer()(model, X, y) == accuracy_score(y, model.predict(X))

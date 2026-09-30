@@ -52,6 +52,7 @@ from sklearn.semi_supervised import SelfTrainingClassifier
 from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from Types import Detecter, Estimator, Transform
+from JBGScoring import SCORING_DISPLAY_NAMES
 
 PCA_VARIANCE_EXPLAINED = 0.95
 LOWER_LIMIT_REDUCTION = 100
@@ -1139,6 +1140,12 @@ class ScoreMetric(MetaEnum):
     average_precision_micro = {"full_name": "Average Precision Micro", "callable": average_precision_score, "kwargs": {"average": 'micro'}}
     average_precision_macro = {"full_name": "Average Precision Macro", "callable": average_precision_score, "kwargs": {"average": 'macro'}}
     average_precision_weighted = {"full_name": "Average Precision Weighted", "callable": average_precision_score, "kwargs": {"average": 'weighted'}}
+
+    @property
+    def full_name(self):
+        # Enum pickles resolve by value. Retain the legacy value dictionaries so old
+        # model/config artifacts remain loadable; correct only the displayed label.
+        return SCORING_DISPLAY_NAMES.get(self.name, super().full_name)
 
     def get_full_name(self) -> str:
         return self.full_name

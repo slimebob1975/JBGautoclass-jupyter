@@ -1242,12 +1242,13 @@ class TestModelHandler():
 
         serial_kwargs = {}
 
-        def fake_cross_val_score(*args, **kwargs):
+        def fake_cross_validate(*args, **kwargs):
             serial_kwargs.update(kwargs)
-            return np.array([0.5, 0.5])
+            return {"test_score": np.array([0.5, 0.5]),
+                    "fit_time": np.array([0.01, 0.02]), "score_time": np.array([0.001, 0.002])}
 
         default_model_handler.execute_n_job = fail_parallel
-        monkeypatch.setattr(handler_module, "cross_val_score", fake_cross_val_score)
+        monkeypatch.setattr(handler_module, "cross_validate", fake_cross_validate)
 
         dh = type("Dataset", (), {})()
         dh.X_train = pandas.DataFrame({"a": [1.0, 2.0, 3.0, 4.0]})
@@ -1265,6 +1266,7 @@ class TestModelHandler():
         assert np.array_equal(cv_results, np.array([0.5, 0.5]))
         assert serial_kwargs["n_jobs"] == 1
         assert "n_jobs_desired" not in serial_kwargs
+        assert default_model_handler._last_cv_timing[1].workers == 1
 
     def test_spot_check_candidate_marks_unstable_without_overwriting_failure(self, default_model_handler):
         state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)

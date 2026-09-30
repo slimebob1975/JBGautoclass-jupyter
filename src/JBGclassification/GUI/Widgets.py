@@ -17,6 +17,7 @@ from Config import (Config, Reduction, ReductionTuple, Algorithm,
                     ScoreMetric, Oversampling, Undersampling, NgramRange, DarkNumberAlpha, DarkNumberMethod)
 from JBGTransformers import TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
+from JBGScoring import score_metric_help
         
 from JBGExceptions import GuiWidgetsException
 import Helpers
@@ -2026,9 +2027,18 @@ class Widgets:
     @property
     def scoremetric_dropdown(self) -> widgets.Dropdown:
         name = sys._getframe().f_code.co_name # Current function name
-        return self._load_widget(name, calculated_params={
-            "options": ScoreMetric.get_sorted_list()
-        })
+        if name not in self.widgets:
+            widget = self._load_widget(
+                name, handler=self._scoremetric_tooltip_changed,
+                calculated_params={"options": ScoreMetric.get_sorted_list()},
+            )
+            widget.tooltip = score_metric_help(widget.value)
+        return self.widgets[name]
+
+    def _scoremetric_tooltip_changed(self, change) -> None:
+        # Display-only updates must also run during locked Repeat Last/model restore.
+        if change["name"] == "value":
+            change["owner"].tooltip = score_metric_help(change["new"])
         
 
     @property

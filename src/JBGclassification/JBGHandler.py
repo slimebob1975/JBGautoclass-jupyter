@@ -21,7 +21,7 @@ from sklearn.feature_selection import RFE
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, make_scorer, f1_score, get_scorer
-from sklearn.model_selection import (StratifiedKFold, cross_val_score,
+from sklearn.model_selection import (StratifiedKFold, cross_validate,
                                      train_test_split, GridSearchCV, ParameterGrid)
 from tensorflow import keras
 from imblearn.pipeline import Pipeline
@@ -48,6 +48,7 @@ from JBGModelPersistence import (
     save_model_artifact,
 )
 import Helpers
+from JBGTrainingTiming import CVTiming, estimate_grid_search, format_approximate_duration
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
 from pickle import PicklingError
@@ -918,6 +919,7 @@ class _SpotCheckState:
     best_algorithm: Algorithm = None
     best_preprocessor: Preprocess = None
     best_reduction: Reduction = None
+    best_cv_timing: CVTiming = None
 
 
 @dataclass
@@ -1176,6 +1178,9 @@ class ModelHandler:
                 verbose=0,
                 error_score='raise',
                 n_jobs_desired=n_jobs_desired)
+            # The constructor has resolved CPU/config caps and any worker retries.
+            # Publish the estimate before fit starts, also when verbose logging is off.
+            self._report_grid_search_estimate(n_param_combos, n_splits, search.n_jobs)
             estimator_X = Helpers.prepare_estimator_input(X)
             try:
                 search.fit(estimator_X, Y)
@@ -1191,6 +1196,29 @@ class ModelHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
+
+    def _report_grid_search_estimate(self, combinations: int, folds: int, workers: int) -> None:
+        timing = getattr(self, "_selected_cv_timing", None)
+        estimate = estimate_grid_search(timing, combinations, folds, workers)
+        work = f"{combinations} parameter combinations x {folds} folds = {combinations * folds} CV fits + 1 refit"
+        if estimate is None:
+            message = f"Grid search time estimate unavailable: no valid selected-pipeline CV timing; {work}."
+        else:
+            duration = format_approximate_duration(estimate.seconds)
+            message = f"Grid search estimated wall-clock time: {duration}; {work}."
+            self.handler.logger.print_progress(f"Grid search: estimated {duration} ({estimate.cv_fits} CV fits + 1 refit)")
+        self.handler.logger.print_info(message)
+        if estimate is not None:
+            self.handler.logger.print_info(
+                f"Grid search estimate assumptions: selected pipeline mean CV fit "
+                f"{timing.mean_fit_seconds:.3g} s + scoring {timing.mean_score_seconds:.3g} s/fold; "
+                f"{timing.wall_seconds:.3g} s observed wall-clock with {timing.workers} workers. "
+                f"Assumes {estimate.workers} concurrent fits (search requests {workers}; "
+                f"no speedup assumed beyond observed CV concurrency), comparable parameter costs, "
+                f"approximately linear refit scaling ({estimate.refit_seconds:.3g} s) and "
+                f"{estimate.overhead_seconds:.3g} s startup/dispatch allowance. "
+                "Parameter costs, contention and worker retries may change actual duration."
+            )
 
     def _fit_pipeline_for_validation(self, pipeline: Pipeline, dh: DatasetHandler) -> None:
         """Fit a spot-check pipeline, preserving sparse text input and the dense fallback."""
@@ -1325,6 +1353,7 @@ class ModelHandler:
                 raise
 
             else:
+                self._last_execution_n_jobs = n_jobs
                 end_time = time.time()
                 if self.handler.config.debug:
                     #self.handler.logger.print_info(f" --- Execution took {round(end_time - start_time, 2)} seconds. ---")
@@ -1523,6 +1552,8 @@ class ModelHandler:
         state.best_stdev = cv_stdev
         state.best_rfe_feature_selection = num_features
         state.best_num_components = num_components
+        last_timing = getattr(self, "_last_cv_timing", None)
+        state.best_cv_timing = last_timing[1] if last_timing is not None and last_timing[0] is pipeline else None
 
     def _consider_spot_check_candidate(self, state: _SpotCheckState, pipeline: Pipeline,
                                        preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
@@ -1702,12 +1733,15 @@ class ModelHandler:
         best_model.algorithm = state.best_algorithm
         best_model.pipeline = state.trained_pipeline
         best_model.n_features_out = state.best_num_components
+        self._selected_cv_timing = state.best_cv_timing
         return best_model
 
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
     def spot_check_machine_learning_models(self, dh: DatasetHandler, cross_validation_filepath: str, k: int = 10) -> Model:
+        self._last_cv_timing = None
+        self._selected_cv_timing = None
         standard_progress_text = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot-checking ML algorithms")
 
@@ -1981,7 +2015,7 @@ class ModelHandler:
 
     # Make cross val score evaluation
     def get_cross_val_score(self, pipeline: Pipeline, dh: DatasetHandler, kfold: StratifiedKFold, algorithm: Algorithm) -> np.ndarray:
-       
+        self._last_cv_timing = None
         # Now make kfolded cross evaluation. Notice that fit_params are not used right now (just placeholder for future revisions)
         scorer_mechanism = self._resolve_scoring_mechanism_for_target(dh.Y_train)
 
@@ -1996,25 +2030,35 @@ class ModelHandler:
         # CSR so sklearn can preserve sparsity through cross-validation.
         n_jobs_desired = min(kfold.get_n_splits(), self.handler.STANDARD_DESIRED_N_JOBS)
         estimator_X = Helpers.prepare_estimator_input(dh.X_train, prefer_numpy=True)
+        self._last_execution_n_jobs = None
+        started = time.perf_counter()
         try:
-            cv_results = self.execute_n_job(cross_val_score, pipeline, estimator_X, \
+            cv_results = self.execute_n_job(cross_validate, pipeline, estimator_X, \
                     dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, \
                     error_score='raise') 
         except TypeError as ex:
-            self.handler.logger.print_warning(f"TypeError in parallel call of cross_val_score: {str(ex)}. Trying dense NumPy fallback.")
+            self.handler.logger.print_warning(f"TypeError in parallel call of cross_validate: {str(ex)}. Trying dense NumPy fallback.")
             try:
-                cv_results = self.execute_n_job(cross_val_score, pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), cv=kfold, \
+                started = time.perf_counter()
+                cv_results = self.execute_n_job(cross_validate, pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), cv=kfold, \
                     scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, error_score='raise') 
             except Exception as ex:
-                self.handler.logger.print_warning(f"Could not execute cross_val_score in parallell: {str(ex)}")
+                self.handler.logger.print_warning(f"Could not execute cross_validate in parallell: {str(ex)}")
                 try:
                     self.handler.logger.print_info("Doing cross validation without parallelization.")
-                    cv_results = cross_val_score(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
+                    started = time.perf_counter()
+                    cv_results = cross_validate(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
                         cv=kfold, scoring=scorer_mechanism, n_jobs=1, params=fit_params, error_score='raise')
+                    self._last_execution_n_jobs = 1
                 except Exception as ex:
-                    raise ModelException(f"Unexpected error in cross_val_score: {str(ex)}") from ex
+                    raise ModelException(f"Unexpected error in cross_validate: {str(ex)}") from ex
         
-        return cv_results
+        timing = CVTiming.from_results(
+            cv_results, kfold.get_n_splits(), self._last_execution_n_jobs,
+            time.perf_counter() - started,
+        )
+        self._last_cv_timing = (pipeline, timing)
+        return cv_results["test_score"]
     
     def save_model_to_file(self, filename: Path):
         """ Save ml model and corresponding configuration """
