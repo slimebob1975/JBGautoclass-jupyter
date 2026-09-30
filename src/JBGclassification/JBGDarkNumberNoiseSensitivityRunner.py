@@ -13,6 +13,9 @@ from datetime import datetime
 import hashlib
 import json
 import os
+import re
+
+import joblib
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -35,6 +38,10 @@ from JBGDarkNumberValidationRunner import (
     resolve_sql_credentials,
 )
 from JBGDarkNumbers import DarkNumberCalculator
+from JBGDarkNumberSensitivityCheckpoint import (
+    SensitivityCheckpoint, checkpoint_lock, file_fingerprint, runtime_identity,
+    load_input_snapshot, save_input_snapshot,
+)
 from JBGStreamedLogger import JBGLogger
 
 
@@ -128,11 +135,13 @@ def dataset_fingerprint(X, y) -> str:
     digest.update(str(tuple(X.shape)).encode("utf-8"))
     if scipy_sparse.issparse(X):
         matrix = X.tocsr()
+        digest.update(str(matrix.dtype).encode("utf-8"))
         digest.update(_array_bytes(matrix.indptr))
         digest.update(_array_bytes(matrix.indices))
         digest.update(_array_bytes(matrix.data))
     else:
         frame = pd.DataFrame(X)
+        digest.update(joblib.hash((list(frame.columns), [str(dtype) for dtype in frame.dtypes])).encode("ascii"))
         hashed = pd.util.hash_pandas_object(frame, index=True).to_numpy(dtype=np.uint64)
         digest.update(_array_bytes(hashed))
     y_hashed = pd.util.hash_pandas_object(pd.Series(np.asarray(y)), index=True).to_numpy(dtype=np.uint64)
@@ -469,7 +478,18 @@ def summarize_sensitivity(runs: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def run_noise_sensitivity(
+def run_noise_sensitivity(config, logger, X, y, pipeline, *, checkpoint_path: Path | None = None,
+                          source_artifact_fingerprint: str | None = None, **settings):
+    """Hold one process lock throughout validation and incremental checkpoint writes."""
+    checkpoint_path = Path(checkpoint_path) if checkpoint_path is not None else None
+    with checkpoint_lock(checkpoint_path):
+        return _run_noise_sensitivity(
+            config, logger, X, y, pipeline, checkpoint_path=checkpoint_path,
+            source_artifact_fingerprint=source_artifact_fingerprint, **settings,
+        )
+
+
+def _run_noise_sensitivity(
     config,
     logger,
     X,
@@ -486,27 +506,20 @@ def run_noise_sensitivity(
     perturbation_clones: int,
     perturbation_min_valid: int,
     perturbation_max_cv: float,
+    checkpoint_path: Path | None,
+    source_artifact_fingerprint: str | None,
 ):
     y_array = np.asarray(y).astype(str)
     selected_targets = resolve_targets(config, y_array, targets)
     source_model_identity = describe_model_pipeline(pipeline)
     logger.print_info(f"Sensitivity source pipeline: {format_model_identity(source_model_identity)}")
     logger.print_info(f"Resolved sensitivity targets: {selected_targets}.")
-    fixed_model, train_idx, test_idx = fit_fixed_cross_trained_model(
-        pipeline,
-        X,
-        y_array,
-        test_size=config.get_test_size(),
-        split_seed=split_seed,
+    train_idx, test_idx = train_test_split(
+        np.arange(len(y_array)), test_size=float(config.get_test_size()),
+        stratify=y_array, random_state=int(split_seed),
     )
     X_train = _take_rows(X, train_idx)
     y_train = y_array[train_idx]
-    fixed_predictions = np.asarray(fixed_model.predict(X))
-    if not hasattr(fixed_model, "predict_proba"):
-        raise ValueError("Noise sensitivity requires predict_proba() to mirror configured Dark Number alpha handling.")
-    fixed_probabilities = np.asarray([max(row) for row in fixed_model.predict_proba(X)], dtype=float)
-
-    fixed_model_identity = describe_model_pipeline(fixed_model)
     metadata = {
         "dataset_fingerprint": dataset_fingerprint(X, y_array),
         "split_fingerprint": split_fingerprint(train_idx, test_idx),
@@ -527,12 +540,71 @@ def run_noise_sensitivity(
         ),
         "calculation_type": config.get_dark_number_calculation_type(),
         "source_model_identity": source_model_identity,
-        "fixed_model_identity": fixed_model_identity,
-        "fixed_model_type": type(fixed_model).__name__,
-        "fixed_model_full_accuracy": float(np.mean(fixed_predictions == y_array)),
         "full_class_support": {str(label): int(np.sum(y_array == label)) for label in pd.unique(y_array)},
         "train_class_support": {str(label): int(np.sum(y_train == label)) for label in pd.unique(y_train)},
     }
+    metadata.update(
+        perturbation_clones=int(perturbation_clones),
+        perturbation_min_valid=int(perturbation_min_valid),
+        perturbation_max_cv=float(perturbation_max_cv),
+    )
+    planned_cells = [(target, float(fraction), int(seed) + run_index)
+                     for target in selected_targets for fraction in fractions
+                     for run_index in range(int(runs))]
+    if not planned_cells or len(set(planned_cells)) != len(planned_cells):
+        raise ValueError("Sensitivity grid must be non-empty and must not contain duplicate targets/fractions.")
+    checkpoint = None
+    if checkpoint_path is not None:
+        # Compare full hyperparameters, not sklearn's truncated/address-bearing repr.
+        experiment = {
+            key: value for key, value in metadata.items() if key != "source_model_identity"
+        }
+        experiment.update(
+            model_parameters_fingerprint=joblib.hash(
+                _seed_unset_random_states(pipeline, split_seed).get_params(deep=True)
+            ),
+            source_artifact_fingerprint=source_artifact_fingerprint,
+            runtime=runtime_identity(),
+        )
+        checkpoint = SensitivityCheckpoint(checkpoint_path, experiment, planned_cells, metadata)
+        logger.print_info(f"Sensitivity checkpoint: {checkpoint_path}")
+        logger.print_info(f"Checkpoint progress: {len(checkpoint.rows)}/{len(planned_cells)} completed cells.")
+
+    bundle = checkpoint.load_fixed_experiment() if checkpoint is not None else None
+    if bundle is None:
+        fixed_model, train_idx, test_idx = fit_fixed_cross_trained_model(
+            pipeline, X, y_array, test_size=config.get_test_size(), split_seed=split_seed,
+        )
+        fixed_predictions = np.asarray(fixed_model.predict(X))
+        if not hasattr(fixed_model, "predict_proba"):
+            raise ValueError("Noise sensitivity requires predict_proba() to mirror configured Dark Number alpha handling.")
+        fixed_probabilities = np.asarray([max(row) for row in fixed_model.predict_proba(X)], dtype=float)
+        fixed_model_identity = describe_model_pipeline(fixed_model)
+        metadata.update(
+            fixed_model_identity=fixed_model_identity,
+            fixed_model_type=type(fixed_model).__name__,
+            fixed_model_full_accuracy=float(np.mean(fixed_predictions == y_array)),
+            fixed_model_fingerprint=joblib.hash(fixed_model),
+            fixed_predictions_fingerprint=joblib.hash((fixed_predictions, fixed_probabilities)),
+        )
+        if checkpoint is not None:
+            checkpoint.save_fixed_experiment(
+                dict(model=fixed_model, predictions=fixed_predictions, probabilities=fixed_probabilities),
+                metadata,
+            )
+    else:
+        fixed_model = bundle["model"]
+        fixed_predictions = bundle["predictions"]
+        fixed_probabilities = bundle["probabilities"]
+        metadata = dict(checkpoint.payload["metadata"])
+        # The exact original fitted pipeline/predictions are restored, not refitted.
+        if (joblib.hash(fixed_model) != metadata.get("fixed_model_fingerprint")
+                or joblib.hash((fixed_predictions, fixed_probabilities))
+                != metadata.get("fixed_predictions_fingerprint")):
+            raise ValueError("Sensitivity checkpoint fixed-model/prediction fingerprint mismatch.")
+        fixed_model_identity = metadata["fixed_model_identity"]
+        logger.print_info("Restored original fixed sensitivity model and predictions; no refit required.")
+
     logger.print_info(
         "Fixed sensitivity experiment: "
         f"dataset={metadata['dataset_fingerprint'][:12]}, split={metadata['split_fingerprint'][:12]}, "
@@ -541,9 +613,10 @@ def run_noise_sensitivity(
     )
     logger.print_info(f"Fixed sensitivity pipeline: {format_model_identity(fixed_model_identity)}")
 
-    rows = []
-    total_cells = len(selected_targets) * len(fractions) * int(runs)
-    completed_cells = 0
+    rows = list(checkpoint.rows) if checkpoint is not None else []
+    total_cells = len(planned_cells)
+    completed_cells = len(rows)
+    completed_keys = {SensitivityCheckpoint.cell_key(row) for row in rows}
     for target in selected_targets:
         logger.print_info(
             f"Dark Number noise sensitivity target={target!r}; train positives="
@@ -555,6 +628,8 @@ def run_noise_sensitivity(
             )
             for run_index in range(int(runs)):
                 correction_seed = int(seed) + run_index
+                if (target, float(fraction), correction_seed) in completed_keys:
+                    continue
                 row = run_sensitivity_cell(
                     config,
                     logger,
@@ -573,6 +648,8 @@ def run_noise_sensitivity(
                     perturbation_min_valid=perturbation_min_valid,
                     perturbation_max_cv=perturbation_max_cv,
                 )
+                if checkpoint is not None:
+                    checkpoint.append(row)
                 rows.append(row)
                 completed_cells += 1
                 logger.print_info(
@@ -583,6 +660,9 @@ def run_noise_sensitivity(
                     f"D_cv_full={row['d_cv_full']:.6g}."
                 )
 
+    if checkpoint is not None:
+        checkpoint.finish()
+        metadata.update(checkpoint_path=str(checkpoint_path), completed_cells=len(rows), total_cells=total_cells)
     detailed = pd.DataFrame(rows)
     summary = summarize_sensitivity(detailed)
     return detailed, summary, metadata
@@ -613,6 +693,11 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--state", type=Path, default=Path.cwd() / LAST_RUN_STATE_FILENAME)
     parser.add_argument("--model", type=Path, default=None)
+    parser.add_argument(
+        "--checkpoint", type=Path, default=None,
+        help="Checkpoint JSON to create or resume. Defaults to a per-model file under output/csvs. "
+             "Use a new path to start a separate study; mismatches are refused.",
+    )
     parser.add_argument("--sql-username", default=None)
     parser.add_argument(
         "--target",
@@ -684,14 +769,40 @@ def main(argv=None) -> int:
     logger.print_info(f"Last-run state: {args.state}")
     logger.print_info(f"Saved model artifact: {model_path}")
 
-    with logger.capture_console_output():
-        X, y, pipeline = load_validation_inputs(config, logger, model_path)
-        detailed, summary, metadata = run_noise_sensitivity(
+    model_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(config.io.model_name)) or "model"
+    checkpoint_path = args.checkpoint or (
+        Path(config.script_path) / "output" / "csvs" /
+        f"dark_number_noise_sensitivity_{model_name}_checkpoint.json"
+    )
+    checkpoint_path = checkpoint_path.resolve()
+
+    # Lock before loading/fetching snapshots so two invocations cannot replace the basis.
+    with logger.capture_console_output(), checkpoint_lock(checkpoint_path):
+        request = {
+            "last_run_settings_fingerprint": joblib.hash(snapshot),
+            "source_artifact_fingerprint": file_fingerprint(model_path),
+            "runtime": runtime_identity(),
+        }
+        inputs = load_input_snapshot(checkpoint_path, request)
+        if inputs is None:
+            X, y, pipeline = load_validation_inputs(config, logger, model_path)
+            inputs = dict(X=X, y=y, pipeline=pipeline,
+                          dataset_fingerprint=dataset_fingerprint(X, np.asarray(y).astype(str)))
+            save_input_snapshot(checkpoint_path, request, inputs)
+            logger.print_info("Saved original sensitivity input snapshot before fixed-model training.")
+        else:
+            X, y, pipeline = inputs["X"], inputs["y"], inputs["pipeline"]
+            if dataset_fingerprint(X, np.asarray(y).astype(str)) != inputs.get("dataset_fingerprint"):
+                raise ValueError("Sensitivity input dataset fingerprint mismatch.")
+            logger.print_info("Restored original sensitivity dataset snapshot; no new SQL selection/shuffle.")
+        detailed, summary, metadata = _run_noise_sensitivity(
             config,
             logger,
             X,
             y,
             pipeline,
+            checkpoint_path=checkpoint_path,
+            source_artifact_fingerprint=request["source_artifact_fingerprint"],
             targets=args.target,
             fractions=fractions,
             runs=args.runs,
