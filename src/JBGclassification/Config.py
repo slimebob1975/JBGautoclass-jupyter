@@ -123,6 +123,8 @@ class Config:
         "mode.num_selected_features": "<num_selected_features>",
         "mode.scoring": "<scoring>",
         "mode.max_iterations": "<max_iterations>",
+        "mode.calculate_feature_importance": "<calculate_feature_importance>",
+        "mode.feature_importance_repeats": "<feature_importance_repeats>",
         "io.verbose": "<verbose>",
         "io.model_path": "<model_path>",
         "io.model_name": "<model_name>",
@@ -410,6 +412,8 @@ class Config:
         num_selected_features: int = None
         scoring: ScoreMetric = field(default_factory=ScoreMetric.defaultScoreMetric)
         max_iterations: int = None
+        calculate_feature_importance: bool = False
+        feature_importance_repeats: int = 5
 
         def __post_init__(self) -> None:
             # New configurations default to the separated alpha adjustment for
@@ -473,6 +477,11 @@ class Config:
 
             if not isinstance(self.calculate_dark_numbers, bool):
                 raise TypeError("Argument calculate_dark_numbers must be True or False")
+
+            if not isinstance(self.calculate_feature_importance, bool):
+                raise TypeError("Argument calculate_feature_importance must be True or False")
+            if type(self.feature_importance_repeats) is not int or not 2 <= self.feature_importance_repeats <= 30:
+                raise ValueError("Argument feature_importance_repeats must be an integer between 2 and 30")
 
             if not isinstance(self.dark_number_method, DarkNumberMethod):
                 raise TypeError("Argument dark_number_method is invalid")
@@ -540,6 +549,8 @@ class Config:
                 "Categorize text data where applicable": self.use_categorization,
                 "Force categorization to these columns": forced_columns,
                 "Test size for trainings":               self.test_size,
+                "Calculate feature importance":            self.calculate_feature_importance,
+                "Feature importance repeats":              self.feature_importance_repeats,
                 "Calculate Dark Numbers":                  self.calculate_dark_numbers,
                 "Dark Number method":                      self.dark_number_method.display_name,
                 "Dark Number alpha":                       self.dark_number_alpha.display_name,
@@ -650,6 +661,8 @@ class Config:
                 "suffix": "csv",
                 "prefix": "crossval_"
             },
+            "feature_importance": {"suffix": "csv", "prefix": "feature_importance_"},
+            "feature_importance_details": {"suffix": "csv", "prefix": "feature_importance_details_"},
             "config": {
                 "suffix": "py",
                 "prefix": self.CONFIG_FILENAME_START
@@ -854,12 +867,18 @@ class Config:
             saved_config.mode.dark_number_target = ""
         if not hasattr(saved_config.mode, "experimental_perturbed_dark_number_fallback"):
             saved_config.mode.experimental_perturbed_dark_number_fallback = True
+        if not hasattr(saved_config.mode, "calculate_feature_importance"):
+            saved_config.mode.calculate_feature_importance = False
+        if not hasattr(saved_config.mode, "feature_importance_repeats"):
+            saved_config.mode.feature_importance_repeats = 5
         
         if config is not None:
             saved_config.mode.train = config.mode.train
             saved_config.mode.predict = config.mode.predict
             saved_config.mode.mispredicted = config.mode.mispredicted
             saved_config.mode.use_metas = config.mode.use_metas
+            saved_config.mode.calculate_feature_importance = config.should_calculate_feature_importance()
+            saved_config.mode.feature_importance_repeats = config.get_feature_importance_repeats()
             saved_config.mode.calculate_dark_numbers = config.mode.calculate_dark_numbers
             saved_config.mode.dark_number_method = config.mode.dark_number_method
             saved_config.mode.dark_number_alpha = config.mode.dark_number_alpha
@@ -914,9 +933,12 @@ class Config:
        
         configured_password = module.connection.get("sql_password", "")
         runtime_password = configured_password or os.environ.get(cls.SQL_PASSWORD_ENV, "")
+        # The generated template has no mail section; keep defaults unless one is supplied.
+        mail_defaults = cls.Mail()
+        mail_settings = getattr(module, "mail", {})
 
         config = cls(
-            Config.Connection(
+            connection=Config.Connection(
                 odbc_driver=module.connection["odbc_driver"],
                 host=module.connection["host"],
                 trusted_connection=module.connection["trusted_connection"],
@@ -931,13 +953,14 @@ class Config:
                 data_numerical_columns=data_numerical_columns,
                 id_column=module.connection["id_column"],
             ),
-            Config.Mode(
+            mode=Config.Mode(
                 train=module.mode["train"],
                 predict=module.mode["predict"],
                 mispredicted=module.mode["mispredicted"],
                 use_metas=use_metas,
                 use_stop_words=module.mode["use_stop_words"],
-                ngram_range=module.mode["ngram_range"],
+                ngram_range=(module.mode["ngram_range"] if isinstance(module.mode["ngram_range"], NgramRange)
+                             else NgramRange[module.mode["ngram_range"]]),
                 hex_encode=module.mode["hex_encode"],
                 use_categorization=module.mode["use_categorization"],
                 category_text_columns=category_text_columns,
@@ -955,18 +978,20 @@ class Config:
                 feature_selection=ReductionTuple.from_string(module.mode["feature_selection"]),
                 num_selected_features=num_selected_features,
                 scoring=ScoreMetric[module.mode["scoring"]],
-                max_iterations=max_iterations
+                max_iterations=max_iterations,
+                calculate_feature_importance=module.mode.get("calculate_feature_importance", False),
+                feature_importance_repeats=module.mode.get("feature_importance_repeats", 5),
             ),
-            Config.IO(
+            io=Config.IO(
                 verbose=module.io["verbose"],
                 model_path=module.io["model_path"],
                 model_name=module.io["model_name"]
             ),
-            Config.Mail(
-                smtp_server=module.mail["smtp_server"],
-                notification_email=module.mail["notification_email"]
+            mail=Config.Mail(
+                smtp_server=mail_settings.get("smtp_server", mail_defaults.smtp_server),
+                notification_email=mail_settings.get("notification_email", mail_defaults.notification_email),
             ),
-            Config.Debug(
+            debug=Config.Debug(
                 on=module.debug["on"],
                 data_limit=data_limit
             ),
@@ -1178,6 +1203,13 @@ class Config:
     def should_display_mispredicted(self) -> bool:
         """ Returns if this is a misprediction config """
         return self.mode.mispredicted
+
+    def should_calculate_feature_importance(self) -> bool:
+        """Optional inspection is performed only in a fresh training/holdout lifecycle."""
+        return bool(self.should_train() and getattr(self.mode, "calculate_feature_importance", False))
+
+    def get_feature_importance_repeats(self) -> int:
+        return getattr(self.mode, "feature_importance_repeats", 5)
 
     def should_use_metas(self) -> bool:
         """ Returns if this is a use metas config """

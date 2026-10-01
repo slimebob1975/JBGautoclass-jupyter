@@ -73,3 +73,31 @@ def format_approximate_duration(seconds):
     if hours:
         return f"~{hours} h {minutes} min"
     return f"~{minutes} min"
+
+
+def format_actual_duration(seconds):
+    """Human-readable elapsed duration without calling an actual measurement approximate."""
+    if seconds < 60:
+        return f"{seconds:.2f} s"
+    whole_seconds = int(round(seconds))
+    hours, remainder = divmod(whole_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    if hours:
+        return f"{hours} h {minutes} min {seconds} s"
+    return f"{minutes} min {seconds} s"
+
+
+def format_grid_search_comparison(estimate, actual_seconds):
+    """Compare successful search-fit + refit durations using unrounded seconds."""
+    if estimate is None or not isfinite(estimate.seconds) or estimate.seconds <= 0:
+        return None
+    if not isfinite(actual_seconds) or actual_seconds < 0:
+        return None
+    ratio = 100 * actual_seconds / estimate.seconds
+    deviation = ratio - 100
+    return (
+        f"Grid search completed (CV fits + refit): estimated "
+        f"{format_approximate_duration(estimate.seconds)}; actual {format_actual_duration(actual_seconds)}; "
+        f"actual/estimate {ratio:.1f}%; deviation {deviation:+.1f}% "
+        "(percentages use unrounded durations; negative = shorter, positive = longer)."
+    )

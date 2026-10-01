@@ -265,6 +265,8 @@ class GUIHandler:
                 "train": mode.train,
                 "predict": mode.predict,
                 "mispredicted": mode.mispredicted,
+                "calculate_feature_importance": getattr(mode, "calculate_feature_importance", False),
+                "feature_importance_repeats": getattr(mode, "feature_importance_repeats", 5),
                 "use_metas": mode.use_metas,
                 "use_stop_words": mode.use_stop_words,
                 "ngram_range": mode.ngram_range.name,
@@ -327,6 +329,8 @@ class GUIHandler:
                 train=mode["train"],
                 predict=mode["predict"],
                 mispredicted=mode["mispredicted"],
+                calculate_feature_importance=mode.get("calculate_feature_importance", False),
+                feature_importance_repeats=mode.get("feature_importance_repeats", 5),
                 use_metas=mode["use_metas"],
                 use_stop_words=mode["use_stop_words"],
                 ngram_range=NgramRange[mode["ngram_range"]],
@@ -748,4 +752,3 @@ else:
             os.strerror(errno.ENOENT), 
             env_path
         )
-

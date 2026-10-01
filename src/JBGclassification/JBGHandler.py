@@ -34,6 +34,7 @@ from JBGExceptions import (DatasetException, MissingScorerException, ModelExcept
     PipelineException)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
+from JBGDarkNumberReporting import build_dark_number_intervals, format_dark_number_interval
 from JBGDarkNumberCorrectionFactor import (
     DarkNumberCorrectionFactorEstimator,
     estimate_perturbed_same_model_correction,
@@ -48,7 +49,9 @@ from JBGModelPersistence import (
     save_model_artifact,
 )
 import Helpers
-from JBGTrainingTiming import CVTiming, estimate_grid_search, format_approximate_duration
+from JBGTrainingTiming import (
+    CVTiming, estimate_grid_search, format_approximate_duration, format_grid_search_comparison,
+)
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
 from pickle import PicklingError
@@ -828,7 +831,7 @@ class DatasetHandler:
         
     # Split dataset into training and validation parts
     def split_dataset_for_training_and_validation(self) -> bool:
-        
+        self.X_validation_original = None
         self.handler.logger.print_progress(message="Split dataset for machine learning")
         
         # Quick return if no training
@@ -840,6 +843,11 @@ class DatasetHandler:
             self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
                 self.X, self.Y, test_size = self.handler.config.get_test_size(), shuffle = True, random_state = 42, 
                 stratify = self.Y)
+
+            if getattr(self.handler.config, "should_calculate_feature_importance", lambda: False)():
+                # Snapshot the held-out original input columns before text/category conversion.
+                # The optional analysis later reuses only the fitted training converter.
+                self.X_validation_original = self.X_validation.copy(deep=True)
 
             return True
         
@@ -1180,8 +1188,9 @@ class ModelHandler:
                 n_jobs_desired=n_jobs_desired)
             # The constructor has resolved CPU/config caps and any worker retries.
             # Publish the estimate before fit starts, also when verbose logging is off.
-            self._report_grid_search_estimate(n_param_combos, n_splits, search.n_jobs)
+            estimate = self._report_grid_search_estimate(n_param_combos, n_splits, search.n_jobs)
             estimator_X = Helpers.prepare_estimator_input(X)
+            started = time.perf_counter()
             try:
                 search.fit(estimator_X, Y)
             except TypeError:
@@ -1190,6 +1199,15 @@ class ModelHandler:
                 self.handler.logger.print_dragon(exception=e)
                 raise ModelException(f"Something went wrong on grid search training of picked model: {str(e)}")                
 
+            actual_seconds = time.perf_counter() - started
+            comparison = format_grid_search_comparison(estimate, actual_seconds)
+            if comparison is not None:
+                self.handler.logger.print_info(comparison)
+            else:
+                self.handler.logger.print_info(
+                    "Grid search completed (CV fits + refit): time comparison unavailable "
+                    "because the pre-search estimate was unavailable."
+                )
             # Choose best estimator from grid search
             return search.best_estimator_, pd.DataFrame.from_dict(search.cv_results_)
         
@@ -1197,7 +1215,7 @@ class ModelHandler:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
 
-    def _report_grid_search_estimate(self, combinations: int, folds: int, workers: int) -> None:
+    def _report_grid_search_estimate(self, combinations: int, folds: int, workers: int):
         timing = getattr(self, "_selected_cv_timing", None)
         estimate = estimate_grid_search(timing, combinations, folds, workers)
         work = f"{combinations} parameter combinations x {folds} folds = {combinations * folds} CV fits + 1 refit"
@@ -1219,6 +1237,7 @@ class ModelHandler:
                 f"{estimate.overhead_seconds:.3g} s startup/dispatch allowance. "
                 "Parameter costs, contention and worker retries may change actual duration."
             )
+        return estimate
 
     def _fit_pipeline_for_validation(self, pipeline: Pipeline, dh: DatasetHandler) -> None:
         """Fit a spot-check pipeline, preserving sparse text input and the dense fallback."""
@@ -2679,6 +2698,12 @@ class PredictionsHandler:
             "max": details.get("max"),
             "clone_corrections": json.dumps(details.get("clone_corrections", [])),
             "clone_results": json.dumps(details.get("clone_results", []), default=str),
+            "planned_fits": details.get("planned_fits"),
+            "completed_fits": details.get("completed_fits"),
+            "skipped_fits": details.get("skipped_fits"),
+            "initial_workers": details.get("initial_workers"),
+            "final_workers": details.get("final_workers"),
+            "execution_seconds": details.get("execution_seconds"),
         }
         self.dark_number_fallback_events = pd.concat(
             [self.dark_number_fallback_events, pd.DataFrame([event])], ignore_index=True
@@ -2800,6 +2825,7 @@ class PredictionsHandler:
                                 perturbation_min_valid=3,
                                 perturbation_max_cv=0.50,
                                 logger=self.handler.logger,
+                                n_jobs=self.handler.STANDARD_DESIRED_N_JOBS,
                             )
                         except Exception as fallback_error:
                             self.handler.logger.print_warning(
@@ -2952,50 +2978,17 @@ class PredictionsHandler:
             target_labels = all_labels
         supports_predict_proba = [hasattr(model, "predict_proba") for model in models]
 
-        # A correction factor belongs to a model/data pairing. The cross-trained
-        # model was fitted on the 80% training split, while the retrained model was
-        # fitted on all known data. Preserve that distinction instead of sharing the
-        # correction factors from models[0] across every reported estimate.
-        corrs_by_model = {}
-        corr_sources_by_model = {}
-        corr_models_by_model = {}
-        for model_index, (model, model_name, can_predict_proba) in enumerate(
-            zip(models, model_names, supports_predict_proba)
-        ):
-            if not can_predict_proba:
-                continue
-
-            if model_index == 0 and X_cv_training is not None and Y_cv_training is not None:
-                corr_X, corr_Y = X_cv_training, Y_cv_training
-            else:
-                corr_X, corr_Y = X, Y
-
-            (
-                corrs_by_model[model_index],
-                corr_sources_by_model[model_index],
-                corr_models_by_model[model_index],
-            ) = self._calculate_dark_number_corrections(
-                model=model,
-                X=corr_X,
-                Y=corr_Y,
-                labels=target_labels,
-                flip_fraction=flip_fraction,
-                random_state=random_state,
-                model_name=model_name,
-            )
-
+        # Cache each existing prediction scope once, before deciding whether its
+        # correction can affect any result. The combined report shares one model's
+        # correction, so it must be included in that model's dependency check.
+        reports = []
         full_data_predictions = []
-
         for model_index, (model, model_name, can_predict_proba) in enumerate(
             zip(models, model_names, supports_predict_proba)
         ):
             if model_index == 0:
                 evaluation_sets = []
-                if (
-                    X_validation is not None
-                    and Y_validation is not None
-                    and len(Y_validation) > 0
-                ):
+                if X_validation is not None and Y_validation is not None and len(Y_validation) > 0:
                     evaluation_sets.append(("D_cv_test", X_validation, Y_validation, False))
                 evaluation_sets.append(("D_cv_full", X, Y, True))
             elif model_index == 1:
@@ -3006,31 +2999,14 @@ class PredictionsHandler:
             for estimate_name, X_eval, Y_eval, include_in_combined in evaluation_sets:
                 estimator_X = Helpers.prepare_estimator_input(X_eval)
                 Y_pred = pd.Series(model.predict(estimator_X), index=Y_eval.index)
-                result_name = f"{estimate_name} - {model_name}"
-
-                self._update_confusion_matrix(result_name, Y_eval, Y_pred, all_labels)
-
-                if not can_predict_proba:
-                    continue
-
-                Y_prob_pred = pd.Series(
-                    [max(row) for row in model.predict_proba(estimator_X)],
-                    index=Y_eval.index
-                )
-                self._update_dark_numbers(
-                    result_name,
-                    Y_eval,
-                    Y_pred,
-                    Y_prob_pred,
-                    type,
-                    corrs_by_model[model_index],
-                    corr_sources_by_model[model_index],
-                    corr_models_by_model[model_index],
-                    targets=target_labels,
-                )
-
-                if include_in_combined:
-                    full_data_predictions.append((Y_pred, Y_prob_pred, model_index))
+                Y_prob_pred = None
+                if can_predict_proba:
+                    Y_prob_pred = pd.Series(
+                        [max(row) for row in model.predict_proba(estimator_X)], index=Y_eval.index
+                    )
+                    if include_in_combined:
+                        full_data_predictions.append((Y_pred, Y_prob_pred, model_index))
+                reports.append((f"{estimate_name} - {model_name}", Y_eval, Y_pred, Y_prob_pred, model_index))
 
             if not can_predict_proba:
                 self.handler.logger.print_warning(
@@ -3038,39 +3014,77 @@ class PredictionsHandler:
                     "model does not support predict_proba()."
                 )
 
-        # Retain the historical combined/worst-case output for backward comparison.
-        # Its correction factors deliberately keep the old models[0] convention; the
-        # three named estimates above are the new model-specific results.
+        # Preserve the historical combined predictions and correction ownership.
         if combine_models and full_data_predictions:
             Y_pred_worst = Y.copy(deep=True)
             Y_prob_pred_worst = pd.Series([0.0 for _ in range(Y.size)], index=Y.index)
-
             for Y_pred, Y_prob_pred, _ in full_data_predictions:
                 replace_mask = (Y_pred != Y) & (Y_prob_pred >= Y_prob_pred_worst)
                 Y_pred_worst = Y_pred_worst.mask(replace_mask, Y_pred)
                 Y_prob_pred_worst = Y_prob_pred_worst.mask(replace_mask, Y_prob_pred)
+            legacy_owner = 0 if supports_predict_proba[0] else full_data_predictions[0][2]
+            reports.append(("Combined (legacy full-data)", Y, Y_pred_worst, Y_prob_pred_worst, legacy_owner))
 
-            self._update_confusion_matrix("Combined (legacy full-data)", Y, Y_pred_worst, all_labels)
+        corrs_by_model = {}
+        corr_sources_by_model = {}
+        corr_models_by_model = {}
+        for model_index, (model, model_name, can_predict_proba) in enumerate(
+            zip(models, model_names, supports_predict_proba)
+        ):
+            if not can_predict_proba:
+                continue
+            dependent_reports = [report for report in reports if report[4] == model_index]
+            unused_labels = [label for label in target_labels if dependent_reports and all(
+                DarkNumberCalculator.correction_is_unused(real, predicted, probabilities, label, type)
+                for _, real, predicted, probabilities, _ in dependent_reports
+            )]
+            required_labels = [label for label in target_labels if label not in unused_labels]
+            if model_index == 0 and X_cv_training is not None and Y_cv_training is not None:
+                corr_X, corr_Y = X_cv_training, Y_cv_training
+            else:
+                corr_X, corr_Y = X, Y
+            corrs, sources, corr_models = {}, {}, {}
+            if required_labels:
+                corrs, sources, corr_models = self._calculate_dark_number_corrections(
+                    model=model, X=corr_X, Y=corr_Y, labels=required_labels,
+                    flip_fraction=flip_fraction, random_state=random_state, model_name=model_name,
+                )
+            for label in unused_labels:
+                # 1.0 is only a neutral calculation placeholder, never an estimate.
+                corrs[label] = 1.0
+                sources[label] = "not_needed_zero_fp"
+                corr_models[label] = model_name
+                scope_counts = []
+                has_false_negatives = False
+                for report_name, real, predicted, _, _ in dependent_reports:
+                    false_negatives = int(((real == label) & (predicted != label)).sum())
+                    has_false_negatives |= false_negatives > 0
+                    scope_counts.append(f"{report_name}: FP=0, FN={false_negatives}")
+                self.handler.logger.print_info(
+                    f"Skipping Dark Number correction for {model_name}, target {label}: "
+                    "zero false positives in every dependent report; the configured formula's "
+                    "false-positive multiplier is zero. No correction fits, regression or "
+                    "experimental shadow clones are needed. corr=1.0 is a neutral placeholder "
+                    f"(corr_source=not_needed_zero_fp). {'; '.join(scope_counts)}"
+                )
+                if has_false_negatives:
+                    self.handler.logger.print_warning(
+                        f"Dark Number for target {label} is zero by the configured formula despite "
+                        "observed false negatives. Zero observed false positives does not establish "
+                        "absence of unobserved positives."
+                    )
+            corrs_by_model[model_index] = corrs
+            corr_sources_by_model[model_index] = sources
+            corr_models_by_model[model_index] = corr_models
 
-            legacy_corrs = corrs_by_model.get(0)
-            legacy_corr_sources = corr_sources_by_model.get(0)
-            legacy_corr_models = corr_models_by_model.get(0)
-            if legacy_corrs is None:
-                first_model_index = full_data_predictions[0][2]
-                legacy_corrs = corrs_by_model[first_model_index]
-                legacy_corr_sources = corr_sources_by_model[first_model_index]
-                legacy_corr_models = corr_models_by_model[first_model_index]
-            self._update_dark_numbers(
-                "Combined (legacy full-data)",
-                Y,
-                Y_pred_worst,
-                Y_prob_pred_worst,
-                type,
-                legacy_corrs,
-                legacy_corr_sources,
-                legacy_corr_models,
-                targets=target_labels,
-            )
+        for result_name, Y_eval, Y_pred, Y_prob_pred, correction_owner in reports:
+            self._update_confusion_matrix(result_name, Y_eval, Y_pred, all_labels)
+            if Y_prob_pred is not None:
+                self._update_dark_numbers(
+                    result_name, Y_eval, Y_pred, Y_prob_pred, type,
+                    corrs_by_model[correction_owner], corr_sources_by_model[correction_owner],
+                    corr_models_by_model[correction_owner], targets=target_labels,
+                )
 
         return None
 
@@ -3160,6 +3174,12 @@ class PredictionsHandler:
         
         self.handler.logger.display_matrix(f"Dark numbers confusion matrices", self.dark_numb_conf_matrix)
         self.handler.logger.display_matrix(f"Dark numbers calculations", self.dark_numbers, precision = 4)
+
+        for interval in build_dark_number_intervals(self.dark_numbers):
+            plain, rich = format_dark_number_interval(interval)
+            self.handler.logger.print_info(
+                plain, print_always=True, html_function=lambda text, markup=rich: markup,
+            )
 
         Helpers.save_matrix_as_csv(
             self.dark_numb_conf_matrix,

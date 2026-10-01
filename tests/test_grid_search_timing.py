@@ -13,7 +13,10 @@ from sklearn.preprocessing import StandardScaler
 
 import JBGHandler as handler_module
 from JBGHandler import ModelHandler, _SpotCheckState
-from JBGTrainingTiming import CVTiming, estimate_grid_search, format_approximate_duration
+from JBGTrainingTiming import (
+    CVTiming, GridSearchEstimate, estimate_grid_search, format_approximate_duration,
+    format_actual_duration, format_grid_search_comparison,
+)
 
 
 def test_parallel_budget_includes_scoring_refit_and_one_startup_allowance():
@@ -177,3 +180,40 @@ def test_missing_timing_logs_reason_and_fit_count():
     message = handler.handler.logger.print_info.call_args.args[0]
     assert "unavailable" in message and "60 CV fits + 1 refit" in message
     handler.handler.logger.print_progress.assert_not_called()
+
+
+def test_comparison_uses_unrounded_seconds_and_signed_deviation():
+    estimate = GridSearchEstimate(601.0, 1, 10, 0, 0)
+    message = format_grid_search_comparison(estimate, 480.8)
+    assert "estimated ~11 min" in message
+    assert "actual/estimate 80.0%" in message
+    assert "deviation -20.0%" in message
+    assert "unrounded" in message
+    assert "deviation +20.0%" in format_grid_search_comparison(estimate, 721.2)
+
+
+@pytest.mark.parametrize("estimate,actual", [
+    (None, 1), (GridSearchEstimate(0, 1, 1, 0, 0), 1),
+    (GridSearchEstimate(1, 1, 1, 0, 0), float('nan')),
+    (GridSearchEstimate(1, 1, 1, 0, 0), -1),
+])
+def test_invalid_comparisons_are_unavailable(estimate, actual):
+    assert format_grid_search_comparison(estimate, actual) is None
+
+
+@pytest.mark.parametrize("seconds,display", [(0.1234, "0.12 s"), (589.96, "9 min 50 s"), (3661, "1 h 1 min 1 s")])
+def test_actual_duration_is_not_labelled_as_estimated(seconds, display):
+    assert format_actual_duration(seconds) == display
+
+
+def test_failed_grid_search_never_logs_successful_percentage(monkeypatch):
+    handler = make_handler()
+    handler._selected_cv_timing = CVTiming(2, 1, 1, 0.1, 2.2)
+    monkeypatch.setattr(handler_module.GridSearchCV, "fit", Mock(side_effect=ValueError("failed fit")))
+    with pytest.raises(handler_module.ModelException):
+        handler.model_parameter_grid_search(
+            Pipeline([("LRN", LogisticRegression())]), {"LRN__C": [1]}, 2,
+            pd.DataFrame({"a": [1, 2, 3, 4]}), pd.Series([0, 1, 0, 1]),
+        )
+    messages = [call.args[0] for call in handler.handler.logger.print_info.call_args_list]
+    assert not any("actual/estimate" in message or "Grid search completed" in message for message in messages)

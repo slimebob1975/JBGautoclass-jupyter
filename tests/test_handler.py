@@ -1614,10 +1614,16 @@ class TestPredictionsHandler:
         }
 
         monkeypatch.setattr(handler_module, "DarkNumberCorrectionFactorEstimator", FakeDirectEstimator)
+        fallback_workers = []
+
+        def fake_perturbed_fallback(*args, **kwargs):
+            fallback_workers.append(kwargs["n_jobs"])
+            return 3.2, "perturbed_same_model", details
+
         monkeypatch.setattr(
             handler_module,
             "estimate_perturbed_same_model_correction",
-            lambda *args, **kwargs: (3.2, "perturbed_same_model", details),
+            fake_perturbed_fallback,
         )
         monkeypatch.setattr(
             default_predictions_handler.handler,
@@ -1646,6 +1652,7 @@ class TestPredictionsHandler:
         assert corrs == {"B": pytest.approx(3.2)}
         assert sources == {"B": "perturbed_same_model"}
         assert corr_models == {"B": "Target model"}
+        assert fallback_workers == [default_predictions_handler.handler.STANDARD_DESIRED_N_JOBS]
         events = default_predictions_handler.dark_number_fallback_events
         assert len(events) == 1
         assert events.iloc[0]["accepted"] == True
@@ -1714,7 +1721,7 @@ class TestPredictionsHandler:
         class FixedModel:
             def predict(self, X):
                 values = np.asarray(X)[:, 0]
-                return np.where(values >= 2.0, "M", "B")
+                return np.where(values >= 1.0, "M", "B")
 
             def predict_proba(self, X):
                 predicted = self.predict(X)
@@ -1840,7 +1847,7 @@ class TestPredictionsHandler:
         )
 
         X = pandas.DataFrame({"feature": [0.0, 1.0, 2.0, 3.0, 4.0, 5.0]})
-        Y = pandas.Series(["B", "B", "B", "M", "M", "M"])
+        Y = pandas.Series(["B", "B", "M", "B", "M", "B"])
         X_cv_training = X.iloc[:4]
         Y_cv_training = Y.iloc[:4]
         X_validation = X.iloc[4:]

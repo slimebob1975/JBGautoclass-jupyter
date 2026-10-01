@@ -7,6 +7,8 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from joblib import Parallel, delayed
 from pickle import PicklingError
 from typing import TYPE_CHECKING
+from time import perf_counter
+from JBGDarkNumberExecution import FallbackProgress, resolve_fallback_workers, run_isolated_tasks
 
 if TYPE_CHECKING:
     from JBGLogger import JBGLogger
@@ -69,7 +71,9 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
                  positive_class: int = 1,
                  sample_size: float = 0.1,
                  parallel_backend: str = BACKEND_PROCESSES,
-                 logger: JBGLogger = None):   
+                 logger: JBGLogger = None,
+                 progress=None,
+                 isolated_execution: bool = False):
         self.estimator = estimator
         self.flip_fraction = flip_fraction
         self.n_splits = n_splits
@@ -86,6 +90,8 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         self.mean_recovery_ = None
         self.parallel_backend = parallel_backend
         self.logger = logger
+        self.progress = progress
+        self.isolated_execution = isolated_execution
 
     @staticmethod
     def _compute_min_sample_size(y,
@@ -194,6 +200,13 @@ class DarkNumberCorrectionFactorEstimator(BaseEstimator):
         """
         Run tasks with retry logic, reusing the same task list.
         """
+        if self.isolated_execution:
+            results, self.n_jobs = run_isolated_tasks(
+                tasks, self.n_jobs, progress=self.progress, logger=self.logger,
+                workers_changed=lambda workers: setattr(self, "n_jobs", workers),
+            )
+            return results
+
         while True:
             try:
                 if DEBUG_LOGGING:
@@ -251,6 +264,7 @@ def estimate_perturbed_same_model_correction(
     perturbation_min_valid: int = 3,
     perturbation_max_cv: float = 0.50,
     logger=None,
+    n_jobs: int = 1,
 ):
     """Estimate a correction factor from stable perturbed clones of the same model.
 
@@ -270,6 +284,34 @@ def estimate_perturbed_same_model_correction(
     if not np.isfinite(perturbation_max_cv) or perturbation_max_cv < 0:
         raise ValueError("perturbation_max_cv must be finite and non-negative")
 
+    fits_per_clone = int(n_splits) * int(n_repeats)
+    if int(n_splits) < 2 or int(n_repeats) < 1:
+        raise ValueError("n_splits must be at least 2 and n_repeats at least 1")
+    workers, reason = resolve_fallback_workers(estimator, n_jobs, fits_per_clone)
+    with FallbackProgress(logger, int(perturbation_clones), fits_per_clone, workers, reason) as progress:
+        corr, source, details = _estimate_perturbed_same_model_correction(
+            estimator, X, y, flip_fraction=flip_fraction, n_splits=n_splits,
+            n_repeats=n_repeats, random_state=random_state, positive_class=positive_class,
+            perturbation_clones=perturbation_clones, perturbation_min_valid=perturbation_min_valid,
+            perturbation_max_cv=perturbation_max_cv, logger=logger,
+            n_jobs=workers, progress=progress,
+        )
+    details.update({
+        "planned_fits": progress.total,
+        "completed_fits": progress.completed,
+        "skipped_fits": progress.skipped,
+        "execution_seconds": progress.seconds,
+        "initial_workers": workers,
+    })
+    return corr, source, details
+
+
+def _estimate_perturbed_same_model_correction(
+    estimator, X, y, *, flip_fraction, n_splits, n_repeats, random_state,
+    positive_class, perturbation_clones, perturbation_min_valid, perturbation_max_cv,
+    logger, n_jobs, progress,
+):
+    """Keep the five-clone statistical experiment independent of execution policy."""
     y_array = np.asarray(y)
     valid_corrs: list[float] = []
     clone_results: list[dict] = []
@@ -292,6 +334,9 @@ def estimate_perturbed_same_model_correction(
             for name in params
             if name.endswith("random_state")
         }
+        # Parallelism belongs to the independent fits, not nested ensemble jobs.
+        updates.update({name: 1 for name, value in params.items()
+                        if name.endswith("n_jobs") and value not in (None, 1)})
         if updates:
             shadow.set_params(**updates)
         return shadow
@@ -307,6 +352,8 @@ def estimate_perturbed_same_model_correction(
         return indices.astype(int, copy=False)
 
     for clone_index in range(int(perturbation_clones)):
+        progress.start_clone(clone_index)
+        clone_started = perf_counter()
         perturb_seed = int(random_state) + 1009 * (clone_index + 1)
         indices = stratified_bootstrap_indices(perturb_seed)
         X_boot = take_rows(X, indices)
@@ -317,13 +364,15 @@ def estimate_perturbed_same_model_correction(
             flip_fraction=float(flip_fraction),
             n_splits=int(n_splits),
             n_repeats=int(n_repeats),
-            n_jobs=1,
+            n_jobs=n_jobs,
             predict_mode="predict",
             random_state=perturb_seed,
             positive_class=positive_class,
             sample_size=1.0,
-            parallel_backend=BACKEND_THREADS,
+            parallel_backend=BACKEND_PROCESSES,
             logger=logger,
+            progress=progress.fit_completed,
+            isolated_execution=True,
         )
         try:
             correction_estimator.fit(X_boot, y_boot)
@@ -347,6 +396,8 @@ def estimate_perturbed_same_model_correction(
                     f"EXPERIMENTAL perturbed same-model clone {clone_index + 1}/"
                     f"{perturbation_clones} was not usable: {error}"
                 )
+            n_jobs = min(n_jobs, correction_estimator.n_jobs)
+            progress.finish_clone(perf_counter() - clone_started, "unusable", n_jobs)
             continue
 
         valid_corrs.append(corr)
@@ -356,6 +407,8 @@ def estimate_perturbed_same_model_correction(
             "status": "estimated",
             "corr": corr,
         })
+        n_jobs = min(n_jobs, correction_estimator.n_jobs)
+        progress.finish_clone(perf_counter() - clone_started, f"corr={corr:.6g}", n_jobs)
 
     details = {
         "clone_count": int(perturbation_clones),
@@ -366,6 +419,7 @@ def estimate_perturbed_same_model_correction(
         "clone_results": clone_results,
         "accepted": False,
         "reason": "insufficient_valid_clones",
+        "final_workers": n_jobs,
     }
 
     if len(valid_corrs) < perturbation_min_valid:

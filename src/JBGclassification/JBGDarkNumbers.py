@@ -58,6 +58,32 @@ class DarkNumberCalculator:
     def __init__(self):
         pass
 
+    @classmethod
+    def correction_is_unused(cls, real, predicted, probabilities, target, calculation_type):
+        """Prove the zero-FP multiplier is zero on a valid reported scope.
+
+        No observed negatives is not zero FPR: the historical rate is undefined
+        there. Require both target/rest support, aligned complete labels and valid
+        confidence values for alpha formulas before skipping any correction work.
+        """
+        if calculation_type != "all" and calculation_type not in cls.FORMULA_LATEX:
+            return False
+        if (len(real) == 0 or not real.index.equals(predicted.index)
+                or real.isna().any() or predicted.isna().any()):
+            return False
+        target_rows = real == target
+        if not target_rows.any() or target_rows.all():
+            return False
+        if ((~target_rows) & (predicted == target)).any():
+            return False
+        uses_alpha = calculation_type in {"all", "single_alpha", "separated_alpha", "non_linear_alpha"}
+        if uses_alpha and (
+            probabilities is None or not real.index.equals(probabilities.index)
+            or probabilities.isna().any() or not probabilities.between(0, 1).all()
+        ):
+            return False
+        return True
+
     def compute_posneg_rates(self, TN: int, FP: int, FN: int, TP: int):
 
         # Compute performance rates

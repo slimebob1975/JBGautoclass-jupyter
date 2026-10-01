@@ -4,12 +4,15 @@ from pathlib import Path
 from typing import Protocol
 import copy
 import smtplib
+import json
+import pandas as pd
 
 from imblearn.pipeline import Pipeline
 
 from JBGExceptions import PredictionsException, ModelException, DatasetException, ConfigException
 from JBGHandler import JBGHandler
 import Helpers
+from JBGFeatureImportance import compute_feature_importance
 
 class Logger(Protocol):
     """ Hides implementation """
@@ -311,6 +314,81 @@ class TaskRunner:
 
         return {"cross_trained_model": cross_trained_model, "trained_model": trained_model}
 
+    def feature_importance__task(self) -> dict:
+        """Inspect the locked cross-trained model after evaluation and before full-data refit."""
+        if not self.config.should_calculate_feature_importance():
+            return {}
+        self.logger.print_task_header(title="Feature importance on final holdout")
+        raw_holdout = getattr(self.dh, "X_validation_original", None)
+        if raw_holdout is None:
+            self.logger.print_warning("Feature importance unavailable: original-column holdout was not preserved.")
+            return {}
+        repeats = self.config.get_feature_importance_repeats()
+        progress_key = "feature_importance"
+        total_scores = 1 + raw_holdout.shape[1] * repeats
+        self.logger.print_info(
+            f"Feature importance: {raw_holdout.shape[1]} original input columns x {repeats} repeats "
+            f"+ 1 baseline = {total_scores} score evaluations on all {len(raw_holdout)} holdout rows. "
+            "The fitted converter and pipeline are fixed; no refitting or feature selection is performed."
+        )
+        self.logger.start_inline_progress(progress_key, "Feature importance", total_scores, "Percent scores evaluated")
+        success = False
+        try:
+            def progress(completed, total):
+                self.logger.update_inline_progress(progress_key, completed, "Percent scores evaluated")
+
+            report = compute_feature_importance(
+                self.mh.model.pipeline, raw_holdout, self.dh.Y_validation,
+                scoring=self.mh._resolve_scoring_mechanism_for_target(self.dh.Y_validation),
+                converter=self.mh.model.text_converter, repeats=repeats, progress=progress,
+            )
+            self.logger.print_info(
+                f"Feature importance baseline ({self.config.mode.scoring.full_name}): {report.baseline_score:.6g}; "
+                f"analysis took {report.seconds:.2f} s. Positive importance means shuffling decreased "
+                "the score; negative values are retained. Std. across repeats is shuffle variation, "
+                "not a confidence interval. Correlated inputs can mask each other's importance. "
+                "This measures this fitted model's reliance on inputs, not causality."
+            )
+            summary_path = self.config.get_output_filepath("feature_importance")
+            details_path = self.config.get_output_filepath("feature_importance_details")
+            details = {
+                "Method": "Permutation importance of original input columns",
+                "Data scope": "All final holdout rows; evaluated before full-data retraining",
+                "Model": self.mh.model.get_name(),
+                "Scorer": self.config.mode.scoring.full_name,
+                "Baseline score": report.baseline_score,
+                "Holdout rows": report.rows,
+                "Holdout class counts": json.dumps(
+                    {str(label): int(count) for label, count in self.dh.Y_validation.value_counts().items()},
+                    ensure_ascii=False,
+                ),
+                "Original input columns": raw_holdout.shape[1],
+                "Converted input features": self.dh.X_validation.shape[1],
+                "Repeats": report.repeats,
+                "Permutation seed": report.seed,
+                "Score evaluations": total_scores,
+                "Analysis seconds": report.seconds,
+                "Interpretation": "Mean baseline-minus-permuted score; std is repeat variation, not a confidence interval",
+                "Limitations": "Model-dependent; correlated inputs can mask importance; not causal or automatic feature selection",
+            }
+            Helpers.save_matrix_as_csv(report.table, summary_path)
+            Helpers.save_matrix_as_csv(pd.DataFrame.from_dict(details, orient="index", columns=["Value"]), details_path)
+            self.logger.display_matrix(
+                "Feature importance — top 20 original inputs (mean score decrease)", report.table.iloc[:20, :4]
+            )
+            self.logger.print_code("All feature importance scores and repeats", Helpers.create_download_link(summary_path, title=""))
+            self.logger.print_code("Feature importance settings and baseline", Helpers.create_download_link(details_path, title=""))
+            success = True
+        except Exception as ex:
+            self.logger.print_warning(
+                f"Optional feature importance analysis failed: {type(ex).__name__}: {ex}. "
+                "Continuing the normal training lifecycle."
+            )
+        finally:
+            self.logger.end_inline_progress(progress_key, set_100=success)
+            self.dh.X_validation_original = None
+        return {}
+
     
     def display_mispredicted__task(self, cross_trained_model: Pipeline, trained_model: Pipeline) -> dict:
         """Compute reclassification and Dark Numbers as independent training outputs."""
@@ -441,9 +519,10 @@ def get_tasks(config: Config, regression_suite: bool = False) -> list:
         training_tasks = [
             "train_model",
             "evaluate_model",
-            "retrain_model",
-            "display_mispredicted"
         ]
+        if getattr(config, "should_calculate_feature_importance", lambda: False)() and not regression_suite:
+            training_tasks.append("feature_importance")
+        training_tasks.extend(["retrain_model", "display_mispredicted"])
         tasks.extend(training_tasks)
 
     if config.should_predict():

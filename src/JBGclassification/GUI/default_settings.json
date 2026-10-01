@@ -547,6 +547,26 @@
                 }
             },
             "class": "mispredicted"
+        },
+        "feature_importance_checkbox": {
+            "type": "Checkbox",
+            "params": {
+                "value": false,
+                "disabled": true,
+                "description": "Feature importance",
+                "tooltip": "Measure score decrease when original inputs are shuffled on the final holdout; adds scoring work"
+            }
+        },
+        "feature_importance_repeats": {
+            "type": "BoundedIntText",
+            "params": {
+                "value": 5,
+                "min": 2,
+                "max": 30,
+                "disabled": true,
+                "description": "Repeats:",
+                "tooltip": "Shuffle each input this many times; more repeats add scoring work"
+            }
         }
     },
     "display": [
@@ -561,6 +581,7 @@
         "continuation_form",
         "checkboxes_form",
         "dark_numbers_form",
+        "feature_importance_form",
         "algorithm_form",
         "data_handling_form",
         "text_handling_form",
@@ -615,7 +636,9 @@
             "data_limit",
             "show_info_checkbox",
             "num_variables",
-            "start_button"
+            "start_button",
+            "feature_importance_checkbox",
+            "feature_importance_repeats"
         ]
     },
     "styles": {

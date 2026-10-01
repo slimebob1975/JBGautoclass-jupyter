@@ -418,6 +418,7 @@ class Widgets:
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
             "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_target, self.dark_number_method, self.dark_number_alpha, self.dark_number_failure_mode],
+            "feature_importance": [self.feature_importance_checkbox, self.feature_importance_repeats],
             "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
             "data_handling": [self.oversampler_dropdown, self.undersampler_dropdown, self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.ngram_range_dropdown],
@@ -432,6 +433,30 @@ class Widgets:
 
     def _migrate_legacy_widget_labels(self) -> None:
         """Migrate exact legacy labels while preserving user-customized text."""
+        # Locally saved GUI settings predate this optional analysis section.
+        new_widgets = {
+            "feature_importance_checkbox": {
+                "type": "Checkbox", "params": {
+                    "value": False, "disabled": True, "description": "Feature importance",
+                    "tooltip": "Measure score decrease when original inputs are shuffled on the final holdout; adds scoring work",
+                },
+            },
+            "feature_importance_repeats": {
+                "type": "BoundedIntText", "params": {
+                    "value": 5, "min": 2, "max": 30, "disabled": True, "description": "Repeats:",
+                    "tooltip": "Shuffle each input this many times; more repeats add scoring work",
+                },
+            },
+        }
+        classifier_items = self.settings.get("sections", {}).get("classifier")
+        for name, definition in new_widgets.items():
+            self.default_widgets.setdefault(name, definition)
+            if classifier_items is not None and name not in classifier_items:
+                classifier_items.append(name)
+        display_items = self.settings.get("display", [])
+        if "feature_importance_form" not in display_items:
+            position = display_items.index("algorithm_form") if "algorithm_form" in display_items else len(display_items)
+            display_items.insert(position, "feature_importance_form")
         legacy_fallback = self.default_widgets.pop("dark_number_perturbed_fallback_checkbox", None)
         for section_name, section_items in self.settings.get("sections", {}).items():
             self.settings["sections"][section_name] = [
@@ -676,6 +701,8 @@ class Widgets:
             "oversampler_dropdown": config.get_oversampler_abbreviation(),
             "undersampler_dropdown": config.get_undersampler_abbreviation(),
             "dark_numbers_checkbox": config.should_calculate_dark_numbers(),
+            "feature_importance_checkbox": config.should_calculate_feature_importance(),
+            "feature_importance_repeats": config.get_feature_importance_repeats(),
             "dark_number_method": config.get_dark_number_method().name,
             "dark_number_alpha": config.get_dark_number_alpha().name,
             "dark_number_target": config.get_dark_number_target(),
@@ -781,6 +808,8 @@ class Widgets:
                 "train_checkbox": mode.train,
                 "predict_checkbox": mode.predict,
                 "mispredicted_checkbox": mode.mispredicted,
+                "feature_importance_checkbox": bool(mode.train and getattr(mode, "calculate_feature_importance", False)),
+                "feature_importance_repeats": getattr(mode, "feature_importance_repeats", 5),
                 "metas_checkbox": mode.use_metas,
                 "dark_numbers_checkbox": getattr(mode, "calculate_dark_numbers", mode.mispredicted),
                 "dark_number_method": DarkNumberMethod.from_config_value(
@@ -832,6 +861,7 @@ class Widgets:
 
         if name == "classifier":
             self.sync_dark_number_control_state()
+            self.sync_feature_importance_control_state()
 
     def deactivate_section(self, name: str) -> None:
         """ This should probably be a toggle, but for the moment we'll do it this way"""
@@ -885,6 +915,8 @@ class Widgets:
                 "train_checkbox": True,
                 "predict_checkbox": False,
                 "mispredicted_checkbox": True,
+                "feature_importance_checkbox": False,
+                "feature_importance_repeats": 5,
                 "dark_numbers_checkbox": True,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "SEPARATED",
@@ -906,6 +938,7 @@ class Widgets:
                 "train_checkbox": False,
                 "predict_checkbox": True,
                 "mispredicted_checkbox": False,
+                "feature_importance_checkbox": False,
                 "dark_numbers_checkbox": False,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "NONE",
@@ -966,6 +999,7 @@ class Widgets:
             "predict_checkbox", "mispredicted_checkbox", "metas_checkbox",
             "dark_numbers_checkbox", "dark_number_method", "dark_number_alpha",
             "dark_number_target", "dark_number_failure_mode",
+            "feature_importance_checkbox", "feature_importance_repeats",
         ])
         self.update_values({
             "train_checkbox": True,
@@ -977,6 +1011,7 @@ class Widgets:
             "dark_number_alpha": "NONE",
             "dark_number_target": "",
             "dark_number_failure_mode": True,
+            "feature_importance_checkbox": False,
         })
         self.categorize_columns.options = ()
 
@@ -1148,6 +1183,8 @@ class Widgets:
                 train = self.train_checkbox.value,
                 predict = self.predict_checkbox.value,
                 mispredicted = self.mispredicted_checkbox.value,
+                calculate_feature_importance = self.train_checkbox.value and self.feature_importance_checkbox.value,
+                feature_importance_repeats = self.feature_importance_repeats.value,
                 use_metas = self.metas_checkbox.value,
                 use_stop_words = self.filter_checkbox.value,
                 ngram_range = NgramRange[self.ngram_range_dropdown.value],
@@ -1206,6 +1243,7 @@ class Widgets:
         mode.predict = False
         mode.mispredicted = False
         mode.use_metas = False
+        mode.calculate_feature_importance = False
 
         params["io"].model_name = self.project.value or "regression"
         return params
@@ -1545,6 +1583,9 @@ class Widgets:
     def checkboxes_form(self) -> widgets.Box:
         return self.create_section_form("Mode", self.forms["checkboxes"], widgets.HBox)
 
+    def feature_importance_form(self) -> widgets.Box:
+        return self.create_section_form("Feature analysis", self.forms["feature_importance"], widgets.HBox)
+
     def dark_numbers_form(self) -> widgets.Box:
         controls = widgets.HBox(
             self.forms["dark_numbers"],
@@ -1826,7 +1867,25 @@ class Widgets:
     @property
     def train_checkbox(self) -> widgets.Checkbox:
         name = sys._getframe(  ).f_code.co_name # Current function name
-        return self._load_widget(name)
+        return self._load_widget(name, handler=self._feature_importance_controls_changed)
+
+    @property
+    def feature_importance_checkbox(self) -> widgets.Checkbox:
+        return self._load_widget("feature_importance_checkbox", handler=self._feature_importance_controls_changed)
+
+    @property
+    def feature_importance_repeats(self) -> widgets.BoundedIntText:
+        return self._load_widget("feature_importance_repeats")
+
+    def _feature_importance_controls_changed(self, change) -> None:
+        if change.get("name") in ("value", "disabled"):
+            self.sync_feature_importance_control_state()
+
+    def sync_feature_importance_control_state(self) -> None:
+        # Display-only synchronization also runs while Repeat Last observers are locked.
+        checkbox = self.feature_importance_checkbox
+        checkbox.disabled = self.train_checkbox.disabled or not self.train_checkbox.value or self.regression_suite_state
+        self.feature_importance_repeats.disabled = checkbox.disabled or not checkbox.value
         
     
     @property
@@ -2199,5 +2258,3 @@ class Widgets:
                     #print(item)
                 else:
                     display(widget, display_id=item)
-
-        

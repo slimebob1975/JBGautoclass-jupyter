@@ -210,6 +210,8 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
             feature_selection=ReductionTuple(("NOR", "PCA")),
             scoring=ScoreMetric.f1_macro,
             max_iterations=12300,
+            calculate_feature_importance=True,
+            feature_importance_repeats=7,
         ),
         "io": Config.IO(verbose=True, model_name="saved_model"),
         "debug": Config.Debug(on=True, data_limit=321),
@@ -250,6 +252,8 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     assert widgets.undersampler_dropdown.value == "NUG"
     assert widgets.testdata_slider.value == 30
     assert widgets.iterations_slider.value == 12300
+    assert widgets.feature_importance_checkbox.value is False
+    assert widgets.feature_importance_repeats.value == 7
     assert widgets.encryption_checkbox.value is False
     assert widgets.categorize_checkbox.value is True
     assert widgets.categorize_columns.value == ("comment",)
@@ -272,6 +276,8 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     assert rerun["mode"].preprocessor.get_abbreviations() == ["NOS", "STA"]
     assert rerun["mode"].feature_selection.get_abbreviations() == ["NOR", "PCA"]
     assert rerun["mode"].calculate_dark_numbers is False
+    assert rerun["mode"].calculate_feature_importance is False
+    assert rerun["mode"].feature_importance_repeats == 7
     assert rerun["mode"].dark_number_method is DarkNumberMethod.NON_LINEAR
     assert rerun["mode"].dark_number_alpha is DarkNumberAlpha.SINGLE
     assert rerun["mode"].dark_number_target == "positive"
@@ -282,6 +288,7 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     saved["mode"].train = True
     saved["mode"].predict = False
     widgets.restore_classifier_config(saved)
+    assert widgets.feature_importance_checkbox.value is True
     assert widgets.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION
     assert widgets.train_checkbox.value is True
     assert widgets.predict_checkbox.value is False
@@ -816,3 +823,35 @@ def test_new_model_uses_separated_alpha_by_default():
 
     assert widgets.dark_number_method.value == "LINEAR"
     assert widgets.dark_number_alpha.value == "SEPARATED"
+
+
+def test_feature_importance_controls_follow_training_and_locked_changes():
+    widgets = make_widgets()
+    assert widgets.feature_importance_checkbox.value is False
+    assert widgets.feature_importance_repeats.value == 5
+    assert widgets.feature_importance_repeats.disabled is True
+    widgets.eventhandler.lock_observe_1 = True
+    widgets.train_checkbox.disabled = False
+    widgets.train_checkbox.value = True
+    widgets.feature_importance_checkbox.value = True
+    assert widgets.feature_importance_checkbox.disabled is False
+    assert widgets.feature_importance_repeats.disabled is False
+    widgets.feature_importance_checkbox.value = False
+    assert widgets.feature_importance_repeats.disabled is True
+    widgets.train_checkbox.value = False
+    assert widgets.feature_importance_checkbox.disabled is True
+
+
+def test_feature_importance_migrates_old_local_settings_without_duplicates():
+    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    settings = json.loads((src_path / 'GUI/default_settings.json').read_text())
+    for name in ('feature_importance_checkbox', 'feature_importance_repeats'):
+        settings['widgets'].pop(name)
+        settings['sections']['classifier'].remove(name)
+    settings['display'].remove('feature_importance_form')
+    widgets = Widgets(src_path=src_path, GUIhandler=MockGUIHandler(), settings=settings)
+    widgets._migrate_legacy_widget_labels()
+    assert widgets.feature_importance_checkbox.value is False
+    assert widgets.feature_importance_repeats.value == 5
+    assert settings['display'].count('feature_importance_form') == 1
+    assert settings['sections']['classifier'].count('feature_importance_checkbox') == 1
