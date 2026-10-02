@@ -35,6 +35,7 @@ from JBGExceptions import (DatasetException, MissingScorerException, ModelExcept
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberReporting import build_dark_number_intervals, format_dark_number_interval
+from JBGEstimatorInput import call_with_sparse_input_retry
 from JBGDarkNumberCorrectionFactor import (
     DarkNumberCorrectionFactorEstimator,
     estimate_perturbed_same_model_correction,
@@ -1122,12 +1123,15 @@ class ModelHandler:
         # Train model. Preserve sparse text features as SciPy CSR at the estimator boundary.
         estimator_X = Helpers.prepare_estimator_input(X)
         try:
-            return model.fit(estimator_X, Y)
+            return call_with_sparse_input_retry(
+                lambda X_input: model.fit(X_input, Y), estimator_X,
+                logger=self.handler.logger, context="model fit", estimator=model,
+            )
         except TypeError:
-            return model.fit(X.to_numpy(), Y.to_numpy())
+            raise
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
-            raise ModelException(f"Something went wrong on training picked model: {str(e)}")
+            raise ModelException(f"Something went wrong on training picked model: {str(e)}") from e
 
     def retrain_picked_model(self, model: Pipeline, X: pd.DataFrame, Y: pd.DataFrame) -> Pipeline:
         """Fit a fresh clone of the selected pipeline on the complete training dataset.
@@ -1192,9 +1196,12 @@ class ModelHandler:
             estimator_X = Helpers.prepare_estimator_input(X)
             started = time.perf_counter()
             try:
-                search.fit(estimator_X, Y)
+                call_with_sparse_input_retry(
+                    lambda X_input: search.fit(X_input, Y), estimator_X,
+                    logger=self.handler.logger, context="GridSearchCV fit", estimator=model,
+                )
             except TypeError:
-                search.fit(X.to_numpy(), Y.to_numpy())
+                raise
             except Exception as e:
                 self.handler.logger.print_dragon(exception=e)
                 raise ModelException(f"Something went wrong on grid search training of picked model: {str(e)}")                
@@ -1213,7 +1220,7 @@ class ModelHandler:
         
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
-            raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}")
+            raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}") from e
 
     def _report_grid_search_estimate(self, combinations: int, folds: int, workers: int):
         timing = getattr(self, "_selected_cv_timing", None)
@@ -1240,12 +1247,12 @@ class ModelHandler:
         return estimate
 
     def _fit_pipeline_for_validation(self, pipeline: Pipeline, dh: DatasetHandler) -> None:
-        """Fit a spot-check pipeline, preserving sparse text input and the dense fallback."""
+        """Fit a spot-check pipeline with a confirmed sparse-input retry only."""
         estimator_X = Helpers.prepare_estimator_input(dh.X_train)
-        try:
-            pipeline.fit(estimator_X, dh.Y_train)
-        except TypeError:
-            pipeline.fit(dh.X_train.to_numpy(), dh.Y_train.to_numpy())
+        call_with_sparse_input_retry(
+            lambda X_input: pipeline.fit(X_input, dh.Y_train), estimator_X,
+            logger=self.handler.logger, context="validation fit", estimator=pipeline,
+        )
 
     def _resolve_scoring_mechanism_for_target(self, Y) -> Union[str, Callable]:
         """Resolve scoring aliases whose estimator requirements depend on class count.
@@ -1270,17 +1277,17 @@ class ModelHandler:
         estimator_X = Helpers.prepare_estimator_input(dh.X_validation)
 
         if not isinstance(scorer, str):
-            try:
-                return scorer(pipeline, estimator_X, dh.Y_validation)
-            except TypeError:
-                return scorer(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
+            return call_with_sparse_input_retry(
+                lambda X_input: scorer(pipeline, X_input, dh.Y_validation), estimator_X,
+                logger=self.handler.logger, context="validation scoring", estimator=pipeline,
+            )
 
         if scorer in ('roc_auc', 'roc_auc_ovo'):
             scorer_callable = get_scorer(scorer)
-            try:
-                return scorer_callable(pipeline, estimator_X, dh.Y_validation)
-            except TypeError:
-                return scorer_callable(pipeline, dh.X_validation.to_numpy(), dh.Y_validation.to_numpy())
+            return call_with_sparse_input_retry(
+                lambda X_input: scorer_callable(pipeline, X_input, dh.Y_validation), estimator_X,
+                logger=self.handler.logger, context="validation AUC scoring", estimator=pipeline,
+            )
 
         raise MissingScorerException("Scorer {0} is not supported".format(scorer))
 
@@ -1296,16 +1303,18 @@ class ModelHandler:
         # Multilabel case does not raise an ValueError
         estimator_X = Helpers.prepare_estimator_input(dh.X_validation)
         try:
-            try:
-                score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(estimator_X), multi_class='ovo')
-            except TypeError:
-                score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy()), multi_class='ovo')
+            probabilities = call_with_sparse_input_retry(
+                pipeline.predict_proba, estimator_X, logger=self.handler.logger,
+                context="AUC probability prediction", estimator=pipeline,
+            )
+            score = roc_auc_score(dh.Y_validation, probabilities, multi_class='ovo')
         # Binary case
         except ValueError:
-            try:
-                score = roc_auc_score(dh.Y_validation, pipeline.predict_proba(estimator_X)[:, 1], multi_class='ovo')
-            except TypeError:
-                score = roc_auc_score(dh.Y_validation.to_numpy(), pipeline.predict_proba(dh.X_validation.to_numpy())[:, 1], multi_class='ovo')
+            probabilities = call_with_sparse_input_retry(
+                pipeline.predict_proba, estimator_X, logger=self.handler.logger,
+                context="binary AUC probability prediction", estimator=pipeline,
+            )
+            score = roc_auc_score(dh.Y_validation, probabilities[:, 1], multi_class='ovo')
         return score
         
     def _resolve_n_jobs(self, n_jobs_desired, max_cores: int) -> int:
@@ -1414,11 +1423,12 @@ class ModelHandler:
         if preprocessor == Preprocess.MIX and sparse_input:
             return "MinMaxScaler does not support sparse input"
 
-        # LinearDiscriminantAnalysis requires dense estimator input. NOR and RFE preserve
+        # LinearDiscriminantAnalysis and GaussianNB require dense estimator input. NOR and RFE preserve
         # the sparse text matrix all the way to the estimator, while PCA/Nystroem/TSVD
         # already produce dense arrays. Reject only the known-incompatible sparse paths.
-        if sparse_input and algorithm == Algorithm.LDA and reduction in (Reduction.NOR, Reduction.RFE):
-            return "LinearDiscriminantAnalysis requires dense input"
+        if sparse_input and algorithm in (Algorithm.LDA, Algorithm.GNB) and reduction in (Reduction.NOR, Reduction.RFE):
+            estimator_name = "LinearDiscriminantAnalysis" if algorithm == Algorithm.LDA else "GaussianNB"
+            return f"{estimator_name} requires dense input"
 
         # FastICA rejects SciPy sparse matrices. The text/category pipeline keeps
         # sparse features sparse through NOS/STA/MAX/NRM/BIN, so skip the known
@@ -2051,26 +2061,14 @@ class ModelHandler:
         estimator_X = Helpers.prepare_estimator_input(dh.X_train, prefer_numpy=True)
         self._last_execution_n_jobs = None
         started = time.perf_counter()
-        try:
-            cv_results = self.execute_n_job(cross_validate, pipeline, estimator_X, \
-                    dh.Y_train.to_numpy(), cv=kfold, scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, \
-                    error_score='raise') 
-        except TypeError as ex:
-            self.handler.logger.print_warning(f"TypeError in parallel call of cross_validate: {str(ex)}. Trying dense NumPy fallback.")
-            try:
-                started = time.perf_counter()
-                cv_results = self.execute_n_job(cross_validate, pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), cv=kfold, \
-                    scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired, params=fit_params, error_score='raise') 
-            except Exception as ex:
-                self.handler.logger.print_warning(f"Could not execute cross_validate in parallell: {str(ex)}")
-                try:
-                    self.handler.logger.print_info("Doing cross validation without parallelization.")
-                    started = time.perf_counter()
-                    cv_results = cross_validate(pipeline, dh.X_train.to_numpy(), dh.Y_train.to_numpy(), \
-                        cv=kfold, scoring=scorer_mechanism, n_jobs=1, params=fit_params, error_score='raise')
-                    self._last_execution_n_jobs = 1
-                except Exception as ex:
-                    raise ModelException(f"Unexpected error in cross_validate: {str(ex)}") from ex
+        cv_results = call_with_sparse_input_retry(
+            lambda X_input: self.execute_n_job(
+                cross_validate, pipeline, X_input, dh.Y_train.to_numpy(), cv=kfold,
+                scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired,
+                params=fit_params, error_score='raise',
+            ),
+            estimator_X, logger=self.handler.logger, context="cross-validation", estimator=pipeline,
+        )
         
         timing = CVTiming.from_results(
             cv_results, kfold.get_n_splits(), self._last_execution_n_jobs,
@@ -2273,17 +2271,18 @@ class PredictionsHandler:
         could_predict_proba = False
         estimator_X = Helpers.prepare_estimator_input(X)
         try:
-            predictions = model.predict(estimator_X)
-        except TypeError:
-            predictions = model.predict(X.to_numpy())
+            predictions = call_with_sparse_input_retry(
+                model.predict, estimator_X, logger=self.handler.logger,
+                context="prediction", estimator=model,
+            )
         except ValueError as e:
             self.handler.logger.abort_cleanly(message=f"It seems like you need to regenerate your prediction model: {e}")
         if hasattr(model, "predict_proba"):
             try:
-                try:
-                    probabilities = model.predict_proba(estimator_X)
-                except TypeError:
-                    probabilities = model.predict_proba(X.to_numpy())
+                probabilities = call_with_sparse_input_retry(
+                    model.predict_proba, estimator_X, logger=self.handler.logger,
+                    context="probability prediction", estimator=model,
+                )
                 rates = np.amax(probabilities, axis=1)
                 could_predict_proba = True
             except Exception as e:
@@ -2522,12 +2521,14 @@ class PredictionsHandler:
 
         # Make predictions for both models, preserving sparse text input where present.
         estimator_X = Helpers.prepare_estimator_input(X)
-        try:
-            y_pred_ct = ct_pipe.predict(estimator_X)
-            y_pred_ft = full_pipe.predict(estimator_X)
-        except TypeError:
-            y_pred_ct = ct_pipe.predict(X.to_numpy())
-            y_pred_ft = full_pipe.predict(X.to_numpy())
+        y_pred_ct = call_with_sparse_input_retry(
+            ct_pipe.predict, estimator_X, logger=self.handler.logger,
+            context="cross-trained misprediction analysis", estimator=ct_pipe,
+        )
+        y_pred_ft = call_with_sparse_input_retry(
+            full_pipe.predict, estimator_X, logger=self.handler.logger,
+            context="retrained misprediction analysis", estimator=full_pipe,
+        )
 
         # Wrap predictions as Series aligned to Y.index (positional operations will use iloc anyway)
         Y_pred_ct = pd.Series(y_pred_ct, index=Y.index)
@@ -2593,12 +2594,14 @@ class PredictionsHandler:
 
         estimator_X_misp = Helpers.prepare_estimator_input(X_misp_feat)
         try:
-            try:
-                prob_ct = ct_pipe.predict_proba(estimator_X_misp)
-                prob_ft = full_pipe.predict_proba(estimator_X_misp)
-            except TypeError:
-                prob_ct = ct_pipe.predict_proba(X_misp_feat.to_numpy())
-                prob_ft = full_pipe.predict_proba(X_misp_feat.to_numpy())
+            prob_ct = call_with_sparse_input_retry(
+                ct_pipe.predict_proba, estimator_X_misp, logger=self.handler.logger,
+                context="cross-trained misprediction probabilities", estimator=ct_pipe,
+            )
+            prob_ft = call_with_sparse_input_retry(
+                full_pipe.predict_proba, estimator_X_misp, logger=self.handler.logger,
+                context="retrained misprediction probabilities", estimator=full_pipe,
+            )
 
             prob_ct = np.asarray(prob_ct)
             prob_ft = np.asarray(prob_ft)

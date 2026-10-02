@@ -1229,44 +1229,25 @@ class TestModelHandler():
             record_workers, n_jobs_desired=6
         ) == 2
 
-    def test_cross_val_score_serial_fallback_uses_sklearn_n_jobs_keyword(
+    def test_cross_val_score_preserves_unrelated_typeerror_without_repeating_cv(
         self, monkeypatch, default_model_handler
     ):
-        parallel_attempts = []
-
+        attempts = []
+        error = TypeError("NumPy input not supported")
         def fail_parallel(*args, **kwargs):
-            parallel_attempts.append(kwargs)
-            if len(parallel_attempts) == 1:
-                raise TypeError("NumPy input not supported")
-            raise RuntimeError("parallel execution failed")
-
-        serial_kwargs = {}
-
-        def fake_cross_validate(*args, **kwargs):
-            serial_kwargs.update(kwargs)
-            return {"test_score": np.array([0.5, 0.5]),
-                    "fit_time": np.array([0.01, 0.02]), "score_time": np.array([0.001, 0.002])}
-
+            attempts.append(kwargs)
+            raise error
         default_model_handler.execute_n_job = fail_parallel
-        monkeypatch.setattr(handler_module, "cross_validate", fake_cross_validate)
-
+        monkeypatch.setattr(handler_module, "cross_validate", lambda *args, **kwargs: pytest.fail("No generic serial retry"))
         dh = type("Dataset", (), {})()
         dh.X_train = pandas.DataFrame({"a": [1.0, 2.0, 3.0, 4.0]})
         dh.Y_train = pandas.Series([0, 1, 0, 1])
         kfold = type("KFold", (), {"get_n_splits": lambda self: 2})()
-
-        cv_results = default_model_handler.get_cross_val_score(
-            pipeline=object(),
-            dh=dh,
-            kfold=kfold,
-            algorithm=Algorithm.DUMY,
-        )
-
-        assert len(parallel_attempts) == 2
-        assert np.array_equal(cv_results, np.array([0.5, 0.5]))
-        assert serial_kwargs["n_jobs"] == 1
-        assert "n_jobs_desired" not in serial_kwargs
-        assert default_model_handler._last_cv_timing[1].workers == 1
+        with pytest.raises(TypeError) as caught:
+            default_model_handler.get_cross_val_score(object(), dh, kfold, Algorithm.DUMY)
+        assert caught.value is error
+        assert len(attempts) == 1
+        assert default_model_handler._last_cv_timing is None
 
     def test_spot_check_candidate_marks_unstable_without_overwriting_failure(self, default_model_handler):
         state = _SpotCheckState(best_num_components=4, best_rfe_feature_selection=4)
@@ -1368,7 +1349,7 @@ class TestModelHandler():
 
         assert "FLT" not in dict(pipeline.steps)
 
-    def test_validation_fit_falls_back_to_numpy(self, default_model_handler):
+    def test_validation_fit_preserves_unconfirmed_dataframe_typeerror(self, default_model_handler):
         class DataFrameRejectingPipeline:
             def __init__(self):
                 self.fit_inputs = []
@@ -1384,12 +1365,10 @@ class TestModelHandler():
         dh.Y_train = pandas.Series([0, 1])
         pipeline = DataFrameRejectingPipeline()
 
-        default_model_handler._fit_pipeline_for_validation(pipeline, dh)
-
-        assert len(pipeline.fit_inputs) == 2
+        with pytest.raises(TypeError, match="DataFrame not supported"):
+            default_model_handler._fit_pipeline_for_validation(pipeline, dh)
+        assert len(pipeline.fit_inputs) == 1
         assert isinstance(pipeline.fit_inputs[0][0], pandas.DataFrame)
-        assert isinstance(pipeline.fit_inputs[1][0], np.ndarray)
-        assert isinstance(pipeline.fit_inputs[1][1], np.ndarray)
 
     def test_binary_auc_validation_accepts_svc_decision_function_without_predict_proba(
         self, default_model_handler
@@ -1417,7 +1396,7 @@ class TestModelHandler():
 
         assert 0.0 <= score <= 1.0
 
-    def test_validation_scorer_falls_back_to_numpy(self, default_model_handler):
+    def test_validation_scorer_preserves_unconfirmed_dataframe_typeerror(self, default_model_handler):
         score_inputs = []
 
         def scorer(pipeline, X, Y):
@@ -1431,13 +1410,10 @@ class TestModelHandler():
         dh.X_validation = pandas.DataFrame({"a": [1.0, 2.0]})
         dh.Y_validation = pandas.Series([0, 1])
 
-        score = default_model_handler._score_validation_pipeline(object(), dh)
-
-        assert score == 0.75
-        assert len(score_inputs) == 2
+        with pytest.raises(TypeError, match="DataFrame not supported"):
+            default_model_handler._score_validation_pipeline(object(), dh)
+        assert len(score_inputs) == 1
         assert isinstance(score_inputs[0][0], pandas.DataFrame)
-        assert isinstance(score_inputs[1][0], np.ndarray)
-        assert isinstance(score_inputs[1][1], np.ndarray)
 
     # Series of functions calling each other
     # train_model calls get_model_from
