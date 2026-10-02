@@ -48,15 +48,39 @@ def pipeline_input_label(estimator):
     return "-".join(str(name) for name, _ in steps) if steps else type(estimator).__name__
 
 
+def prepare_known_dense_input(data, *, logger, context, estimator):
+    """Reuse a model's confirmed dense-input requirement at a later boundary."""
+    if not sparse.issparse(data):
+        return data
+    dense_bytes = int(data.shape[0]) * int(data.shape[1]) * int(data.dtype.itemsize)
+    logger.print_warning(
+        f"Reusing confirmed dense-input requirement during {context}, "
+        f"pipeline {pipeline_input_label(estimator)}: input={type(data).__name__}, "
+        f"shape={data.shape}, dtype={data.dtype}, estimated dense buffer={dense_bytes} "
+        f"bytes ({dense_bytes / 1024**2:.2f} MiB). "
+        "CV workers and estimator copies can require additional memory."
+    )
+    return data.toarray()
+
+
 def call_with_sparse_input_retry(operation, data, *, logger, context, estimator):
-    """Call once normally; retry once only after a confirmed sparse-X rejection.
+    """Return the operation result under the confirmed one-retry policy."""
+    result, _ = call_with_resolved_input(
+        operation, data, logger=logger, context=context, estimator=estimator
+    )
+    return result
+
+
+def call_with_resolved_input(operation, data, *, logger, context, estimator):
+    """Return (result, successful input), with one confirmed sparse-X retry.
 
     Convert the actual prepared SciPy input, retaining dtype and row/column order.
     Log the single-buffer size before allocation. It is not a total worker-memory
     estimate. Resource/pickling retry policy remains with execute_n_job.
+    Retaining the successful input lets callers reuse it across related operations.
     """
     try:
-        return operation(data)
+        return operation(data), data
     except TypeError as error:
         if not is_sparse_input_rejection(error, data):
             raise
@@ -69,7 +93,8 @@ def call_with_sparse_input_retry(operation, data, *, logger, context, estimator)
             f"Retrying once with dense input. Original rejection: {error}"
         )
         try:
-            return operation(data.toarray())
+            dense_input = data.toarray()
+            return operation(dense_input), dense_input
         except Exception as retry_error:
             add_note = getattr(retry_error, "add_note", None)
             if callable(add_note):

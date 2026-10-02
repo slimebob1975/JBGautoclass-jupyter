@@ -35,7 +35,9 @@ from JBGExceptions import (DatasetException, MissingScorerException, ModelExcept
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberReporting import build_dark_number_intervals, format_dark_number_interval
-from JBGEstimatorInput import call_with_sparse_input_retry
+from JBGEstimatorInput import (
+    call_with_sparse_input_retry, call_with_resolved_input, prepare_known_dense_input,
+)
 from JBGDarkNumberCorrectionFactor import (
     DarkNumberCorrectionFactorEstimator,
     estimate_perturbed_same_model_correction,
@@ -2986,6 +2988,7 @@ class PredictionsHandler:
         # correction, so it must be included in that model's dependency check.
         reports = []
         full_data_predictions = []
+        dense_models = set()
         for model_index, (model, model_name, can_predict_proba) in enumerate(
             zip(models, model_names, supports_predict_proba)
         ):
@@ -3001,14 +3004,30 @@ class PredictionsHandler:
 
             for estimate_name, X_eval, Y_eval, include_in_combined in evaluation_sets:
                 estimator_X = Helpers.prepare_estimator_input(X_eval)
-                Y_pred = pd.Series(model.predict(estimator_X), index=Y_eval.index)
+                context = f"Dark Number {estimate_name} - {model_name}"
+                if model_index in dense_models:
+                    estimator_X = prepare_known_dense_input(
+                        estimator_X, logger=self.handler.logger, context=context, estimator=model,
+                    )
+                original_input = estimator_X
+                predicted, estimator_X = call_with_resolved_input(
+                    model.predict, estimator_X, logger=self.handler.logger,
+                    context=f"{context} predict", estimator=model,
+                )
+                Y_pred = pd.Series(predicted, index=Y_eval.index)
                 Y_prob_pred = None
                 if can_predict_proba:
+                    probabilities, estimator_X = call_with_resolved_input(
+                        model.predict_proba, estimator_X, logger=self.handler.logger,
+                        context=f"{context} predict_proba", estimator=model,
+                    )
                     Y_prob_pred = pd.Series(
-                        [max(row) for row in model.predict_proba(estimator_X)], index=Y_eval.index
+                        [max(row) for row in probabilities], index=Y_eval.index
                     )
                     if include_in_combined:
                         full_data_predictions.append((Y_pred, Y_prob_pred, model_index))
+                if scipy_sparse.issparse(original_input) and not scipy_sparse.issparse(estimator_X):
+                    dense_models.add(model_index)
                 reports.append((f"{estimate_name} - {model_name}", Y_eval, Y_pred, Y_prob_pred, model_index))
 
             if not can_predict_proba:
@@ -3048,6 +3067,11 @@ class PredictionsHandler:
                 corr_X, corr_Y = X, Y
             corrs, sources, corr_models = {}, {}, {}
             if required_labels:
+                if model_index in dense_models:
+                    corr_X = prepare_known_dense_input(
+                        Helpers.prepare_estimator_input(corr_X), logger=self.handler.logger,
+                        context=f"Dark Number correction input - {model_name}", estimator=model,
+                    )
                 corrs, sources, corr_models = self._calculate_dark_number_corrections(
                     model=model, X=corr_X, Y=corr_Y, labels=required_labels,
                     flip_fraction=flip_fraction, random_state=random_state, model_name=model_name,
