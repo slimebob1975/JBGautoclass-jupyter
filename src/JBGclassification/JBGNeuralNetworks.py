@@ -28,13 +28,13 @@ class _NeuralNetwork3PL(nn.Module):
         # The output layer
         self.layers.append(nn.Linear(hidden_layer_size, output_features))
         
-        # Construct the opti
-        self.optimizer = optimizer(params=self.layers.parameters(), lr=0.001)
+        # Keep the constructor argument for compatibility. Skorch owns and
+        # steps the optimizer; a second optimizer here was never used to train.
 
     def forward(self, X, **kwargs):
         for i in range(len(self.layers)-1):
             X = self.activation()(self.layers[i](X))
-            X = nn.Dropout(self.dropout_prob)(X)
+            X = nn.functional.dropout(X, p=self.dropout_prob, training=self.training)
         X = nn.Softmax(dim=-1)(self.layers[-1](X))
         return X
     

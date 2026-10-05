@@ -1,6 +1,8 @@
 import os
+import pickle
 import shutil
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import Helpers
 import langdetect
@@ -8,11 +10,11 @@ import numpy as np
 import pandas as pd
 import torch
 from JBGNeuralNetworks import _NeuralNetwork3PL
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, ClassifierMixin, TransformerMixin
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder, OrdinalEncoder
 from sklearn.utils.multiclass import unique_labels
-from sklearn.utils.validation import check_is_fitted
+from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 from skorch import NeuralNetClassifier
 from skorch.callbacks import Checkpoint
 from stop_words import get_stop_words
@@ -24,7 +26,7 @@ from typing import Dict, Iterable, Any
 
 
 """ ESTIMATOR """
-class BaseNeuralNetClassifier(BaseEstimator):
+class BaseNeuralNetClassifier(ClassifierMixin, BaseEstimator):
     """ The base neural network classifier """
     
     OUTPUT_DIR = "output"
@@ -46,23 +48,70 @@ class BaseNeuralNetClassifier(BaseEstimator):
         
         # The net, this is defined by inheriting classes
         self.net = None
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        if state.get("net") is not None:
+            # Skorch supports standard pickle. Encode only that component so
+            # outer dill artifacts do not traverse Torch optimizer internals.
+            state["_jbg_skorch_pickle"] = pickle.dumps(state.pop("net"))
+        return state
+
+    def __setstate__(self, state):
+        state = state.copy()
+        encoded_net = state.pop("_jbg_skorch_pickle", None)
+        if encoded_net is not None:
+            state["net"] = pickle.loads(encoded_net)
+        # Historical artifacts store net directly and require no conversion.
+        self.__dict__.update(state)
     
     def fit(self, X, y):
+        X, y = check_X_y(X, y, dtype=np.float32)
+        # Each fit (including clones/folds/retries) owns its checkpoint files.
+        # Load the chosen checkpoint inside fit before deleting temporary files.
+        self.net = None
+        self.__dict__.pop("classes_", None)
+        self.__dict__.pop("n_features_in_", None)
         self.classes_ = unique_labels(y)
         self.label_encoder = self.label_encoder.fit(y)
-        self._setup_net(X, y)
-        self.net.fit( X.astype(np.float32), self.label_encoder.transform(y))
+        checkpoint_root = self.history_file_dir
+        try:
+            checkpoint_root.mkdir(parents=True, exist_ok=True)
+            with TemporaryDirectory(prefix="fit-", dir=checkpoint_root) as dirname:
+                self._checkpoint_fit_dir = Path(dirname)
+                self.checkpoint_fit_dir_ = dirname  # diagnostic only; not a reload dependency
+                self._setup_net(X, y)
+                self.net.fit(X, self.label_encoder.transform(y))
+            self.n_features_in_ = X.shape[1]
+        except BaseException:
+            self.net = None
+            self.__dict__.pop("classes_", None)
+            raise
+        finally:
+            self.__dict__.pop("_checkpoint_fit_dir", None)
+        return self
+
+    def _prediction_input(self, X):
+        check_is_fitted(self, "classes_")
+        X = check_array(X, dtype=np.float32)
+        # num_features is retained for artifacts saved before revision 116.
+        expected = getattr(self, "n_features_in_", self.num_features)
+        if X.shape[1] != expected:
+            raise ValueError(f"Expected {expected} input features, got {X.shape[1]}.")
+        return X
         
     def predict(self, X):
-        return self.label_encoder.inverse_transform(self.net.predict(X.astype(np.float32)))
+        X = self._prediction_input(X)
+        return self.label_encoder.inverse_transform(self.net.predict(X))
         
     def predict_proba(self, X):
-        return self.net.predict_proba(X.astype(np.float32))
+        X = self._prediction_input(X)
+        return self.net.predict_proba(X)
 
 
 class NNClassifier3PL(BaseNeuralNetClassifier):
-    """ classifier based on the neural network with at least one hidden layer """
-    def __init__(self, num_hidden_layers=2, hidden_layer_size=48, activation='tanh', learning_rate=0.02, max_epochs=20, \
+    """Skorch classifier; num_hidden_layers counts stages after the first hidden layer."""
+    def __init__(self, num_hidden_layers=2, hidden_layer_size=48, activation='tanh', learning_rate=0.001, max_epochs=50, \
         optimizer='adam', dropout_prob=0.1, verbose=True, train_split=True):
         
         super().__init__()
@@ -79,9 +128,6 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
         self.verbose = verbose
         self.train_split = train_split  # Whether to split the data into training and test sets internally
 
-        #recreate_dir(self.history_file_dir) # Removes the directory and recreates it
-        
-    
     def _setup_net(self, X, y):
         self.num_features = X.shape[1]
         self.num_classes = len(unique_labels(y))
@@ -98,6 +144,9 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
         nn_classifier_kwargs = {
             "max_epochs": self.max_epochs,
             "lr": self.learning_rate,
+            "optimizer": self._get_optimizer(self.optimizer),
+            "criterion": nn.NLLLoss,
+            "batch_size": 128,
             "device": self.device,
             "verbose": self.verbose,
             "callbacks": [self._get_early_stopping_callback()]
@@ -139,10 +188,8 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
         
     
     def _get_early_stopping_callback(self):
-        if self.train_split:
-            monitor = lambda net: all(net.history[-1, ('train_loss_best', 'valid_loss_best')])
-        else:
-            monitor = 'train_loss_best'
+        """Historical name: restore the best checkpoint, without stopping early."""
+        monitor = 'valid_loss_best' if self.train_split else 'train_loss_best'
         dirname = self.history_file_dir
         
         return Checkpoint(monitor=monitor, dirname=dirname, load_best=True)
@@ -150,7 +197,9 @@ class NNClassifier3PL(BaseNeuralNetClassifier):
     
     @property
     def history_file_dir(self) -> Path:
-        """ Defines the directory to save the best checkpoint"""
+        """Active fit's private directory, or the historical checkpoint root."""
+        if getattr(self, "_checkpoint_fit_dir", None) is not None:
+            return self._checkpoint_fit_dir
         pwd = Path(os.path.dirname(os.path.realpath(__file__)))
         dir = pwd / self.OUTPUT_DIR / self.CHECKPOINT_DIR
 

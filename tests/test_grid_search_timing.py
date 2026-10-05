@@ -109,6 +109,58 @@ def test_real_sklearn_scores_are_identical_and_timings_are_transient(workers, sp
     assert not hasattr(pipeline, "_jbg_cv_timing")
 
 
+@pytest.mark.parametrize('configured_cap,cores,folds,expected_workers', [
+    (-1, 24, 10, 10), (None, 24, 10, 10), (0, 24, 10, 10),
+    (2, 24, 10, 2), (24, 24, 10, 10), (-1, 4, 10, 4), (-1, 24, 3, 3),
+])
+def test_cv_pool_never_exceeds_fold_tasks(configured_cap, cores, folds, expected_workers, monkeypatch):
+    handler = make_handler(configured_cap)
+    observed = []
+    def cv_operation(*args, n_jobs, **kwargs):
+        observed.append(n_jobs)
+        return {'test_score': np.ones(folds), 'fit_time': np.ones(folds), 'score_time': np.zeros(folds)}
+    monkeypatch.setattr(handler_module.psutil, 'cpu_count', lambda logical=True: cores)
+    monkeypatch.setattr(handler_module, 'cross_validate', cv_operation)
+    X = pd.DataFrame(np.ones((40, 2)))
+    actual = handler.get_cross_val_score(
+        LogisticRegression(), SimpleNamespace(X_train=X, Y_train=pd.Series([0, 1] * 20)),
+        StratifiedKFold(folds), SimpleNamespace(fit_params={}),
+    )
+    assert observed == [expected_workers]
+    np.testing.assert_array_equal(actual, np.ones(folds))
+    assert handler._last_execution_n_jobs == expected_workers
+    assert handler._last_cv_timing[1].workers == expected_workers
+
+
+def test_cv_resource_retry_reduces_bounded_pool_and_records_success(monkeypatch):
+    handler, observed = make_handler(-1), []
+    def cv_operation(*args, n_jobs, **kwargs):
+        observed.append(n_jobs)
+        if len(observed) == 1:
+            raise MemoryError('worker pressure')
+        return {'test_score': np.ones(10), 'fit_time': np.ones(10), 'score_time': np.zeros(10)}
+    monkeypatch.setattr(handler_module.psutil, 'cpu_count', lambda logical=True: 24)
+    monkeypatch.setattr(handler_module, 'cross_validate', cv_operation)
+    handler.get_cross_val_score(
+        LogisticRegression(), SimpleNamespace(X_train=pd.DataFrame(np.ones((40, 2))),
+                                              Y_train=pd.Series([0, 1] * 20)),
+        StratifiedKFold(10), SimpleNamespace(fit_params={}),
+    )
+    assert observed == [10, 5]
+    assert handler._last_execution_n_jobs == 5
+    assert handler._last_cv_timing[1].workers == 5
+
+
+def test_unlimited_non_cv_work_still_uses_available_cpu_cap(monkeypatch):
+    handler, observed = make_handler(-1), []
+    monkeypatch.setattr(handler_module.psutil, 'cpu_count', lambda logical=True: 24)
+    def operation(n_jobs):
+        observed.append(n_jobs)
+        return 'ok'
+    assert handler.execute_n_job(operation, n_jobs_desired=-1) == 'ok'
+    assert observed == [24]
+
+
 def test_estimate_tracks_winner_not_last_candidate():
     handler = make_handler()
     state = _SpotCheckState(best_num_components=5, best_rfe_feature_selection=5)

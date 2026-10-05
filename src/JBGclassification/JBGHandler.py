@@ -55,6 +55,7 @@ import Helpers
 from JBGTrainingTiming import (
     CVTiming, estimate_grid_search, format_approximate_duration, format_grid_search_comparison,
 )
+from JBGNystroemRuntime import prepare_runtime_cv, build_runtime_rows, format_runtime_summary
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
 from pickle import PicklingError
@@ -1773,6 +1774,7 @@ class ModelHandler:
     def spot_check_machine_learning_models(self, dh: DatasetHandler, cross_validation_filepath: str, k: int = 10) -> Model:
         self._last_cv_timing = None
         self._selected_cv_timing = None
+        self._nystroem_runtime_rows = []
         standard_progress_text = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot-checking ML algorithms")
 
@@ -1852,6 +1854,7 @@ class ModelHandler:
         self.handler.logger.clear_last_printed_result_line()
         self.handler.logger.print_test_performance(list_of_results, cross_validation_filepath)
         self.handler.logger.end_inline_progress(progress_key)
+        self._export_nystroem_runtime(cross_validation_filepath)
 
         if state.trained_pipeline is None:
             raise ModelException(
@@ -2059,25 +2062,65 @@ class ModelHandler:
         # We want to execute the job with as many workers as possible. Dense data keeps
         # the historical NumPy path, while pandas sparse text data is converted to SciPy
         # CSR so sklearn can preserve sparsity through cross-validation.
-        n_jobs_desired = min(kfold.get_n_splits(), self.handler.STANDARD_DESIRED_N_JOBS)
+        # CV has one task per fold. execute_n_job applies CPU and positive
+        # configured caps; a global -1 must not erase this finite task bound.
+        n_jobs_desired = kfold.get_n_splits()
         estimator_X = Helpers.prepare_estimator_input(dh.X_train, prefer_numpy=True)
         self._last_execution_n_jobs = None
+        cv_pipeline, cv_scorer, profiled = pipeline, scorer_mechanism, False
+        try:
+            cv_pipeline, cv_scorer, profiled = prepare_runtime_cv(
+                pipeline, scorer_mechanism, getattr(algorithm, 'name', ''),
+            )
+        except Exception as profile_error:
+            self.handler.logger.print_warning(
+                f"Nystroem runtime diagnostics could not be prepared: {profile_error}. "
+                "Continuing with the original CV call."
+            )
         started = time.perf_counter()
         cv_results = call_with_sparse_input_retry(
             lambda X_input: self.execute_n_job(
-                cross_validate, pipeline, X_input, dh.Y_train.to_numpy(), cv=kfold,
-                scoring=scorer_mechanism, n_jobs_desired=n_jobs_desired,
+                cross_validate, cv_pipeline, X_input, dh.Y_train.to_numpy(), cv=kfold,
+                scoring=cv_scorer, n_jobs_desired=n_jobs_desired,
                 params=fit_params, error_score='raise',
             ),
             estimator_X, logger=self.handler.logger, context="cross-validation", estimator=pipeline,
         )
         
+        wall_seconds = time.perf_counter() - started
         timing = CVTiming.from_results(
             cv_results, kfold.get_n_splits(), self._last_execution_n_jobs,
-            time.perf_counter() - started,
+            wall_seconds,
         )
         self._last_cv_timing = (pipeline, timing)
+        if profiled:
+            try:
+                rows = build_runtime_rows(pipeline, cv_results, self._last_execution_n_jobs, wall_seconds)
+                if not hasattr(self, '_nystroem_runtime_rows'):
+                    self._nystroem_runtime_rows = []
+                self._nystroem_runtime_rows.extend(rows)
+                self.handler.logger.print_info(format_runtime_summary(rows))
+            except Exception as profile_error:
+                self.handler.logger.print_warning(
+                    f"Nystroem runtime diagnostics unavailable: {profile_error}. CV score retained."
+                )
         return cv_results["test_score"]
+
+    def _export_nystroem_runtime(self, cross_validation_filepath):
+        """An optional diagnostics export must not abort a successful training run."""
+        rows = getattr(self, '_nystroem_runtime_rows', [])
+        if not rows:
+            return
+        try:
+            filepath = os.path.splitext(str(cross_validation_filepath))[0] + '_nystroem_runtime.csv'
+            Helpers.save_matrix_as_csv(pd.DataFrame(rows), filepath)
+            self.handler.logger.print_code(
+                'Nystroem runtime diagnostics by CV fold', Helpers.create_download_link(filepath, title=''),
+            )
+        except Exception as profile_error:
+            self.handler.logger.print_warning(
+                f"Nystroem runtime CSV export failed: {profile_error}. Training continues."
+            )
     
     def save_model_to_file(self, filename: Path):
         """ Save ml model and corresponding configuration """
@@ -2797,9 +2840,11 @@ class PredictionsHandler:
                 ):
                     self.handler.logger.print_warning(
                         f"Direct Dark Number correction for {model_name}, target {label} is based on "
-                        f"very low mean recovery ({mean_recovery:.2%}; corr={corr:.6g}). "
-                        f"The direct result is retained unchanged, but may be statistically unstable "
-                        f"(warning threshold={DARK_NUMBER_LOW_RECOVERY_WARNING_THRESHOLD:.0%})."
+                        f"a low mean rediscovery rate ({mean_recovery:.2%}; corr={corr:.6g}). "
+                        f"Rediscovery is below {DARK_NUMBER_LOW_RECOVERY_WARNING_THRESHOLD:.0%} "
+                        "and the correction may be statistically unstable. Consider another "
+                        "pipeline combination for this problem and investigate the correctness "
+                        "and quality of the training dataset. The direct result is retained unchanged."
                     )
             except Exception as ex:
                 direct_error = ex

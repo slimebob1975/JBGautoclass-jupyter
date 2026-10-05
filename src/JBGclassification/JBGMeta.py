@@ -265,6 +265,21 @@ class Library(MetaEnum):
     def get_full_name(self) -> str:
         return self.full_name
 
+def _pytorch_grid_parameters(activation: str, optimizer: str) -> dict:
+    """Six parameter combinations per named variant; do not retune its activation/optimizer identity."""
+    rates = (0.0003, 0.001, 0.003) if optimizer == "adam" else (0.01, 0.02, 0.05)
+    return {
+        "activation": (activation,),
+        "optimizer": (optimizer,),
+        "learning_rate": rates,
+        "max_epochs": (50,),
+        "dropout_prob": (0.1,),
+        "num_hidden_layers": (2,),
+        "hidden_layer_size": (48, 100),
+        "train_split": (True,),
+    }
+
+
 class AlgorithmGridSearchParams(MetaEnum):
     DUMY =  {"parameters": {'strategy': ('most_frequent', 'prior', 'stratified', 'uniform', 'constant')}}
     SRF1 = {"parameters": {}}
@@ -393,8 +408,22 @@ class AlgorithmGridSearchParams(MetaEnum):
     FLAX = {"parameters": {'hidden_size': [16, 32, 64], 'num_layers': [3, 5, 10], 'learning_rate': [0.001, 0.01, 0.1], \
                            'num_epochs': [10, 20, 50, 100], 'batch_size': (32,64) }}
     
+    # Append new members while keeping old enum values/order intact for artifacts.
+    TORA = {"parameters": _pytorch_grid_parameters("relu", "adam")}
+    TORS = {"parameters": _pytorch_grid_parameters("relu", "sgd")}
+    TOTA = {"parameters": _pytorch_grid_parameters("tanh", "adam")}
+    TOTS = {"parameters": _pytorch_grid_parameters("tanh", "sgd")}
+    TOSA = {"parameters": _pytorch_grid_parameters("sigmoid", "adam")}
+    TOSS = {"parameters": _pytorch_grid_parameters("sigmoid", "sgd")}
+
     @property
     def parameters(self):
+        if self.name == "TOSS":
+            # Keep revision-116 enum values stable for existing saved artifacts.
+            # Apply the current Sigmoid+SGD search policy only at runtime.
+            parameters = _pytorch_grid_parameters("sigmoid", "sgd")
+            parameters.update(learning_rate=(0.02, 0.05, 0.1), num_hidden_layers=(0,))
+            return parameters
         if isinstance(self.value, dict):
             return self.value.get("parameters", {})
         
@@ -478,6 +507,10 @@ class Algorithm(MetaEnum):
 
     @property
     def search_params(self):
+        # Enum values are serialized by value. Keep historical Algorithm/PYNN
+        # values intact; select the new fixed-identity grid at runtime instead.
+        if self.name in ("TORA", "TORS", "TOTA", "TOTS", "TOSA", "TOSS"):
+            return AlgorithmGridSearchParams[self.name]
         if isinstance(self.value, dict):
             return self.value.get("search_params")
         
@@ -674,7 +707,12 @@ class Algorithm(MetaEnum):
         return self.call_PYNN(activation='sigmoid', optimizer='sgd')
     
     def call_PYNN(self, activation: str, optimizer: str)-> NNClassifier3PL:     
-        return NNClassifier3PL(activation=activation, optimizer=optimizer, verbose=False, train_split=True)
+        shallow_sigmoid_sgd = activation == "sigmoid" and optimizer == "sgd"
+        rate = 0.1 if shallow_sigmoid_sgd else (0.001 if optimizer == "adam" else 0.02)
+        depth = 0 if shallow_sigmoid_sgd else 2
+        return NNClassifier3PL(activation=activation, optimizer=optimizer,
+                               learning_rate=rate, num_hidden_layers=depth, max_epochs=50,
+                               verbose=False, train_split=True)
     
     def do_KERA(self, max_iterations: int, size: int)-> NNClassifier3PL:     
         return  MLPKerasClassifier()

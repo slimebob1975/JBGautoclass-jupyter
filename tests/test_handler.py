@@ -1441,20 +1441,30 @@ class TestPredictionsHandler:
         assert isinstance(result, float)
 
 
+    @pytest.mark.parametrize("recovery, correction, warn", [
+        (0.01, 100.0, True),
+        (0.04, 25.0, True),
+        (0.0499, 1.0 / 0.0499, True),
+        (0.05, 20.0, False),
+        (0.0501, 1.0 / 0.0501, False),
+        (0.08, 12.5, False),
+        (np.nan, 25.0, False),
+        (None, 25.0, False),
+    ])
     def test_dark_number_direct_low_recovery_warns_but_keeps_direct_result(
-        self, default_predictions_handler, monkeypatch
+        self, default_predictions_handler, monkeypatch, recovery, correction, warn
     ):
         class LowRecoveryDirectEstimator:
             def __init__(self, *args, **kwargs):
                 self.is_valid_for_regression_ = True
                 self.correction_status_ = "estimated"
-                self.mean_recovery_ = 0.01
+                self.mean_recovery_ = recovery
 
             def fit(self, X, Y):
                 return self
 
             def score(self, X=None, Y=None):
-                return 100.0
+                return correction
 
         class FakeModelHandler:
             def execute_n_job(self, func, *args, n_jobs_desired=None, **kwargs):
@@ -1496,12 +1506,16 @@ class TestPredictionsHandler:
             model_name="Target model",
         )
 
-        assert corrs == {"B": 100.0}
+        assert corrs == {"B": correction}
         assert sources == {"B": "direct"}
         assert corr_models == {"B": "Target model"}
-        assert len(logger.warnings) == 1
-        assert "very low mean recovery (1.00%; corr=100)" in logger.warnings[0]
-        assert "retained unchanged" in logger.warnings[0]
+        assert len(logger.warnings) == int(warn)
+        if warn:
+            assert f"low mean rediscovery rate ({recovery:.2%}; corr={correction:.6g})" in logger.warnings[0]
+            assert "Rediscovery is below 5%" in logger.warnings[0]
+            assert "Consider another pipeline combination" in logger.warnings[0]
+            assert "investigate the correctness and quality of the training dataset" in logger.warnings[0]
+            assert "retained unchanged" in logger.warnings[0]
 
     def test_dark_number_zero_recovery_does_not_trigger_sample_size_regression(
         self, default_predictions_handler, monkeypatch
