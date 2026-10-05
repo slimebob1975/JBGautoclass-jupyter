@@ -10,6 +10,7 @@ from typing import Callable, Type, TypeVar, Union
 
 import Helpers
 from JBGModelPersistence import load_model_config
+from JBGPaths import relocate_saved_config_paths
 from JBGExceptions import ConfigException, ODBCDriverException
 from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
                      Reduction, ReductionTuple, ScoreMetric, MetaTuple, Oversampling,
@@ -696,6 +697,8 @@ class Config:
 
         if self.script_path is None:
             self.script_path = Path(pwd)
+
+        relocate_saved_config_paths(self)
 
         
         """Post init is called after init, which is the best place to check the types & values"""

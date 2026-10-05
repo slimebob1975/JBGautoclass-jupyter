@@ -18,6 +18,8 @@ from typing import Any, Mapping
 
 import dill
 
+from JBGPaths import relocate_saved_config_paths
+
 MODEL_ARTIFACT_FORMAT = "JBGAutoClassification.model"
 MODEL_ARTIFACT_VERSION = 1
 KERAS_MODEL_FILE_EXTENSION = ".keras"
@@ -142,7 +144,9 @@ def unpack_model_artifact(serialized: Any) -> tuple:
                 "oversampler, undersampler, preprocess, reduction, algorithm."
             )
 
-        return tuple(payload[field] for field in MODEL_ARTIFACT_FIELDS)
+        values = tuple(payload[field] for field in MODEL_ARTIFACT_FIELDS)
+        relocate_saved_config_paths(values[0])
+        return values
 
     # Backwards compatibility with the unversioned format used before patch 055.
     if isinstance(serialized, (list, tuple)) and len(serialized) == len(MODEL_ARTIFACT_FIELDS):
@@ -151,7 +155,9 @@ def unpack_model_artifact(serialized: Any) -> tuple:
             raise ModelArtifactError(
                 "Legacy model artifact has an invalid model-component tuple; expected five entries."
             )
-        return tuple(serialized)
+        values = tuple(serialized)
+        relocate_saved_config_paths(values[0])
+        return values
 
     raise ModelArtifactError(
         "Unrecognized model artifact format. Expected a versioned JBG model artifact "
@@ -177,7 +183,7 @@ def load_model_config(filename: str | Path):
     # config fixtures did not contain a complete six-field model payload. Keep that
     # narrow compatibility here without weakening full model loading validation.
     if isinstance(serialized, (list, tuple)) and serialized:
-        return serialized[0]
+        return relocate_saved_config_paths(serialized[0])
 
     raise ModelArtifactError(
         "Unrecognized model artifact format while loading persisted configuration."

@@ -56,7 +56,7 @@ class MockGUIHandler:
 
 
 def make_widgets() -> Widgets:
-    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src"
     model_path = Path(__file__).parent / "fixtures"
     return Widgets(src_path=src_path, GUIhandler=MockGUIHandler(), model_path=model_path)
 
@@ -620,7 +620,7 @@ def test_repeat_last_and_regression_suite_are_aligned_to_opposite_edges():
 
 
 def test_legacy_local_settings_labels_are_migrated_without_overriding_custom_text():
-    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src"
     model_path = Path(__file__).parent / "fixtures"
     settings_path = src_path / "GUI" / "default_settings.json"
     settings = json.loads(settings_path.read_text())
@@ -649,7 +649,7 @@ def test_legacy_local_settings_labels_are_migrated_without_overriding_custom_tex
 
 
 def test_legacy_local_settings_checkbox_is_migrated_to_failure_mode_radio():
-    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src"
     model_path = Path(__file__).parent / "fixtures"
     settings_path = src_path / "GUI" / "default_settings.json"
     settings = json.loads(settings_path.read_text())
@@ -685,7 +685,7 @@ def test_legacy_local_settings_checkbox_is_migrated_to_failure_mode_radio():
 
 
 def test_local_settings_without_any_failure_mode_control_default_to_experimental_fallback():
-    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src"
     model_path = Path(__file__).parent / "fixtures"
     settings_path = src_path / "GUI" / "default_settings.json"
     settings = json.loads(settings_path.read_text())
@@ -708,7 +708,7 @@ def test_local_settings_without_any_failure_mode_control_default_to_experimental
 
 
 def test_local_settings_move_existing_dark_number_target_after_estimate():
-    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src"
     model_path = Path(__file__).parent / "fixtures"
     settings_path = src_path / "GUI" / "default_settings.json"
     settings = json.loads(settings_path.read_text())
@@ -730,7 +730,7 @@ def test_local_settings_move_existing_dark_number_target_after_estimate():
 
 
 def test_local_settings_without_dark_number_target_get_all_classes_default():
-    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src"
     model_path = Path(__file__).parent / "fixtures"
     settings_path = src_path / "GUI" / "default_settings.json"
     settings = json.loads(settings_path.read_text())
@@ -753,7 +753,7 @@ def test_local_settings_without_dark_number_target_get_all_classes_default():
 
 
 def test_pre_065_categorize_label_is_migrated_to_categorizer():
-    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src"
     model_path = Path(__file__).parent / "fixtures"
     settings_path = src_path / "GUI" / "default_settings.json"
     settings = json.loads(settings_path.read_text())
@@ -843,7 +843,7 @@ def test_feature_importance_controls_follow_training_and_locked_changes():
 
 
 def test_feature_importance_migrates_old_local_settings_without_duplicates():
-    src_path = Path(__file__).parents[1] / "src" / "JBGclassification"
+    src_path = Path(__file__).parents[1] / "src"
     settings = json.loads((src_path / 'GUI/default_settings.json').read_text())
     for name in ('feature_importance_checkbox', 'feature_importance_repeats'):
         settings['widgets'].pop(name)

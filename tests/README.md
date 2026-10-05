@@ -33,7 +33,7 @@ Fixtures live in `tests/fixtures/`.
 
 If `test_config.py` or `test_handler.py` fail after a deliberate serialization
 change, inspect the fixtures first. The fixture regeneration helper currently
-lives at `src/JBGclassification/regenerate-fixtures.py`.
+lives at `src/regenerate-fixtures.py`.
 
 ## Dark Number real-dataset validation runner
 
@@ -43,7 +43,7 @@ After an ordinary training run has produced `.jbg_last_run.json` and the corresp
 the repository root:
 
 ```text
-python .\src\JBGclassification\JBGDarkNumberValidationRunner.py --sql-username <username> --runs 9
+python .\src\JBGDarkNumberValidationRunner.py --sql-username <username> --runs 9
 ```
 
 Use `--target <class>` one or more times to restrict the one-vs-rest targets. The SQL password is read from
@@ -55,7 +55,7 @@ paired CSV/JSON outputs; it does not modify the saved model or production Dark N
 Revision 099 adds a second validation-only runner that holds one fetched dataset, deterministic split and cross-trained model fixed while varying only the correction flip fraction and seed. Defaults are 5/10/15/20% and nine seeds. It writes detailed and summary CSVs plus metadata fingerprints and leaves the 20% production default unchanged.
 
 ```text
-python .\src\JBGclassification\JBGDarkNumberNoiseSensitivityRunner.py --sql-username <username>
+python .\src\JBGDarkNumberNoiseSensitivityRunner.py --sql-username <username>
 ```
 
 Focused tests cover target/default resolution, hard flipped/recovered count reconstruction, sentinel-safe stability summaries, fingerprints, output persistence, and revision-100 source/fixed pipeline identity reporting used by long-run observability.

@@ -2,20 +2,23 @@
 __pycache__
 .vscode
 autoclassconfig_*.py
-src/*/config/test_*.py
-src/*/output/*.csv
-src/*/output/csvs/
-src/*/output/nn_checkpoints/*
-src/*/output/grid_search_timing.json
-src/*/output/grid-timing-*.tmp
-src/*/model/*
+src/config/test_*.py
+src/output/*.csv
+src/output/csvs/
+src/output/nn_checkpoints/*
+src/output/grid_search_timing.json
+src/output/grid-timing-*.tmp
+src/model/*
 .env
 .ideas
 .pytest_cache
 __test.py
 settings.json
-src/*/*.pt
-src/*/output/logs/
+src/*.pt
+/logs/
+# Local files can remain here between applying 119 and running its migration.
+src/JBGclassification/
+src/output/logs/
 
 # Local previous-run recipe; contains configuration metadata but no SQL password.
 .jbg_last_run.json

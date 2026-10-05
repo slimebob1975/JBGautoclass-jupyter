@@ -13,6 +13,27 @@ data. It is partly a Building AI course project.
 - `CHANGELOG.md` is the append-only history of numbered development revisions and their verification status.
 - `BACKLOG.md` tracks open issues, priorities and deferred work.
 
+### Source tree and logs (119)
+
+The application modules and their `GUI`, `DataLayer`, `SqlHelper`, `config`, `sql`, `model` and `output` directories now live directly under `src/`. The root notebook remains `JBG_SML_GUI.ipynb`, importing `src.GUIHandler`. Default application, validation/sensitivity-runner and PowerShell server logs now go to `<repo-root>/logs/`, determined from the checkout rather than the current working directory. An explicitly supplied Python `log_dir` still takes precedence. CSVs, checkpoint companions and timing history stay under `src/output/`; models and Keras sidecars stay together under `src/model/`.
+
+Stop Voilà and its kernels before applying the structural patch. Git moves tracked files; ignored models, generated configs, previous outputs and logs need a one-time local migration. From the checkout root, using the application's Python environment, run:
+
+```powershell
+python .\scripts\migrate_source_layout.py --dry-run
+if ($LASTEXITCODE -ne 0) { throw "Resolve the migration collision before continuing." }
+python .\scripts\migrate_source_layout.py
+if ($LASTEXITCODE -ne 0) { throw "Migration stopped; check the reported path." }
+```
+
+The helper preserves empty directories and verifies copied bytes before removing originals. It moves all remaining local contents of `src/JBGclassification/` into `src/`, routes its `output/logs/` (and any interim `src/output/logs/`) into root `logs/`, reconciles identical copies after interruption, and refuses differing-file/directory collisions before moving any files. Resolve a collision manually and rerun; the helper never chooses between different versions of a model, config or log. Fresh checkouts and subsequent reruns are no-ops. Existing sensitivity checkpoint companions are preserved, but the existing code/dependency fingerprint guard refuses resuming an earlier-revision study under 119; finish such a study first or resume it in its original checkout.
+
+Branch switches do not relocate ignored runtime files: keep an old-layout `main`/`prod` checkout in a separate worktree if it must continue using its existing runtime files while `dev` is migrated.
+
+The launcher template performs the same migration before opening Voilà. If you use a customized launcher, update its log destination to `$LogDir = Join-Path $DevRoot 'logs'` and run the migration once before restarting it. Use your existing virtual-environment interpreter if `python` names a different environment. The Python migration helper needs no third-party packages.
+
+Historical top-level module names remain available. A compatibility import hook resolves saved references to `src.JBGclassification.*` / `JBGclassification.*` to the same current class, function and enum objects without recreating the old directory. Saved config paths under the historical source directory are rebased to this checkout's `src/`; explicitly configured paths outside that directory remain unchanged. Model serialization format, algorithm values, training and predictions are unchanged. Windows/Voilà verification of the structural migration and saved-model prediction remains pending.
+
 ### PyTorch variants and training profile (116–117)
 
 All six named variants remain available: TORA/TORS use ReLU, TOTA/TOTS use Tanh, and TOSA/TOSS use Sigmoid; the final A/S selects Adam/SGD. The selected activation and optimizer now remain fixed during that variant's final search. Adam is passed to skorch explicitly rather than silently training its variants with the default SGD. Inference disables dropout and repeated probability predictions are deterministic for a fixed fitted CPU model.
@@ -33,7 +54,7 @@ API references: [skorch optimizer/probability/loss contract](https://skorch.read
 
 ### GridSearch time estimates (118)
 
-Final-search estimates apply to every model using the shared GridSearch path. A first search uses the selected pipeline's measured CV times, concurrent batches, startup/dispatch allowance and approximate sequential refit. A successful search records its actual/base duration ratio in `src/JBGclassification/output/grid_search_timing.json`. Future matching searches multiply the current CV-based estimate by the median of up to five matching observations from the last 30 days. The file holds at most 64 profiles and survives a kernel restart; delete it to reset calibration. Existing log files are not imported automatically.
+Final-search estimates apply to every model using the shared GridSearch path. A first search uses the selected pipeline's measured CV times, concurrent batches, startup/dispatch allowance and approximate sequential refit. A successful search records its actual/base duration ratio in `src/output/grid_search_timing.json`. Future matching searches multiply the current CV-based estimate by the median of up to five matching observations from the last 30 days. The file holds at most 64 profiles and survives a kernel restart; delete it to reset calibration. Existing log files are not imported automatically.
 
 Matching covers the data source/table/target, training shape/input container, feature names/types and class counts; unfitted pipeline parameters and complete search grid; scorer, fold count, resolved search workers and observed CV workers; coarse factor-of-two bands of measured CV fold work and dispatch allowance (floored at 1 ms) to avoid mixing cold/warm or materially different timing regimes; host, Python/framework versions and thread environment. This is a workload signature, not a dataset-content fingerprint: changed values in the same table, randomization, worker startup and contention can still affect duration. The history stores only hashed signatures and numeric timings, with no rows, labels, credentials or fitted models. Unsupported custom objects, missing context/telemetry, expired/corrupt history or file-access failures fall back to the CV-based estimate and cannot discard a successful model.
 
@@ -60,7 +81,7 @@ To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 4. Start Anaconda Navigator and launch Jupyter-lab from within
 
 5. In the file explorer window to the left in Jupyter-lab, browse your way to the file
-    JBGclassification_GUI.ipynb
+    JBG_SML_GUI.ipynb
 6. If you see the JBG logo and some webb-like widgets in the right hand side, then all is ok!
     
 Notice:
@@ -73,7 +94,7 @@ Troubleshooting:
 
 == Terminal ==
 
-To run the script in the terminal you need to have a file in `src\JBGclassification\config` with a functional config. 
+To run the script in the terminal you need to have a file in `src\config` with a functional config.
 Configs start with `autoclassconfig_` as the name, and will be saved when you create a new model using the GUI.
 Generated config files deliberately do **not** contain the SQL password. Supply it at runtime through the
 `JBG_SQL_PASSWORD` process environment variable (or enter it in the GUI). Saved `.sav` model files likewise omit
@@ -82,12 +103,12 @@ the SQL password; when a model is loaded through the application, the current ru
 Revisions 084-088 provide a validation runner that reuses the most recent manual/Repeat Last configuration and compares the hard/direct baseline with `perturbed_same_model`; revision 088 adds robustness summaries and uses nine paired seeds by default. Revision 089 exposes that same shadow-clone method in the normal Dark Number path, revision 091 presents its correction-failure policy as a two-option radio choice, revisions 092-093 add/refine a live equation card, and revision 095 adds a dynamic `Target:` radio group. `All classes` preserves historical behavior; selecting one observed class restricts correction-factor estimation, fallback and Dark Number output to that target while the full confusion matrix remains available for model diagnosis. The compact failure labels are `No fallback` / `Experimental` with the experimental choice selected by default. The card is driven by `JBGDarkNumbers.py`, updates with Method + Alpha + Target + correction-failure policy, and dims when `Estimate` is off. Direct correction still wins whenever it is estimable; the experimental path is attempted only for recovery-level statistical failures and remains explicitly marked with `corr_source=perturbed_same_model`. Run the validation harness from the repository root after a model-training run:
 
 ```text
-python .\src\JBGclassification\JBGDarkNumberValidationRunner.py --sql-username <username> --runs 9
+python .\src\JBGDarkNumberValidationRunner.py --sql-username <username> --runs 9
 ```
 
 The runner reads `.jbg_last_run.json`, uses `JBG_SQL_PASSWORD` if set (otherwise it prompts without echo), reloads the
 saved model's fitted text/category converter, normalizes sparse text features to SciPy CSR, and writes paired
-baseline-vs-`perturbed_same_model` CSV/JSON evidence under `src\JBGclassification\output\csvs`. Its log is
+baseline-vs-`perturbed_same_model` CSV/JSON evidence under `src\output\csvs`. Its log is
 written separately as `jbg-dark-number-validation_*.log`. The perturbation defaults are five shadow clones, at least three valid clone estimates, and maximum correction-factor CV 0.50; these can be adjusted with `--perturbation-clones`, `--perturbation-min-valid`, and `--perturbation-max-cv`. Normal production runs keep those validated 5/3/0.50 guardrails fixed for now and, whenever the experimental fallback is attempted, write aggregate provenance to `dark_number_experimental_fallback_*` without raw source rows.
 
 Revision 111 preflight-skips Gaussian Naive Bayes when sparse features reach the estimator unchanged (NOR/RFE); dense input and PCA/TSVD/Nystroem paths remain eligible. Normal estimator calls retain sparse input and retry with dense features only for a confirmed scikit-learn sparse-X rejection, including joblib worker traceback evidence. A retry logs the operation/pipeline, shape, dtype and estimated dense-buffer size before allocation. Unrelated TypeErrors and failed dense retries are surfaced without another fit or generic serial-CV retry; existing resource/pickling worker reductions remain intact. This improves error attribution and avoids known incompatible work. Expensive Nystroem candidate fits require separate runtime investigation.
@@ -129,24 +150,29 @@ Analysis adds `1 + number_of_original_inputs * repeats` score evaluations and pr
 Revision 099 adds a separate correction-noise sensitivity runner. It fetches the real dataset once, freezes one deterministic train/test split and one cross-trained model, then compares 5%, 10%, 15%, and 20% correction label flips across nine correction seeds by default. It records hard flipped/recovered counts, recovery/corr stability, fallback activation and configured-formula `D_cv_full`, plus dataset/split fingerprints. Run it after an ordinary training run with the operational Dark Number target selected:
 
 ```text
-python .\src\JBGclassification\JBGDarkNumberNoiseSensitivityRunner.py --sql-username <username>
+python .\src\JBGDarkNumberNoiseSensitivityRunner.py --sql-username <username>
 ```
 
 Use repeated `--fraction` or `--target` arguments to override the default grid/target. If the configured Dark Number target is unset and no `--target` is supplied, all observed classes are studied, so the total cell count grows by the number of targets. Revision 100 logs the resolved targets, the loaded and fixed pipeline identities, and `[n/N]` progress for every completed fraction×seed cell; the metadata JSON also retains full source/fixed estimator identity. The command is validation-only and does not change the production 20% default. Current sensitivity evidence keeps 20% as the compatibility default while 15% is tracked as a lower-perturbation candidate pending another genuinely imbalanced real dataset.
 
-Revision 102 automatically checkpoints the sensitivity study after each completed target×fraction×seed cell. The default checkpoint is `src\JBGclassification\output\csvs\dark_number_noise_sensitivity_<model>_checkpoint.json`; its `.model.joblib` companion preserves the **original fitted fixed pipeline and predictions**, while `.inputs.joblib` and `.inputs.json` preserve/checksum the original fetched feature/label/source-pipeline snapshot. Keep all checkpoint companions together. Resuming uses that snapshot without a new SQL fetch or application shuffle; this matters because both can randomize the row selection/order. Metadata/fingerprints are written before fixed-model training begins. Completed cells survive interruption, including a forced process close, and the interrupted cell is rerun when you issue the same command again. The log reports `Checkpoint progress: n/N completed cells`; resuming restores the fixed model without retraining it. A complete checkpoint regenerates the final CSV/summary/metadata outputs without repeating the experiment.
+Revision 102 automatically checkpoints the sensitivity study after each completed target×fraction×seed cell. The default checkpoint is `src\output\csvs\dark_number_noise_sensitivity_<model>_checkpoint.json`; its `.model.joblib` companion preserves the **original fitted fixed pipeline and predictions**, while `.inputs.joblib` and `.inputs.json` preserve/checksum the original fetched feature/label/source-pipeline snapshot. Keep all checkpoint companions together. Resuming uses that snapshot without a new SQL fetch or application shuffle; this matters because both can randomize the row selection/order. Metadata/fingerprints are written before fixed-model training begins. Completed cells survive interruption, including a forced process close, and the interrupted cell is rerun when you issue the same command again. The log reports `Checkpoint progress: n/N completed cells`; resuming restores the fixed model without retraining it. A complete checkpoint regenerates the final CSV/summary/metadata outputs without repeating the experiment.
 
 Resume validates the ordered dataset (including feature names/types), deterministic split, full model hyperparameters, saved model artifact checksum and last-run settings fingerprint, targets/fractions/seeds, calculation/fallback options, perturbation guardrails, source code and dependency versions. A mismatch stops the run without overwriting the checkpoint. For a separate fresh experiment, use a new checkpoint filename:
 
 ```powershell
-python .\src\JBGclassification\JBGDarkNumberNoiseSensitivityRunner.py --target 1 --checkpoint .\creditcard_fraud_sensitivity_102.json
+python .\src\JBGDarkNumberNoiseSensitivityRunner.py --target 1 --checkpoint .\creditcard_fraud_sensitivity_102.json
 ```
 
 Checkpoint resume also requires the original source code and dependency versions. Applying a later code revision such as 103 intentionally invalidates a 102 checkpoint for resume; its completed CSV/metadata exports remain usable. After interruption, repeat that exact command with the same saved source model and last-run settings. Avoid retraining/replacing the ordinary source model between attempts. Each checkpoint is locked against concurrent writers; the operating system releases the lock on process exit. A resumed study measures the original data snapshot, even if the live SQL table subsequently changes; use a new checkpoint path to study fresh data. Final CSVs still contain the full study only; the checkpoint holds partial results and preserves NaN/infinite diagnostics exactly. Earlier revision-100 log-only cells cannot be resumed, so the first revision-102 study starts from cell 1. Production Dark Number defaults remain unchanged.
 
-Go into `src\JBGclassification` and run `python JBGautomaticClassifier.py -f <path-to-file>`. The path to the file needs to
-be on the format of `.config\filename.py`, so assuming that the config-file is `autoclassconfig_iris_abc0123.py` 
-(check the `config` directory for the right name), the command is: `python JBGautomaticClassifier.py -f autoclassconfig_iris_abc0123.py`
+Go into `src` and run `python .\AutomaticClassifier.py -f .\config\<filename>.py`. For example:
+
+```powershell
+Set-Location .\src
+python .\AutomaticClassifier.py -f .\config\autoclassconfig_iris_abc0123.py
+```
+
+Use the generated filename present in `src/config/`.
 
 
 Serialized `.sav` model files use Python pickle/dill-compatible serialization. New model files are written with
@@ -157,7 +183,7 @@ from a trusted source: loading an untrusted pickle/dill payload can execute arbi
 
 === Troubleshooting ===
 
-1. You have to run the terminal command from the src\JBGclassification directory, due to imports and such
+1. You have to run the terminal command from the src directory, due to imports and such
 2. There are a lot of (unnecessary) warnings coming out of the 3rd-party libraries (in particular sklearn), which will clutter up
 the terminal. To ignore them, use the `W` flag in the command (see below for usage)
 
@@ -165,7 +191,7 @@ the terminal. To ignore them, use the `W` flag in the command (see below for usa
 
 Source: https://docs.python.org/3/using/cmdline.html#cmdoption-W
 
-To ignore all warnings: `python -Wi JBGautomaticClassifier.py -f <path-to-file>`
+To ignore all warnings: `python -Wi AutomaticClassifier.py -f <path-to-file>`
 
 The full argument is `action:message:category:module:lineno`, and if you're targetting something "deeper" into the argument, leave any
 intermediate things empty, IE `ignore::Classname` to target all warnings of Classname, no matter their message.

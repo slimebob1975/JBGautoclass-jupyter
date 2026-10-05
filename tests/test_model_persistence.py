@@ -155,7 +155,7 @@ def test_model_artifact_pipeline_reloads_predicts_and_retrains_in_fresh_process(
     save_model_artifact(path, *_payload(pipeline=pipeline))
 
     project_root = Path(__file__).resolve().parents[1]
-    module_path = project_root / "src" / "JBGclassification"
+    module_path = project_root / "src"
     env = os.environ.copy()
     env["PYTHONPATH"] = os.pathsep.join(
         [str(module_path), env.get("PYTHONPATH", "")]

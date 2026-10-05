@@ -12,6 +12,8 @@ import traceback
 from typing import Optional, TextIO, Union
 import warnings
 
+from JBGPaths import LOG_DIR
+
 
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _EXPLICIT_LEVEL_RE = re.compile(
@@ -98,7 +100,7 @@ class TimestampedLogFile:
 
     def __init__(self, log_dir: Optional[Union[str, Path]] = None, filename: Optional[str] = None):
         if log_dir is None:
-            log_dir = Path(__file__).resolve().parent / "output" / "logs"
+            log_dir = LOG_DIR
 
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)

@@ -90,11 +90,17 @@ Invoke-InDir -Path $DevRoot -ScriptBlock {
     & $Py  -m ipykernel install --user --name=$KernelName --display-name $KernelDisplay
 }
 
+# --- Migrate local files left by the source-tree move (safe to repeat) ---
+& $Py (Join-Path $DevRoot 'scripts\migrate_source_layout.py')
+if ($LASTEXITCODE -ne 0) {
+    throw 'Source-layout migration failed. Resolve the reported collision before launching Voila.'
+}
+
 # --- Launch Voila ---
 # This log starts outside the notebook/kernel process and therefore also captures
 # Voila, Jupyter/IPKernel and native-library output that the in-application Python
 # logger cannot intercept (for example TensorFlow startup messages).
-$LogDir = Join-Path $DevRoot 'src\JBGclassification\output\logs'
+$LogDir = Join-Path $DevRoot 'logs'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $ServerTimestamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
 $ServerLog = Join-Path $LogDir ("jbg-server_{0}_pid{1}.log" -f $ServerTimestamp, $PID)

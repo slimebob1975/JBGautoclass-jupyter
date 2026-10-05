@@ -456,9 +456,9 @@ def bytes_to_suffix(nbytes):
     return '%s %s' % (f, suffixes[i])
 
 # In case the user has specified some input arguments to command line calls
-# As written, you need to call on the class in the src\JBGclassification dir, with
+# As written, you need to call on the class in the src dir, with
 # the configfilename on the format of ".\config\filename.py", where it has to be
-# a subfolder in the src\JBGclassification dir
+# a subfolder in the src dir
 # This complicates testing a Config loaded from a file 
 def check_input_arguments(argv: list):
     command_line_instructions = \
