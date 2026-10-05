@@ -31,6 +31,14 @@ Each fit/fold/refit/retry writes checkpoints in its own temporary subdirectory u
 
 API references: [skorch optimizer/probability/loss contract](https://skorch.readthedocs.io/en/stable/user/neuralnet.html), [Checkpoint versus EarlyStopping](https://skorch.readthedocs.io/en/stable/callbacks.html), and [PyTorch dropout](https://docs.pytorch.org/docs/stable/generated/torch.nn.Dropout.html).
 
+### GridSearch time estimates (118)
+
+Final-search estimates apply to every model using the shared GridSearch path. A first search uses the selected pipeline's measured CV times, concurrent batches, startup/dispatch allowance and approximate sequential refit. A successful search records its actual/base duration ratio in `src/JBGclassification/output/grid_search_timing.json`. Future matching searches multiply the current CV-based estimate by the median of up to five matching observations from the last 30 days. The file holds at most 64 profiles and survives a kernel restart; delete it to reset calibration. Existing log files are not imported automatically.
+
+Matching covers the data source/table/target, training shape/input container, feature names/types and class counts; unfitted pipeline parameters and complete search grid; scorer, fold count, resolved search workers and observed CV workers; coarse factor-of-two bands of measured CV fold work and dispatch allowance (floored at 1 ms) to avoid mixing cold/warm or materially different timing regimes; host, Python/framework versions and thread environment. This is a workload signature, not a dataset-content fingerprint: changed values in the same table, randomization, worker startup and contention can still affect duration. The history stores only hashed signatures and numeric timings, with no rows, labels, credentials or fitted models. Unsupported custom objects, missing context/telemetry, expired/corrupt history or file-access failures fall back to the CV-based estimate and cannot discard a successful model.
+
+The log states whether an estimate is uncalibrated or learned from matching completed searches, reports the sample count and observed factor range, and keeps the actual/estimate percentage comparison. The observed range describes historical variability; it is not a confidence interval. Completion logs additionally report candidate mean fit costs, scoring, actual refit time and the remaining CV/dispatch phase. Startup/dispatch/contention are not separately measured. Calibration adds no training fits and does not change search parameters, scores, worker policy or model selection. Failed searches and ordinary-fit fallback do not contribute history. Windows verification of calibrated repeat-run forecasts remains pending.
+
 ## How to use JBG
 To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 

@@ -54,6 +54,8 @@ from JBGModelPersistence import (
 import Helpers
 from JBGTrainingTiming import (
     CVTiming, estimate_grid_search, format_approximate_duration, format_grid_search_comparison,
+    GridSearchTimingHistory, grid_search_timing_key, calibrate_grid_search_estimate,
+    format_grid_search_timing_diagnostics,
 )
 from JBGNystroemRuntime import prepare_runtime_cv, build_runtime_rows, format_runtime_summary
 from sklearn.base import clone
@@ -1195,7 +1197,29 @@ class ModelHandler:
                 n_jobs_desired=n_jobs_desired)
             # The constructor has resolved CPU/config caps and any worker retries.
             # Publish the estimate before fit starts, also when verbose logging is off.
-            estimate = self._report_grid_search_estimate(n_param_combos, n_splits, search.n_jobs)
+            history, timing_key = None, None
+            try:
+                config = self.handler.config
+                connection = getattr(config, "connection", None)
+                source = tuple(getattr(connection, name, "") for name in (
+                    "host", "data_catalog", "data_table", "class_column",
+                ))
+                script_path = getattr(config, "script_path", None)
+                if script_path is not None:
+                    history = GridSearchTimingHistory(Path(script_path) / "output" / "grid_search_timing.json")
+                    timing_key = grid_search_timing_key(
+                        model, search_params, scorer, X, Y, n_splits, search.n_jobs, source,
+                        cv_workers=getattr(getattr(self, "_selected_cv_timing", None), "workers", None),
+                        cv_timing=getattr(self, "_selected_cv_timing", None),
+                    )
+            except Exception as timing_error:
+                self.handler.logger.print_warning(
+                    f"Grid search timing calibration could not be prepared: {timing_error}. "
+                    "Continuing with the CV-based estimate."
+                )
+            estimate = self._report_grid_search_estimate(
+                n_param_combos, n_splits, search.n_jobs, history=history, timing_key=timing_key,
+            )
             estimator_X = Helpers.prepare_estimator_input(X)
             started = time.perf_counter()
             try:
@@ -1218,6 +1242,22 @@ class ModelHandler:
                     "Grid search completed (CV fits + refit): time comparison unavailable "
                     "because the pre-search estimate was unavailable."
                 )
+            diagnostics = format_grid_search_timing_diagnostics(search, actual_seconds)
+            if diagnostics is not None:
+                self.handler.logger.print_info(diagnostics)
+            # Only a completed search/refit may teach a later matching forecast.
+            # Always record the raw CV-based estimate, not the calibrated one.
+            if history is not None and timing_key is not None and estimate is not None:
+                try:
+                    if history.record(timing_key, estimate, actual_seconds):
+                        self.handler.logger.print_info(
+                            "Grid search timing calibration recorded for future matching searches."
+                        )
+                except Exception as timing_error:
+                    self.handler.logger.print_warning(
+                        f"Grid search timing calibration could not be saved: {timing_error}. "
+                        "The trained model and search results are retained."
+                    )
             # Choose best estimator from grid search
             return search.best_estimator_, pd.DataFrame.from_dict(search.cv_results_)
         
@@ -1225,9 +1265,18 @@ class ModelHandler:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}") from e
 
-    def _report_grid_search_estimate(self, combinations: int, folds: int, workers: int):
+    def _report_grid_search_estimate(self, combinations: int, folds: int, workers: int,
+                                    history=None, timing_key=None):
         timing = getattr(self, "_selected_cv_timing", None)
         estimate = estimate_grid_search(timing, combinations, folds, workers)
+        if estimate is not None and history is not None and timing_key is not None:
+            try:
+                estimate = calibrate_grid_search_estimate(estimate, history.observations(timing_key))
+            except Exception as timing_error:
+                self.handler.logger.print_warning(
+                    f"Grid search timing calibration could not be read: {timing_error}. "
+                    "Continuing with the CV-based estimate."
+                )
         work = f"{combinations} parameter combinations x {folds} folds = {combinations * folds} CV fits + 1 refit"
         if estimate is None:
             message = f"Grid search time estimate unavailable: no valid selected-pipeline CV timing; {work}."
@@ -1238,7 +1287,7 @@ class ModelHandler:
         self.handler.logger.print_info(message)
         if estimate is not None:
             self.handler.logger.print_info(
-                f"Grid search estimate assumptions: selected pipeline mean CV fit "
+                f"Grid search base estimate assumptions: selected pipeline mean CV fit "
                 f"{timing.mean_fit_seconds:.3g} s + scoring {timing.mean_score_seconds:.3g} s/fold; "
                 f"{timing.wall_seconds:.3g} s observed wall-clock with {timing.workers} workers. "
                 f"Assumes {estimate.workers} concurrent fits (search requests {workers}; "
@@ -1247,6 +1296,20 @@ class ModelHandler:
                 f"{estimate.overhead_seconds:.3g} s startup/dispatch allowance. "
                 "Parameter costs, contention and worker retries may change actual duration."
             )
+            if estimate.calibration_samples:
+                self.handler.logger.print_info(
+                    f"Grid search estimate calibration: base {estimate.base_seconds:.3g} s × "
+                    f"median factor {estimate.calibration_factor:.3g} from "
+                    f"{estimate.calibration_samples} matching completed search(es); observed factors "
+                    f"{estimate.calibration_min:.3g}–{estimate.calibration_max:.3g}. "
+                    "These describe past variation, not a confidence interval. "
+                    "Data changes, worker startup and current contention can still change duration."
+                )
+            else:
+                self.handler.logger.print_info(
+                    "Grid search estimate calibration: uncalibrated; no usable matching "
+                    "completed-search history. Using the selected pipeline's CV-based estimate."
+                )
         return estimate
 
     def _fit_pipeline_for_validation(self, pipeline: Pipeline, dh: DatasetHandler) -> None:

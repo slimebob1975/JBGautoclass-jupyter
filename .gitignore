@@ -6,6 +6,8 @@ src/*/config/test_*.py
 src/*/output/*.csv
 src/*/output/csvs/
 src/*/output/nn_checkpoints/*
+src/*/output/grid_search_timing.json
+src/*/output/grid-timing-*.tmp
 src/*/model/*
 .env
 .ideas
