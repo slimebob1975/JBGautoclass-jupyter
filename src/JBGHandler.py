@@ -33,6 +33,7 @@ from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estima
 from JBGExceptions import (DatasetException, MissingScorerException, ModelException, HandlerException, ModelInitializationException, 
     PipelineException)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
+from JBGFeatureSelection import EmptyFeatureSelectionError
 from JBGDarkNumbers import DarkNumberCalculator
 from JBGDarkNumberReporting import build_dark_number_intervals, format_dark_number_interval
 from JBGEstimatorInput import (
@@ -2021,6 +2022,12 @@ class ModelHandler:
             cv_results = self.get_cross_val_score(
                 pipeline=pipe, dh=dh, kfold=kfold, algorithm=algorithm
             )
+
+        except EmptyFeatureSelectionError as ex:
+            # An expected, fold-specific unusable candidate belongs in the
+            # result table/CSV, without an unrelated downstream fit traceback.
+            cv_results = np.array([np.nan])
+            exception = f"UNUSABLE: {ex}"
 
         except Exception as ex:
             cv_results = np.array([np.nan])

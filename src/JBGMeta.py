@@ -19,6 +19,7 @@ from imblearn.under_sampling import (ClusterCentroids, CondensedNearestNeighbour
                                      RandomUnderSampler, TomekLinks,
                                      RepeatedEditedNearestNeighbours)
 from JBGTransformers import (NNClassifier3PL, MLPKerasClassifier)
+from JBGFeatureSelection import NonEmptySelectFromModel
 from JBGJaxTransformers import FlaxClassifier
 from sklearn.decomposition import NMF, PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
@@ -622,7 +623,7 @@ class Algorithm(MetaEnum):
 
     def do_SLSV(self, max_iterations: int, size: int)-> Pipeline:
         return Pipeline([
-            ('feature_selection', SelectFromModel(LinearSVC(max_iter=max_iterations, penalty="l1", dual=False))),
+            ('feature_selection', NonEmptySelectFromModel(LinearSVC(max_iter=max_iterations, penalty="l1", dual=False))),
             ('classification', LinearSVC(max_iter=max_iterations, penalty="l2", dual=True))])
 
     def do_SVC(self, max_iterations: int, size: int):

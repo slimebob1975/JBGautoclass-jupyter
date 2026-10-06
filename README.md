@@ -60,6 +60,10 @@ Matching covers the data source/table/target, training shape/input container, fe
 
 The log states whether an estimate is uncalibrated or learned from matching completed searches, reports the sample count and observed factor range, and keeps the actual/estimate percentage comparison. The observed range describes historical variability; it is not a confidence interval. Completion logs additionally report candidate mean fit costs, scoring, actual refit time and the remaining CV/dispatch phase. Startup/dispatch/contention are not separately measured. Calibration adds no training fits and does not change search parameters, scores, worker policy or model selection. Failed searches and ordinary-fit fallback do not contribute history. Windows verification of calibrated repeat-run forecasts remains pending.
 
+### Empty feature selections (121)
+
+Stacked Linear SVC (`SLSV`) first selects features with an L1 LinearSVC. If that selector retains no columns in a training fold, the CV table/CSV shows `UNUSABLE: SelectFromModel(LinearSVC) selected 0 of ...` with threshold details and suggested actions. The downstream classifier is not fitted for that fold, and other model candidates continue. Consider another preprocessing/model combination and inspect the training data's usable signal or regularization; this result alone does not establish that the dataset is flawed. The check adds no fits and keeps selection inside the CV training folds. Valid selections and previously saved models retain their behavior.
+
 ## How to use JBG
 To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
 
