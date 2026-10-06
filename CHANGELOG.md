@@ -1,5 +1,11 @@
 # Revision log – JBGAutoClassification
 
+## 120 — Prediction-only completion-mail configuration
+
+- Preserve the current runtime `Config.Mail` object when prediction-only startup merges a saved model configuration. Model artifacts intentionally keep runtime mail settings out of persisted metadata, so the previous merge silently replaced GUI/CLI notification settings with the sanitized defaults before the completion task ran. SQL/runtime and model semantics are otherwise unchanged.
+- Treat an absent recipient, invalid recipient, or absent SMTP server as an explicit notification-disabled/misconfigured state. These cases now skip email without labelling the successful classification/prediction as an error, and a missing (`None`) environment value is handled safely. SMTP connection/send failures remain reported as actual mail errors.
+- Added focused regression coverage for runtime-mail preservation and the missing/invalid recipient paths. Runtime verification should include a fresh-kernel prediction-only reload with a configured recipient, plus one run with notifications deliberately left blank.
+
 ## 119 — Flat source tree and repository-root logs
 
 - Move every tracked application module/resource from `src/JBGclassification/` directly into `src/`. Update the root notebook's import, pytest source path, resource/test paths, runner commands, fixture instructions and benchmark documentation. Keep SQL/config/GUI resources, CSVs, timing history, model files and Keras sidecars at their corresponding locations inside the flattened `src/` tree; model/algorithm behavior and stored enum values are unchanged.

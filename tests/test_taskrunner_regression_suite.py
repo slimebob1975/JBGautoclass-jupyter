@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from JBGTaskRunner import TaskRunner, get_tasks
+from JBGTaskRunner import TaskRunner, get_tasks, send_email
 
 
 class StubConfig:
@@ -134,6 +134,79 @@ def test_regular_run_keeps_completion_email_task():
     tasks = get_tasks(TaskListConfig())
 
     assert tasks[-1] == "send_completetion_email"
+
+
+class MailLogger:
+    def __init__(self):
+        self.info = []
+
+    def print_info(self, *args):
+        self.info.append(" ".join(str(arg) for arg in args))
+
+
+def test_completion_email_keeps_missing_recipient_as_non_error_state(monkeypatch):
+    def smtp_must_not_be_called(*args, **kwargs):
+        raise AssertionError("SMTP should not be opened without a configured recipient")
+
+    monkeypatch.setattr("JBGTaskRunner.smtplib.SMTP", smtp_must_not_be_called)
+    logger = MailLogger()
+    mail = SimpleNamespace(smtp_server="smtp.example", notification_email="")
+
+    sent = send_email(mail, logger, "subject", "text", "<p>html</p>")
+
+    assert sent is False
+    assert logger.info == [
+        "Completion email skipped: no notification recipient is configured. "
+        "Set DEFAULT_NOTIFICATION_EMAIL to enable completion notifications."
+    ]
+
+
+def test_completion_email_handles_none_recipient_without_exception(monkeypatch):
+    def smtp_must_not_be_called(*args, **kwargs):
+        raise AssertionError("SMTP should not be opened without a configured recipient")
+
+    monkeypatch.setattr("JBGTaskRunner.smtplib.SMTP", smtp_must_not_be_called)
+    logger = MailLogger()
+    mail = SimpleNamespace(smtp_server="smtp.example", notification_email=None)
+
+    sent = send_email(mail, logger, "subject", "text", "<p>html</p>")
+
+    assert sent is False
+    assert "no notification recipient is configured" in logger.info[0]
+
+
+def test_completion_email_reports_invalid_recipient_as_configuration_state(monkeypatch):
+    def smtp_must_not_be_called(*args, **kwargs):
+        raise AssertionError("SMTP should not be opened with an invalid recipient")
+
+    monkeypatch.setattr("JBGTaskRunner.smtplib.SMTP", smtp_must_not_be_called)
+    logger = MailLogger()
+    mail = SimpleNamespace(smtp_server="smtp.example", notification_email="not-an-email")
+
+    sent = send_email(mail, logger, "subject", "text", "<p>html</p>")
+
+    assert sent is False
+    assert logger.info == [
+        "Completion email skipped: the configured notification recipient is invalid. "
+        "Check DEFAULT_NOTIFICATION_EMAIL."
+    ]
+
+
+def test_completion_email_reports_missing_smtp_as_configuration_state(monkeypatch):
+    def smtp_must_not_be_called(*args, **kwargs):
+        raise AssertionError("SMTP should not be opened without a configured server")
+
+    monkeypatch.setattr("JBGTaskRunner.smtplib.SMTP", smtp_must_not_be_called)
+    logger = MailLogger()
+    mail = SimpleNamespace(smtp_server="", notification_email="runtime@example.test")
+
+    sent = send_email(mail, logger, "subject", "text", "<p>html</p>")
+
+    assert sent is False
+    assert logger.info == [
+        "Completion email skipped: no SMTP server is configured. "
+        "Set DEFAULT_SMTP_SERVER to enable completion notifications."
+    ]
 
 
 def test_regular_run_can_calculate_dark_numbers_without_displaying_mispredictions():

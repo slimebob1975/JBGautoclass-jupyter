@@ -98,15 +98,40 @@ def send_email(mail_config, logger: Logger, subject: str, text_body: str, html_b
     msg["Subject"] = subject
     msg["From"] = "no-reply@jbg.se"
 
-    recipients = mail_config.notification_email
+    recipients = getattr(mail_config, "notification_email", None)
     if isinstance(recipients, (list, tuple)):
         dest = list(recipients)
+    elif recipients is None:
+        dest = []
     else:
         dest = [recipients]
 
-    valid_dest = [recipient for recipient in dest if Helpers.is_valid_email(recipient)]
+    configured_dest = [
+        str(recipient).strip()
+        for recipient in dest
+        if recipient is not None and str(recipient).strip()
+    ]
+    if not configured_dest:
+        logger.print_info(
+            "Completion email skipped: no notification recipient is configured. "
+            "Set DEFAULT_NOTIFICATION_EMAIL to enable completion notifications."
+        )
+        return False
+
+    valid_dest = [recipient for recipient in configured_dest if Helpers.is_valid_email(recipient)]
     if not valid_dest:
-        logger.print_info("Error sending completion mail: no valid recipient(s).")
+        logger.print_info(
+            "Completion email skipped: the configured notification recipient is invalid. "
+            "Check DEFAULT_NOTIFICATION_EMAIL."
+        )
+        return False
+
+    host = str(getattr(mail_config, "smtp_server", "") or "").strip()
+    if not host:
+        logger.print_info(
+            "Completion email skipped: no SMTP server is configured. "
+            "Set DEFAULT_SMTP_SERVER to enable completion notifications."
+        )
         return False
 
     msg["To"] = ", ".join(valid_dest)
@@ -114,7 +139,6 @@ def send_email(mail_config, logger: Logger, subject: str, text_body: str, html_b
     msg.add_alternative(html_body, subtype="html")
 
     try:
-        host = mail_config.smtp_server
         port = getattr(mail_config, "smtp_port", 25)
         use_starttls = getattr(mail_config, "use_starttls", port in (587,))
         username = getattr(mail_config, "username", None)

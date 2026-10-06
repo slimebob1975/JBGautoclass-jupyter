@@ -896,6 +896,10 @@ class Config:
             saved_config.connection.data_table = config.connection.data_table
             saved_config.io.model_name = config.io.model_name
             saved_config.debug.data_limit = config.debug.data_limit
+            # Mail settings are runtime configuration and are intentionally not
+            # persisted in model metadata.  Keep the current GUI/CLI values when
+            # a prediction-only run replaces the live config with the saved one.
+            saved_config.mail = copy.deepcopy(config.mail)
         
         return saved_config
 

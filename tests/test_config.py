@@ -392,6 +392,21 @@ class TestConfig:
         assert new_config.mode.dark_number_flip_fraction == pytest.approx(0.15)
         assert new_config == saved_with_valid_iris_config
 
+    def test_load_config_from_model_file_preserves_runtime_mail(
+        self, valid_iris_config
+    ):
+        """Prediction-only model loading keeps live notification settings."""
+        filename = get_fixture_path() / "config-save.sav"
+        valid_iris_config.mail = Config.Mail(
+            smtp_server="smtp.runtime.example",
+            notification_email="runtime@example.test",
+        )
+
+        loaded = Config.load_config_from_model_file(filename, valid_iris_config)
+
+        assert loaded.mail == valid_iris_config.mail
+        assert loaded.mail is not valid_iris_config.mail
+
     def test_load_config_uses_runtime_password_for_sanitized_file(
         self, tmp_path, valid_iris_config, monkeypatch
     ):
