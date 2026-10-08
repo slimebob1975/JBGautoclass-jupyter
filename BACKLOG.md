@@ -3,6 +3,7 @@
 
 ## Current direction
 
+- [ ] Extend the data-limit parameter to accept a whole-number row count (for example `1000`), an explicit percentage including `%` (for example `25%`), or a fractional float between zero and one (for example `0.25`, meaning 25%). Define validation, boundary and rounding behavior explicitly, keep GUI/config parsing consistent, and preserve the chosen format through saved settings and Repeat Last.
 - [X] Run one or more realistic end-to-end classification projects outside the regression suite and let observed product/runtime issues drive the next patches. This revision used repeated targeted real-data runs to drive fixes 031–047.
 - [ ] Treat `Regr. suite` primarily as a regression safety net after changes rather than continuing to expand it by default.
 - [X] Exercise the full real-world lifecycle where practical: Iris was trained on 135 labelled rows, saved, reloaded after a kernel/process restart, and used to predict/write all 15 previously unknown rows after 056 fixed prediction-only loading.
