@@ -1326,7 +1326,7 @@ class TestModelHandler():
         )
 
         step_names = [name for name, _ in pipeline.steps]
-        assert step_names[:4] == ["IMP", "FLT", "SME", "NUG"]
+        assert step_names[:5] == ["IMP", "FLT", "NOS", "SME", "NUG"]
 
         integer_features = np.array([[0, 0], [1, 1], [10, 10], [11, 11]], dtype=np.int64)
         transformed = pipeline.named_steps["FLT"].transform(integer_features)

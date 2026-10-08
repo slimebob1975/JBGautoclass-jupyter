@@ -771,6 +771,17 @@ class Oversampling(MetaEnum):
             Oversampling.SVM,
         )
 
+    def uses_scaled_distances(self) -> bool:
+        """Numerical neighbor-based interpolation uses the selected feature scale.
+
+        SMOTE-NC/SMOTE-N need a separate categorical-data contract; applying a
+        generic scaler first can discard category metadata or interpolate codes.
+        """
+        return self in (
+            Oversampling.SME, Oversampling.ADA, Oversampling.BRD,
+            Oversampling.KMS, Oversampling.SVM,
+        )
+
     def do_NOG(self) -> NonOversampler:
         """ While this return is superfluos, it helps with the listings of oversamplers """
         return self.NonOversampler()

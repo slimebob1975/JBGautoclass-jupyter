@@ -2057,9 +2057,16 @@ class ModelHandler:
             # Then add the feature reduction part of the pipeline between the preprocessor and the estimator
             steps.insert(1, (reduction.name, the_feature_reducer))
 
-            # Finally, put oversampling and undersampling techniques before everything else
+            # Preserve the historical sampler order (oversampling, undersampling).
             steps.insert(0, (oversampler.name, oversampler.get_callable_oversampler()))
             steps.insert(1, (undersampler.name, undersampler.get_callable_undersampler()))
+
+            # Numerical SMOTE-family neighborhoods must see the selected scale.
+            # Fit the scaler on original rows within each training fold, before
+            # generating synthetic rows. Reduction stays after resampling.
+            # Other sampler families retain their existing order/semantics.
+            if oversampler.uses_scaled_distances():
+                steps.insert(0, steps.pop(2))
 
             # Interpolation-based SMOTE-family samplers must receive floating-point
             # features.  With integer input imbalanced-learn preserves the integer dtype
