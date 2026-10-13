@@ -25,6 +25,8 @@ class Logger:
         self.warnings.append(message)
     def print_info(self, *args, **kwargs):
         pass
+    def print_code(self, *args, **kwargs):
+        pass
     def print_dragon(self, *args, **kwargs):
         pass
     def anaconda_debug(self, *args, **kwargs):

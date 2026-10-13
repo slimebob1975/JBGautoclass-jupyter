@@ -21,6 +21,7 @@ from JBGScoring import score_metric_help
         
 from JBGExceptions import GuiWidgetsException
 import Helpers
+from JBGSampling import sampling_names
 
 class WidgetConstant(Enum):
     DATA_NUMERICAL = 1
@@ -373,8 +374,8 @@ class Widgets:
         "preprocess_dropdown": ("NOS", "STA", "MIX", "MAX"),
         "reduction_dropdown": ("NOR", "PCA", "RFE"),
         "scoremetric_dropdown": "balanced_accuracy",
-        "oversampler_dropdown": "NOG",
-        "undersampler_dropdown": "NUG",
+        "oversampler_dropdown": ("NOG",),
+        "undersampler_dropdown": ("NUG",),
         "testdata_slider": 20,
         "iterations_slider": 20000,
         "encryption_checkbox": True,
@@ -399,6 +400,7 @@ class Widgets:
         
         self.default_widgets = self.settings.get("widgets")
         self._migrate_legacy_widget_labels()
+        self._migrate_sampling_widgets()
         self.sections = self.settings.get("sections")
         self.logo_image =  self.get_sibling_file_path(self.settings.get("logo"))
         self.field_statuses = {}
@@ -419,8 +421,8 @@ class Widgets:
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
             "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_target, self.dark_number_method, self.dark_number_alpha, self.dark_number_failure_mode],
             "feature_importance": [self.feature_importance_checkbox, self.feature_importance_repeats],
-            "algorithm": [self.preprocess_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
-            "data_handling": [self.oversampler_dropdown, self.undersampler_dropdown, self.testdata_slider, self.iterations_slider],
+            "algorithm": [self.preprocess_dropdown, self.oversampler_dropdown, self.undersampler_dropdown, self.reduction_dropdown, self.algorithm_dropdown, self.scoremetric_dropdown],
+            "data_handling": [self.testdata_slider, self.iterations_slider],
             "text_handling": [self.categorize_checkbox, self.categorize_columns, self.encryption_checkbox, self.filter_checkbox, self.ngram_range_dropdown],
             "debug": [self.data_limit, self.show_info_checkbox, self.num_variables],
             "progress": [self.progress_bar, self.progress_label]
@@ -430,6 +432,26 @@ class Widgets:
         # satisfies the GUI's "Unique id" contract for the current table.
         self.datatype_dict = None
         self.unique_id_columns = []
+
+    def _migrate_sampling_widgets(self) -> None:
+        """Upgrade old local settings without changing the selected methods."""
+        for name, enum_type, fallback in (
+            ("oversampler_dropdown", Oversampling, Oversampling.NOG),
+            ("undersampler_dropdown", Undersampling, Undersampling.NUG),
+        ):
+            definition = self.default_widgets[name]
+            definition["type"] = "SelectMultiple"
+            params = definition.setdefault("params", {})
+            params["value"] = sampling_names(params.get("value"), enum_type, fallback)
+            params["rows"] = 4
+            params["tooltip"] = (
+                "Select one or more methods (Ctrl/Cmd-click); include no sampling "
+                "to compare it with active methods. Each selected pair is evaluated."
+                + (" Random R20/R10/R05/R02 cap majority rows at 20/10/5/2 times "
+                   "the smallest training-fold class; RND uses full balancing. "
+                   "Already less imbalanced folds keep their rows."
+                   if name == "undersampler_dropdown" else "")
+            )
 
     def _migrate_legacy_widget_labels(self) -> None:
         """Migrate exact legacy labels while preserving user-customized text."""
@@ -698,8 +720,8 @@ class Widgets:
             "categorize_checkbox": config.use_categorization(),
             "categorize_columns":  config.get_categorical_text_column_names(),
             "testdata_slider": config.get_test_size_percentage(),
-            "oversampler_dropdown": config.get_oversampler_abbreviation(),
-            "undersampler_dropdown": config.get_undersampler_abbreviation(),
+            "oversampler_dropdown": tuple(config.get_oversampler_abbreviations()),
+            "undersampler_dropdown": tuple(config.get_undersampler_abbreviations()),
             "dark_numbers_checkbox": config.should_calculate_dark_numbers(),
             "feature_importance_checkbox": config.should_calculate_feature_importance(),
             "feature_importance_repeats": config.get_feature_importance_repeats(),
@@ -826,8 +848,8 @@ class Widgets:
                 "preprocess_dropdown": tuple(mode.preprocessor.get_abbreviations()),
                 "reduction_dropdown": tuple(mode.feature_selection.get_abbreviations()),
                 "scoremetric_dropdown": mode.scoring.name,
-                "oversampler_dropdown": mode.oversampler.name,
-                "undersampler_dropdown": mode.undersampler.name,
+                "oversampler_dropdown": tuple(sampling_names(getattr(mode, "oversamplers", None), Oversampling, mode.oversampler)),
+                "undersampler_dropdown": tuple(sampling_names(getattr(mode, "undersamplers", None), Undersampling, mode.undersampler)),
                 "testdata_slider": int(round(float(mode.test_size) * 100)),
                 "iterations_slider": mode.max_iterations,
                 "encryption_checkbox": mode.hex_encode,
@@ -1197,8 +1219,10 @@ class Widgets:
                 dark_number_alpha = DarkNumberAlpha[self.dark_number_alpha.value],
                 dark_number_target = str(self.dark_number_target.value or ""),
                 experimental_perturbed_dark_number_fallback = bool(self.dark_number_failure_mode.value),
-                oversampler = Oversampling[self.oversampler_dropdown.value],
-                undersampler = Undersampling[self.undersampler_dropdown.value],
+                oversampler = Oversampling[self.oversampler_dropdown.value[0]] if self.oversampler_dropdown.value else Oversampling.NOG,
+                undersampler = Undersampling[self.undersampler_dropdown.value[0]] if self.undersampler_dropdown.value else Undersampling.NUG,
+                oversamplers = list(self.oversampler_dropdown.value),
+                undersamplers = list(self.undersampler_dropdown.value),
                 algorithm = AlgorithmTuple(self.algorithm_dropdown.value),
                 preprocessor = PreprocessTuple(self.preprocess_dropdown.value),
                 feature_selection = ReductionTuple(self.reduction_dropdown.value),
@@ -1608,7 +1632,10 @@ class Widgets:
         return form
     
     def algorithm_form(self) -> widgets.Box:
-        return self.create_section_form("Model selection", self.forms["algorithm"], widgets.Box)
+        form = self.create_section_form("Model selection", self.forms["algorithm"], widgets.Box)
+        form.children[1].layout.flex_flow = "row wrap"
+        form.children[1].layout.width = "100%"
+        return form
     
     def data_handling_form(self) -> widgets.Box:
         return self.create_section_form("Training data", self.forms["data_handling"], widgets.HBox)
@@ -2109,7 +2136,7 @@ class Widgets:
     
     
     @property
-    def oversampler_dropdown(self) -> widgets.Dropdown:
+    def oversampler_dropdown(self) -> widgets.SelectMultiple:
         name = sys._getframe().f_code.co_name # Current function name
         return self._load_widget(name, calculated_params={
             "options": Oversampling.get_sorted_list()
@@ -2117,7 +2144,7 @@ class Widgets:
         
     
     @property
-    def undersampler_dropdown(self) -> widgets.Dropdown:
+    def undersampler_dropdown(self) -> widgets.SelectMultiple:
         name = sys._getframe().f_code.co_name # Current function name
         return self._load_widget(name, calculated_params={
             "options":Undersampling.get_sorted_list()

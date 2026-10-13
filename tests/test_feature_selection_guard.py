@@ -177,13 +177,13 @@ def test_cv_result_records_empty_selection_and_next_candidate_can_win():
     state = _SpotCheckState(best_num_components=2, best_rfe_feature_selection=2)
     rows, success = candidate(handler, X, y, state)
     assert not success and state.trained_pipeline is None
-    assert len(rows) == 1 and np.isnan(rows[0][4]) and np.isnan(rows[0][5])
+    assert len(rows) == 1 and np.isnan(rows[0][6]) and np.isnan(rows[0][7])
     assert rows[0][-1].startswith("UNUSABLE: SelectFromModel(LinearSVC) selected 0 of 2")
     assert "Traceback" not in rows[0][-1]
     assert "Try a different preprocessing/model combination" in rows[0][-1]
     rows, success = candidate(handler, X, y, state, algorithm=Algorithm.LSVC)
     assert success and state.best_algorithm is Algorithm.LSVC
-    assert np.isfinite(rows[0][4]) and rows[0][-1] == ""
+    assert np.isfinite(rows[0][6]) and rows[0][-1] == ""
     handler.handler.logger.print_warning.assert_not_called()
 
 

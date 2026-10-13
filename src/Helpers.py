@@ -14,6 +14,7 @@ import numpy as np
 import pandas
 import IPython.display
 from scipy import sparse as scipy_sparse
+from JBGCVReporting import CV_TARGET_COLUMNS
 
 DOUBLE_UNDERSCORE = "__"
 EMAIL_REGEX = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
@@ -28,6 +29,12 @@ MODEL_PERFORMANCE_COLUMNS = [
     "Elapsed Time",
     "Exception",
 ]
+SAMPLING_MODEL_PERFORMANCE_COLUMNS = ["Oversampling", "Undersampling", *MODEL_PERFORMANCE_COLUMNS]
+
+TARGET_MODEL_PERFORMANCE_COLUMNS = [
+    *SAMPLING_MODEL_PERFORMANCE_COLUMNS[:8], *CV_TARGET_COLUMNS,
+    *SAMPLING_MODEL_PERFORMANCE_COLUMNS[8:],
+]
 
 def build_model_performance_matrix(results: list) -> pandas.DataFrame:
     """Build the CV-only spot-check report.
@@ -37,7 +44,12 @@ def build_model_performance_matrix(results: list) -> pandas.DataFrame:
     ordered by mean CV score and CV standard deviation only; stable sorting preserves
     evaluation order for exact CV ties.
     """
-    matrix = pandas.DataFrame(results, columns=MODEL_PERFORMANCE_COLUMNS)
+    # Accept legacy eight-column reports as well as new sampling-aware rows.
+    schemas = (MODEL_PERFORMANCE_COLUMNS, SAMPLING_MODEL_PERFORMANCE_COLUMNS,
+               TARGET_MODEL_PERFORMANCE_COLUMNS)
+    width = len(results[0]) if results else len(MODEL_PERFORMANCE_COLUMNS)
+    columns = next(schema for schema in schemas if len(schema) == width)
+    matrix = pandas.DataFrame(results, columns=columns)
     return matrix.sort_values(
         by=["Mean cv", "Stdev."],
         ascending=[False, True],
@@ -98,13 +110,13 @@ def ensure_float64(data):
 
     return np.asarray(data, dtype=np.float64)
 
-def create_download_link(filename, title = "Click here to download file: "):  
+def create_download_link(filename, title = "Click here to download file: ", mime_type="text/csv"):
     with open(filename, "rb") as infile:
         data = infile.read()
     b64 = base64.b64encode(data)
     payload = b64.decode()
-    html = '<a download="{filename}" href="data:text/csv;base64,{payload}" target="_blank">{title}</a>'
-    html = html.format(payload=payload,title=title+f' {filename}',filename=Path(filename).name)
+    html = '<a download="{filename}" href="data:{mime_type};base64,{payload}" target="_blank">{title}</a>'
+    html = html.format(payload=payload,title=title+f' {filename}',filename=Path(filename).name,mime_type=mime_type)
     #return IPython.display.HTML(html)
     return html
 

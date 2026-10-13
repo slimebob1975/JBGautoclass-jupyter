@@ -189,6 +189,7 @@ def test_failed_cv_does_not_retry_or_create_success_diagnostics(default_model_ha
 
 def test_prepare_failure_does_not_repeat_cv(default_model_handler, monkeypatch):
     mh, calls = default_model_handler, []
+    mh.handler.config.get_scoring_mechanism = lambda: "accuracy"
     def broken(*args):
         raise RuntimeError('preparation failed')
     def cv_call(*args, **kwargs):
@@ -201,7 +202,11 @@ def test_prepare_failure_does_not_repeat_cv(default_model_handler, monkeypatch):
     original = pipeline()
     mh.get_cross_val_score(original, SimpleNamespace(X_train=pd.DataFrame(X), Y_train=pd.Series(y)),
                            cv, SimpleNamespace(name='MLPC', fit_params={}))
-    assert calls == [(original, 'accuracy')]
+    from JBGCVReporting import TargetCVScorer
+    from sklearn.metrics import accuracy_score
+    assert len(calls) == 1 and calls[0][0] is original
+    assert isinstance(calls[0][1], TargetCVScorer)
+    assert calls[0][1].scorer._score_func is accuracy_score
 
 
 def test_report_failure_keeps_successful_cv_score(default_model_handler, monkeypatch):

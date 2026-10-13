@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import enum
-from functools import total_ordering
+from functools import partial, total_ordering
 from typing import Callable, Iterable, Protocol, Type, TypeVar, Union
 
 import numpy as np
@@ -20,6 +20,7 @@ from imblearn.under_sampling import (ClusterCentroids, CondensedNearestNeighbour
                                      RepeatedEditedNearestNeighbours)
 from JBGTransformers import (NNClassifier3PL, MLPKerasClassifier)
 from JBGFeatureSelection import NonEmptySelectFromModel
+from JBGSampling import partial_undersampling_counts
 from JBGJaxTransformers import FlaxClassifier
 from sklearn.decomposition import NMF, PCA, FastICA, TruncatedSVD
 from sklearn.discriminant_analysis import (LinearDiscriminantAnalysis,
@@ -54,6 +55,7 @@ from sklearn.svm import SVC, LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from Types import Detecter, Estimator, Transform
 from JBGScoring import SCORING_DISPLAY_NAMES
+from JBGFinalSearch import extra_trees_search_parameters
 
 PCA_VARIANCE_EXPLAINED = 0.95
 LOWER_LIMIT_REDUCTION = 100
@@ -419,6 +421,9 @@ class AlgorithmGridSearchParams(MetaEnum):
 
     @property
     def parameters(self):
+        if self.name == "ETC":
+            # Keep historical Enum values stable for persisted model metadata.
+            return extra_trees_search_parameters()
         if self.name == "TOSS":
             # Keep revision-116 enum values stable for existing saved artifacts.
             # Apply the current Sigmoid+SGD search policy only at runtime.
@@ -824,6 +829,10 @@ class Oversampling(MetaEnum):
 class Undersampling(MetaEnum):
     NUG = "No Undersampling"
     RND = "Random"
+    R20 = "Random (minority:majority 1:20)"
+    R10 = "Random (minority:majority 1:10)"
+    R05 = "Random (minority:majority 1:5)"
+    R02 = "Random (minority:majority 1:2)"
     CCS = "Cluster Centroids"
     CNN = "Condensed Nearest Neighbours"
     ENN = "Edited Nearest Neighours"
@@ -852,6 +861,18 @@ class Undersampling(MetaEnum):
 
     def do_RND(self) -> RandomUnderSampler:
         return RandomUnderSampler(sampling_strategy = 'auto')
+
+    def do_R20(self) -> RandomUnderSampler:
+        return RandomUnderSampler(sampling_strategy=partial(partial_undersampling_counts, majority_multiple=20))
+
+    def do_R10(self) -> RandomUnderSampler:
+        return RandomUnderSampler(sampling_strategy=partial(partial_undersampling_counts, majority_multiple=10))
+
+    def do_R05(self) -> RandomUnderSampler:
+        return RandomUnderSampler(sampling_strategy=partial(partial_undersampling_counts, majority_multiple=5))
+
+    def do_R02(self) -> RandomUnderSampler:
+        return RandomUnderSampler(sampling_strategy=partial(partial_undersampling_counts, majority_multiple=2))
     
     def do_CCS(self) -> ClusterCentroids:
         return ClusterCentroids(sampling_strategy = 'auto')

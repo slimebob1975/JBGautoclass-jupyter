@@ -361,18 +361,20 @@
             }
         },
         "oversampler_dropdown": {
-            "type": "Dropdown",
+            "type": "SelectMultiple",
             "params": {
-                "value": "NOG",
+                "value": ["NOG"],
+                "rows": 4,
                 "disabled": true,
                 "description": "Oversampler:",
                 "tooltip": "Use oversampling techniques for training data"
             }
         },
         "undersampler_dropdown": {
-            "type": "Dropdown",
+            "type": "SelectMultiple",
             "params": {
-                "value": "NUG",
+                "value": ["NUG"],
+                "rows": 4,
                 "disabled": true,
                 "description": "Undersampl.:",
                 "tooltip": "Use undersampling techniques for training data"

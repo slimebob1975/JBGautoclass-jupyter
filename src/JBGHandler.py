@@ -7,6 +7,8 @@ import traceback
 from dataclasses import dataclass, field
 from datetime import datetime
 from math import ceil
+from collections import Counter
+from itertools import product
 from typing import Callable, Protocol, Union, Any
 import os
 import json
@@ -32,6 +34,8 @@ from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estima
                      Oversampling, Undersampling, NgramRange)
 from JBGExceptions import (DatasetException, MissingScorerException, ModelException, HandlerException, ModelInitializationException, 
     PipelineException)
+from JBGCVReporting import (CV_TARGET_COLUMNS, TargetCVScorer, resolve_cv_target,
+                           summarize_target_cv, annotate_grid_target_cv, partition_signature)
 from JBGTransformers import MLPKerasClassifier, TextDataToNumbersConverter
 from JBGFeatureSelection import EmptyFeatureSelectionError
 from JBGDarkNumbers import DarkNumberCalculator
@@ -59,6 +63,7 @@ from JBGTrainingTiming import (
     format_grid_search_timing_diagnostics,
 )
 from JBGNystroemRuntime import prepare_runtime_cv, build_runtime_rows, format_runtime_summary
+from JBGFinalSearch import include_extra_trees_baseline, final_search_summary
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
 from pickle import PicklingError
@@ -512,24 +517,25 @@ class DatasetHandler:
 
         
     def shuffle_dataset(self, dataset: pd.DataFrame) -> pd.DataFrame:
-        """ Impossible to test, due to random being random """
-        # Shuffle the upper part of the data, such that all already classified material are
-        # put in random order keeping the unclassified material in the bottom
-        # Notice: perhaps this operation is now obsolete, since we now use a NEWID() in the 
-        # data query above
-        # Addendum: När man får in data så vill man att de olika klasserna i träningsdata 
-        # ska vara jämt utspridda över hela träningsdata, inte först 50 iris-setosa och sen 
-        # 50 iris-virginica, etc. Utan man vill ha lite slumpmässig utspridning. 
-        # Kommentera bort rnd-mojen och kolla med att köra dataset.head(20) eller något sånt, 
-        # om du tycker att class-variablen är hyfsat jämt utspridd för iris före och efter bortkommenteringen, ta bort rnd
-        self.handler.logger.print_formatted_info("Shuffling data")
-        num_un_pred = self.get_num_unpredicted_rows(dataset) 
-        num_lines = len(dataset.index)
-        dataset['rnd'] = np.concatenate([np.random.rand(num_lines - num_un_pred), [num_lines]*num_un_pred])
-        dataset.sort_values(by = 'rnd', inplace = True )
-        dataset.drop(['rnd'], axis = 1, inplace = True )
+        """Canonical ID order makes the seeded split independent of fetch order.
 
-        return dataset
+        Keep known labels first and unknown labels last for downstream positional
+        separation. No feature/label values or global random state are changed.
+        """
+        id_column = self.handler.config.get_id_column_name()
+        class_column = self.handler.config.get_class_column_name()
+        # Reuse the same ID normalization as split_keys_from_dataset.
+        ids = dataset[id_column].apply(Helpers.get_rid_of_decimals)
+        unknown = dataset[class_column].map(lambda value: value is None or not str(value).strip())
+        order = pd.DataFrame({"unknown": unknown.to_numpy(), "id": ids.to_numpy(),
+                              "position": np.arange(len(dataset))})
+        positions = order.sort_values(["unknown", "id"], kind="mergesort")["position"]
+        self.handler.logger.print_info(
+            f"Dataset order: known labels first, then unique ID {id_column!r}; "
+            "holdout split seed=42, stratified CV seed=1. Same fetched rows/IDs/labels "
+            "and split settings reproduce the partitions; row-limited SQL subsets may change."
+        )
+        return dataset.iloc[positions.to_numpy()].copy()
     
     def split_keys_from_dataset(self, dataset: pd.DataFrame, id_column: str) -> tuple[pd.DataFrame, pd.Series]:
         # Use the unique id column from the data as the index column and take a copy, 
@@ -851,6 +857,14 @@ class DatasetHandler:
                 self.X, self.Y, test_size = self.handler.config.get_test_size(), shuffle = True, random_state = 42, 
                 stratify = self.Y)
 
+            for label, X_part, Y_part in (("training", self.X_train, self.Y_train),
+                                          ("holdout", self.X_validation, self.Y_validation)):
+                self.handler.logger.print_info(
+                    f"Split {label}: rows={len(Y_part)}, class counts={dict(Counter(Y_part))}, "
+                    f"ID/label SHA256={partition_signature(X_part.index, Y_part)}. "
+                    "Signatures identify membership and labels, not feature values."
+                )
+
             if getattr(self.handler.config, "should_calculate_feature_importance", lambda: False)():
                 # Snapshot the held-out original input columns before text/category conversion.
                 # The optional analysis later reuses only the fitted training converter.
@@ -928,13 +942,15 @@ class Model:
 class _SpotCheckState:
     best_num_components: int
     best_rfe_feature_selection: int
-    best_cv_score: float = 0.0
+    best_cv_score: float = -np.inf
     best_stdev: float = 1.0
     trained_pipeline: Pipeline = None
     best_algorithm: Algorithm = None
     best_preprocessor: Preprocess = None
     best_reduction: Reduction = None
     best_cv_timing: CVTiming = None
+    best_oversampler: Oversampling = None
+    best_undersampler: Undersampling = None
 
 
 @dataclass
@@ -1061,21 +1077,13 @@ class ModelHandler:
             raise ModelException(f"Something unknown went wrong on training model: {str(e)}")
 
     def get_model_from(self, dh: DatasetHandler, cross_validation_filepath: str) -> Model:
-        
-        # Prepare for k-folded cross evaluation
-        # Calculate the number of possible folds of the training data. The k-value is chosen such that
-        # each fold contains at least one sample of the smallest class
-        k_train = int(Helpers.find_smallest_class_number(dh.Y) * 1.0-self.handler.config.get_test_size())
-        k = min(self.STANDARD_K_FOLDS, k_train)
-        
-        # If oversampler is turned on, we need to have at least two samples of the smallest class in each fold
-        if self.handler.config.use_oversampling():
-            k2 = int(float(k_train) / self.STANDARD_NUM_SAMPLES_PER_FOLD_FOR_OVERSAMPLER)
-            if k2 < 2:
-                self.handler.logger.print_warning(f"The smallest class is of size {k}, which is too small for using oversampler in cross-validation. Turning oversampler off!") 
-                self.handler.config.set_oversampler(Oversampling.NOG)
-            else:
-                k = min(k, k2)
+        # Use the actual training target, not an approximation from full data.
+        # Every sampling candidate shares these folds; infeasible pairs are reported
+        # individually rather than disabling oversampling or changing the CV split.
+        class_counts = Counter(dh.Y_train)
+        if len(class_counts) < 2 or min(class_counts.values()) < 2:
+            raise ModelException("Cross-validation requires at least two training rows in each of two classes.")
+        k = min(self.STANDARD_K_FOLDS, min(class_counts.values()))
         if k < self.STANDARD_K_FOLDS:
             self.handler.logger.print_key_value_pair("Using non-standard k-value for cross-validation of algorithms", k)
         
@@ -1111,6 +1119,7 @@ class ModelHandler:
                         dh.X_train,
                         dh.Y_train)
                     self.handler.logger.print_code("Optimized parameters after grid search", model.pipeline.get_params(deep=False))
+                    self._export_final_search_results(grid_cv_info, cross_validation_filepath)
                 except ModelException as ex:
                     # In case all estimators failed to fit, use ordinary fit as fallback
                     self.handler.logger.print_info(f"Grid search failed: {str(ex)}. Using ordinary fit as fallback for: {model_name}. " + \
@@ -1159,14 +1168,17 @@ class ModelHandler:
         
     
     # For pipelines with a specified fit search parameters list, do like this instead
-    def model_parameter_grid_search(self, model: Pipeline, search_params: dict, n_splits: int, X: pd.DataFrame, Y: pd.DataFrame) -> Pipeline:
-
+    def model_parameter_grid_search(self, model: Pipeline, search_params: Union[dict, list], n_splits: int, X: pd.DataFrame, Y: pd.DataFrame) -> Pipeline:
+        self._last_grid_search_summary = None
         try:
+            search_params, baseline = include_extra_trees_baseline(model, search_params)
             # Make a stratified kfold
             kfold = StratifiedKFold(n_splits=n_splits, random_state=1, shuffle=True)
 
             # Create a scoring mechanism compatible with the observed target shape.
-            scorer = self._resolve_scoring_mechanism_for_target(Y)
+            selection_scorer = self._resolve_scoring_mechanism_for_target(Y)
+            target, target_error = self._resolve_cv_diagnostic_target(Y)
+            scorer = TargetCVScorer(selection_scorer, target, target_error)
 
             # Compute how many independent jobs we really have
             n_param_combos = len(ParameterGrid(search_params))
@@ -1192,7 +1204,7 @@ class ModelHandler:
                 search_params, 
                 scoring=scorer, 
                 cv=kfold, 
-                refit=True, 
+                refit="score",
                 verbose=0,
                 error_score='raise',
                 n_jobs_desired=n_jobs_desired)
@@ -1259,12 +1271,77 @@ class ModelHandler:
                         f"Grid search timing calibration could not be saved: {timing_error}. "
                         "The trained model and search results are retained."
                     )
-            # Choose best estimator from grid search
-            return search.best_estimator_, pd.DataFrame.from_dict(search.cv_results_)
+            # Report the scores used for selection, not only runtime and estimator repr.
+            results = pd.DataFrame.from_dict(search.cv_results_)
+            try:
+                annotate_grid_target_cv(results, n_splits, target, target_error)
+            except Exception as report_error:
+                self.handler.logger.print_warning(
+                    f"GridSearch target diagnostics unavailable: {report_error}. The trained model is retained."
+                )
+            try:
+                configured_metric = getattr(getattr(self.handler.config, "mode", None), "scoring", None)
+                metric = getattr(configured_metric, "full_name", None) or str(scorer)
+                selected = getattr(self, "_selected_cv_score", None)
+                spot_check_score = selected[1] if selected is not None and selected[0] is model else None
+                summary, baseline_rows = final_search_summary(search, baseline, metric, spot_check_score)
+                target_report = (results.iloc[search.best_index_][CV_TARGET_COLUMNS].to_dict()
+                                 if all(column in results for column in CV_TARGET_COLUMNS)
+                                 else summarize_target_cv({}, target, target_error))
+                summary["target_cv"] = {
+                    key: value.item() if isinstance(value, np.generic) else value
+                    for key, value in target_report.items()
+                }
+                self._last_grid_search_summary = summary
+                results["is_baseline"] = [i in baseline_rows for i in range(len(results))]
+                results["is_selected"] = [i == search.best_index_ for i in range(len(results))]
+                self.handler.logger.print_info(
+                    f"Final GridSearch CV ({metric}): best mean={summary['best_cv_mean']:.6g}, "
+                    f"fold std={summary['best_cv_std']:.6g}; {summary['candidate_count']} candidates x "
+                    f"{summary['cv_folds']} training folds. Final holdout excluded."
+                )
+                self.handler.logger.print_info(f"Final GridSearch target CV: {summary['target_cv']}")
+                if summary['baseline_cv_mean'] is not None:
+                    self.handler.logger.print_info(
+                        f"Extra Trees baseline in the same GridSearch: mean={summary['baseline_cv_mean']:.6g}, "
+                        f"fold std={summary['baseline_cv_std']:.6g}; "
+                        f"best-minus-baseline={summary['best_minus_baseline']:.6g}."
+                    )
+                if spot_check_score is not None:
+                    self.handler.logger.print_info(f"Selected spot-check CV mean before tuning: {spot_check_score:.6g}.")
+                self.handler.logger.print_code("GridSearch selected parameters", search.best_params_)
+            except Exception as report_error:
+                self.handler.logger.print_warning(
+                    f"Final GridSearch diagnostics unavailable: {report_error}. The trained model is retained."
+                )
+            return search.best_estimator_, results
         
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise ModelException(f"Something went wrong on training picked model with grid parameter search: {str(e)}") from e
+
+    def _export_final_search_results(self, results, cross_validation_filepath):
+        """Optional downloads must not invalidate successful search/refit."""
+        stem = os.path.splitext(str(cross_validation_filepath))[0]
+        try:
+            csv_path = stem + '_grid_search.csv'
+            Helpers.save_matrix_as_csv(results, csv_path)
+            self.handler.logger.print_code(
+                'Final GridSearch CV results', Helpers.create_download_link(csv_path, title=''),
+            )
+        except Exception as export_error:
+            self.handler.logger.print_warning(f"Final GridSearch CSV export unavailable: {export_error}.")
+        summary = getattr(self, '_last_grid_search_summary', None)
+        if summary is not None:
+            try:
+                json_path = stem + '_grid_search_summary.json'
+                with open(json_path, 'w', encoding='utf-8') as output:
+                    json.dump(summary, output, ensure_ascii=False, indent=2, default=str)
+                self.handler.logger.print_code(
+                    'Final GridSearch summary', Helpers.create_download_link(json_path, title='', mime_type='application/json'),
+                )
+            except Exception as export_error:
+                self.handler.logger.print_warning(f"Final GridSearch summary export unavailable: {export_error}.")
 
     def _report_grid_search_estimate(self, combinations: int, folds: int, workers: int,
                                     history=None, timing_key=None):
@@ -1613,14 +1690,23 @@ class ModelHandler:
 
     def _build_spot_check_result(self, preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
                                  components: int, cv_score: float, cv_stdev: float,
-                                 elapsed_time: float, failure: str) -> list:
-        return [
+                                 elapsed_time: float, failure: str,
+                                 oversampler: Oversampling = None, undersampler: Undersampling = None,
+                                 diagnostics: dict = None) -> list:
+        sampling = [oversampler.name, undersampler.name] if oversampler is not None and undersampler is not None else []
+        target_values = []
+        if sampling:
+            target_values = ([diagnostics[column] for column in CV_TARGET_COLUMNS]
+                             if diagnostics is not None else
+                             [np.nan] * (len(CV_TARGET_COLUMNS) - 1) + ["Unavailable: skipped or failed"])
+        return sampling + [
             preprocessor.name,
             reduction.name,
             self._format_algorithm_name(algorithm),
             components,
             cv_score,
             cv_stdev,
+            *target_values,
             elapsed_time,
             failure,
         ]
@@ -1702,6 +1788,7 @@ class ModelHandler:
                 cv_stdev=np.nan,
                 elapsed_time=0.0,
                 failure=failure,
+                oversampler=oversampler, undersampler=undersampler,
             )], False
 
         max_features_selection = dh.X.shape[1]
@@ -1790,6 +1877,9 @@ class ModelHandler:
                 num_components=num_components,
                 failure=failure,
             )
+            if state.trained_pipeline is current_pipeline and current_pipeline is not None:
+                state.best_oversampler = oversampler
+                state.best_undersampler = undersampler
             if candidate_is_stable:
                 candidate_success = True
 
@@ -1802,6 +1892,10 @@ class ModelHandler:
                 cv_stdev=temp_cv_stdev,
                 elapsed_time=elapsed_time,
                 failure=failure,
+                oversampler=oversampler, undersampler=undersampler,
+                diagnostics=(self._last_cv_diagnostics[1]
+                             if getattr(self, "_last_cv_diagnostics", None) is not None
+                             and self._last_cv_diagnostics[0] is current_pipeline else None),
             ))
 
             if rfe_search_stalled:
@@ -1820,16 +1914,21 @@ class ModelHandler:
             "algorithm": state.best_algorithm,
             "preprocessor": state.best_preprocessor,
             "num_selected_features": state.best_rfe_feature_selection,
+            "oversampler": state.best_oversampler or self.handler.config.mode.oversampler,
+            "undersampler": state.best_undersampler or self.handler.config.mode.undersampler,
         }
         self.handler.config.update_attributes(type="mode", updates=updates)
 
         best_model = self.model
+        best_model.oversampler = updates["oversampler"]
+        best_model.undersampler = updates["undersampler"]
         best_model.preprocess = state.best_preprocessor
         best_model.reduction = state.best_reduction
         best_model.algorithm = state.best_algorithm
         best_model.pipeline = state.trained_pipeline
         best_model.n_features_out = state.best_num_components
         self._selected_cv_timing = state.best_cv_timing
+        self._selected_cv_score = (state.trained_pipeline, state.best_cv_score)
         return best_model
 
     # Spot Check Algorithms.
@@ -1838,6 +1937,8 @@ class ModelHandler:
     def spot_check_machine_learning_models(self, dh: DatasetHandler, cross_validation_filepath: str, k: int = 10) -> Model:
         self._last_cv_timing = None
         self._selected_cv_timing = None
+        self._selected_cv_score = None
+        self._last_grid_search_summary = None
         self._nystroem_runtime_rows = []
         standard_progress_text = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot-checking ML algorithms")
@@ -1848,11 +1949,27 @@ class ModelHandler:
             max_iterations=self.handler.config.get_max_iterations(),
         )
         preprocessors = self.handler.config.get_callable_preprocessors()
-        oversampler = self.handler.config.mode.oversampler
-        undersampler = self.handler.config.mode.undersampler
+        oversamplers = [Oversampling[name] for name in self.handler.config.get_oversampler_abbreviations()]
+        undersamplers = [Undersampling[name] for name in self.handler.config.get_undersampler_abbreviations()]
 
         progress_key = "training_model"
-        number_of_tries = len(algorithms) * len(reductions) * len(preprocessors)
+        number_of_tries = (len(oversamplers) * len(undersamplers)
+                           * len(algorithms) * len(reductions) * len(preprocessors))
+        self.handler.logger.print_info(
+            f"Sampling comparison: {len(oversamplers)} over x {len(undersamplers)} under x "
+            f"{len(preprocessors)} scaling x {len(reductions)} reduction x {len(algorithms)} algorithms "
+            f"= {number_of_tries} candidates; {k} shared stratified CV folds. "
+            "New pipelines seed samplers and unset estimator random states with 42."
+        )
+        target, target_error = self._resolve_cv_diagnostic_target(dh.Y_train)
+        self.handler.logger.print_info(
+            f"CV target diagnostics: {str(target)!r}; pooled held-out-fold precision/recall/F1 "
+            "and predicted-positive/support/row totals. Target is the configured Dark Number "
+            "label (also when Dark Numbers are disabled), or the least frequent training "
+            "label when no target is configured. Candidate ranking uses the selected metric."
+        )
+        if target_error:
+            self.handler.logger.print_warning(target_error + "; CV target diagnostics are unavailable.")
         self.handler.logger.start_inline_progress(
             progress_key,
             "Checking & Training models",
@@ -1866,6 +1983,14 @@ class ModelHandler:
         )
         list_of_results = []
         kfold = self._create_spot_check_kfold(k)
+        minority_count = min(Counter(dh.Y_train).values())
+        neighbor_limit = minority_count - ceil(minority_count / k) - 1
+        if neighbor_limit < 5 and any(o not in (Oversampling.NOG, Oversampling.RND) for o in oversamplers):
+            self.handler.logger.print_warning(
+                f"Minority support in the smallest CV training fold is {neighbor_limit + 1}. "
+                f"Synthetic samplers use at most {max(0, neighbor_limit)} neighbors; "
+                "infeasible pairs are reported individually. The selected pipeline retains its neighbor settings."
+            )
 
         success = False
         repetitions = 0
@@ -1877,43 +2002,36 @@ class ModelHandler:
             repetitions += 1
             tries = -1
 
-            for preprocessor, preprocessor_callable in preprocessors:
-                for reduction, reduction_callable in reductions:
-                    # Preserve the existing configuration behavior for each reduction round.
-                    state.best_rfe_feature_selection = dh.X.shape[1]
-                    first_rfe_round = reduction == Reduction.RFE
+            for ((preprocessor, preprocessor_callable), oversampler, undersampler,
+                 (reduction, reduction_callable), (algorithm, algorithm_callable)) in product(
+                    preprocessors, oversamplers, undersamplers, reductions, algorithms):
+                tries += 1
+                self.handler.logger.update_inline_progress(
+                    progress_key, tries, "Percent models checked"
+                )
+                if not self.should_run_computation(reduction, algorithm):
+                    # Preserve a row for incompatible RFE combinations as well.
+                    list_of_results.append(self._build_spot_check_result(
+                        preprocessor, reduction, algorithm, dh.X_train.shape[1],
+                        np.nan, np.nan, 0.0, "SKIPPED: incompatible reduction/algorithm",
+                        oversampler, undersampler,
+                    ))
+                    continue
 
-                    for algorithm, algorithm_callable in algorithms:
-                        tries += 1
-                        if not self.should_run_computation(reduction, algorithm):
-                            continue
-
-                        self.handler.logger.print_progress(
-                            message=f"{standard_progress_text} ({preprocessor.name}-{reduction.name}-{algorithm.name})"
-                        )
-                        if not first_rfe_round:
-                            self.handler.logger.update_inline_progress(
-                                progress_key, tries, "Percent models checked"
-                            )
-                        else:
-                            first_rfe_round = False
-
-                        candidate_results, candidate_success = self._evaluate_spot_check_candidate(
-                            dh=dh,
-                            preprocessor=preprocessor,
-                            preprocessor_callable=preprocessor_callable,
-                            reduction=reduction,
-                            reduction_callable=reduction_callable,
-                            algorithm=algorithm,
-                            algorithm_callable=algorithm_callable,
-                            oversampler=oversampler,
-                            undersampler=undersampler,
-                            kfold=kfold,
-                            state=state,
-                        )
-                        list_of_results.extend(candidate_results)
-                        if candidate_success:
-                            success = True
+                self.handler.logger.print_progress(
+                    message=f"{standard_progress_text} ({preprocessor.name}-{oversampler.name}-"
+                            f"{undersampler.name}-{reduction.name}-{algorithm.name})"
+                )
+                candidate_results, candidate_success = self._evaluate_spot_check_candidate(
+                    dh=dh, preprocessor=preprocessor, preprocessor_callable=preprocessor_callable,
+                    reduction=reduction, reduction_callable=reduction_callable,
+                    algorithm=algorithm, algorithm_callable=algorithm_callable,
+                    oversampler=oversampler, undersampler=undersampler,
+                    kfold=kfold, state=state,
+                )
+                list_of_results.extend(candidate_results)
+                if candidate_success:
+                    success = True
 
         self.handler.logger.clear_last_printed_result_line()
         self.handler.logger.print_test_performance(list_of_results, cross_validation_filepath)
@@ -2001,10 +2119,14 @@ class ModelHandler:
                 n_features=dh.X_train.shape[1],
             )
 
+        class_count = min(Counter(dh.Y_train).values())
+        neighbor_limit = class_count - ceil(class_count / kfold.get_n_splits()) - 1
+        if oversampler not in (Oversampling.NOG, Oversampling.RND) and neighbor_limit < 1:
+            raise PipelineException("Sampling needs at least two minority rows in every CV training fold.")
         return self.get_pipeline(
             reduction, feature_reducer, algorithm, estimator, preprocessor, scaler,
             oversampler, undersampler, dh.X_train.shape[1], num_features,
-            min(5, kfold.get_n_splits())
+            min(5, neighbor_limit) if oversampler not in (Oversampling.NOG, Oversampling.RND) else None
         )
 
     # Build pipeline and perform cross validation
@@ -2012,6 +2134,7 @@ class ModelHandler:
         estimator: Estimator, scaler: Transform, oversampler: Oversampling, undersampler: Undersampling, kfold: StratifiedKFold, \
         dh: DatasetHandler, num_features: int):
 
+        self._last_cv_diagnostics = None
         exception = ""
         pipe = None
         try:
@@ -2039,10 +2162,16 @@ class ModelHandler:
     def get_pipeline(self, reduction: Reduction, feature_reducer: Transform, algorithm: Algorithm, \
                 estimator: Estimator, preprocessor: Preprocess, scaler: Transform, \
                 oversampler: Oversampling, undersampler: Undersampling, max_features: int, \
-                rfe_features: int = None, max_k_neighbors: int = 2) -> Union[Pipeline, Estimator]:
+                rfe_features: int = None, max_k_neighbors: int = None) -> Union[Pipeline, Estimator]:
        
         try:
             # First, put estimator/algorithm in pipeline
+            # CV clones share fixed randomness without mutating enum factory objects.
+            estimator = clone(estimator)
+            seed_params = {name: 42 for name, value in estimator.get_params(deep=True).items()
+                           if (name == "random_state" or name.endswith("__random_state")) and value is None}
+            if seed_params:
+                estimator.set_params(**seed_params)
             steps = [(algorithm.name, estimator)]
             
             # Secondly, add the other steps to the pipeline BEFORE the algorithm
@@ -2057,15 +2186,25 @@ class ModelHandler:
             # Then add the feature reduction part of the pipeline between the preprocessor and the estimator
             steps.insert(1, (reduction.name, the_feature_reducer))
 
-            # Preserve the historical sampler order (oversampling, undersampling).
-            steps.insert(0, (oversampler.name, oversampler.get_callable_oversampler()))
-            steps.insert(1, (undersampler.name, undersampler.get_callable_undersampler()))
+            # Keep over before under and disambiguate the shared RND enum name.
+            over = oversampler.get_callable_oversampler()
+            under = undersampler.get_callable_undersampler()
+            for sampler in (over, under):
+                if "random_state" in sampler.get_params(deep=False):
+                    sampler.set_params(random_state=42)
+            if max_k_neighbors is not None:
+                params = over.get_params(deep=False)
+                for key in ("k_neighbors", "n_neighbors"):
+                    if key in params and isinstance(params[key], int):
+                        over.set_params(**{key: min(params[key], max_k_neighbors)})
+            under_name = undersampler.name if undersampler.name != oversampler.name else f"UNDER_{undersampler.name}"
+            steps.insert(0, (oversampler.name, over))
+            steps.insert(1, (under_name, under))
 
-            # Numerical SMOTE-family neighborhoods must see the selected scale.
-            # Fit the scaler on original rows within each training fold, before
-            # generating synthetic rows. Reduction stays after resampling.
-            # Other sampler families retain their existing order/semantics.
-            if oversampler.uses_scaled_distances():
+            # Every numerical sampling alternative fits scaling on original rows.
+            # This also scales neighbor undersampling when no SMOTE is selected.
+            # Categorical SMOTE paths retain their historical separate contract.
+            if oversampler not in (Oversampling.SNC, Oversampling.SNN):
                 steps.insert(0, steps.pop(2))
 
             # Interpolation-based SMOTE-family samplers must receive floating-point
@@ -2125,10 +2264,18 @@ class ModelHandler:
         return steps
 
     # Make cross val score evaluation
+    def _resolve_cv_diagnostic_target(self, Y):
+        getter = getattr(self.handler.config, "get_dark_number_target", None)
+        requested = getter() if callable(getter) else ""
+        return resolve_cv_target(Y, requested)
+
     def get_cross_val_score(self, pipeline: Pipeline, dh: DatasetHandler, kfold: StratifiedKFold, algorithm: Algorithm) -> np.ndarray:
         self._last_cv_timing = None
+        self._last_cv_diagnostics = None
         # Now make kfolded cross evaluation. Notice that fit_params are not used right now (just placeholder for future revisions)
         scorer_mechanism = self._resolve_scoring_mechanism_for_target(dh.Y_train)
+        target, target_error = self._resolve_cv_diagnostic_target(dh.Y_train)
+        diagnostic_scorer = TargetCVScorer(scorer_mechanism, target, target_error)
 
         fit_params = {}
         
@@ -2144,10 +2291,10 @@ class ModelHandler:
         n_jobs_desired = kfold.get_n_splits()
         estimator_X = Helpers.prepare_estimator_input(dh.X_train, prefer_numpy=True)
         self._last_execution_n_jobs = None
-        cv_pipeline, cv_scorer, profiled = pipeline, scorer_mechanism, False
+        cv_pipeline, cv_scorer, profiled = pipeline, diagnostic_scorer, False
         try:
             cv_pipeline, cv_scorer, profiled = prepare_runtime_cv(
-                pipeline, scorer_mechanism, getattr(algorithm, 'name', ''),
+                pipeline, diagnostic_scorer, getattr(algorithm, 'name', ''),
             )
         except Exception as profile_error:
             self.handler.logger.print_warning(
@@ -2170,6 +2317,12 @@ class ModelHandler:
             wall_seconds,
         )
         self._last_cv_timing = (pipeline, timing)
+        try:
+            self._last_cv_diagnostics = (pipeline, summarize_target_cv(cv_results, target, target_error))
+        except Exception as report_error:
+            self.handler.logger.print_warning(
+                f"Target CV diagnostics unavailable: {report_error}. CV score retained."
+            )
         if profiled:
             try:
                 rows = build_runtime_rows(pipeline, cv_results, self._last_execution_n_jobs, wall_seconds)

@@ -57,10 +57,13 @@ def test_numerical_neighbor_samplers_place_scaling_before_both_samplers(sampler)
 
 
 @pytest.mark.parametrize("sampler", [Oversampling.NOG, Oversampling.RND, Oversampling.SNC, Oversampling.SNN])
-def test_other_sampler_families_keep_existing_order(sampler):
+def test_numerical_random_paths_scale_first_and_categorical_paths_keep_order(sampler):
     names = [name for name, _ in pipeline(sampler).steps]
     float_step = ["FLT"] if sampler.requires_float_input() else []
-    assert names == ["IMP", *float_step, sampler.name, "NUG", "STA", "LRN"]
+    expected = (["IMP", *float_step, sampler.name, "NUG", "STA", "LRN"]
+                if sampler in (Oversampling.SNC, Oversampling.SNN)
+                else ["IMP", "STA", sampler.name, "NUG", "LRN"])
+    assert names == expected
     assert not sampler.uses_scaled_distances()
 
 

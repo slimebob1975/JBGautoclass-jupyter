@@ -113,6 +113,10 @@ mode = {
     # Use undersampling techniques
     "undersampler": "<undersampler>",
 
+    # Candidate methods; scalar fields above describe the current selected model.
+    "oversamplers": "<oversamplers>",
+    "undersamplers": "<undersamplers>",
+
     # What algorithm to use
     "algorithm": "<algorithm>",
 

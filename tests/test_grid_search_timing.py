@@ -13,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 
 import JBGHandler as handler_module
 from JBGHandler import ModelHandler, _SpotCheckState
+from JBGMeta import Oversampling, Undersampling
 from JBGTrainingTiming import (
     CVTiming, GridSearchEstimate, estimate_grid_search, format_approximate_duration,
     format_actual_duration, format_grid_search_comparison,
@@ -82,7 +83,8 @@ def test_human_duration(seconds, display):
 def make_handler(workers=1):
     handler = ModelHandler(handler=SimpleNamespace(
         STANDARD_DESIRED_N_JOBS=workers,
-        config=SimpleNamespace(debug=False, io=SimpleNamespace(verbose=False)),
+        config=SimpleNamespace(debug=False, io=SimpleNamespace(verbose=False),
+                               mode=SimpleNamespace(oversampler=Oversampling.NOG, undersampler=Undersampling.NUG)),
         logger=Mock(),
     ))
     handler._resolve_scoring_mechanism_for_target = lambda y: "balanced_accuracy"

@@ -96,7 +96,8 @@ class RuntimeScorer:
         except Exception:
             metrics = dict.fromkeys(METRICS, np.nan)
             available = 0.0
-        return {'score': score, 'runtime_available': available, **metrics}
+        scores = score if isinstance(score, dict) else {'score': score}
+        return {**scores, 'runtime_available': available, **metrics}
 
 
 def prepare_runtime_cv(pipeline, scorer, algorithm_name):

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable, Type, TypeVar, Union
 
 import Helpers
+from JBGSampling import sampling_names
 from JBGModelPersistence import load_model_config
 from JBGPaths import relocate_saved_config_paths
 from JBGExceptions import ConfigException, ODBCDriverException
@@ -118,6 +119,8 @@ class Config:
         "mode.experimental_perturbed_dark_number_fallback": "<experimental_perturbed_dark_number_fallback>",
         "mode.oversampler": "<oversampler>",
         "mode.undersampler": "<undersampler>",
+        "mode.oversamplers": "<oversamplers>",
+        "mode.undersamplers": "<undersamplers>",
         "mode.algorithm": "<algorithm>",
         "mode.preprocessor": "<preprocessor>",
         "mode.feature_selection": "<feature_selection>",
@@ -407,6 +410,8 @@ class Config:
         experimental_perturbed_dark_number_fallback: bool = True
         oversampler: Oversampling = field(default_factory=Oversampling.defaultOversampler)
         undersampler: Undersampling = field(default_factory=Undersampling.defaultUndersampler)
+        oversamplers: list[str] = None
+        undersamplers: list[str] = None
         algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple.defaultAlgorithmTuple)        
         preprocessor: PreprocessTuple = field(default_factory=PreprocessTuple.defaultPreprocessTuple)
         feature_selection: ReductionTuple = field(default_factory=ReductionTuple.defaultReductionTuple)
@@ -521,6 +526,15 @@ class Config:
             if not (isinstance(self.undersampler, Undersampling)):
                 raise TypeError(f"Argument undersampler is invalid: {str(self.undersampler)}")
 
+            # getattr keeps older pickled Mode instances compatible.
+            for field_name, enum_type, fallback in (
+                ("oversamplers", Oversampling, self.oversampler),
+                ("undersamplers", Undersampling, self.undersampler),
+            ):
+                selection = getattr(self, field_name, None)
+                if selection is not None:
+                    setattr(self, field_name, sampling_names(selection, enum_type, fallback))
+
             for item in [
                 "use_stop_words",
                 "hex_encode",
@@ -563,6 +577,8 @@ class Config:
                 ),
                 "Dark-number injected label-noise fraction": self.dark_number_flip_fraction,
                 "Oversampling technique":                self.oversampler.full_name,
+                "Oversampling candidates":               ", ".join(sampling_names(getattr(self, "oversamplers", None), Oversampling, self.oversampler)),
+                "Undersampling candidates":              ", ".join(sampling_names(getattr(self, "undersamplers", None), Undersampling, self.undersampler)),
                 "Undersampling technique":               self.undersampler.full_name,
                 "Algorithms of choice":                  self.algorithm.full_name,
                 "Preprocessing method of choice":        self.preprocessor.full_name,
@@ -808,7 +824,11 @@ class Config:
                 replace = getattr(self, location[0])
             else:
                 head = getattr(self, location[0])
-                replace = getattr(head, location[1])
+                replace = getattr(head, location[1], None)
+                if tag == "mode.oversamplers":
+                    replace = self.get_oversampler_abbreviations()
+                elif tag == "mode.undersamplers":
+                    replace = self.get_undersampler_abbreviations()
 
                 # SQL passwords are runtime-only credentials. Generated config files
                 # intentionally contain an empty password and may use JBG_SQL_PASSWORD
@@ -980,6 +1000,8 @@ class Config:
                 experimental_perturbed_dark_number_fallback=experimental_perturbed_dark_number_fallback,
                 oversampler=Oversampling[module.mode["oversampler"]],
                 undersampler=Undersampling[module.mode["undersampler"]],
+                oversamplers=module.mode.get("oversamplers") or None,
+                undersamplers=module.mode.get("undersamplers") or None,
                 algorithm=AlgorithmTuple.from_string(module.mode["algorithm"]),
                 preprocessor=PreprocessTuple.from_string(module.mode["preprocessor"]),
                 feature_selection=ReductionTuple.from_string(module.mode["feature_selection"]),
@@ -1362,6 +1384,12 @@ class Config:
 
         return [item.name]
     
+    def get_oversampler_abbreviations(self) -> list[str]:
+        return sampling_names(getattr(self.mode, "oversamplers", None), Oversampling, self.mode.oversampler)
+
+    def get_undersampler_abbreviations(self) -> list[str]:
+        return sampling_names(getattr(self.mode, "undersamplers", None), Undersampling, self.mode.undersampler)
+
     def get_oversampler_abbreviation(self) -> str:
         item = self.mode.oversampler
         if isinstance(item, tuple):

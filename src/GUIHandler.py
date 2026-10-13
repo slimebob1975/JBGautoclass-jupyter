@@ -30,6 +30,7 @@ from JBGMeta import (
     AlgorithmTuple, NgramRange, Oversampling, PreprocessTuple, ReductionTuple,
     ScoreMetric, Undersampling,
 )
+from JBGSampling import sampling_names
 from SQLDataLayer import DataLayer
 from GUI.Widgets import Widgets
 
@@ -282,6 +283,8 @@ class GUIHandler:
                 "experimental_perturbed_dark_number_fallback": mode.experimental_perturbed_dark_number_fallback,
                 "oversampler": mode.oversampler.name,
                 "undersampler": mode.undersampler.name,
+                "oversamplers": sampling_names(getattr(mode, "oversamplers", None), Oversampling, mode.oversampler),
+                "undersamplers": sampling_names(getattr(mode, "undersamplers", None), Undersampling, mode.undersampler),
                 "algorithm": mode.algorithm.get_abbreviations(),
                 "preprocessor": mode.preprocessor.get_abbreviations(),
                 "feature_selection": mode.feature_selection.get_abbreviations(),
@@ -348,6 +351,8 @@ class GUIHandler:
                 ),
                 oversampler=Oversampling[mode["oversampler"]],
                 undersampler=Undersampling[mode["undersampler"]],
+                oversamplers=mode.get("oversamplers"),
+                undersamplers=mode.get("undersamplers"),
                 algorithm=AlgorithmTuple(mode["algorithm"]),
                 preprocessor=PreprocessTuple(mode["preprocessor"]),
                 feature_selection=ReductionTuple(mode["feature_selection"]),
@@ -535,6 +540,8 @@ class GUIHandler:
         mode = config_params["mode"]
         mode.oversampler = Oversampling[profile["oversampler"]]
         mode.undersampler = Undersampling[profile["undersampler"]]
+        mode.oversamplers = None
+        mode.undersamplers = None
         mode.scoring = ScoreMetric[profile["scoring"]]
         mode.algorithm = AlgorithmTuple(profile["algorithms"])
         mode.preprocessor = PreprocessTuple(profile["preprocessors"])
@@ -568,6 +575,9 @@ class GUIHandler:
         connection.data_text_columns = list(dataset["text_columns"])
         connection.data_numerical_columns = list(dataset["numerical_columns"])
 
+        # Suite profiles stay bounded even when the manual GUI compares samplers.
+        config_params["mode"].oversamplers = None
+        config_params["mode"].undersamplers = None
         config_params["mode"].category_text_columns = []
         config_params["debug"].data_limit = dataset["row_count"]
 
