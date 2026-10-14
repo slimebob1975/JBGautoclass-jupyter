@@ -1,5 +1,13 @@
 # Revision log – JBGAutoClassification
 
+## 129 — Experimental command-line original-column feature search
+
+- Add `scripts/feature_search.py` and reusable `JBGFeatureSearch.py`: read last GUI settings/current config, SQL labelled rows or a raw CSV; offer a no-SQL synthetic smoke test. Reuse JBG validation/canonical ordering and reserve its normal holdout. No application model/config/Repeat Last/database writes or notifications.
+- Fix logistic regression/scaling settings and rank original-column subsets by mean-fold MCC. Evaluate a full-column reference, up to 100 unique random subsets across explicit sizes, then bounded single-column add/remove refinement. Cache duplicates, record unusable candidates and convergence warnings, enforce a per-search evaluation cap and export pooled target-class metrics/counts. The recommendation remains exploratory.
+- Fit a fresh selected-column JBG converter, imputer and scaler inside every inner training fold. Repeat the entire selection procedure in outer training folds and compare its selected subset with full columns on paired outer validation folds. Optional group CV keeps supplied group IDs together and excludes that column from features. No final JBG holdout scoring.
+- Export candidate checkpoints, nested validation, accepted refinement moves, equal-size best/worst contrasts, selection frequency, a final column recommendation and a run summary. Preserve partial results after interruption/failure. Document the separate interpretation of search scores, nested procedure validation and final-subset evidence; defer the requested Data selection checkbox to runtime verification.
+- Validation: 90 distinct focused checks pass (35 new search checks and 55 existing reporting/selection/importance/persistence checks). Synthetic CLI execution with real sklearn and focused JBG text-converter tests cover fold isolation, metrics, budgets, caching, reproducibility, refinement, input/config compatibility and failure checkpoints. The local harness omits unused SQL/neural runtimes; SQL fetch routing is mocked and CSV/config/split behavior is exercised. Windows/Voilà, live SQL authentication and production-dataset runtime remain pending.
+
 ## 128 — Compare partial random-undersampling profiles
 
 - Add R20/R10/R05/R02 profiles with minority:majority caps 1:20/1:10/1:5/1:2 to the existing sampler multiselect. Preserve the meanings of RND (full balancing) and NUG (default/no sampling), old configs and saved model pipelines.

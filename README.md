@@ -8,6 +8,10 @@ spot-checking of algorithms for a particular dataset. For the time being JBG is 
 to a Windows and SQL Server environment and works for numerical, categorical and textual
 data. It is partly a Building AI course project.
 
+### Experimental original-column feature search (129)
+
+Start with `python scripts/feature_search.py --demo --trials 8 --sizes 2 4 6 --inner-folds 3 --outer-folds 3 --top-sets 1 --refine-rounds 1 --max-evaluations 30`. Then run `python scripts/feature_search.py --last-run --target Inkorrekt` from the repo root using the JBG Python environment. The diagnostic searches original-column subsets with logistic regression, validates the entire procedure through nested CV within the training partition, and preserves the normal JBG holdout. It exports recommendations without applying them. See [experimental feature-search instructions](docs/experimental_feature_search.md) for input alternatives, fit budgets, group CV, result interpretation and CSVs to return. The planned Data selection checkbox is deferred until command-line runtime verification.
+
 ## Development records
 
 - `CHANGELOG.md` is the append-only history of numbered development revisions and their verification status.
