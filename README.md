@@ -8,9 +8,9 @@ spot-checking of algorithms for a particular dataset. For the time being JBG is 
 to a Windows and SQL Server environment and works for numerical, categorical and textual
 data. It is partly a Building AI course project.
 
-### Experimental original-column feature search (129)
+### Experimental original-column feature search (129/130)
 
-Start with `python scripts/feature_search.py --demo --trials 8 --sizes 2 4 6 --inner-folds 3 --outer-folds 3 --top-sets 1 --refine-rounds 1 --max-evaluations 30`. Then run `python scripts/feature_search.py --last-run --target Inkorrekt` from the repo root using the JBG Python environment. The diagnostic searches original-column subsets with logistic regression, validates the entire procedure through nested CV within the training partition, and preserves the normal JBG holdout. It exports recommendations without applying them. See [experimental feature-search instructions](docs/experimental_feature_search.md) for input alternatives, fit budgets, group CV, result interpretation and CSVs to return. The planned Data selection checkbox is deferred until command-line runtime verification.
+Start with `python scripts/feature_search.py --demo --trials 8 --sizes 2 4 6 --inner-folds 3 --outer-folds 3 --top-sets 1 --refine-rounds 1 --max-evaluations 30`. Then run `python scripts/feature_search.py --last-run --target Inkorrekt` from the repo root using the JBG Python environment. The diagnostic searches original-column subsets with a fixed Linear (logistic regression), Non-linear (MLPC), or Tree (Extra Trees) investigative model, validates the entire procedure through nested CV within the training partition, and preserves the normal JBG holdout. `--model-type` selects the family; separate family controls retain the legacy Linear defaults. It exports recommendations without applying them. See [experimental feature-search instructions](docs/feature_search_models.md) for input alternatives, fit budgets, group CV, result interpretation and CSVs to return. Revision 130 adds structured progress and study provenance for the planned three-mode "Feature selection modelling" panel; GUI/profile integration and Windows runtime verification remain pending.
 
 ## Development records
 

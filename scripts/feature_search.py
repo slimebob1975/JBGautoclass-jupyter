@@ -38,8 +38,18 @@ def parser():
     p.add_argument('--min-gain', type=float, default=0.005, help='Minimum mean MCC gain to continue greedy refinement')
     p.add_argument('--seed', type=int, default=42, help='Search/nested-CV seed; reserved JBG holdout always uses 42')
     p.add_argument('--scaler', choices=['STA', 'MAX'], default='STA')
-    p.add_argument('--C', type=float, default=1.)
-    p.add_argument('--max-iterations', type=int, default=2000)
+    p.add_argument('--model-type', choices=['Linear', 'Non-linear', 'Tree'], default='Linear',
+                   help='Fixed investigative model, independent of the normal classifier')
+    p.add_argument('--C', type=float, default=1., help='Linear inverse regularization strength')
+    p.add_argument('--max-iterations', '--linear-max-iterations', type=int, default=2000,
+                   help='Linear iteration cap; legacy --max-iterations retains its meaning')
+    p.add_argument('--non-linear-max-iterations', type=int, default=2000)
+    p.add_argument('--non-linear-alpha', type=float, default=0.0001)
+    p.add_argument('--non-linear-hidden-layers', type=int, nargs='+', default=[100])
+    p.add_argument('--non-linear-learning-rate', type=float, default=0.001)
+    p.add_argument('--tree-n-estimators', type=int, default=100)
+    p.add_argument('--tree-max-depth', type=int, help='Omit for unrestricted depth')
+    p.add_argument('--tree-min-samples-leaf', type=int, default=1)
     p.add_argument('--output', help='New/empty output directory; default timestamped feature-search folder')
     return p
 
@@ -89,8 +99,12 @@ def load_development(args):
         X = pd.DataFrame(values, columns=[f'feature_{i+1}' for i in range(10)], index=np.arange(1, 321))
         y = pd.Series(np.where(labels == 1, 'Inkorrekt', 'Korrekt'), index=X.index)
         train, reserved = train_test_split(np.arange(len(X)), stratify=y, test_size=0.2, random_state=42)
+        args.study_context = dict(project='demo', source_kind='synthetic')
         return X.iloc[train], y.iloc[train], args.target or 'Inkorrekt', {}, partition_signature(X.iloc[reserved].index, y.iloc[reserved])
     config = load_config(args)
+    args.study_context = dict(project=config.name, source_kind='csv' if args.csv else 'sql',
+        source_tables=[f'{config.connection.data_catalog}.{config.connection.data_table}'],
+        class_column=config.get_class_column_name(), id_column=config.get_id_column_name())
     from JBGHandler import JBGHandler
     from JBGLogger import JBGLogger
     from SQLDataLayer import DataLayer
@@ -143,7 +157,12 @@ def main(argv=None):
     options = SearchOptions(trials=args.trials, sizes=tuple(args.sizes), inner_folds=args.inner_folds,
         outer_folds=args.outer_folds, top_sets=args.top_sets, refine_rounds=args.refine_rounds,
         max_evaluations=args.max_evaluations, min_gain=args.min_gain, seed=args.seed,
-        scaler=args.scaler, C=args.C, max_iterations=args.max_iterations)
+        scaler=args.scaler, C=args.C, max_iterations=args.max_iterations, model_type=args.model_type,
+        non_linear_max_iterations=args.non_linear_max_iterations, non_linear_alpha=args.non_linear_alpha,
+        non_linear_hidden_layers=tuple(args.non_linear_hidden_layers),
+        non_linear_learning_rate=args.non_linear_learning_rate,
+        tree_n_estimators=args.tree_n_estimators, tree_max_depth=args.tree_max_depth,
+        tree_min_samples_leaf=args.tree_min_samples_leaf)
     try:
         options.validate()
         X, y, target, text_options, reserved_signature = load_development(args)
@@ -151,24 +170,38 @@ def main(argv=None):
         if missing:
             raise ValueError(f'Unknown excluded columns: {sorted(missing)}')
         groups = None
-        excluded = list(args.exclude)
+        excluded = list(dict.fromkeys(args.exclude))
         if args.group_column:
             if args.group_column not in X:
                 raise ValueError('group-column must be an available original feature column')
             groups = X[args.group_column].copy()
-            excluded.append(args.group_column)
+            if args.group_column not in excluded:
+                excluded.append(args.group_column)
         X = X.drop(columns=excluded)
+        context = dict(getattr(args, 'study_context', {}), excluded_columns=excluded,
+                       group_column=args.group_column or '')
         output = Path(args.output or ROOT / 'output' / ('feature_search_' + datetime.now().strftime('%Y%m%d_%H%M%S_%f')))
-        print(f'Experimental logistic-regression feature search: {len(X)} training rows, '
+        print(f'Experimental {options.model_type} feature search: {len(X)} training rows, '
               f'{X.shape[1]} original columns, classes={dict(Counter(y))}, target={target!r}.')
         print('JBG holdout reserved and unused. No model, settings, database or Repeat Last updates.')
-        bound = (options.outer_folds + 1) * options.max_evaluations * options.inner_folds + 2 * options.outer_folds
-        print(f'Up to {bound} fits; serial execution, one numerical thread. Results: {output}')
-        def progress(message):
-            print('\r' + message.ljust(110), end='', flush=True)
+        from JBGFeatureSearch import model_identity
+        print('Investigative model: ' + json.dumps(model_identity(options), ensure_ascii=False))
+        print(f'Up to {options.planned_fit_upper_bound} fits; serial execution, one numerical thread. Results: {output}')
+        def on_event(event):
+            if event['event'] == 'fit_started':
+                phase = (f'candidate {event["candidate"]}, fold {event["fold"]}/{event["folds"]}'
+                         if event['phase'] == 'inner' else event['model'] + ' outer validation')
+                message = f'{event["scope"]}: {phase}; attempted fits {event["attempted_fits"]}/{event["planned_fit_upper_bound"]}'
+            elif event['event'] == 'candidate_completed':
+                score = 'FAILED' if event['error'] else f'MCC={event["mean_mcc"]:.4f}'
+                message = f'{event["scope"]}: candidate {event["candidate"]}/{event["max_evaluations"]}, {event["n_columns"]} columns, {score}'
+            else:
+                return
+            print('\r' + message.ljust(140), end='', flush=True)
         with threadpool_limits(limits=1):
             result = run_experiment(X, y, target, output, options, text_options, groups,
-                reserved_holdout_signature=reserved_signature, progress=progress)
+                reserved_holdout_signature=reserved_signature, progress=None,
+                on_event=on_event, study_context=context)
         print('\nCompleted. Nested validation:')
         for name, values in result['nested_validation'].items():
             print(f'{name}: MCC={values["mean_mcc"]:.4f}, precision={values["precision"]:.3f}, '
