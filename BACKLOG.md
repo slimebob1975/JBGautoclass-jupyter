@@ -1,7 +1,16 @@
+- [x] Add selectable Random Forest alongside Extra Trees, plus Quick/Standard/Extended/Custom search budgets (revision 135).
+
 
 # Backlog – JBGAutoClassification
 
 ## Current direction
+
+- [X] 134 — Group investigation controls by purpose; permit deterministic, budget-limited adaptive add/remove refinement instead of skipping oversized neighbourhoods; isolate ordinary Start progress text. Keep 66-fit defaults for quick checks pending real-data benchmarking.
+- [ ] Follow up 134 with measured search-budget presets (Quick/Standard/Extended/Custom), richer size coverage for approximately 100 columns, resume/interrupt safeguards, parameter and class-imbalance calibration, and cost measurements for each investigative model family.
+
+- [X] 133H — Allow deleting one saved recommendation from the GUI with explicit two-click confirmation and a deletion audit; preserve active settings and model. Selecting a saved recommendation now reproduces available nested-CV preview metrics, columns and result location without rerunning the study.
+- [ ] Next after 134: evaluate and expand the original-column feature-search strategy/budgets on realistic, high-dimensional, imbalanced data. Examine subset-size coverage, refinement/evaluation cap, algorithm-family costs, class weighting/threshold decisions and stable cross-validation; estimate fits and wall-clock cost before extending defaults.
+
 
 - [X] 133G — Remove external cohort CSV/validation form from Feature selection modelling, retain independent validation as a standalone optional backend capability.
 - [ ] Optional future: redesign external-cohort comparison as a separate advanced research tool if needed, outside the standard recommendation workflow.

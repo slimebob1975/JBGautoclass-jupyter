@@ -1,3 +1,18 @@
+- 135: Add Random Forest to the Tree investigation family and Quick/Standard/Extended/Custom search budget presets; preserve legacy Extra Trees default and settings.
+
+## Revision 134 — budget-aware feature search and grouped controls (2026-10-14)
+
+- Continue deterministic, size-balanced unique random proposals and evaluate a reproducible budget-limited sample of single-column add/remove neighbours when the remaining evaluation cap cannot cover a full neighbourhood. Incomplete neighbourhoods are exploratory, not proof of local optimality.
+- Group GUI settings into Search strategy, Validation and computational budget, and Investigative model parameters without changing stored settings or silently increasing the default 66-fit smoke-test ceiling.
+- Keep data-loading progress calls from updating the ordinary Start progress widgets during feature-selection investigation. Investigation event/status updates remain local to its panel.
+- Add budget-limited refinement regression tests. Advanced budget presets and broader parameter ranges remain for measured real-data tuning.
+
+## Revision 133H — recommendation deletion and saved preview (2026-10-14)
+
+- Saved recommendations show the available original investigation outcome, nested selected-vs-full MCC, target metrics, multiclass macro metrics, recommended original columns and result directory, as well as compatibility review; unavailable historical evidence is labelled unavailable.
+- GUI deletion requires two explicit clicks against the same immutable profile ID, cancels on selection/mode changes, deletes only the chosen candidate JSON, refreshes the dropdown and records a minimal audit entry in `deletions.jsonl`. Active data choices and trained models remain untouched.
+- No feature-search algorithm/budget changes; future realistic-dataset search-space expansion remains in BACKLOG.
+
 ## 133G — Simplify feature-selection GUI
 
 - Remove the optional external-cohort CSV fields, origin field and validation button from the normal GUI in every mode.

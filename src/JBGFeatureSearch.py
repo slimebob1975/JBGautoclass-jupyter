@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.ensemble import ExtraTreesClassifier
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -54,6 +54,7 @@ class SearchOptions:
     non_linear_alpha: float = 0.0001
     non_linear_hidden_layers: tuple = (100,)
     non_linear_learning_rate: float = 0.001
+    tree_estimator: str = 'Extra Trees'
     tree_n_estimators: int = 100
     tree_max_depth: int | None = None
     tree_min_samples_leaf: int = 1
@@ -82,6 +83,8 @@ class SearchOptions:
             raise ValueError('min_gain must be finite and nonnegative')
         if type(self.seed) is not int or not 0 <= self.seed < 2**32:
             raise ValueError('seed must be an integer in [0, 2**32)')
+        if self.tree_estimator not in ('Extra Trees', 'Random Forest'):
+            raise ValueError('tree_estimator must be Extra Trees or Random Forest')
         if self.model_type not in ('Linear', 'Non-linear', 'Tree'):
             raise ValueError('model_type must be Linear, Non-linear or Tree')
         if (not isinstance(self.non_linear_hidden_layers, tuple) or not self.non_linear_hidden_layers
@@ -107,10 +110,13 @@ def make_estimator(options):
             learning_rate_init=options.non_linear_learning_rate,
             max_iter=options.non_linear_max_iterations, random_state=options.seed,
             early_stopping=False, warm_start=False)
-    return 'extra_trees', ExtraTreesClassifier(n_estimators=options.tree_n_estimators,
+    estimator_class = (RandomForestClassifier if options.tree_estimator == 'Random Forest'
+                       else ExtraTreesClassifier)
+    estimator = estimator_class(n_estimators=options.tree_n_estimators,
         max_depth=options.tree_max_depth, min_samples_leaf=options.tree_min_samples_leaf,
         criterion='gini', max_features='sqrt', class_weight=None,
         random_state=options.seed, n_jobs=1, warm_start=False)
+    return ('random_forest' if options.tree_estimator == 'Random Forest' else 'extra_trees'), estimator
 
 
 def model_identity(options):
@@ -267,22 +273,29 @@ def folds_for(X, y, count, seed, groups=None):
 
 
 def random_subsets(columns, options):
-    """Round-robin sizes, unique subsets; exhaustively fill small search spaces."""
+    """Deterministic, size-balanced proposals with broad subset-size coverage.
+
+    Explicit sizes remain authoritative; seed controls reproducibility. The
+    full-column baseline is evaluated separately and never duplicated.
+    """
     columns = tuple(columns)
-    sizes = sorted(set(min(n, len(columns)) for n in options.sizes))
+    n = len(columns)
+    sizes = sorted(set(min(size, n) for size in options.sizes))
     rng = np.random.default_rng(options.seed)
     seen = {columns}
     result = []
-    for i in range(max(100, options.trials * 50)):
+    # Cycle through sizes rather than exhausting a single size. Prioritize
+    # unexplored sizes if small search spaces contain many duplicates.
+    for i in range(max(100, options.trials * 100)):
         size = sizes[i % len(sizes)]
-        chosen = set(rng.choice(len(columns), size=size, replace=False).tolist())
-        subset = tuple(c for j, c in enumerate(columns) if j in chosen)
+        indices = set(rng.choice(n, size=size, replace=False).tolist())
+        subset = tuple(c for j, c in enumerate(columns) if j in indices)
         if subset not in seen:
             seen.add(subset)
             result.append(subset)
         if len(result) == options.trials:
-            break
-    if len(columns) <= 12 and len(result) < options.trials:
+            return result
+    if n <= 12:
         for size in sizes:
             for subset in combinations(columns, size):
                 if subset not in seen:
@@ -388,10 +401,23 @@ class Search:
                     else:
                         continue
                     neighbours.append((proposal, operation, feature))
-                new_count = sum(p not in self.cache for p, _, _ in neighbours)
-                # Do not commit a greedy step after screening an arbitrary partial neighbourhood.
-                if len(self.cache) + new_count > self.options.max_evaluations:
+                remaining = self.options.max_evaluations - len(self.cache)
+                pending = [(p, op, feature) for p, op, feature in neighbours if p not in self.cache]
+                if remaining <= 0:
                     break
+                # A full neighbourhood can require O(number of columns) CV
+                # evaluations. Under a bounded budget, examine a reproducible
+                # subset instead of silently skipping refinement entirely.
+                # Existing cached neighbours always participate in the decision.
+                if len(pending) > remaining:
+                    rng = np.random.default_rng(self.options.seed + 1009 * (round_number + 1) + 7919 * len(base))
+                    indices = sorted(rng.choice(len(pending), size=remaining, replace=False).tolist())
+                    chosen = [pending[i] for i in indices]
+                    allowed = {p for p, _, _ in chosen} | set(self.cache)
+                    neighbours = [entry for entry in neighbours if entry[0] in allowed]
+                    self.emit('refinement_budget_limited', round=round_number + 1,
+                              proposed=len(pending), evaluated_new=len(chosen),
+                              remaining_before=remaining)
                 evaluated = [(self.evaluate(p, 'refine'), operation, feature) for p, operation, feature in neighbours]
                 usable = [(r, op, feature) for r, op, feature in evaluated if r is not None and not r['error']]
                 if not usable:
@@ -405,7 +431,8 @@ class Search:
                     after_columns=best['columns'], before_mcc=current['mean_mcc'],
                     after_mcc=best['mean_mcc'], gain=gain))
                 current = best
-        # All evaluated proposals remain candidates, even when the greedy stopping rule rejects a small gain.
+        # Budget-limited neighbourhoods are exploratory, not proof of a local optimum.
+        # Every evaluated proposal remains eligible for the final ranking.
         best = min((r for r in self.cache.values() if not r['error']), key=ranking)
         return best
 

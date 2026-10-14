@@ -45,7 +45,7 @@ class FeatureSearchGuiContractTests(unittest.TestCase):
         self.assertIn('family == "Tree"', WIDGETS)
 
     def test_apply_is_explicit_and_candidate_only(self):
-        self.assertIn("Apply recommendation", WIDGETS)
+        self.assertIn('"description": "Apply"', WIDGETS)
         self.assertIn('recommendation.get("validation_status") != "candidate"', WIDGETS)
 
     def test_apply_preserves_reviewed_text_and_category_choices(self):
@@ -55,6 +55,26 @@ class FeatureSearchGuiContractTests(unittest.TestCase):
 
     def test_baseline_retained_preview_wording_exists(self):
         self.assertIn("Full-column baseline retained; no improvement found within this search budget.", WIDGETS)
+
+    def test_saved_preview_and_two_step_deletion_wired(self):
+        self.assertIn('self.feature_search_delete_button', WIDGETS)
+        self.assertIn('Confirm delete', WIDGETS)
+        self.assertIn('self.cancel_feature_search_deletion()', WIDGETS)
+        self.assertIn('self.widgets.review_feature_search_candidate()', WIDGETS)
+        self.assertIn('Nested selected MCC ', WIDGETS)
+        self.assertIn('Macro precision ', WIDGETS)
+        self.assertIn('Recommended columns: ', WIDGETS)
+
+    def test_compact_profile_actions_and_tooltip_coverage(self):
+        self.assertIn('profile_row = widgets.HBox(', WIDGETS)
+        self.assertIn('self.feature_search_review_button,', WIDGETS)
+        self.assertIn('self.feature_search_delete_button,', WIDGETS)
+        self.assertIn('action_row = widgets.HBox(', WIDGETS)
+        self.assertNotIn('grid_template_columns="repeat(3, minmax(0, 1fr))"', WIDGETS)
+        for name in ('feature_selection_mode', 'feature_selection_profile',
+                     'feature_search_fit_budget', 'feature_search_rows',
+                     'feature_search_tree_max_depth'):
+            self.assertIn('"' + name + '": "', WIDGETS)
 
     def test_generated_config_contains_mode_model_and_budget_fields(self):
         required = (

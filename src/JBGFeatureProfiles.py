@@ -139,3 +139,33 @@ def profile_display_name(record):
     timestamp = str(record.get("created_utc") or "")[:16].replace("T", " ")
     suffix = " | ".join(part for part in (model, friendly, timestamp) if part)
     return f"{project} | {source} | {suffix} (candidate)"
+
+
+def delete_candidate(store, profile_id):
+    """Delete exactly one UUID-named candidate; never interpret GUI input as a path."""
+    from uuid import UUID
+    try:
+        key = str(UUID(profile_id))
+    except (ValueError, TypeError, AttributeError):
+        raise ValueError("Invalid recommendation identifier")
+    if key != profile_id:
+        raise ValueError("Invalid recommendation identifier")
+    directory = Path(store)
+    path = directory / (key + ".json")
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("Selected recommendation is no longer available")
+    try:
+        record = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError) as ex:
+        raise ValueError("Saved recommendation is unreadable") from ex
+    if (record.get("profile_schema") != PROFILE_SCHEMA or
+            record.get("profile_id") != key or
+            record.get("validation_status") != "candidate"):
+        raise ValueError("Selected file does not match the candidate recommendation")
+    path.unlink()
+    # The audit contains only an identifier and event time, never dataset values or credentials.
+    audit = directory / "deletions.jsonl"
+    with audit.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"event": "candidate_deleted", "profile_id": key,
+                                 "deleted_utc": datetime.now(timezone.utc).isoformat()}) + "\n")
+    return record

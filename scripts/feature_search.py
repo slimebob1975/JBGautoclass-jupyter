@@ -47,6 +47,7 @@ def parser():
     p.add_argument('--non-linear-alpha', type=float, default=0.0001)
     p.add_argument('--non-linear-hidden-layers', type=int, nargs='+', default=[100])
     p.add_argument('--non-linear-learning-rate', type=float, default=0.001)
+    p.add_argument('--tree-estimator', choices=['Extra Trees', 'Random Forest'], default='Extra Trees')
     p.add_argument('--tree-n-estimators', type=int, default=100)
     p.add_argument('--tree-max-depth', type=int, help='Omit for unrestricted depth')
     p.add_argument('--tree-min-samples-leaf', type=int, default=1)
@@ -161,7 +162,7 @@ def main(argv=None):
         non_linear_max_iterations=args.non_linear_max_iterations, non_linear_alpha=args.non_linear_alpha,
         non_linear_hidden_layers=tuple(args.non_linear_hidden_layers),
         non_linear_learning_rate=args.non_linear_learning_rate,
-        tree_n_estimators=args.tree_n_estimators, tree_max_depth=args.tree_max_depth,
+        tree_estimator=args.tree_estimator, tree_n_estimators=args.tree_n_estimators, tree_max_depth=args.tree_max_depth,
         tree_min_samples_leaf=args.tree_min_samples_leaf)
     try:
         options.validate()

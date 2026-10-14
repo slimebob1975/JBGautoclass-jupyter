@@ -156,6 +156,8 @@ class Config:
         "mode.feature_search_non_linear_alpha": "<feature_search_non_linear_alpha>",
         "mode.feature_search_non_linear_hidden_layers": "<feature_search_non_linear_hidden_layers>",
         "mode.feature_search_non_linear_learning_rate": "<feature_search_non_linear_learning_rate>",
+        "mode.feature_search_preset": "<feature_search_preset>",
+        "mode.feature_search_tree_estimator": "<feature_search_tree_estimator>",
         "mode.feature_search_tree_n_estimators": "<feature_search_tree_n_estimators>",
         "mode.feature_search_tree_max_depth": "<feature_search_tree_max_depth>",
         "mode.feature_search_tree_min_samples_leaf": "<feature_search_tree_min_samples_leaf>",
@@ -468,6 +470,8 @@ class Config:
         feature_search_non_linear_alpha: float = 0.0001
         feature_search_non_linear_hidden_layers: list[int] = field(default_factory=lambda: [100])
         feature_search_non_linear_learning_rate: float = 0.001
+        feature_search_tree_estimator: str = "Extra Trees"
+        feature_search_preset: str = "Quick"
         feature_search_tree_n_estimators: int = 100
         feature_search_tree_max_depth: int = 0
         feature_search_tree_min_samples_leaf: int = 1
@@ -546,6 +550,10 @@ class Config:
                 raise TypeError("Argument feature_selection_profile_id must be a string")
             if self.feature_search_model_type not in ("Linear", "Non-linear", "Tree"):
                 raise ValueError("Argument feature_search_model_type must be Linear, Non-linear or Tree")
+            if self.feature_search_preset not in ("Quick", "Standard", "Extended", "Custom"):
+                raise ValueError("Unknown feature search preset")
+            if self.feature_search_tree_estimator not in ("Extra Trees", "Random Forest"):
+                raise ValueError("Unknown feature search tree estimator")
             if self.feature_search_scaler not in ("STA", "MAX"):
                 raise ValueError("Argument feature_search_scaler must be STA or MAX")
             for name in (
@@ -1004,6 +1012,8 @@ class Config:
             "feature_search_linear_c", "feature_search_linear_max_iterations",
             "feature_search_non_linear_max_iterations", "feature_search_non_linear_alpha",
             "feature_search_non_linear_hidden_layers", "feature_search_non_linear_learning_rate",
+            "feature_search_preset", "feature_search_tree_estimator",
+            "feature_search_preset", "feature_search_tree_estimator",
             "feature_search_tree_n_estimators", "feature_search_tree_max_depth",
             "feature_search_tree_min_samples_leaf",
         ):
@@ -1143,6 +1153,8 @@ class Config:
                 feature_search_non_linear_alpha=float(module.mode.get("feature_search_non_linear_alpha", 0.0001)),
                 feature_search_non_linear_hidden_layers=_positive_int_list(module.mode.get("feature_search_non_linear_hidden_layers"), "100"),
                 feature_search_non_linear_learning_rate=float(module.mode.get("feature_search_non_linear_learning_rate", 0.001)),
+                feature_search_preset=module.mode.get("feature_search_preset", "Quick"),
+                feature_search_tree_estimator=module.mode.get("feature_search_tree_estimator", "Extra Trees"),
                 feature_search_tree_n_estimators=int(module.mode.get("feature_search_tree_n_estimators", 100)),
                 feature_search_tree_max_depth=int(module.mode.get("feature_search_tree_max_depth", 0)),
                 feature_search_tree_min_samples_leaf=int(module.mode.get("feature_search_tree_min_samples_leaf", 1)),

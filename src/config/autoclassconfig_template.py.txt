@@ -86,6 +86,8 @@ mode = {
     "feature_search_non_linear_alpha": <feature_search_non_linear_alpha>,
     "feature_search_non_linear_hidden_layers": "<feature_search_non_linear_hidden_layers>",
     "feature_search_non_linear_learning_rate": <feature_search_non_linear_learning_rate>,
+    "feature_search_preset": <feature_search_preset>,
+    "feature_search_tree_estimator": <feature_search_tree_estimator>,
     "feature_search_tree_n_estimators": <feature_search_tree_n_estimators>,
     # 0 means unrestricted depth in the GUI/config representation.
     "feature_search_tree_max_depth": <feature_search_tree_max_depth>,

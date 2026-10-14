@@ -38,12 +38,13 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         raise ValueError("Feature-selection investigation requires a training configuration")
     options.validate()
 
-    datalayer = DataLayer(config=config, logger=logger)
+    investigation_logger = _InvestigationLogger(logger)
+    datalayer = DataLayer(config=config, logger=investigation_logger)
     rows = datalayer.get_dataset()
     if rows is None:
         raise ValueError("No data was fetched for feature-selection investigation")
 
-    handler = JBGHandler(datalayer, config, logger)
+    handler = JBGHandler(datalayer, config, investigation_logger)
     dataset = handler.add_handler("dataset")
     dataset.load_data(rows)
     dataset.separate_dataset()
@@ -94,3 +95,18 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         )
     result["output_directory"] = str(output)
     return result
+
+class _InvestigationLogger:
+    """Forward diagnostics without touching the ordinary Start progress widgets."""
+
+    def __init__(self, logger):
+        self._logger = logger
+
+    def __getattr__(self, name):
+        return getattr(self._logger, name)
+
+    def print_progress(self, message=None, percent=None):
+        return None
+
+    def update_progress(self, percent=None, message=None):
+        return percent

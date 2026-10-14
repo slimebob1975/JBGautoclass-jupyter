@@ -2,7 +2,7 @@
 import tempfile
 import unittest
 from pathlib import Path
-from JBGFeatureProfiles import save_candidate, load_candidates, compatible_for_review, eligible_for_reuse, review_compatibility, find_candidate, profile_display_name
+from JBGFeatureProfiles import save_candidate, load_candidates, compatible_for_review, eligible_for_reuse, review_compatibility, find_candidate, profile_display_name, delete_candidate
 
 
 def example():
@@ -41,6 +41,36 @@ class ProfileTests(unittest.TestCase):
             self.assertTrue(review_compatibility(record, **dict(kw, tables=["other.table"])))
             self.assertTrue(review_compatibility(record, **dict(kw, column_schema=[{"name":"a", "dtype":"text"}])))
             self.assertFalse(eligible_for_reuse(record))
+
+    def test_delete_exact_selected_profile_only_with_audit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            first = save_candidate(directory, example())
+            second = save_candidate(directory, example())
+            original = load_candidates(directory)
+            first_id = first.stem
+            deleted = delete_candidate(directory, first_id)
+            self.assertEqual(deleted["profile_id"], first_id)
+            self.assertFalse(first.exists())
+            self.assertTrue(second.exists())
+            self.assertEqual(len(load_candidates(directory)), 1)
+            audit = Path(directory, "deletions.jsonl").read_text(encoding="utf-8")
+            self.assertIn(first_id, audit)
+            self.assertNotIn("db.table", audit)
+
+    def test_delete_rejects_path_traversal_missing_or_tampered_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = save_candidate(directory, example())
+            for invalid in ("../other", "../../etc/passwd", "not-a-uuid"):
+                with self.assertRaises(ValueError):
+                    delete_candidate(directory, invalid)
+            import json
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            real_id = payload["profile_id"]
+            payload["profile_id"] = "different"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                delete_candidate(directory, real_id)
+            self.assertTrue(path.exists())
 
     def test_display_name_identifies_project_table_and_model(self):
         record = {"provenance": {"context": {"project": "Iris", "source_tables": ["AIdata.jbg_ai.iris"]}},
