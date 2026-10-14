@@ -25,7 +25,6 @@ import Helpers
 from JBGSampling import sampling_names
 from JBGFeatureSearch import SearchOptions
 from JBGFeatureProfiles import save_candidate, load_candidates, find_candidate, review_compatibility, profile_display_name
-from JBGFeatureValidation import evaluate_external_candidate
 
 class WidgetConstant(Enum):
     DATA_NUMERICAL = 1
@@ -237,9 +236,6 @@ class EventHandler:
     def feature_search_review_button_was_clicked(self, button: widgets.Button) -> None:
         self.widgets.review_feature_search_candidate()
 
-    def feature_search_validate_button_was_clicked(self, button: widgets.Button) -> None:
-        self.widgets.validate_feature_search_candidate()
-    
     def algorithm_dropdown_handler(self, change: Bunch) -> None:
         self.check_num_alg_pre_red(change)
 
@@ -491,8 +487,6 @@ class Widgets:
                 self.feature_search_tree_n_estimators, self.feature_search_tree_max_depth,
                 self.feature_search_tree_min_samples_leaf, self.feature_search_investigate_button,
                 self.feature_search_apply_button, self.feature_search_save_button, self.feature_search_review_button,
-                self.feature_search_development_csv, self.feature_search_external_csv,
-                self.feature_search_cohort_description, self.feature_search_validate_button,
             ],
             "checkboxes": [self.train_checkbox, self.predict_checkbox, self.mispredicted_checkbox, self.metas_checkbox],
             "dark_numbers": [self.dark_numbers_checkbox, self.dark_number_target, self.dark_number_method, self.dark_number_alpha, self.dark_number_failure_mode],
@@ -588,10 +582,6 @@ class Widgets:
             "feature_search_apply_button": {"type": "Button", "params": {"description": "Apply recommendation", "button_style": "primary", "disabled": True, "icon": "check"}},
             "feature_search_save_button": {"type": "Button", "params": {"description": "Save candidate", "button_style": "", "disabled": True, "icon": "save"}},
             "feature_search_review_button": {"type": "Button", "params": {"description": "Review profiles", "button_style": "", "disabled": True, "icon": "search"}},
-            "feature_search_development_csv": {"type": "Text", "params": {"value": "", "description": "Development CSV:", "placeholder": "Path to original labelled development rows", "disabled": True, "layout": widgets.Layout(width="95%")}},
-            "feature_search_external_csv": {"type": "Text", "params": {"value": "", "description": "External CSV:", "placeholder": "Path to independent labelled rows", "disabled": True, "layout": widgets.Layout(width="95%")}},
-            "feature_search_cohort_description": {"type": "Textarea", "params": {"value": "", "description": "Cohort origin:", "placeholder": "How was this cohort independently collected?", "disabled": True, "layout": widgets.Layout(width="95%")}},
-            "feature_search_validate_button": {"type": "Button", "params": {"description": "Validate external cohort", "button_style": "warning", "disabled": True, "icon": "shield"}},
         }
         classifier_items = self.settings.get("sections", {}).get("classifier")
         for name, definition in new_widgets.items():
@@ -1838,9 +1828,6 @@ class Widgets:
         reuse = dataset_editable and mode == "reuse"
         self.feature_selection_profile.disabled = not reuse
         self.feature_search_review_button.disabled = not reuse
-        for control in (self.feature_search_development_csv, self.feature_search_external_csv, self.feature_search_cohort_description):
-            control.disabled = not reuse
-        self.feature_search_validate_button.disabled = not (reuse and bool(self.feature_selection_profile.value)) or getattr(self, "_feature_validation_running", False)
         if reuse:
             self.refresh_feature_search_profiles()
 
@@ -2053,78 +2040,6 @@ class Widgets:
         self.feature_search_status.value = "Recommendation reviewed. No columns applied."
         self.sync_feature_selection_controls(preserve_status=True)
 
-    def validate_feature_search_candidate(self) -> None:
-        """Evaluate a frozen candidate using two explicitly provided labelled CSVs.
-
-        CSVs must contain all original features in original order, plus the saved
-        ID and class column names. Neither CSV is fetched from JBG's SQL tables.
-        """
-        if self.feature_selection_mode.value != "reuse" or getattr(self, "_feature_validation_running", False):
-            return
-        self._feature_validation_running = True
-        self.feature_search_validate_button.disabled = True
-        try:
-            record = find_candidate(self._feature_profile_store(), self.feature_selection_profile.value)
-            if record is None:
-                raise ValueError("Select a saved candidate")
-            if not record.get("options") or not record.get("text_options"):
-                raise ValueError("This candidate predates frozen settings; investigate and save it again")
-            params = self.get_config_params()
-            conn = params["connection"]
-            problems = review_compatibility(record, project=params["name"],
-                tables=[f"{conn.data_catalog}.{conn.data_table}"],
-                class_column=conn.class_column, id_column=conn.id_column,
-                columns=list(self.data_columns.options))
-            if problems:
-                raise ValueError("Profile/source mismatch: " + "; ".join(problems))
-            context = record["provenance"]["context"]
-            id_col, label_col = context["id_column"], context["class_column"]
-            original = record["original_columns"]
-            paths = (self.feature_search_development_csv.value.strip(),
-                     self.feature_search_external_csv.value.strip())
-            if not all(paths) or Path(paths[0]).resolve() == Path(paths[1]).resolve():
-                raise ValueError("Choose two different existing CSV files")
-            cohort = self.feature_search_cohort_description.value.strip()
-            if len(cohort) < 20:
-                raise ValueError("Describe external-cohort origin and independence (at least 20 characters)")
-            frames = []
-            for path in paths:
-                if not Path(path).is_file():
-                    raise ValueError("CSV file does not exist: " + path)
-                # Preserve the candidate's saved pandas dtype representation.
-                frame = pd.read_csv(path, sep=";", decimal=",", encoding="utf-8-sig")
-                expected = set(original) | {id_col, label_col}
-                if not expected.issubset(frame.columns):
-                    raise ValueError("CSV missing required columns: " + ", ".join(sorted(expected-set(frame.columns))))
-                if frame[id_col].isna().any() or frame[label_col].isna().any():
-                    raise ValueError("CSV contains missing IDs or class labels")
-                frames.append(frame)
-            dev, ext = frames
-            store = self._feature_profile_store() / "evidence"
-            from uuid import uuid4
-            output = store / (record["profile_id"] + "_" + str(uuid4()) + ".json")
-            self.feature_search_status.value = "Validating external cohort; fitting frozen selected and full models..."
-            report = evaluate_external_candidate(record,
-                dev.loc[:, original], dev[label_col], ext.loc[:, original], ext[label_col],
-                development_ids=dev[id_col], external_ids=ext[id_col],
-                cohort_description=cohort, output_path=output)
-            selected, baseline = report["selected"], report["full_baseline"]
-            self.feature_search_preview.value = (
-                "<b>Independent cohort evidence — review only; NOT approved for reuse.</b><br>"
-                f"Rows: {report['external_rows']}; model: {html.escape(str(report['model_type']))}<br>"
-                f"Selected MCC {selected['mcc']:.4f} vs baseline {baseline['mcc']:.4f} "
-                f"(difference {report['paired_mcc_difference']:+.4f}).<br>"
-                f"Macro F1: selected {selected['macro_f1']:.3f}; baseline {baseline['macro_f1']:.3f}.<br>"
-                f"Evidence: <code>{html.escape(str(output))}</code><br>"
-                "Approval requires separate independent and semantic review. No columns changed."
-            )
-            self.feature_search_status.value = "External validation evidence saved. Candidate remains ineligible for reuse."
-        except Exception as ex:
-            self.feature_search_status.value = "External validation failed: " + html.escape(type(ex).__name__ + ": " + str(ex))
-        finally:
-            self._feature_validation_running = False
-            self.sync_feature_selection_controls(preserve_status=True)
-
     def save_feature_search_candidate(self) -> None:
         """Save evidence as a candidate; never make it eligible for profile reuse."""
         result = self.feature_search_result
@@ -2249,9 +2164,6 @@ class Widgets:
         ], layout=widgets.Layout(flex_flow="row wrap", width="100%"))
         body = widgets.VBox([
             mode_row, model_row, search_row, family_row,
-            widgets.HTML(value="<b>Optional external validation: two labelled semicolon CSVs, with ID and class columns. Development rows must exactly match the original investigation.</b>"),
-            self.feature_search_development_csv, self.feature_search_external_csv,
-            self.feature_search_cohort_description, self.feature_search_validate_button,
             self.feature_search_status, self.feature_search_preview,
         ], layout=widgets.Layout(width="100%"))
         return self.create_section_form("Feature selection modelling", [body], widgets.Box)
@@ -2623,16 +2535,6 @@ class Widgets:
     @property
     def feature_search_save_button(self) -> widgets.Button:
         return self._load_widget("feature_search_save_button", callback=self.eventhandler.feature_search_save_button_was_clicked)
-
-    @property
-    def feature_search_development_csv(self): return self._load_widget("feature_search_development_csv")
-    @property
-    def feature_search_external_csv(self): return self._load_widget("feature_search_external_csv")
-    @property
-    def feature_search_cohort_description(self): return self._load_widget("feature_search_cohort_description")
-    @property
-    def feature_search_validate_button(self):
-        return self._load_widget("feature_search_validate_button", callback=self.eventhandler.feature_search_validate_button_was_clicked)
 
     @property
     def feature_search_review_button(self) -> widgets.Button:

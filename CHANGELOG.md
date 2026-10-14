@@ -1,3 +1,9 @@
+## 133G — Simplify feature-selection GUI
+
+- Remove the optional external-cohort CSV fields, origin field and validation button from the normal GUI in every mode.
+- Keep saved recommendation review and explicit application unchanged; independent validation remains an optional standalone API.
+- Update GUI regression guards and documentation for the three-mode workflow.
+
 ## 133F — User-selected saved feature recommendations
 
 - Renamed the third feature-selection mode to "Use a recommended data setting" (internal `reuse` value unchanged for existing configs).

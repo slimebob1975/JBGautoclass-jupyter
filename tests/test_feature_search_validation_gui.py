@@ -1,27 +1,27 @@
-"""Regression guards for review-only validation wiring."""
+"""The optional external-cohort API is not part of the standard GUI."""
 from pathlib import Path
 import unittest
 
-SRC = Path(__file__).resolve().parents[1] / 'src' / 'GUI' / 'Widgets.py'
+ROOT = Path(__file__).resolve().parents[1]
+GUI = ROOT / "src" / "GUI" / "Widgets.py"
+API = ROOT / "src" / "JBGFeatureValidation.py"
 
 
 class ValidationGuiContractTests(unittest.TestCase):
-    def test_gui_wires_explicit_cohorts_to_frozen_validation(self):
-        source = SRC.read_text(encoding='utf-8')
-        for token in ('feature_search_development_csv', 'feature_search_external_csv',
-                      'feature_search_cohort_description',
-                      'feature_search_validate_button_was_clicked',
-                      'evaluate_external_candidate(', 'development_ids=dev[id_col]',
-                      'external_ids=ext[id_col]', 'review_compatibility(',
-                      'Optional external validation', 'profile_id'):
-            self.assertIn(token, source)
+    def test_external_validation_controls_are_removed(self):
+        source = GUI.read_text(encoding="utf-8")
+        for token in ("feature_search_development_csv", "feature_search_external_csv",
+                      "feature_search_cohort_description", "feature_search_validate_button",
+                      "Optional external validation", "validate_feature_search_candidate("):
+            self.assertNotIn(token, source)
 
-    def test_reuse_is_not_approved_by_validation_gui(self):
-        source = SRC.read_text(encoding='utf-8')
-        validation = source.split('def validate_feature_search_candidate(self)', 1)[1].split('def save_feature_search_candidate', 1)[0]
-        self.assertNotIn('apply_feature_search_recommendation(', validation)
-        self.assertNotIn('eligible_for_reuse(', validation)
-        self.assertIn('Candidate remains ineligible for reuse', validation)
+    def test_standalone_validation_api_is_preserved(self):
+        self.assertTrue(API.is_file())
+        self.assertIn("def evaluate_external_candidate(", API.read_text(encoding="utf-8"))
+        gui = GUI.read_text(encoding="utf-8")
+        self.assertIn("def apply_feature_search_recommendation(", gui)
+        self.assertIn("def review_feature_search_candidate(", gui)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,9 @@
 
 ## Current direction
 
+- [X] 133G — Remove external cohort CSV/validation form from Feature selection modelling, retain independent validation as a standalone optional backend capability.
+- [ ] Optional future: redesign external-cohort comparison as a separate advanced research tool if needed, outside the standard recommendation workflow.
+
 - [X] 133F — Rename reuse mode to "Use a recommended data setting"; allow explicit application of a saved exploratory candidate after source/column/type-family checks, restoring saved selected text/category columns. Independent evaluation is optional; saved candidates are never auto-ranked or promoted.
 - [ ] Optional future extension: compare saved Linear, Non-linear and Tree recommendations using paired evaluation evidence; do not automatically choose a winner from exploratory scores.
 - [ ] Extend recommendation-application compatibility from coarse type families to authoritative SQL schema, semantic feature definitions and relevant converter setting equivalence; describe any unverified assumptions in the GUI.
