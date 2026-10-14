@@ -66,6 +66,31 @@ mode = {
     "calculate_feature_importance": <calculate_feature_importance>,
     "feature_importance_repeats": <feature_importance_repeats>,
 
+    # Original-column feature-selection modelling. Assisted investigations are
+    # separate from the ordinary classifier model grid and never auto-apply results.
+    "feature_selection_mode": "<feature_selection_mode>",
+    "feature_selection_profile_id": "<feature_selection_profile_id>",
+    "feature_search_model_type": "<feature_search_model_type>",
+    "feature_search_scaler": "<feature_search_scaler>",
+    "feature_search_trials": <feature_search_trials>,
+    "feature_search_sizes": "<feature_search_sizes>",
+    "feature_search_inner_folds": <feature_search_inner_folds>,
+    "feature_search_outer_folds": <feature_search_outer_folds>,
+    "feature_search_top_sets": <feature_search_top_sets>,
+    "feature_search_refine_rounds": <feature_search_refine_rounds>,
+    "feature_search_max_evaluations": <feature_search_max_evaluations>,
+    "feature_search_min_gain": <feature_search_min_gain>,
+    "feature_search_linear_c": <feature_search_linear_c>,
+    "feature_search_linear_max_iterations": <feature_search_linear_max_iterations>,
+    "feature_search_non_linear_max_iterations": <feature_search_non_linear_max_iterations>,
+    "feature_search_non_linear_alpha": <feature_search_non_linear_alpha>,
+    "feature_search_non_linear_hidden_layers": "<feature_search_non_linear_hidden_layers>",
+    "feature_search_non_linear_learning_rate": <feature_search_non_linear_learning_rate>,
+    "feature_search_tree_n_estimators": <feature_search_tree_n_estimators>,
+    # 0 means unrestricted depth in the GUI/config representation.
+    "feature_search_tree_max_depth": <feature_search_tree_max_depth>,
+    "feature_search_tree_min_samples_leaf": <feature_search_tree_min_samples_leaf>,
+
     # Ignore standard stop words in classification 
     "use_stop_words": <use_stop_words>,
 

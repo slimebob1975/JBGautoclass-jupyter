@@ -21,7 +21,7 @@ from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import matthews_corrcoef
+from sklearn.metrics import matthews_corrcoef, confusion_matrix
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 from sklearn.neural_network import MLPClassifier
 from sklearn.pipeline import Pipeline
@@ -212,6 +212,41 @@ def metrics(counts):
                 **counts)
 
 
+
+def multiclass_diagnostics(actual, predicted, labels):
+    """Pooled out-of-fold multiclass reports, never per-fold metric averaging."""
+    matrix = confusion_matrix(actual, predicted, labels=labels).astype(int)
+    per_class = {}
+    for i, label in enumerate(labels):
+        tp = int(matrix[i, i])
+        fp = int(matrix[:, i].sum() - tp)
+        fn = int(matrix[i, :].sum() - tp)
+        precision = tp / (tp + fp) if tp + fp else 0.
+        recall = tp / (tp + fn) if tp + fn else 0.
+        f1 = 2 * tp / (2 * tp + fp + fn) if 2 * tp + fp + fn else 0.
+        per_class[str(label)] = dict(precision=precision, recall=recall, f1=f1,
+                                     support=int(matrix[i, :].sum()), predicted=int(matrix[:, i].sum()),
+                                     tp=tp, fp=fp, fn=fn)
+    return dict(macro_precision=float(np.mean([v['precision'] for v in per_class.values()])),
+                macro_recall=float(np.mean([v['recall'] for v in per_class.values()])),
+                macro_f1=float(np.mean([v['f1'] for v in per_class.values()])),
+                class_labels=[str(label) for label in labels], confusion_matrix=matrix.tolist(),
+                per_class=per_class)
+
+
+def add_matrices(matrices):
+    return np.sum(np.asarray(matrices, dtype=int), axis=0).tolist()
+
+
+def diagnostics_from_matrix(matrix, labels):
+    # Expand count matrix only to reuse the exact pooled diagnostic definition.
+    actual, predicted = [], []
+    for i, row in enumerate(matrix):
+        for j, count in enumerate(row):
+            actual.extend([labels[i]] * int(count))
+            predicted.extend([labels[j]] * int(count))
+    return multiclass_diagnostics(actual, predicted, labels)
+
 def folds_for(X, y, count, seed, groups=None):
     if min(Counter(y).values()) < count:
         raise ValueError(f'{count} CV folds require at least {count} rows of each class')
@@ -224,8 +259,8 @@ def folds_for(X, y, count, seed, groups=None):
         splitter = StratifiedGroupKFold(count, shuffle=True, random_state=seed)
         folds = list(splitter.split(X, y, groups))
     for train, test in folds:
-        if len(set(y.iloc[train])) != 2 or len(set(y.iloc[test])) != 2:
-            raise ValueError('Every training/validation fold must contain both classes; reduce folds or reconsider groups')
+        if set(y.iloc[train]) != set(y) or set(y.iloc[test]) != set(y):
+            raise ValueError('Every training/validation fold must contain every class; reduce folds or reconsider groups')
         if groups is not None and set(groups.iloc[train]) & set(groups.iloc[test]):
             raise ValueError('A group crosses a CV boundary')
     return folds
@@ -286,6 +321,7 @@ class Search:
             return None
         started = perf_counter()
         scores, counts, warning_count = [], Counter(), 0
+        actual_all, predicted_all = [], []
         error = ''
         try:
             for fold, (train, test) in enumerate(self.folds, 1):
@@ -300,6 +336,9 @@ class Search:
                 predicted = model.predict(self.X.iloc[test])
                 scores.append(float(matthews_corrcoef(self.y.iloc[test], predicted)))
                 counts.update(classification_counts(self.y.iloc[test], predicted, self.target))
+                if self.y.nunique() > 2:
+                    actual_all.extend(self.y.iloc[test].tolist())
+                    predicted_all.extend(predicted.tolist())
                 self.emit('fit_completed', phase='inner', candidate=len(self.cache) + 1,
                           fold=fold, folds=len(self.folds), n_columns=len(columns), stage=stage)
             if not np.isfinite(scores).all():
@@ -312,7 +351,9 @@ class Search:
                    std_mcc=float(np.std(scores)) if not error else np.nan,
                    fold_mcc=scores, convergence_warnings=warning_count,
                    seconds=perf_counter() - started, error=error,
-                   **metrics(counts))
+                   **metrics(counts),
+                   **(multiclass_diagnostics(actual_all, predicted_all, sorted(set(self.y), key=str))
+                      if self.y.nunique() > 2 and not error else {}))
         self.cache[columns] = row
         self.sink(row)
         self.emit('candidate_completed', candidate=len(self.cache),
@@ -371,7 +412,7 @@ class Search:
 
 def export_frame(rows, path, append=False, columns=None):
     frame = pd.DataFrame(rows, columns=columns)
-    for name in ('columns', 'fold_mcc', 'seed_columns', 'before_columns', 'after_columns'):
+    for name in ('columns', 'fold_mcc', 'seed_columns', 'before_columns', 'after_columns', 'class_labels', 'confusion_matrix', 'per_class'):
         if name in frame:
             frame[name] = frame[name].map(lambda value: json.dumps(value, ensure_ascii=False))
     path = Path(path)
@@ -393,8 +434,10 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         raise ValueError('Need a nonempty DataFrame of uniquely named original columns')
     if not isinstance(y, pd.Series) or not X.index.equals(y.index) or X.index.has_duplicates:
         raise ValueError('Original columns and labels need aligned unique row IDs')
-    if y.isna().any() or len(set(y)) != 2 or target not in set(y):
-        raise ValueError('This initial experiment requires two classes and a target present in y')
+    if y.isna().any() or len(set(y)) < 2 or target not in set(y):
+        raise ValueError('Investigation requires at least two classes and a target present in y')
+    labels = sorted(set(y), key=str)
+    is_multiclass = len(labels) > 2
     if groups is not None and not groups.index.equals(X.index):
         raise ValueError('Group labels and original rows must align')
     provenance = study_provenance(X, study_context)
@@ -416,6 +459,9 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
                     investigative_model=identity, provenance=provenance,
                     original_columns=list(X.columns), text_options=text_options or {}, signatures=signatures,
                     development_rows=len(X), development_classes=dict(Counter(y)), grouped_cv=groups is not None,
+                    evaluation=dict(type='multiclass' if is_multiclass else 'binary',
+                                    ranking='mean fold multiclass MCC' if is_multiclass else 'mean fold MCC',
+                                    target=str(target), class_labels=[str(v) for v in labels]),
                     planned_fit_upper_bound=options.planned_fit_upper_bound, attempted_fits=0)
     if groups is not None:
         manifest['signatures']['development_groups'] = hashlib.sha256(
@@ -461,7 +507,8 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
                     mcc=float(matthews_corrcoef(y.iloc[test], predicted)),
                     convergence_warnings=sum(issubclass(w.category, ConvergenceWarning) for w in recorded),
                     validation_signature=partition_signature(X.iloc[test].index, y.iloc[test]),
-                    **metrics(classification_counts(y.iloc[test], predicted, target))))
+                    **metrics(classification_counts(y.iloc[test], predicted, target)),
+                    **(multiclass_diagnostics(y.iloc[test], predicted, labels) if is_multiclass else {})))
             export_frame(outer_rows, output / 'outer_validation.csv')
             export_frame(moves, output / 'refinement.csv', columns=['scope', 'seed_columns', 'round', 'operation', 'feature', 'before_columns', 'after_columns', 'before_mcc', 'after_mcc', 'gain'])
             emit(dict(event='outer_validation_completed', scope=f'outer_{fold}',
@@ -475,7 +522,9 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
             rows = [r for r in outer_rows if r['model'] == name]
             counts = {key: sum(r[key] for r in rows) for key in ('tp', 'fp', 'fn', 'tn')}
             summaries[name] = dict(mean_mcc=float(np.mean([r['mcc'] for r in rows])),
-                std_mcc=float(np.std([r['mcc'] for r in rows])), **metrics(counts))
+                std_mcc=float(np.std([r['mcc'] for r in rows])), **metrics(counts),
+                **(diagnostics_from_matrix(add_matrices([r['confusion_matrix'] for r in rows]), labels)
+                   if is_multiclass else {}))
         paired = [next(r['mcc'] for r in outer_rows if r['fold'] == f and r['model'] == 'selected') -
                   next(r['mcc'] for r in outer_rows if r['fold'] == f and r['model'] == 'full_baseline')
                   for f in range(1, options.outer_folds + 1)]

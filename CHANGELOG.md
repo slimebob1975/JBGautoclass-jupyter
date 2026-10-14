@@ -1,4 +1,37 @@
+## 133F — User-selected saved feature recommendations
+
+- Renamed the third feature-selection mode to "Use a recommended data setting" (internal `reuse` value unchanged for existing configs).
+- Added explicit application of saved candidate columns with source and type-family compatibility checks and saved text/category choices; exploratory status remains visible.
+- Kept external validation optional and deferred automatic ranking/approval.
+
 # Revision log – JBGAutoClassification
+
+## 133E — External validation GUI, review-only
+
+- Add explicit two-file labelled CSV external validation inputs to saved-candidate review. The frozen model comparison writes immutable evidence and displays paired MCC/macro F1 without applying or approving profiles.
+- Preserve the 133D disjoint-cohort, fingerprint, and schema validation guards; candidates remain ineligible for reuse.
+
+## 133D (stage 1) — External validation evidence for candidate profiles
+
+- Persist frozen investigation options, text-processing settings and development partition signatures in newly saved candidate profiles. Older candidate files remain reviewable but cannot be independently evaluated without repeating and saving the investigation.
+- Add a fail-closed external-validation API: fit the fixed candidate and full-column baseline on the identical verified original development partition, score both on the same explicitly supplied disjoint labelled cohort, and write immutable JSON with MCC, target metrics, macro/per-class metrics and confusion matrices.
+- Require stable non-overlapping row IDs, original-feature hash, source dtypes, complete estimator settings and original development label signature. The API never promotes profiles, modifies the GUI or accesses the ordinary JBG holdout. Future GUI-driven cohort collection, schema semantics review and approval remain pending.
+- Verification: 38 focused feature-search tests pass, including external evidence and fail-closed checks.
+
+## 132 — Multiclass feature-selection investigations
+
+- Support datasets with two or more labelled classes in the shared Linear/MLPC/Extra Trees search and GUI investigation service. Use multiclass MCC for ranking and keep the same nested fold-isolated preprocessing, explicit candidate apply and untouched JBG holdout. Reject stratified/group CV folds missing any class.
+- Export pooled class-specific precision/recall/F1/counts and confusion matrices with macro precision/recall/F1 for multiclass studies, while preserving existing binary target-based result fields and scoring semantics. GUI previews display macro diagnostics alongside target diagnostics.
+- Tests: new three-class Iris nested-CV coverage and original 30 feature-search/model/GUI tests; Windows/Voilà and real SQL multiclass execution remain user verification tasks. Saved profile lifecycle is still deferred to Revision 133.
+
+## 131 — Feature selection modelling GUI integration
+
+- Add the three-mode **Feature selection modelling** panel between Dataset columns and Dataset actions. Manual mode remains the default and leaves ordinary data-column editing untouched; assisted mode enables an explicit investigation workflow; reuse mode exposes the profile selector but reports that no compatible validated profiles exist until the profile lifecycle is implemented. Mode changes never apply columns implicitly.
+- Integrate the revision-130 Linear/logistic, Non-linear/MLPC and Tree/Extra Trees investigative families with separate retained family controls plus scaler, subset/refinement and nested-CV budgets. The initial GUI budget matches the bounded monthly study: 4 random trials, subset sizes 5/10/20, 3x3 inner/outer CV, no refinement and 5 evaluated subsets per search, for a 66-fit ceiling. Display the ceiling as a bound rather than a runtime forecast.
+- Add a GUI-facing training-only investigation service. It fetches the selected source, uses JBG's normal seeded training/holdout split, passes only original training rows to `JBGFeatureSearch.run_experiment`, retains fold-local conversion/scaling and keeps the normal JBG holdout reserved. It does not invoke the classifier task runner or update models, generated classifier settings, Repeat Last, predictions, database state or notifications.
+- Show transient fit/candidate progress and a candidate preview containing selected-vs-full nested MCC plus target precision/recall/F1, recommended columns and the study output directory. When all columns are retained, state explicitly: **Full-column baseline retained; no improvement found within this search budget.** Applying a recommendation requires a separate button and preserves the user's reviewed text/category choices for columns that remain selected.
+- Persist feature-selection mode, profile ID placeholder, investigative family and all GUI search/training controls in generated configs and Repeat Last, with manual/revision-130-compatible defaults for older state. Include active mode/profile/model in the ordinary run summary. Saved named/versioned profiles, compatibility validation and promotion beyond `candidate` remain the next revision.
+- Verification: the 15 revision-130 model-family/backend checks still pass (3.5 s) and 15 revision-131 GUI-contract checks pass. Generated-config and Repeat Last round-trips were also exercised with local dependency shims; SQL credentials remain runtime-only. Python compilation and whitespace checks pass. Live Windows/Voilà rendering, SQL execution of the new assisted button and bounded monthly Non-linear/Tree studies remain pending.
 
 ## 130 — Investigative model families and GUI-facing feature-search contract
 

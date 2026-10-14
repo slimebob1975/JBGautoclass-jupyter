@@ -100,7 +100,7 @@ def load_development(args):
         y = pd.Series(np.where(labels == 1, 'Inkorrekt', 'Korrekt'), index=X.index)
         train, reserved = train_test_split(np.arange(len(X)), stratify=y, test_size=0.2, random_state=42)
         args.study_context = dict(project='demo', source_kind='synthetic')
-        return X.iloc[train], y.iloc[train], args.target or 'Inkorrekt', {}, partition_signature(X.iloc[reserved].index, y.iloc[reserved])
+        return X.iloc[train], y.iloc[train], args.target or min(Counter(y.iloc[train]), key=lambda value: (Counter(y.iloc[train])[value], str(value))), {}, partition_signature(X.iloc[reserved].index, y.iloc[reserved])
     config = load_config(args)
     args.study_context = dict(project=config.name, source_kind='csv' if args.csv else 'sql',
         source_tables=[f'{config.connection.data_catalog}.{config.connection.data_table}'],
@@ -145,7 +145,7 @@ def load_development(args):
         ngram_range=config.get_ngram_range().ngram_range,
         use_encryption=config.should_hex_encode(), use_categorization=config.use_categorization())
     target = args.target or config.get_dark_number_target()
-    if not target:
+    if target not in set(dh.Y_train):
         target = min(Counter(dh.Y_train), key=lambda value: (Counter(dh.Y_train)[value], str(value)))
     return dh.X_train, dh.Y_train, target, settings, partition_signature(dh.X_validation.index, dh.Y_validation)
 

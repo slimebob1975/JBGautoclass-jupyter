@@ -22,6 +22,15 @@ T = TypeVar('T', bound='Config')
 ODBC_drivers = ["SQL Server", "ODBC Driver 13 for SQL Server", "ODBC Driver 17 for SQL Server", "ODBC Driver 18 for SQL Server"]
 
 
+def _positive_int_list(value, default: str) -> list[int]:
+    """Accept generated CSV strings and direct list/tuple config values."""
+    if value is None:
+        value = default
+    if isinstance(value, (list, tuple)):
+        return [int(item) for item in value]
+    return [int(item.strip()) for item in str(value).split(",") if item.strip()]
+
+
 class DarkNumberAlpha(enum.Enum):
     NONE = "none"
     SINGLE = "single"
@@ -129,6 +138,27 @@ class Config:
         "mode.max_iterations": "<max_iterations>",
         "mode.calculate_feature_importance": "<calculate_feature_importance>",
         "mode.feature_importance_repeats": "<feature_importance_repeats>",
+        "mode.feature_selection_mode": "<feature_selection_mode>",
+        "mode.feature_selection_profile_id": "<feature_selection_profile_id>",
+        "mode.feature_search_model_type": "<feature_search_model_type>",
+        "mode.feature_search_scaler": "<feature_search_scaler>",
+        "mode.feature_search_trials": "<feature_search_trials>",
+        "mode.feature_search_sizes": "<feature_search_sizes>",
+        "mode.feature_search_inner_folds": "<feature_search_inner_folds>",
+        "mode.feature_search_outer_folds": "<feature_search_outer_folds>",
+        "mode.feature_search_top_sets": "<feature_search_top_sets>",
+        "mode.feature_search_refine_rounds": "<feature_search_refine_rounds>",
+        "mode.feature_search_max_evaluations": "<feature_search_max_evaluations>",
+        "mode.feature_search_min_gain": "<feature_search_min_gain>",
+        "mode.feature_search_linear_c": "<feature_search_linear_c>",
+        "mode.feature_search_linear_max_iterations": "<feature_search_linear_max_iterations>",
+        "mode.feature_search_non_linear_max_iterations": "<feature_search_non_linear_max_iterations>",
+        "mode.feature_search_non_linear_alpha": "<feature_search_non_linear_alpha>",
+        "mode.feature_search_non_linear_hidden_layers": "<feature_search_non_linear_hidden_layers>",
+        "mode.feature_search_non_linear_learning_rate": "<feature_search_non_linear_learning_rate>",
+        "mode.feature_search_tree_n_estimators": "<feature_search_tree_n_estimators>",
+        "mode.feature_search_tree_max_depth": "<feature_search_tree_max_depth>",
+        "mode.feature_search_tree_min_samples_leaf": "<feature_search_tree_min_samples_leaf>",
         "io.verbose": "<verbose>",
         "io.model_path": "<model_path>",
         "io.model_name": "<model_name>",
@@ -420,6 +450,27 @@ class Config:
         max_iterations: int = None
         calculate_feature_importance: bool = False
         feature_importance_repeats: int = 5
+        feature_selection_mode: str = "manual"
+        feature_selection_profile_id: str = ""
+        feature_search_model_type: str = "Linear"
+        feature_search_scaler: str = "STA"
+        feature_search_trials: int = 4
+        feature_search_sizes: list[int] = field(default_factory=lambda: [5, 10, 20])
+        feature_search_inner_folds: int = 3
+        feature_search_outer_folds: int = 3
+        feature_search_top_sets: int = 1
+        feature_search_refine_rounds: int = 0
+        feature_search_max_evaluations: int = 5
+        feature_search_min_gain: float = 0.005
+        feature_search_linear_c: float = 1.0
+        feature_search_linear_max_iterations: int = 10000
+        feature_search_non_linear_max_iterations: int = 2000
+        feature_search_non_linear_alpha: float = 0.0001
+        feature_search_non_linear_hidden_layers: list[int] = field(default_factory=lambda: [100])
+        feature_search_non_linear_learning_rate: float = 0.001
+        feature_search_tree_n_estimators: int = 100
+        feature_search_tree_max_depth: int = 0
+        feature_search_tree_min_samples_leaf: int = 1
 
         def __post_init__(self) -> None:
             # New configurations default to the separated alpha adjustment for
@@ -489,6 +540,46 @@ class Config:
             if type(self.feature_importance_repeats) is not int or not 2 <= self.feature_importance_repeats <= 30:
                 raise ValueError("Argument feature_importance_repeats must be an integer between 2 and 30")
 
+            if self.feature_selection_mode not in ("manual", "assisted", "reuse"):
+                raise ValueError("Argument feature_selection_mode must be manual, assisted or reuse")
+            if not isinstance(self.feature_selection_profile_id, str):
+                raise TypeError("Argument feature_selection_profile_id must be a string")
+            if self.feature_search_model_type not in ("Linear", "Non-linear", "Tree"):
+                raise ValueError("Argument feature_search_model_type must be Linear, Non-linear or Tree")
+            if self.feature_search_scaler not in ("STA", "MAX"):
+                raise ValueError("Argument feature_search_scaler must be STA or MAX")
+            for name in (
+                "feature_search_trials", "feature_search_inner_folds", "feature_search_outer_folds",
+                "feature_search_top_sets", "feature_search_max_evaluations",
+                "feature_search_linear_max_iterations", "feature_search_non_linear_max_iterations",
+                "feature_search_tree_n_estimators", "feature_search_tree_min_samples_leaf",
+            ):
+                if type(getattr(self, name)) is not int or getattr(self, name) < 1:
+                    raise ValueError(f"Argument {name} must be a positive integer")
+            if type(self.feature_search_refine_rounds) is not int or self.feature_search_refine_rounds < 0:
+                raise ValueError("Argument feature_search_refine_rounds must be a nonnegative integer")
+            if self.feature_search_inner_folds < 2 or self.feature_search_outer_folds < 2:
+                raise ValueError("Feature-search inner and outer CV each require at least two folds")
+            if self.feature_search_max_evaluations < self.feature_search_trials + 1:
+                raise ValueError("Feature-search max evaluations must allow the baseline plus all trials")
+            if (not isinstance(self.feature_search_sizes, list) or not self.feature_search_sizes
+                    or any(type(value) is not int or value < 1 for value in self.feature_search_sizes)):
+                raise ValueError("Argument feature_search_sizes must be a nonempty list of positive integers")
+            if (not isinstance(self.feature_search_non_linear_hidden_layers, list)
+                    or not self.feature_search_non_linear_hidden_layers
+                    or any(type(value) is not int or value < 1 for value in self.feature_search_non_linear_hidden_layers)):
+                raise ValueError("Argument feature_search_non_linear_hidden_layers must be a nonempty list of positive integers")
+            if not isinstance(self.feature_search_min_gain, (int, float)) or self.feature_search_min_gain < 0:
+                raise ValueError("Argument feature_search_min_gain must be nonnegative")
+            if not isinstance(self.feature_search_linear_c, (int, float)) or self.feature_search_linear_c <= 0:
+                raise ValueError("Argument feature_search_linear_c must be positive")
+            if not isinstance(self.feature_search_non_linear_alpha, (int, float)) or self.feature_search_non_linear_alpha < 0:
+                raise ValueError("Argument feature_search_non_linear_alpha must be nonnegative")
+            if not isinstance(self.feature_search_non_linear_learning_rate, (int, float)) or self.feature_search_non_linear_learning_rate <= 0:
+                raise ValueError("Argument feature_search_non_linear_learning_rate must be positive")
+            if type(self.feature_search_tree_max_depth) is not int or self.feature_search_tree_max_depth < 0:
+                raise ValueError("Argument feature_search_tree_max_depth must be zero or a positive integer")
+
             if not isinstance(self.dark_number_method, DarkNumberMethod):
                 raise TypeError("Argument dark_number_method is invalid")
 
@@ -552,6 +643,11 @@ class Config:
             """ A dict with the headers for each value """
             forced_columns = ', '.join(self.category_text_columns) if len(self.category_text_columns) > 0 else None
 
+            feature_selection_mode_display = {
+                "manual": "I will pick my own data settings",
+                "assisted": "Help me pick the best data settings",
+                "reuse": "Use a recommended data setting",
+            }[self.feature_selection_mode]
             str_dict = {
                 "title": "Classification mode settings", #2
                 "Train new model":                       self.train,
@@ -566,6 +662,9 @@ class Config:
                 "Test size for trainings":               self.test_size,
                 "Calculate feature importance":            self.calculate_feature_importance,
                 "Feature importance repeats":              self.feature_importance_repeats,
+                "Feature selection modelling":             feature_selection_mode_display,
+                "Feature selection profile":               self.feature_selection_profile_id or "None",
+                "Investigative model":                      self.feature_search_model_type,
                 "Calculate Dark Numbers":                  self.calculate_dark_numbers,
                 "Dark Number method":                      self.dark_number_method.display_name,
                 "Dark Number alpha":                       self.dark_number_alpha.display_name,
@@ -829,6 +928,8 @@ class Config:
                     replace = self.get_oversampler_abbreviations()
                 elif tag == "mode.undersamplers":
                     replace = self.get_undersampler_abbreviations()
+                elif tag in ("mode.feature_search_sizes", "mode.feature_search_non_linear_hidden_layers"):
+                    replace = ",".join(str(value) for value in replace)
 
                 # SQL passwords are runtime-only credentials. Generated config files
                 # intentionally contain an empty password and may use JBG_SQL_PASSWORD
@@ -894,6 +995,20 @@ class Config:
             saved_config.mode.calculate_feature_importance = False
         if not hasattr(saved_config.mode, "feature_importance_repeats"):
             saved_config.mode.feature_importance_repeats = 5
+        feature_search_defaults = Config.Mode()
+        for field_name in (
+            "feature_selection_mode", "feature_selection_profile_id", "feature_search_model_type",
+            "feature_search_scaler", "feature_search_trials", "feature_search_sizes",
+            "feature_search_inner_folds", "feature_search_outer_folds", "feature_search_top_sets",
+            "feature_search_refine_rounds", "feature_search_max_evaluations", "feature_search_min_gain",
+            "feature_search_linear_c", "feature_search_linear_max_iterations",
+            "feature_search_non_linear_max_iterations", "feature_search_non_linear_alpha",
+            "feature_search_non_linear_hidden_layers", "feature_search_non_linear_learning_rate",
+            "feature_search_tree_n_estimators", "feature_search_tree_max_depth",
+            "feature_search_tree_min_samples_leaf",
+        ):
+            if not hasattr(saved_config.mode, field_name):
+                setattr(saved_config.mode, field_name, copy.deepcopy(getattr(feature_search_defaults, field_name)))
         
         if config is not None:
             saved_config.mode.train = config.mode.train
@@ -1010,6 +1125,27 @@ class Config:
                 max_iterations=max_iterations,
                 calculate_feature_importance=module.mode.get("calculate_feature_importance", False),
                 feature_importance_repeats=module.mode.get("feature_importance_repeats", 5),
+                feature_selection_mode=module.mode.get("feature_selection_mode", "manual"),
+                feature_selection_profile_id=module.mode.get("feature_selection_profile_id", ""),
+                feature_search_model_type=module.mode.get("feature_search_model_type", "Linear"),
+                feature_search_scaler=module.mode.get("feature_search_scaler", "STA"),
+                feature_search_trials=int(module.mode.get("feature_search_trials", 4)),
+                feature_search_sizes=_positive_int_list(module.mode.get("feature_search_sizes"), "5,10,20"),
+                feature_search_inner_folds=int(module.mode.get("feature_search_inner_folds", 3)),
+                feature_search_outer_folds=int(module.mode.get("feature_search_outer_folds", 3)),
+                feature_search_top_sets=int(module.mode.get("feature_search_top_sets", 1)),
+                feature_search_refine_rounds=int(module.mode.get("feature_search_refine_rounds", 0)),
+                feature_search_max_evaluations=int(module.mode.get("feature_search_max_evaluations", 5)),
+                feature_search_min_gain=float(module.mode.get("feature_search_min_gain", 0.005)),
+                feature_search_linear_c=float(module.mode.get("feature_search_linear_c", 1.0)),
+                feature_search_linear_max_iterations=int(module.mode.get("feature_search_linear_max_iterations", 10000)),
+                feature_search_non_linear_max_iterations=int(module.mode.get("feature_search_non_linear_max_iterations", 2000)),
+                feature_search_non_linear_alpha=float(module.mode.get("feature_search_non_linear_alpha", 0.0001)),
+                feature_search_non_linear_hidden_layers=_positive_int_list(module.mode.get("feature_search_non_linear_hidden_layers"), "100"),
+                feature_search_non_linear_learning_rate=float(module.mode.get("feature_search_non_linear_learning_rate", 0.001)),
+                feature_search_tree_n_estimators=int(module.mode.get("feature_search_tree_n_estimators", 100)),
+                feature_search_tree_max_depth=int(module.mode.get("feature_search_tree_max_depth", 0)),
+                feature_search_tree_min_samples_leaf=int(module.mode.get("feature_search_tree_min_samples_leaf", 1)),
             ),
             io=Config.IO(
                 verbose=module.io["verbose"],

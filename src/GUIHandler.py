@@ -268,6 +268,27 @@ class GUIHandler:
                 "mispredicted": mode.mispredicted,
                 "calculate_feature_importance": getattr(mode, "calculate_feature_importance", False),
                 "feature_importance_repeats": getattr(mode, "feature_importance_repeats", 5),
+                "feature_selection_mode": getattr(mode, "feature_selection_mode", "manual"),
+                "feature_selection_profile_id": getattr(mode, "feature_selection_profile_id", ""),
+                "feature_search_model_type": getattr(mode, "feature_search_model_type", "Linear"),
+                "feature_search_scaler": getattr(mode, "feature_search_scaler", "STA"),
+                "feature_search_trials": getattr(mode, "feature_search_trials", 4),
+                "feature_search_sizes": list(getattr(mode, "feature_search_sizes", [5, 10, 20])),
+                "feature_search_inner_folds": getattr(mode, "feature_search_inner_folds", 3),
+                "feature_search_outer_folds": getattr(mode, "feature_search_outer_folds", 3),
+                "feature_search_top_sets": getattr(mode, "feature_search_top_sets", 1),
+                "feature_search_refine_rounds": getattr(mode, "feature_search_refine_rounds", 0),
+                "feature_search_max_evaluations": getattr(mode, "feature_search_max_evaluations", 5),
+                "feature_search_min_gain": getattr(mode, "feature_search_min_gain", 0.005),
+                "feature_search_linear_c": getattr(mode, "feature_search_linear_c", 1.0),
+                "feature_search_linear_max_iterations": getattr(mode, "feature_search_linear_max_iterations", 10000),
+                "feature_search_non_linear_max_iterations": getattr(mode, "feature_search_non_linear_max_iterations", 2000),
+                "feature_search_non_linear_alpha": getattr(mode, "feature_search_non_linear_alpha", 0.0001),
+                "feature_search_non_linear_hidden_layers": list(getattr(mode, "feature_search_non_linear_hidden_layers", [100])),
+                "feature_search_non_linear_learning_rate": getattr(mode, "feature_search_non_linear_learning_rate", 0.001),
+                "feature_search_tree_n_estimators": getattr(mode, "feature_search_tree_n_estimators", 100),
+                "feature_search_tree_max_depth": getattr(mode, "feature_search_tree_max_depth", 0),
+                "feature_search_tree_min_samples_leaf": getattr(mode, "feature_search_tree_min_samples_leaf", 1),
                 "use_metas": mode.use_metas,
                 "use_stop_words": mode.use_stop_words,
                 "ngram_range": mode.ngram_range.name,
@@ -334,6 +355,27 @@ class GUIHandler:
                 mispredicted=mode["mispredicted"],
                 calculate_feature_importance=mode.get("calculate_feature_importance", False),
                 feature_importance_repeats=mode.get("feature_importance_repeats", 5),
+                feature_selection_mode=mode.get("feature_selection_mode", "manual"),
+                feature_selection_profile_id=mode.get("feature_selection_profile_id", ""),
+                feature_search_model_type=mode.get("feature_search_model_type", "Linear"),
+                feature_search_scaler=mode.get("feature_search_scaler", "STA"),
+                feature_search_trials=mode.get("feature_search_trials", 4),
+                feature_search_sizes=list(mode.get("feature_search_sizes", [5, 10, 20])),
+                feature_search_inner_folds=mode.get("feature_search_inner_folds", 3),
+                feature_search_outer_folds=mode.get("feature_search_outer_folds", 3),
+                feature_search_top_sets=mode.get("feature_search_top_sets", 1),
+                feature_search_refine_rounds=mode.get("feature_search_refine_rounds", 0),
+                feature_search_max_evaluations=mode.get("feature_search_max_evaluations", 5),
+                feature_search_min_gain=mode.get("feature_search_min_gain", 0.005),
+                feature_search_linear_c=mode.get("feature_search_linear_c", 1.0),
+                feature_search_linear_max_iterations=mode.get("feature_search_linear_max_iterations", 10000),
+                feature_search_non_linear_max_iterations=mode.get("feature_search_non_linear_max_iterations", 2000),
+                feature_search_non_linear_alpha=mode.get("feature_search_non_linear_alpha", 0.0001),
+                feature_search_non_linear_hidden_layers=list(mode.get("feature_search_non_linear_hidden_layers", [100])),
+                feature_search_non_linear_learning_rate=mode.get("feature_search_non_linear_learning_rate", 0.001),
+                feature_search_tree_n_estimators=mode.get("feature_search_tree_n_estimators", 100),
+                feature_search_tree_max_depth=mode.get("feature_search_tree_max_depth", 0),
+                feature_search_tree_min_samples_leaf=mode.get("feature_search_tree_min_samples_leaf", 1),
                 use_metas=mode["use_metas"],
                 use_stop_words=mode["use_stop_words"],
                 ngram_range=NgramRange[mode["ngram_range"]],
@@ -407,6 +449,28 @@ class GUIHandler:
                 f"{connection.data_catalog}.{connection.data_table}; data will be fetched again."
             )
         return self.run_classifier(config_params=config_params, output=output)
+
+    def run_feature_selection_investigation(self, config_params: dict, options, on_event=None, row_limit=None):
+        """Run the GUI-assisted feature investigation without touching classifier state."""
+        from JBGFeatureSearchService import run_training_feature_search
+
+        investigation_params = copy.deepcopy(config_params)
+        investigation_params["save"] = False
+        if row_limit is None or int(row_limit) < 1:
+            raise ValueError("Choose at least one investigation row before starting")
+        investigation_params["debug"].data_limit = int(row_limit)
+        investigation_params["mode"].train = True
+        investigation_params["mode"].predict = False
+        investigation_params["mode"].mispredicted = False
+        investigation_params["mode"].calculate_dark_numbers = False
+        investigation_params["mode"].calculate_feature_importance = False
+        investigation_config = Config(**investigation_params)
+        return run_training_feature_search(
+            investigation_config,
+            self.logger,
+            options=options,
+            on_event=on_event,
+        )
 
     def run_classifier(
         self,
