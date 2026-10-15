@@ -33,7 +33,7 @@ class FeatureSearchGuiContractTests(unittest.TestCase):
         self.assertIn('"feature_selection_modelling_form"', WIDGETS)
 
     def test_required_investigative_families_exist(self):
-        self.assertIn('"options": ["Linear", "Non-linear", "Tree"]', WIDGETS)
+        self.assertIn('"options": ["Linear", "Non-linear", "Tree", "Combination"]', WIDGETS)
 
     def test_reuse_mode_has_explicit_empty_profile_state(self):
         self.assertIn("No saved recommendations", WIDGETS)
@@ -120,6 +120,17 @@ class FeatureSearchGuiContractTests(unittest.TestCase):
         self.assertIn('self.disable_button("continuation_button")', WIDGETS)
         self.assertIn('self._feature_search_running = False', WIDGETS)
         self.assertIn('self.update_ready()', WIDGETS)
+
+    def test_investigation_diagnostic_survives_ready_refresh(self):
+        # update_ready calls sync_feature_selection_controls without preserve_status.
+        method = WIDGETS.split('    def run_feature_selection_investigation(self) -> None:', 1)[1]
+        method = method.split('    @staticmethod', 1)[0]
+        self.assertIn('final_status = self.feature_search_status.value', method)
+        self.assertLess(method.index('final_status = self.feature_search_status.value'),
+                        method.index('self.update_ready()'))
+        self.assertLess(method.index('self.update_ready()'),
+                        method.index('self.feature_search_status.value = final_status'))
+        self.assertIn('logging.getLogger(__name__).exception', method)
 
     def test_run_summary_exposes_active_mode_profile_and_model(self):
         self.assertIn('"Feature selection modelling"', CONFIG)

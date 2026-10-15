@@ -1,3 +1,19 @@
+## Revision 138 — FUTV Combination, PCA and assisted Continue gate
+
+- Add a fixed FUTV soft-voting investigative model (MLPC / RF / AdaBoost, weights 1:2:1).
+- Add fold-fitted 95%-variance PCA after optional training-only oversampling.
+- Disable assisted/reuse Continue until a candidate has explicitly been applied; invalidate on changes.
+- Add CLI, persistence, regression tests and `docs/feature_search_138.md`.
+
+## 137 — Feature-search fold-local oversampling
+
+- Reuse JBG Random/SMOTE oversampling in inner and outer CV training folds only.
+- Add GUI and CLI configuration with persisted default NOG, tests and documentation.
+
+## Revision 136 — Imbalance-aware Tree investigation
+
+Tree class weighting and an explicit fixed binary target cutoff; preserve default model behavior. Protect zero-MCC full-column baseline ties, surface TP/FP/FN and remove duplicate preset/Tree controls. See `docs/feature_search_136.md`.
+
 - 135: Add Random Forest to the Tree investigation family and Quick/Standard/Extended/Custom search budget presets; preserve legacy Extra Trees default and settings.
 
 ## Revision 134 — budget-aware feature search and grouped controls (2026-10-14)

@@ -196,11 +196,14 @@ class EventHandler:
         if self.lock_observe_1:
             return
         if change.get("name") == "value":
-            self.widgets.sync_feature_selection_controls()
+            self.widgets._feature_search_applied = False
+            self.widgets.update_ready()
 
     def feature_selection_profile(self, change: Bunch) -> None:
         if not self.lock_observe_1 and change.get("name") == "value":
+            self.widgets._feature_search_applied = False
             self.widgets.cancel_feature_search_deletion()
+            self.widgets.update_ready()
             self.widgets.sync_feature_selection_controls(preserve_status=True)
             if self.widgets.feature_selection_mode.value == "reuse" and change.get("new"):
                 self.widgets.review_feature_search_candidate()
@@ -210,13 +213,16 @@ class EventHandler:
             return
         if change.get("name") == "value":
             self.widgets.invalidate_feature_search_result()
+            self.widgets.update_ready()
             self.widgets.sync_feature_selection_controls()
 
     def feature_search_preset(self, change: Bunch) -> None:
         if self.lock_observe_1 or change.get("name") != "value":
             return
         if change.get("new") != "Custom":
+            self.widgets.invalidate_feature_search_result()
             self.widgets.set_feature_search_preset(change["new"])
+            self.widgets.update_ready()
         else:
             self.widgets.invalidate_feature_search_result()
             self.widgets.update_feature_search_fit_budget()
@@ -239,6 +245,7 @@ class EventHandler:
                 finally:
                     self.lock_observe_1 = False
             self.widgets.update_feature_search_fit_budget()
+            self.widgets.update_ready()
 
     def feature_search_representation_setting(self, change: Bunch) -> None:
         """Invalidate a candidate when preprocessing choices used by the search change."""
@@ -246,6 +253,7 @@ class EventHandler:
             return
         if change.get("name") == "value":
             self.widgets.invalidate_feature_search_result()
+            self.widgets.update_ready()
             self.widgets.sync_feature_selection_controls()
 
     def feature_search_investigate_button_was_clicked(self, button: widgets.Button) -> None:
@@ -330,6 +338,9 @@ class EventHandler:
     def continuation_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
         if getattr(self.widgets, "_feature_search_running", False):
+            return
+        if self.widgets.feature_selection_mode.value in ("assisted", "reuse") and not getattr(self.widgets, "_feature_search_applied", False):
+            self.widgets.update_ready()
             return
         self.lock_observe_1 = True
         
@@ -505,14 +516,14 @@ class Widgets:
             "data": [self.class_column, self.id_column, self.data_columns, self.text_columns],
             "feature_selection": [
                 self.feature_selection_mode, self.feature_selection_profile, self.feature_search_rows, self.feature_search_model_type, self.feature_search_preset, self.feature_search_tree_estimator,
-                self.feature_search_scaler, self.feature_search_trials, self.feature_search_sizes,
+                self.feature_search_scaler, self.feature_search_oversampling, self.feature_search_reduction, self.feature_search_trials, self.feature_search_sizes,
                 self.feature_search_inner_folds, self.feature_search_outer_folds, self.feature_search_top_sets,
                 self.feature_search_refine_rounds, self.feature_search_max_evaluations, self.feature_search_min_gain,
                 self.feature_search_linear_c, self.feature_search_linear_max_iterations,
                 self.feature_search_non_linear_max_iterations, self.feature_search_non_linear_alpha,
                 self.feature_search_non_linear_hidden_layers, self.feature_search_non_linear_learning_rate,
                 self.feature_search_tree_estimator, self.feature_search_tree_n_estimators, self.feature_search_tree_max_depth,
-                self.feature_search_tree_min_samples_leaf, self.feature_search_investigate_button,
+                self.feature_search_tree_min_samples_leaf, self.feature_search_tree_class_weight, self.feature_search_tree_positive_threshold, self.feature_search_investigate_button,
                 self.feature_search_apply_button, self.feature_search_save_button, self.feature_search_review_button,
                 self.feature_search_delete_button,
             ],
@@ -580,13 +591,21 @@ class Widgets:
             }},
             "feature_search_rows": {"type": "BoundedIntText", "params": {"value": 1, "min": 1, "max": 2147483647, "disabled": True, "description": "Search rows:", "tooltip": "Maximum labelled rows fetched for investigation; separate from the normal ML limit."}},
             "feature_search_model_type": {"type": "Dropdown", "params": {
-                "options": ["Linear", "Non-linear", "Tree"], "value": "Linear", "disabled": True,
+                "options": ["Linear", "Non-linear", "Tree", "Combination"], "value": "Linear", "disabled": True,
                 "description": "Model type:",
             }},
             "feature_search_preset": {"type": "Dropdown", "params": {"options": ["Quick", "Standard", "Extended", "Custom"], "value": "Quick", "disabled": True, "description": "Budget preset:", "tooltip": "Quick for smoke tests; Standard or Extended for larger searches. Manual changes set Custom."}},
             "feature_search_tree_estimator": {"type": "Dropdown", "params": {"options": ["Extra Trees", "Random Forest"], "value": "Extra Trees", "disabled": True, "description": "Tree model:", "tooltip": "Extra Trees uses randomized split thresholds; Random Forest optimizes candidate splits."}},
             "feature_search_scaler": {"type": "Dropdown", "params": {
                 "options": ["STA", "MAX"], "value": "STA", "disabled": True, "description": "Scaler:",
+            }},
+            "feature_search_oversampling": {"type": "Dropdown", "params": {
+                "options": [("No Oversampling", "NOG"), ("Random", "RND"), ("SMOTE", "SME")],
+                "value": "NOG", "disabled": True, "description": "Oversampling:",
+            }},
+            "feature_search_reduction": {"type": "Dropdown", "params": {
+                "options": [("No reduction", "NOR"), ("PCA (95% variance)", "PCA")],
+                "value": "NOR", "disabled": True, "description": "Reduction:",
             }},
             "feature_search_trials": {"type": "IntSlider", "params": {"value": 4, "min": 1, "max": 1000, "step": 1, "continuous_update": False, "disabled": True, "description": "Trials:"}},
             "feature_search_sizes": {"type": "Text", "params": {"value": "5,10,20", "disabled": True, "description": "Subset sizes:"}},
@@ -604,6 +623,8 @@ class Widgets:
             "feature_search_non_linear_learning_rate": {"type": "BoundedFloatText", "params": {"value": 0.001, "min": 0.000000001, "max": 1000000.0, "step": 0.001, "disabled": True, "description": "MLP learning:"}},
             "feature_search_tree_n_estimators": {"type": "BoundedIntText", "params": {"value": 100, "min": 1, "max": 100000, "disabled": True, "description": "Trees:"}},
             "feature_search_tree_max_depth": {"type": "BoundedIntText", "params": {"value": 0, "min": 0, "max": 100000, "disabled": True, "description": "Max depth:"}},
+            "feature_search_tree_class_weight": {"type": "Dropdown", "params": {"options": ["None", "balanced", "balanced_subsample"], "value": "None", "disabled": True, "description": "Class weight:"}},
+            "feature_search_tree_positive_threshold": {"type": "BoundedFloatText", "params": {"value": 0.5, "min": 0.01, "max": 0.99, "step": 0.01, "disabled": True, "description": "Positive cutoff:"}},
             "feature_search_tree_min_samples_leaf": {"type": "BoundedIntText", "params": {"value": 1, "min": 1, "max": 100000, "disabled": True, "description": "Min leaf:"}},
             "feature_search_fit_budget": {"type": "HTML", "params": {"value": "Expected fit ceiling: 66"}},
             "feature_search_status": {"type": "HTML", "params": {"value": "Manual data settings; no investigation will run."}},
@@ -628,14 +649,14 @@ class Widgets:
             display_items.insert(position, "feature_selection_modelling_form")
         self.settings.setdefault("sections", {})["feature_selection"] = [
             "feature_selection_mode", "feature_selection_profile", "feature_search_rows", "feature_search_model_type",
-            "feature_search_scaler", "feature_search_trials", "feature_search_sizes",
+            "feature_search_scaler", "feature_search_oversampling", "feature_search_reduction", "feature_search_trials", "feature_search_sizes",
             "feature_search_inner_folds", "feature_search_outer_folds", "feature_search_top_sets",
             "feature_search_refine_rounds", "feature_search_max_evaluations", "feature_search_min_gain",
             "feature_search_linear_c", "feature_search_linear_max_iterations",
             "feature_search_non_linear_max_iterations", "feature_search_non_linear_alpha",
             "feature_search_non_linear_hidden_layers", "feature_search_non_linear_learning_rate",
             "feature_search_tree_n_estimators", "feature_search_tree_max_depth",
-            "feature_search_tree_min_samples_leaf", "feature_search_investigate_button",
+            "feature_search_tree_min_samples_leaf", "feature_search_tree_class_weight", "feature_search_tree_positive_threshold", "feature_search_investigate_button",
             "feature_search_apply_button", "feature_search_save_button", "feature_search_review_button", "feature_search_delete_button",
         ]
         legacy_fallback = self.default_widgets.pop("dark_number_perturbed_fallback_checkbox", None)
@@ -890,6 +911,8 @@ class Widgets:
             "feature_search_preset": getattr(config.mode, "feature_search_preset", "Quick"),
             "feature_search_tree_estimator": getattr(config.mode, "feature_search_tree_estimator", "Extra Trees"),
             "feature_search_scaler": getattr(config.mode, "feature_search_scaler", "STA"),
+            "feature_search_oversampling": getattr(config.mode, "feature_search_oversampling", "NOG"),
+            "feature_search_reduction": getattr(config.mode, "feature_search_reduction", "NOR"),
             "feature_search_trials": getattr(config.mode, "feature_search_trials", 4),
             "feature_search_sizes": ",".join(str(value) for value in getattr(config.mode, "feature_search_sizes", [5, 10, 20])),
             "feature_search_inner_folds": getattr(config.mode, "feature_search_inner_folds", 3),
@@ -907,6 +930,8 @@ class Widgets:
             "feature_search_tree_n_estimators": getattr(config.mode, "feature_search_tree_n_estimators", 100),
             "feature_search_tree_max_depth": getattr(config.mode, "feature_search_tree_max_depth", 0),
             "feature_search_tree_min_samples_leaf": getattr(config.mode, "feature_search_tree_min_samples_leaf", 1),
+            "feature_search_tree_class_weight": getattr(config.mode, "feature_search_tree_class_weight", "None"),
+            "feature_search_tree_positive_threshold": getattr(config.mode, "feature_search_tree_positive_threshold", 0.5),
             "dark_number_method": config.get_dark_number_method().name,
             "dark_number_alpha": config.get_dark_number_alpha().name,
             "dark_number_target": config.get_dark_number_target(),
@@ -1021,6 +1046,8 @@ class Widgets:
                 "feature_search_preset": getattr(mode, "feature_search_preset", "Quick"),
                 "feature_search_tree_estimator": getattr(mode, "feature_search_tree_estimator", "Extra Trees"),
                 "feature_search_scaler": getattr(mode, "feature_search_scaler", "STA"),
+                "feature_search_oversampling": getattr(mode, "feature_search_oversampling", "NOG"),
+                "feature_search_reduction": getattr(mode, "feature_search_reduction", "NOR"),
                 "feature_search_trials": getattr(mode, "feature_search_trials", 4),
                 "feature_search_sizes": ",".join(str(value) for value in getattr(mode, "feature_search_sizes", [5, 10, 20])),
                 "feature_search_inner_folds": getattr(mode, "feature_search_inner_folds", 3),
@@ -1038,6 +1065,8 @@ class Widgets:
                 "feature_search_tree_n_estimators": getattr(mode, "feature_search_tree_n_estimators", 100),
                 "feature_search_tree_max_depth": getattr(mode, "feature_search_tree_max_depth", 0),
                 "feature_search_tree_min_samples_leaf": getattr(mode, "feature_search_tree_min_samples_leaf", 1),
+                "feature_search_tree_class_weight": getattr(mode, "feature_search_tree_class_weight", "None"),
+                "feature_search_tree_positive_threshold": getattr(mode, "feature_search_tree_positive_threshold", 0.5),
                 "metas_checkbox": mode.use_metas,
                 "dark_numbers_checkbox": getattr(mode, "calculate_dark_numbers", mode.mispredicted),
                 "dark_number_method": DarkNumberMethod.from_config_value(
@@ -1420,6 +1449,8 @@ class Widgets:
                 feature_search_preset = self.feature_search_preset.value,
                 feature_search_tree_estimator = self.feature_search_tree_estimator.value,
                 feature_search_scaler = self.feature_search_scaler.value,
+                feature_search_oversampling = self.feature_search_oversampling.value,
+                feature_search_reduction = self.feature_search_reduction.value,
                 feature_search_trials = self.feature_search_trials.value,
                 feature_search_sizes = self._parse_positive_int_list(self.feature_search_sizes.value, "Subset sizes"),
                 feature_search_inner_folds = self.feature_search_inner_folds.value,
@@ -1437,6 +1468,8 @@ class Widgets:
                 feature_search_tree_n_estimators = self.feature_search_tree_n_estimators.value,
                 feature_search_tree_max_depth = self.feature_search_tree_max_depth.value,
                 feature_search_tree_min_samples_leaf = self.feature_search_tree_min_samples_leaf.value,
+                feature_search_tree_class_weight = self.feature_search_tree_class_weight.value,
+                feature_search_tree_positive_threshold = self.feature_search_tree_positive_threshold.value,
                 use_metas = self.metas_checkbox.value,
                 use_stop_words = self.filter_checkbox.value,
                 ngram_range = NgramRange[self.ngram_range_dropdown.value],
@@ -1745,6 +1778,8 @@ class Widgets:
             return
 
         ready_for_classifier = num_vars > 0 and self.id_column.value and self.class_column.value
+        if self.feature_selection_mode.value in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False):
+            ready_for_classifier = False
         if ready_for_classifier:
             self.enable_button("continuation_button")
             if self.new_model:
@@ -1826,6 +1861,8 @@ class Widgets:
             max_evaluations=self.feature_search_max_evaluations.value,
             min_gain=self.feature_search_min_gain.value,
             scaler=self.feature_search_scaler.value,
+            oversampling=self.feature_search_oversampling.value,
+            reduction=self.feature_search_reduction.value,
             C=self.feature_search_linear_c.value,
             max_iterations=self.feature_search_linear_max_iterations.value,
             model_type=self.feature_search_model_type.value,
@@ -1839,6 +1876,8 @@ class Widgets:
             tree_n_estimators=self.feature_search_tree_n_estimators.value,
             tree_max_depth=(self.feature_search_tree_max_depth.value or None),
             tree_min_samples_leaf=self.feature_search_tree_min_samples_leaf.value,
+            tree_class_weight=self.feature_search_tree_class_weight.value,
+            tree_positive_threshold=self.feature_search_tree_positive_threshold.value,
         )
 
     def set_feature_search_preset(self, name: str) -> None:
@@ -1867,6 +1906,7 @@ class Widgets:
             self.feature_search_fit_budget.value = f"Fit budget invalid: {html.escape(str(ex))}"
 
     def invalidate_feature_search_result(self) -> None:
+        self._feature_search_applied = False
         self.feature_search_result = None
         if "feature_search_apply_button" in self.widgets:
             self.disable_button("feature_search_apply_button")
@@ -1891,7 +1931,7 @@ class Widgets:
             self.feature_search_delete_button.disabled = not bool(self.feature_selection_profile.value)
 
         common = [
-            self.feature_search_rows, self.feature_search_model_type, self.feature_search_preset, self.feature_search_scaler, self.feature_search_trials,
+            self.feature_search_rows, self.feature_search_model_type, self.feature_search_preset, self.feature_search_scaler, self.feature_search_oversampling, self.feature_search_reduction, self.feature_search_trials,
             self.feature_search_sizes, self.feature_search_inner_folds, self.feature_search_outer_folds,
             self.feature_search_top_sets, self.feature_search_refine_rounds,
             self.feature_search_max_evaluations, self.feature_search_min_gain,
@@ -1908,14 +1948,14 @@ class Widgets:
             widget.disabled = not (assisted and family == "Non-linear")
         for widget in (
             self.feature_search_tree_estimator, self.feature_search_tree_n_estimators, self.feature_search_tree_max_depth,
-            self.feature_search_tree_min_samples_leaf,
+            self.feature_search_tree_min_samples_leaf, self.feature_search_tree_class_weight, self.feature_search_tree_positive_threshold,
         ):
             widget.disabled = not (assisted and family == "Tree")
 
         ready = assisted and bool(self.data_columns.value) and bool(self.class_column.value) and bool(self.id_column.value)
         running = getattr(self, "_feature_search_running", False)
         self.feature_search_investigate_button.disabled = running or not ready
-        if running:
+        if running or (mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False)):
             self.disable_button("continuation_button")
         if not ready:
             self.feature_search_investigate_button.button_style = "primary"
@@ -1928,6 +1968,8 @@ class Widgets:
         self.feature_search_save_button.disabled = not (
             assisted and self.feature_search_result and self.feature_search_result.get("status") == "completed"
         )
+        if mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False):
+            self.disable_button("continuation_button")
         if not preserve_status:
             if mode == "manual":
                 self.feature_search_status.value = "Manual data settings; no investigation will run."
@@ -1987,20 +2029,26 @@ class Widgets:
                 f"Status: candidate; model: {html.escape(result['investigative_model']['model_type'])}. "
                 f"Nested selected MCC {selected['mean_mcc']:.4f} vs full {baseline['mean_mcc']:.4f}; "
                 f"Target {html.escape(str(result['target']))}: precision {selected['precision']:.3f}, "
-                f"recall {selected['recall']:.3f}, F1 {selected['f1']:.3f}.<br>"
+                f"recall {selected['recall']:.3f}, F1 {selected['f1']:.3f}; "
+                f"TP {selected['tp']}, FP {selected['fp']}, FN {selected['fn']}.<br>"
                 f"{macro_report}"
                 f"Recommended columns: {html.escape(', '.join(columns))}<br>"
                 f"Results: <code>{html.escape(result.get('output_directory', ''))}</code>"
             )
             self.feature_search_status.value = "Investigation completed. Review the candidate before applying it."
         except Exception as ex:
+            # Preserve the failure in the GUI and emit a traceback in the server log.
+            import logging
+            logging.getLogger(__name__).exception("Feature-selection investigation failed")
             self.feature_search_status.value = f"Investigation failed: {html.escape(type(ex).__name__ + ': ' + str(ex))}"
         finally:
+            # update_ready() also synchronizes controls and otherwise replaces the
+            # diagnostic status with the generic Ready prompt.
+            final_status = self.feature_search_status.value
             self._feature_search_running = False
-            # Restore Continue according to the currently selected data settings.
             self.update_ready()
-            # Do not overwrite a failure (or completion) message with the generic Ready text.
             self.sync_feature_selection_controls(preserve_status=True)
+            self.feature_search_status.value = final_status
 
     @staticmethod
     def _feature_profile_store():
@@ -2146,7 +2194,9 @@ class Widgets:
             + "Nested selected MCC " + metric(result, "mean_mcc", 4)
             + " vs full " + metric(baseline, "mean_mcc", 4) + "; "
             + "Target " + html.escape(str(target)) + ": precision " + metric(result, "precision")
-            + ", recall " + metric(result, "recall") + ", F1 " + metric(result, "f1") + ".<br>"
+            + ", recall " + metric(result, "recall") + ", F1 " + metric(result, "f1")
+            + "; TP " + str(result.get("tp", "unavailable")) + ", FP " + str(result.get("fp", "unavailable"))
+            + ", FN " + str(result.get("fn", "unavailable")) + ".<br>"
             + macro + "Recommended columns: " + html.escape(", ".join(selected)) + "<br>"
             + "Results: <code>" + html.escape(str(record.get("output_directory") or "unavailable")) + "</code><br>"
             + "Compatibility: " + findings + "<br>Application is an explicit user decision."
@@ -2211,6 +2261,7 @@ class Widgets:
             self.categorize_columns.value = tuple(column for column in old_categories if column in self.text_columns.value)
         finally:
             self.eventhandler.lock_observe_1 = previous_lock
+        self._feature_search_applied = True
         self.update_ready()
         self.feature_search_status.value = f"Applied {'saved ' if record else ''}candidate recommendation: {len(selected)} original columns selected (not independently validated)."
         self.disable_button("feature_search_apply_button")
@@ -2274,8 +2325,8 @@ class Widgets:
             layout=widgets.Layout(align_items="center", flex_flow="row wrap"),
         )
         model_row = widgets.HBox([
-            self.feature_search_rows, self.feature_search_model_type, self.feature_search_preset, self.feature_search_tree_estimator,
-            self.feature_search_scaler, self.feature_search_fit_budget,
+            self.feature_search_rows, self.feature_search_model_type,
+            self.feature_search_scaler, self.feature_search_oversampling, self.feature_search_reduction, self.feature_search_fit_budget,
         ], layout=widgets.Layout(flex_flow="row wrap", width="100%"))
         action_row = widgets.HBox(
             primary_actions,
@@ -2307,9 +2358,13 @@ class Widgets:
             "feature_search_tree_estimator": "Choose Extra Trees (default) or Random Forest; fixed during each search.",
             "feature_search_preset": "Quick/Standard/Extended set the search budget; Custom allows manual settings.",
             "feature_search_tree_max_depth": "Maximum Extra Trees depth; zero means unlimited.",
-            "feature_search_tree_min_samples_leaf": "Minimum number of training samples at an Extra Trees leaf.",
+            "feature_search_tree_min_samples_leaf": "Minimum records per leaf for the selected Tree estimator.",
+            "feature_search_tree_class_weight": "None: unweighted. balanced: inverse class-frequency weights. balanced_subsample: per-bootstrap weights (Random Forest).",
+            "feature_search_tree_positive_threshold": "Fixed probability cutoff for the target class in BINARY tree investigations; 0.5 is the default. Not tuned by CV.",
             "feature_search_model_type": "Investigative estimator family, separate from the ordinary JBG classifier.",
             "feature_search_scaler": "Fixed scaling method used within each investigation CV fold.",
+            "feature_search_oversampling": "Reuse JBG Random or SMOTE balancing inside training CV folds only; NOG disables oversampling. Validation remains untouched.",
+            "feature_search_reduction": "Fold-local 95% PCA fitted after optional training-only oversampling; does not alter which original columns are selected.",
         }
         for widget_name, tooltip in help_text.items():
             control = getattr(self, widget_name)
@@ -2349,7 +2404,7 @@ class Widgets:
             self.feature_search_non_linear_max_iterations, self.feature_search_non_linear_alpha,
             self.feature_search_non_linear_hidden_layers, self.feature_search_non_linear_learning_rate,
             self.feature_search_tree_estimator, self.feature_search_tree_n_estimators, self.feature_search_tree_max_depth,
-            self.feature_search_tree_min_samples_leaf,
+            self.feature_search_tree_min_samples_leaf, self.feature_search_tree_class_weight, self.feature_search_tree_positive_threshold,
         ])
         body = widgets.VBox([
             mode_row, profile_row, model_row, action_row,
@@ -2680,6 +2735,12 @@ class Widgets:
     def feature_search_rows(self): return self._feature_search_setting_widget("feature_search_rows")
     @property
     def feature_search_scaler(self): return self._feature_search_setting_widget("feature_search_scaler")
+
+    @property
+    def feature_search_oversampling(self): return self._feature_search_setting_widget("feature_search_oversampling")
+
+    @property
+    def feature_search_reduction(self): return self._feature_search_setting_widget("feature_search_reduction")
     @property
     def feature_search_trials(self): return self._feature_search_setting_widget("feature_search_trials")
     @property
@@ -2714,6 +2775,10 @@ class Widgets:
     def feature_search_tree_max_depth(self): return self._feature_search_setting_widget("feature_search_tree_max_depth")
     @property
     def feature_search_tree_min_samples_leaf(self): return self._feature_search_setting_widget("feature_search_tree_min_samples_leaf")
+    @property
+    def feature_search_tree_class_weight(self): return self._feature_search_setting_widget("feature_search_tree_class_weight")
+    @property
+    def feature_search_tree_positive_threshold(self): return self._feature_search_setting_widget("feature_search_tree_positive_threshold")
     @property
     def feature_search_fit_budget(self): return self._load_widget("feature_search_fit_budget")
     @property

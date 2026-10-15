@@ -75,6 +75,20 @@ class FeatureSearchModelTests(unittest.TestCase):
         self.assertEqual(tree.get_params(), fs.make_estimator(replace(options,
             model_type='Tree', C=5., max_iterations=777, non_linear_alpha=0.5))[1].get_params())
 
+    def test_combination_identity_serializes_nested_estimators(self):
+        options = replace(self.options, model_type='Combination')
+        identity = fs.model_identity(options)
+        encoded = json.loads(json.dumps(identity, ensure_ascii=False))
+        self.assertEqual(encoded['model_type'], 'Combination')
+        self.assertEqual(encoded['parameters']['weights'], [1, 2, 1])
+        members = encoded['parameters']['estimators']
+        self.assertEqual([member[0] for member in members], ['mlpc', 'rfcl', 'abc'])
+        self.assertIn('MLPClassifier', members[0][1]['estimator'])
+        self.assertIn('RandomForestClassifier', members[1][1]['estimator'])
+        self.assertIn('AdaBoostClassifier', members[2][1]['estimator'])
+        self.assertEqual(members[0][1]['parameters']['random_state'], options.seed)
+        self.assertEqual(members[1][1]['parameters']['random_state'], options.seed)
+
     def test_invalid_family_settings_fail_before_outputs(self):
         invalid = [dict(model_type='Other'), dict(non_linear_max_iterations=0),
             dict(non_linear_max_iterations=True), dict(non_linear_alpha=-1),

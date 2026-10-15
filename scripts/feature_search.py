@@ -38,7 +38,10 @@ def parser():
     p.add_argument('--min-gain', type=float, default=0.005, help='Minimum mean MCC gain to continue greedy refinement')
     p.add_argument('--seed', type=int, default=42, help='Search/nested-CV seed; reserved JBG holdout always uses 42')
     p.add_argument('--scaler', choices=['STA', 'MAX'], default='STA')
-    p.add_argument('--model-type', choices=['Linear', 'Non-linear', 'Tree'], default='Linear',
+    p.add_argument('--oversampling', choices=['NOG', 'RND', 'SME'], default='NOG',
+                   help='JBG oversampling: NOG=none, RND=random, SME=SMOTE; training folds only')
+    p.add_argument('--reduction', choices=['NOR', 'PCA'], default='NOR')
+    p.add_argument('--model-type', choices=['Linear', 'Non-linear', 'Tree', 'Combination'], default='Linear',
                    help='Fixed investigative model, independent of the normal classifier')
     p.add_argument('--C', type=float, default=1., help='Linear inverse regularization strength')
     p.add_argument('--max-iterations', '--linear-max-iterations', type=int, default=2000,
@@ -158,7 +161,7 @@ def main(argv=None):
     options = SearchOptions(trials=args.trials, sizes=tuple(args.sizes), inner_folds=args.inner_folds,
         outer_folds=args.outer_folds, top_sets=args.top_sets, refine_rounds=args.refine_rounds,
         max_evaluations=args.max_evaluations, min_gain=args.min_gain, seed=args.seed,
-        scaler=args.scaler, C=args.C, max_iterations=args.max_iterations, model_type=args.model_type,
+        scaler=args.scaler, oversampling=args.oversampling, reduction=args.reduction, C=args.C, max_iterations=args.max_iterations, model_type=args.model_type,
         non_linear_max_iterations=args.non_linear_max_iterations, non_linear_alpha=args.non_linear_alpha,
         non_linear_hidden_layers=tuple(args.non_linear_hidden_layers),
         non_linear_learning_rate=args.non_linear_learning_rate,

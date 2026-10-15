@@ -142,6 +142,8 @@ class Config:
         "mode.feature_selection_profile_id": "<feature_selection_profile_id>",
         "mode.feature_search_model_type": "<feature_search_model_type>",
         "mode.feature_search_scaler": "<feature_search_scaler>",
+        "mode.feature_search_oversampling": "<feature_search_oversampling>",
+        "mode.feature_search_reduction": "<feature_search_reduction>",
         "mode.feature_search_trials": "<feature_search_trials>",
         "mode.feature_search_sizes": "<feature_search_sizes>",
         "mode.feature_search_inner_folds": "<feature_search_inner_folds>",
@@ -158,6 +160,8 @@ class Config:
         "mode.feature_search_non_linear_learning_rate": "<feature_search_non_linear_learning_rate>",
         "mode.feature_search_preset": "<feature_search_preset>",
         "mode.feature_search_tree_estimator": "<feature_search_tree_estimator>",
+        "mode.feature_search_tree_class_weight": "<feature_search_tree_class_weight>",
+        "mode.feature_search_tree_positive_threshold": "<feature_search_tree_positive_threshold>",
         "mode.feature_search_tree_n_estimators": "<feature_search_tree_n_estimators>",
         "mode.feature_search_tree_max_depth": "<feature_search_tree_max_depth>",
         "mode.feature_search_tree_min_samples_leaf": "<feature_search_tree_min_samples_leaf>",
@@ -456,6 +460,8 @@ class Config:
         feature_selection_profile_id: str = ""
         feature_search_model_type: str = "Linear"
         feature_search_scaler: str = "STA"
+        feature_search_oversampling: str = "NOG"
+        feature_search_reduction: str = "NOR"
         feature_search_trials: int = 4
         feature_search_sizes: list[int] = field(default_factory=lambda: [5, 10, 20])
         feature_search_inner_folds: int = 3
@@ -471,6 +477,8 @@ class Config:
         feature_search_non_linear_hidden_layers: list[int] = field(default_factory=lambda: [100])
         feature_search_non_linear_learning_rate: float = 0.001
         feature_search_tree_estimator: str = "Extra Trees"
+        feature_search_tree_class_weight: str = "None"
+        feature_search_tree_positive_threshold: float = 0.5
         feature_search_preset: str = "Quick"
         feature_search_tree_n_estimators: int = 100
         feature_search_tree_max_depth: int = 0
@@ -548,12 +556,20 @@ class Config:
                 raise ValueError("Argument feature_selection_mode must be manual, assisted or reuse")
             if not isinstance(self.feature_selection_profile_id, str):
                 raise TypeError("Argument feature_selection_profile_id must be a string")
-            if self.feature_search_model_type not in ("Linear", "Non-linear", "Tree"):
-                raise ValueError("Argument feature_search_model_type must be Linear, Non-linear or Tree")
+            if self.feature_search_model_type not in ("Linear", "Non-linear", "Tree", "Combination"):
+                raise ValueError("Argument feature_search_model_type must be Linear, Non-linear, Tree or Combination")
             if self.feature_search_preset not in ("Quick", "Standard", "Extended", "Custom"):
                 raise ValueError("Unknown feature search preset")
             if self.feature_search_tree_estimator not in ("Extra Trees", "Random Forest"):
                 raise ValueError("Unknown feature search tree estimator")
+            if self.feature_search_tree_class_weight not in ("None", "balanced", "balanced_subsample"):
+                raise ValueError("Unknown feature search tree class weighting")
+            if not isinstance(self.feature_search_tree_positive_threshold, (int, float)) or not 0 < self.feature_search_tree_positive_threshold < 1:
+                raise ValueError("Feature search positive cutoff must lie between 0 and 1")
+            if self.feature_search_reduction not in ("NOR", "PCA"):
+                raise ValueError("Argument feature_search_reduction must be NOR or PCA")
+            if self.feature_search_oversampling not in ("NOG", "RND", "SME"):
+                raise ValueError("Unknown feature search oversampling method")
             if self.feature_search_scaler not in ("STA", "MAX"):
                 raise ValueError("Argument feature_search_scaler must be STA or MAX")
             for name in (
@@ -1006,14 +1022,14 @@ class Config:
         feature_search_defaults = Config.Mode()
         for field_name in (
             "feature_selection_mode", "feature_selection_profile_id", "feature_search_model_type",
-            "feature_search_scaler", "feature_search_trials", "feature_search_sizes",
+            "feature_search_scaler", "feature_search_oversampling", "feature_search_reduction", "feature_search_trials", "feature_search_sizes",
             "feature_search_inner_folds", "feature_search_outer_folds", "feature_search_top_sets",
             "feature_search_refine_rounds", "feature_search_max_evaluations", "feature_search_min_gain",
             "feature_search_linear_c", "feature_search_linear_max_iterations",
             "feature_search_non_linear_max_iterations", "feature_search_non_linear_alpha",
             "feature_search_non_linear_hidden_layers", "feature_search_non_linear_learning_rate",
-            "feature_search_preset", "feature_search_tree_estimator",
-            "feature_search_preset", "feature_search_tree_estimator",
+            "feature_search_preset", "feature_search_tree_estimator", "feature_search_tree_class_weight", "feature_search_tree_positive_threshold",
+            "feature_search_preset", "feature_search_tree_estimator", "feature_search_tree_class_weight", "feature_search_tree_positive_threshold",
             "feature_search_tree_n_estimators", "feature_search_tree_max_depth",
             "feature_search_tree_min_samples_leaf",
         ):
@@ -1139,6 +1155,8 @@ class Config:
                 feature_selection_profile_id=module.mode.get("feature_selection_profile_id", ""),
                 feature_search_model_type=module.mode.get("feature_search_model_type", "Linear"),
                 feature_search_scaler=module.mode.get("feature_search_scaler", "STA"),
+                feature_search_oversampling=module.mode.get("feature_search_oversampling", "NOG"),
+                feature_search_reduction=module.mode.get("feature_search_reduction", "NOR"),
                 feature_search_trials=int(module.mode.get("feature_search_trials", 4)),
                 feature_search_sizes=_positive_int_list(module.mode.get("feature_search_sizes"), "5,10,20"),
                 feature_search_inner_folds=int(module.mode.get("feature_search_inner_folds", 3)),
@@ -1155,6 +1173,8 @@ class Config:
                 feature_search_non_linear_learning_rate=float(module.mode.get("feature_search_non_linear_learning_rate", 0.001)),
                 feature_search_preset=module.mode.get("feature_search_preset", "Quick"),
                 feature_search_tree_estimator=module.mode.get("feature_search_tree_estimator", "Extra Trees"),
+                feature_search_tree_class_weight=module.mode.get("feature_search_tree_class_weight", "None"),
+                feature_search_tree_positive_threshold=module.mode.get("feature_search_tree_positive_threshold", 0.5),
                 feature_search_tree_n_estimators=int(module.mode.get("feature_search_tree_n_estimators", 100)),
                 feature_search_tree_max_depth=int(module.mode.get("feature_search_tree_max_depth", 0)),
                 feature_search_tree_min_samples_leaf=int(module.mode.get("feature_search_tree_min_samples_leaf", 1)),

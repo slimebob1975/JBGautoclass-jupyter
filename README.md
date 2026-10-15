@@ -256,3 +256,6 @@ This work was partly inspired by Jason Brownlee: https://machinelearningmastery.
 ### Dark Number direct-correction diagnostics
 
 Revision 097 orders the controls as `Estimate -> Target -> Method -> Alpha -> Failure` and warns when a direct correction factor is based on mean recovery below 5% (`corr > 20`). Revision 115 keeps that existing limit and makes the message more actionable: it identifies the model/target, reports the rediscovery rate and correction factor, and recommends considering another pipeline combination and investigating the correctness and quality of the training dataset. This prompts investigation rather than declaring the dataset flawed. The value remains a direct estimate; the application does not clamp it or trigger fallback solely because of the warning. The sensitivity runner's warning policy is unchanged.
+
+
+Feature-selection Revision 138 adds the Combination (FUTV) family, optional fold-local PCA, and an Apply-before-Continue safety gate; see `docs/feature_search_138.md`.

@@ -72,6 +72,8 @@ mode = {
     "feature_selection_profile_id": "<feature_selection_profile_id>",
     "feature_search_model_type": "<feature_search_model_type>",
     "feature_search_scaler": "<feature_search_scaler>",
+    "feature_search_oversampling": "<feature_search_oversampling>",
+    "feature_search_reduction": "<feature_search_reduction>",
     "feature_search_trials": <feature_search_trials>,
     "feature_search_sizes": "<feature_search_sizes>",
     "feature_search_inner_folds": <feature_search_inner_folds>,
@@ -88,6 +90,8 @@ mode = {
     "feature_search_non_linear_learning_rate": <feature_search_non_linear_learning_rate>,
     "feature_search_preset": <feature_search_preset>,
     "feature_search_tree_estimator": <feature_search_tree_estimator>,
+    "feature_search_tree_class_weight": <feature_search_tree_class_weight>,
+    "feature_search_tree_positive_threshold": <feature_search_tree_positive_threshold>,
     "feature_search_tree_n_estimators": <feature_search_tree_n_estimators>,
     # 0 means unrestricted depth in the GUI/config representation.
     "feature_search_tree_max_depth": <feature_search_tree_max_depth>,

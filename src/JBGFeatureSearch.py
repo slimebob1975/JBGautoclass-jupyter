@@ -17,14 +17,16 @@ import numpy as np
 import pandas as pd
 import sklearn
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, AdaBoostClassifier, VotingClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import matthews_corrcoef, confusion_matrix
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 from sklearn.neural_network import MLPClassifier
+from sklearn.decomposition import PCA
 from sklearn.pipeline import Pipeline
+from imblearn.pipeline import Pipeline as ResamplingPipeline
 from sklearn.preprocessing import MaxAbsScaler, StandardScaler
 
 from Helpers import prepare_estimator_input
@@ -47,6 +49,8 @@ class SearchOptions:
     min_gain: float = 0.005
     seed: int = 42
     scaler: str = 'STA'
+    oversampling: str = 'NOG'
+    reduction: str = 'NOR'
     C: float = 1.0
     max_iterations: int = 2000
     model_type: str = 'Linear'
@@ -58,6 +62,8 @@ class SearchOptions:
     tree_n_estimators: int = 100
     tree_max_depth: int | None = None
     tree_min_samples_leaf: int = 1
+    tree_class_weight: str = 'None'
+    tree_positive_threshold: float = 0.5
 
     @property
     def planned_fit_upper_bound(self):
@@ -77,16 +83,24 @@ class SearchOptions:
             raise ValueError('max_evaluations must allow the full-column baseline plus all random trials')
         if not self.sizes or any(type(n) is not int or n < 1 for n in self.sizes):
             raise ValueError('Subset sizes must be positive integers')
+        if self.reduction not in ('NOR', 'PCA'):
+            raise ValueError('reduction must be NOR or PCA')
+        if self.oversampling not in ('NOG', 'RND', 'SME'):
+            raise ValueError('oversampling must be NOG, RND or SME')
         if self.scaler not in ('STA', 'MAX') or not finite_number(self.C) or self.C <= 0:
             raise ValueError('Use scaler STA/MAX and positive finite C')
         if not finite_number(self.min_gain) or self.min_gain < 0:
             raise ValueError('min_gain must be finite and nonnegative')
         if type(self.seed) is not int or not 0 <= self.seed < 2**32:
             raise ValueError('seed must be an integer in [0, 2**32)')
+        if self.tree_class_weight not in ('None', 'balanced', 'balanced_subsample'):
+            raise ValueError('tree_class_weight must be None, balanced or balanced_subsample')
+        if not finite_number(self.tree_positive_threshold) or not 0 < self.tree_positive_threshold < 1:
+            raise ValueError('tree_positive_threshold must be in (0, 1)')
         if self.tree_estimator not in ('Extra Trees', 'Random Forest'):
             raise ValueError('tree_estimator must be Extra Trees or Random Forest')
-        if self.model_type not in ('Linear', 'Non-linear', 'Tree'):
-            raise ValueError('model_type must be Linear, Non-linear or Tree')
+        if self.model_type not in ('Linear', 'Non-linear', 'Tree', 'Combination'):
+            raise ValueError('model_type must be Linear, Non-linear, Tree or Combination')
         if (not isinstance(self.non_linear_hidden_layers, tuple) or not self.non_linear_hidden_layers
                 or any(type(n) is not int or n < 1 for n in self.non_linear_hidden_layers)):
             raise ValueError('non_linear_hidden_layers must be a tuple of positive integers')
@@ -110,20 +124,45 @@ def make_estimator(options):
             learning_rate_init=options.non_linear_learning_rate,
             max_iter=options.non_linear_max_iterations, random_state=options.seed,
             early_stopping=False, warm_start=False)
+    if options.model_type == 'Combination':
+        # Mirror JBG's FUTV: soft voting over MLP, RandomForest and AdaBoost.
+        # The original grid searches voting weights; investigative weights are
+        # fixed at the historically successful (1, 2, 1) configuration.
+        return 'futv', VotingClassifier(estimators=[
+            ('mlpc', MLPClassifier(max_iter=20000, random_state=options.seed)),
+            ('rfcl', RandomForestClassifier(random_state=options.seed, n_jobs=1)),
+            ('abc', AdaBoostClassifier(random_state=options.seed)),
+        ], voting='soft', weights=(1, 2, 1), n_jobs=1)
     estimator_class = (RandomForestClassifier if options.tree_estimator == 'Random Forest'
                        else ExtraTreesClassifier)
     estimator = estimator_class(n_estimators=options.tree_n_estimators,
         max_depth=options.tree_max_depth, min_samples_leaf=options.tree_min_samples_leaf,
-        criterion='gini', max_features='sqrt', class_weight=None,
+        criterion='gini', max_features='sqrt', class_weight=(None if options.tree_class_weight == 'None' else options.tree_class_weight),
         random_state=options.seed, n_jobs=1, warm_start=False)
     return ('random_forest' if options.tree_estimator == 'Random Forest' else 'extra_trees'), estimator
+
+
+def _json_model_parameter(value):
+    """Record nested sklearn estimator settings without storing live objects."""
+    if isinstance(value, BaseEstimator):
+        return dict(estimator=f'{type(value).__module__}.{type(value).__name__}',
+                    parameters={key: _json_model_parameter(item)
+                                for key, item in value.get_params(deep=False).items()})
+    if isinstance(value, (list, tuple)):
+        return [_json_model_parameter(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_model_parameter(item) for key, item in value.items()}
+    if isinstance(value, np.generic):
+        return value.item()
+    return value
 
 
 def model_identity(options):
     _, estimator = make_estimator(options)
     return dict(model_type=options.model_type,
                 estimator=f'{type(estimator).__module__}.{type(estimator).__name__}',
-                parameters=estimator.get_params(deep=False))
+                parameters={key: _json_model_parameter(value)
+                            for key, value in estimator.get_params(deep=False).items()})
 
 
 def study_provenance(X, context=None):
@@ -194,13 +233,36 @@ class FoldColumnEncoder(TransformerMixin, BaseEstimator):
 def make_pipeline(columns, options, text_options):
     name, estimator = make_estimator(options)
     scaler = MaxAbsScaler() if options.scaler == 'MAX' else StandardScaler(with_mean=False)
-    return Pipeline([
+    steps = [
         ('columns', FoldColumnEncoder(tuple(columns), text_options)),
         ('impute', SimpleImputer(strategy='constant', fill_value=0, keep_empty_features=True)),
         ('scale', scaler),
-        (name, estimator),
-    ])
+    ]
+    if options.oversampling != 'NOG':
+        # Reuse the ordinary JBG oversampler definitions, but place resampling
+        # strictly inside the training fold of every inner/outer CV fit.
+        from JBGMeta import Oversampling
+        method = Oversampling[options.oversampling]
+        sampler = method.get_callable_oversampler()
+        sampler.set_params(random_state=options.seed)
+        steps.append(('oversampling', sampler))
+    if options.reduction == 'PCA':
+        # Match ordinary JBG's 95%-variance PCA; applied AFTER SMOTE, inside CV.
+        steps.append(('pca', PCA(n_components=0.95, svd_solver='covariance_eigh')))
+    steps.append((name, estimator))
+    return ResamplingPipeline(steps) if options.oversampling != 'NOG' else Pipeline(steps)
 
+
+def investigative_predictions(model, X, target, options):
+    """Apply a fixed threshold only to binary tree models; never tune on validation rows."""
+    if options.model_type != 'Tree' or options.tree_positive_threshold == 0.5:
+        return model.predict(X)
+    labels = model.classes_
+    if len(labels) != 2:
+        raise ValueError('Custom positive threshold is supported for binary Tree investigations only')
+    probability = model.predict_proba(X)[:, list(labels).index(target)]
+    negative = next(label for label in labels if label != target)
+    return np.where(probability >= options.tree_positive_threshold, target, negative)
 
 def classification_counts(y, predicted, target):
     actual = np.asarray(y) == target
@@ -307,8 +369,9 @@ def random_subsets(columns, options):
 
 
 def ranking(row):
-    # MCC controls selection; exact ties prefer fewer original columns, then lower SD.
-    return (-row['mean_mcc'], row['n_columns'], row['std_mcc'], row['columns'])
+    # A zero-MCC tie is not evidence for removing columns. Protect the full baseline.
+    baseline_tie = row.get('stage') == 'full_baseline' and row['mean_mcc'] == 0.0
+    return (-row['mean_mcc'], 0 if baseline_tie else 1, row['n_columns'], row['std_mcc'], row['columns'])
 
 
 class Search:
@@ -346,7 +409,7 @@ class Search:
                               fold=fold, folds=len(self.folds), n_columns=len(columns), stage=stage)
                     model.fit(self.X.iloc[train], self.y.iloc[train])
                 warning_count += sum(issubclass(w.category, ConvergenceWarning) for w in recorded)
-                predicted = model.predict(self.X.iloc[test])
+                predicted = investigative_predictions(model, self.X.iloc[test], self.target, self.options)
                 scores.append(float(matthews_corrcoef(self.y.iloc[test], predicted)))
                 counts.update(classification_counts(self.y.iloc[test], predicted, self.target))
                 if self.y.nunique() > 2:
@@ -465,6 +528,8 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         raise ValueError('Investigation requires at least two classes and a target present in y')
     labels = sorted(set(y), key=str)
     is_multiclass = len(labels) > 2
+    if is_multiclass and options.model_type == 'Tree' and options.tree_positive_threshold != 0.5:
+        raise ValueError('Custom positive threshold requires binary classification; use 0.5 for multiclass')
     if groups is not None and not groups.index.equals(X.index):
         raise ValueError('Group labels and original rows must align')
     provenance = study_provenance(X, study_context)
@@ -527,7 +592,7 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
                     emit(dict(event='fit_started', phase='outer', scope=f'outer_{fold}',
                               model_type=options.model_type, model=name, n_columns=len(subset)))
                     model.fit(X.iloc[train], y.iloc[train])
-                predicted = model.predict(X.iloc[test])
+                predicted = investigative_predictions(model, X.iloc[test], target, options)
                 emit(dict(event='fit_completed', phase='outer', scope=f'outer_{fold}',
                           model_type=options.model_type, model=name, n_columns=len(subset)))
                 outer_rows.append(dict(fold=fold, model=name, model_type=options.model_type, columns=subset,
