@@ -462,7 +462,7 @@ class GUIHandler:
             )
         return self.run_classifier(config_params=config_params, output=output)
 
-    def run_feature_selection_investigation(self, config_params: dict, options, on_event=None, row_limit=None):
+    def run_feature_selection_investigation(self, config_params: dict, options, on_event=None, row_limit=None, output=None, resume=False, pause_event=None):
         """Run the GUI-assisted feature investigation without touching classifier state."""
         from JBGFeatureSearchService import run_training_feature_search
 
@@ -482,6 +482,17 @@ class GUIHandler:
             self.logger,
             options=options,
             on_event=on_event,
+            output=output,
+            resume=resume,
+            pause_event=pause_event,
+        )
+
+    def resume_saved_feature_selection_investigation(self, output, on_event=None, pause_event=None):
+        """Resume using the immutable snapshot, without constructing GUI Config."""
+        from JBGFeatureSearchService import run_training_feature_search
+        return run_training_feature_search(
+            None, self.logger, options=None, on_event=on_event,
+            output=output, resume=True, pause_event=pause_event,
         )
 
     def run_classifier(

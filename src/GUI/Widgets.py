@@ -524,6 +524,7 @@ class Widgets:
                 self.feature_search_non_linear_hidden_layers, self.feature_search_non_linear_learning_rate,
                 self.feature_search_tree_estimator, self.feature_search_tree_n_estimators, self.feature_search_tree_max_depth,
                 self.feature_search_tree_min_samples_leaf, self.feature_search_tree_class_weight, self.feature_search_tree_positive_threshold, self.feature_search_investigate_button,
+                self.feature_search_pause_button, self.feature_search_resume_button,
                 self.feature_search_apply_button, self.feature_search_save_button, self.feature_search_review_button,
                 self.feature_search_delete_button,
             ],
@@ -1878,6 +1879,7 @@ class Widgets:
             tree_min_samples_leaf=self.feature_search_tree_min_samples_leaf.value,
             tree_class_weight=self.feature_search_tree_class_weight.value,
             tree_positive_threshold=self.feature_search_tree_positive_threshold.value,
+            parallel_workers=self.feature_search_parallel_workers.value,
         )
 
     def set_feature_search_preset(self, name: str) -> None:
@@ -1989,25 +1991,153 @@ class Widgets:
             score = "failed" if event.get("error") else f"MCC {event['mean_mcc']:.4f}"
             self.feature_search_status.value = (
                 f"{html.escape(event['scope'])}: candidate {event['candidate']}/"
-                f"{event['max_evaluations']}, {event['n_columns']} columns, {score}"
+                f"{event['max_evaluations']}, {event['n_columns']} columns, {score}; "
+                f"{event.get('completed_candidates', 0)} checkpoints, "
+                f"{event.get('elapsed_seconds', 0) / 60:.1f} min this session"
             )
 
+    @property
+    def feature_search_pause_button(self):
+        if not hasattr(self, '_feature_search_pause_widget'):
+            self._feature_search_pause_widget = widgets.Button(description='Pause', icon='pause', disabled=True)
+            self._feature_search_pause_widget.on_click(lambda _: self.pause_feature_selection_investigation())
+        return self._feature_search_pause_widget
+
+    @property
+    def feature_search_resume_button(self):
+        if not hasattr(self, '_feature_search_resume_widget'):
+            self._feature_search_resume_widget = widgets.Button(description='Resume', icon='play')
+            self._feature_search_resume_widget.on_click(lambda _: self.resume_feature_selection_investigation())
+        return self._feature_search_resume_widget
+
+    def pause_feature_selection_investigation(self):
+        if getattr(self, '_feature_search_running', False) and hasattr(self, '_feature_search_pause_event'):
+            self._feature_search_pause_event.set()
+            self.feature_search_pause_button.disabled = True
+            self.feature_search_status.value = 'Pause requested; finishing the current evaluation before checkpointing.'
+
+    def _feature_search_recovery_choices(self):
+        """List all incomplete studies explicitly; never guess based on mtime."""
+        root = Path(__file__).resolve().parents[2]
+        directories = set((root / 'output').glob('feature_search_gui_*'))
+        directories.update((root / 'src' / 'output').glob('feature_search_gui_*'))
+        choices = []
+        for directory in sorted(directories, key=lambda value: value.name, reverse=True):
+            summary = directory / 'summary.json'
+            if not summary.is_file() or not (directory / 'development_snapshot.pkl').is_file():
+                continue
+            try:
+                data = json.loads(summary.read_text(encoding='utf-8'))
+                if data.get('status') not in ('paused', 'interrupted', 'running', 'failed'):
+                    continue
+                context = data.get('provenance', {}).get('context', {})
+                tables = context.get('source_tables') or ['unknown table']
+                description = (f"{directory.name} | {tables[0]} | "
+                               f"{data.get('options', {}).get('model_type', '?')} | "
+                               f"{data.get('attempted_fits', '?')}/"
+                               f"{data.get('planned_fit_upper_bound', '?')} fits | "
+                               f"{data.get('status')}")
+                choices.append((description, str(directory.resolve())))
+            except (ValueError, OSError, TypeError, KeyError):
+                continue
+        return choices
+
+    @property
+    def feature_search_parallel_workers(self):
+        if not hasattr(self, '_feature_search_parallel_workers_widget'):
+            self._feature_search_parallel_workers_widget = widgets.Dropdown(
+                options=[('Serial (1)', 1), ('2 workers', 2), ('4 workers', 4)],
+                value=1, description='Search workers:',
+                style={'description_width': 'initial'}, layout=widgets.Layout(width='190px'),
+            )
+        return self._feature_search_parallel_workers_widget
+
+    @property
+    def feature_search_recovery_selector(self):
+        if not hasattr(self, '_feature_search_recovery_selector_widget'):
+            self._feature_search_recovery_selector_widget = widgets.Dropdown(
+                options=[('Select a saved investigation (Refresh to list)', '')],
+                description='Recover run:', layout=widgets.Layout(width='480px'),
+                style={'description_width': 'initial'},
+            )
+            self.refresh_feature_search_recovery_choices()
+        return self._feature_search_recovery_selector_widget
+
+    def refresh_feature_search_recovery_choices(self):
+        selector = self.feature_search_recovery_selector if hasattr(self, '_feature_search_recovery_selector_widget') else None
+        if selector is None:
+            return
+        previous = selector.value
+        options = self._feature_search_recovery_choices()
+        selector.options = [('Select a saved investigation', '')] + options
+        if previous and previous in [value for _, value in options]:
+            selector.value = previous
+
+    @property
+    def feature_search_recovery_refresh_button(self):
+        if not hasattr(self, '_feature_search_recovery_refresh_widget'):
+            button = widgets.Button(description='Refresh investigations', icon='refresh')
+            button.on_click(lambda _: self.refresh_feature_search_recovery_choices())
+            self._feature_search_recovery_refresh_widget = button
+        return self._feature_search_recovery_refresh_widget
+
+    def resume_feature_selection_investigation(self):
+        checkpoint = self.feature_search_recovery_selector.value
+        if not checkpoint:
+            self.feature_search_status.value = 'Select a saved investigation to resume, then click Resume.'
+            return
+        if checkpoint not in [value for _, value in self._feature_search_recovery_choices()]:
+            self.feature_search_status.value = 'Selected checkpoint is no longer available; refresh the list.'
+            return
+        self._launch_feature_selection_investigation(resume_directory=Path(checkpoint))
+
     def run_feature_selection_investigation(self) -> None:
-        if getattr(self, "_feature_search_running", False):
+        self._launch_feature_selection_investigation()
+
+    def _launch_feature_selection_investigation(self, resume_directory=None):
+        import threading
+        if getattr(self, '_feature_search_running', False):
+            return
+        # Snapshot GUI state on the kernel callback thread. Workers must not
+        # read mutable widget values while an investigation is running.
+        try:
+            if resume_directory is None:
+                params = self.get_config_params()
+                options = self.feature_search_options()
+                options.validate()
+                row_limit = int(self.feature_search_rows.value)
+            else:
+                params, options, row_limit = None, None, None
+        except Exception as ex:
+            self.feature_search_status.value = 'Could not start investigation: ' + html.escape(str(ex))
             return
         self._feature_search_running = True
+        self._feature_search_pause_event = threading.Event()
+        self.feature_search_pause_button.disabled = False
+        self.feature_search_resume_button.disabled = True
+        self.feature_search_investigate_button.disabled = True
+        self._feature_search_job = threading.Thread(
+            target=self._run_feature_selection_investigation_worker,
+            args=(params, options, row_limit, resume_directory), daemon=True, name='JBGFeatureInvestigation')
+        self._feature_search_job.start()
+
+    def _run_feature_selection_investigation_worker(self, params, options, row_limit, resume_directory=None) -> None:
         self.disable_button("continuation_button")
         self.feature_search_investigate_button.disabled = True
         self.invalidate_feature_search_result()
         try:
-            options = self.feature_search_options()
-            options.validate()
             self.feature_search_investigate_button.disabled = True
             self.feature_search_status.value = "Starting training-only investigation..."
-            result = self.guihandler.run_feature_selection_investigation(
-                self.get_config_params(), options, on_event=self._feature_search_event,
-                row_limit=self.feature_search_rows.value
-            )
+            if resume_directory is not None:
+                result = self.guihandler.resume_saved_feature_selection_investigation(
+                    resume_directory, on_event=self._feature_search_event,
+                    pause_event=self._feature_search_pause_event,
+                )
+            else:
+                result = self.guihandler.run_feature_selection_investigation(
+                    params, options, on_event=self._feature_search_event,
+                    row_limit=row_limit, pause_event=self._feature_search_pause_event,
+                )
             self.feature_search_result = result
             selected = result["nested_validation"]["selected"]
             baseline = result["nested_validation"]["full_baseline"]
@@ -2035,17 +2165,26 @@ class Widgets:
                 f"Recommended columns: {html.escape(', '.join(columns))}<br>"
                 f"Results: <code>{html.escape(result.get('output_directory', ''))}</code>"
             )
+            if result.get('baseline_warning'):
+                self.feature_search_preview.value += '<br><b>Validation warning:</b> ' + html.escape(result['baseline_warning'])
             self.feature_search_status.value = "Investigation completed. Review the candidate before applying it."
         except Exception as ex:
             # Preserve the failure in the GUI and emit a traceback in the server log.
             import logging
-            logging.getLogger(__name__).exception("Feature-selection investigation failed")
-            self.feature_search_status.value = f"Investigation failed: {html.escape(type(ex).__name__ + ': ' + str(ex))}"
+            from JBGFeatureSearch import InvestigationPaused
+            if not isinstance(ex, InvestigationPaused):
+                logging.getLogger(__name__).exception("Feature-selection investigation failed")
+            if isinstance(ex, InvestigationPaused):
+                self.feature_search_status.value = 'Investigation paused. Use Resume to continue.'
+            else:
+                self.feature_search_status.value = f"Investigation failed: {html.escape(type(ex).__name__ + ': ' + str(ex))}"
         finally:
             # update_ready() also synchronizes controls and otherwise replaces the
             # diagnostic status with the generic Ready prompt.
             final_status = self.feature_search_status.value
             self._feature_search_running = False
+            self.feature_search_pause_button.disabled = True
+            self.feature_search_resume_button.disabled = False
             self.update_ready()
             self.sync_feature_selection_controls(preserve_status=True)
             self.feature_search_status.value = final_status
@@ -2312,6 +2451,8 @@ class Widgets:
         # Native button widths match the other application actions.
         primary_actions = [
             self.feature_search_investigate_button,
+            self.feature_search_pause_button,
+            self.feature_search_resume_button,
             self.feature_search_apply_button,
             self.feature_search_save_button,
         ]
@@ -2320,13 +2461,18 @@ class Widgets:
             self.feature_search_delete_button,
         ]
         mode_row = widgets.HBox([self.feature_selection_mode])
+        self.feature_selection_profile.layout.width = '480px'
         profile_row = widgets.HBox(
             [self.feature_selection_profile, *profile_actions],
             layout=widgets.Layout(align_items="center", flex_flow="row wrap"),
         )
         model_row = widgets.HBox([
             self.feature_search_rows, self.feature_search_model_type,
-            self.feature_search_scaler, self.feature_search_oversampling, self.feature_search_reduction, self.feature_search_fit_budget,
+            self.feature_search_scaler, self.feature_search_oversampling, self.feature_search_reduction, self.feature_search_parallel_workers, self.feature_search_fit_budget,
+        ], layout=widgets.Layout(flex_flow="row wrap", width="100%"))
+        recovery_row = widgets.HBox([
+            self.feature_search_recovery_selector,
+            self.feature_search_recovery_refresh_button,
         ], layout=widgets.Layout(flex_flow="row wrap", width="100%"))
         action_row = widgets.HBox(
             primary_actions,
@@ -2407,7 +2553,7 @@ class Widgets:
             self.feature_search_tree_min_samples_leaf, self.feature_search_tree_class_weight, self.feature_search_tree_positive_threshold,
         ])
         body = widgets.VBox([
-            mode_row, profile_row, model_row, action_row,
+            mode_row, profile_row, model_row, recovery_row, action_row,
             strategy_group, validation_group, family_group,
             self.feature_search_status, self.feature_search_preview,
         ], layout=widgets.Layout(width="100%"))

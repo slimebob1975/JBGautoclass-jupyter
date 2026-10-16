@@ -259,3 +259,5 @@ Revision 097 orders the controls as `Estimate -> Target -> Method -> Alpha -> Fa
 
 
 Feature-selection Revision 138 adds the Combination (FUTV) family, optional fold-local PCA, and an Apply-before-Continue safety gate; see `docs/feature_search_138.md`.
+
+Revision 139 adds resumable feature-search investigations (Pause/Resume and crash checkpoints); see `docs/feature_search_139.md`.

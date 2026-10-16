@@ -2,6 +2,13 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import fields
+import hashlib
+import json
+import os
+import socket
+from contextlib import contextmanager
+import pickle
 from datetime import datetime
 from pathlib import Path
 
@@ -28,71 +35,157 @@ def text_options_from_config(config) -> dict:
     )
 
 
-def run_training_feature_search(config, logger, options: SearchOptions, on_event=None, output=None):
+
+@contextmanager
+def _exclusive_investigation(output):
+    """Block duplicate active jobs, including after GUI reconnection."""
+    lock = Path(output) / 'investigation.lock'
+    token = {'pid': os.getpid(), 'hostname': socket.gethostname()}
+    for attempt in range(2):
+        try:
+            fd = os.open(lock, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            try:
+                previous = json.loads(lock.read_text(encoding='utf-8'))
+                if previous.get('hostname') != token['hostname']:
+                    raise RuntimeError('Investigation lock belongs to another machine; inspect before resuming')
+                os.kill(int(previous['pid']), 0)
+            except ProcessLookupError:
+                # Kernel exited without cleanup; its lock is stale.
+                lock.unlink(missing_ok=True)
+                continue
+            except (ValueError, OSError) as ex:
+                raise RuntimeError('Cannot verify investigation lock owner; inspect the checkpoint before resuming') from ex
+            raise RuntimeError('Investigation is already active in another JBG kernel/process')
+        else:
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as writer:
+                    json.dump(token, writer)
+                    writer.flush()
+                    os.fsync(writer.fileno())
+                yield
+            finally:
+                lock.unlink(missing_ok=True)
+            return
+    raise RuntimeError('Unable to acquire investigation checkpoint lock')
+
+
+def run_training_feature_search(config, logger, options: SearchOptions, on_event=None, output=None,
+                                resume=False, pause_event=None):
     """Fetch and split data exactly once, then expose only original training rows to the search.
 
     The normal JBG holdout remains reserved. This service never runs the classifier task runner,
     saves a model, writes generated application state, changes Repeat Last, or writes predictions.
     """
-    if not config.should_train():
+    if not resume and not config.should_train():
         raise ValueError("Feature-selection investigation requires a training configuration")
-    options.validate()
+    if not resume:
+        options.validate()
 
     investigation_logger = _InvestigationLogger(logger)
-    datalayer = DataLayer(config=config, logger=investigation_logger)
-    rows = datalayer.get_dataset()
-    if rows is None:
-        raise ValueError("No data was fetched for feature-selection investigation")
+    base_output = Path(config.script_path).parent / "output" if not resume else None
+    if resume:
+        if output is None:
+            raise ValueError('Resume requires an investigation checkpoint directory')
+        output = Path(output)
+        snapshot = output / 'development_snapshot.pkl'
+        checksum_path = output / 'development_snapshot.sha256'
+        if not snapshot.is_file() or not checksum_path.is_file():
+            raise ValueError('Missing immutable development snapshot; cannot safely resume')
+        data = snapshot.read_bytes()
+        if hashlib.sha256(data).hexdigest() != checksum_path.read_text(encoding='ascii').strip():
+            raise ValueError('Development snapshot checksum mismatch')
+        # Pickle checkpoints are local, application-created trusted files only.
+        record = pickle.loads(data)
+        X, y, reserved_signature, context = (record[k] for k in
+                                               ('X', 'y', 'holdout_signature', 'context'))
+        # The immutable saved snapshot, not a newly initialized GUI or SQL sample,
+        # is authoritative when recovering an existing investigation.
+        text_options = record['text_options']
+        summary = json.loads((output / 'summary.json').read_text(encoding='utf-8'))
+        saved_options = summary['options']
+        parameters = {field.name: saved_options[field.name] for field in fields(SearchOptions)}
+        for key in ('sizes', 'non_linear_hidden_layers'):
+            parameters[key] = tuple(parameters[key])
+        options = SearchOptions(**parameters)
+        options.validate()
+        target = record['target']
+    else:
+        datalayer = DataLayer(config=config, logger=investigation_logger)
+        rows = datalayer.get_dataset()
+        if rows is None:
+            raise ValueError("No data was fetched for feature-selection investigation")
 
-    handler = JBGHandler(datalayer, config, investigation_logger)
-    dataset = handler.add_handler("dataset")
-    dataset.load_data(rows)
-    dataset.separate_dataset()
-    dataset.split_dataset_for_training_and_validation()
+        handler = JBGHandler(datalayer, config, investigation_logger)
+        dataset = handler.add_handler("dataset")
+        dataset.load_data(rows)
+        dataset.separate_dataset()
+        dataset.split_dataset_for_training_and_validation()
 
-    X = dataset.X_train.copy(deep=True)
-    y = dataset.Y_train.copy(deep=True)
-    if X.empty or y.empty:
-        raise ValueError("Feature-selection investigation has no labelled training rows")
-    classes = sorted(set(y), key=str)
-    if len(classes) < 2:
-        raise ValueError("Feature-selection investigation requires at least two labelled classes")
+        X = dataset.X_train.copy(deep=True)
+        y = dataset.Y_train.copy(deep=True)
+        if X.empty or y.empty:
+            raise ValueError("Feature-selection investigation has no labelled training rows")
+        classes = sorted({str(value) for value in y})
+        if len(classes) != 2:
+            raise ValueError(
+                "Feature-selection investigation currently requires exactly two classes "
+                f"(found {len(classes)}: {', '.join(classes)}). "
+                "Ordinary JBG training supports multiclass data, but this investigative "
+                "feature-search backend does not yet."
+            )
 
-    target = config.get_dark_number_target()
-    if target not in classes:
-        counts = Counter(y)
-        target = min(counts, key=lambda value: (counts[value], str(value)))
+        target = config.get_dark_number_target()
+        if not target:
+            counts = Counter(y)
+            target = min(counts, key=lambda value: (counts[value], str(value)))
 
-    output = Path(output or (
-        Path(config.script_path).parent / "output" /
-        ("feature_search_gui_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
-    ))
-    context = dict(
-        project=config.name,
-        source_kind="sql",
-        source_tables=[f"{config.connection.data_catalog}.{config.connection.data_table}"],
-        class_column=config.get_class_column_name(),
-        id_column=config.get_id_column_name(),
-        excluded_columns=[],
-        group_column="",
-    )
-
-    with threadpool_limits(limits=1):
-        result = run_experiment(
-            X,
-            y,
-            target,
-            output,
-            options=options,
-            text_options=text_options_from_config(config),
-            groups=None,
-            reserved_holdout_signature=partition_signature(
-                dataset.X_validation.index, dataset.Y_validation
-            ),
-            progress=None,
-            on_event=on_event,
-            study_context=context,
+        text_options = text_options_from_config(config)
+        output = Path(output or (base_output / ("feature_search_gui_" +
+                                datetime.now().strftime("%Y%m%d_%H%M%S_%f"))))
+        reserved_signature = partition_signature(dataset.X_validation.index, dataset.Y_validation)
+    if not resume:
+        context = dict(
+            project=config.name,
+            source_kind="sql",
+            source_tables=[f"{config.connection.data_catalog}.{config.connection.data_table}"],
+            class_column=config.get_class_column_name(),
+            id_column=config.get_id_column_name(),
+            excluded_columns=[],
+            group_column="",
         )
+
+    if not resume:
+        output.mkdir(parents=True, exist_ok=False)
+        record = dict(X=X, y=y, holdout_signature=reserved_signature, context=context,
+                      text_options=text_options, target=target)
+        snapshot = output / 'development_snapshot.pkl'
+        # Atomic creation avoids a partially written checkpoint after a crash.
+        temp = snapshot.with_suffix('.tmp')
+        data = pickle.dumps(record, protocol=pickle.HIGHEST_PROTOCOL)
+        temp.write_bytes(data)
+        os.replace(temp, snapshot)
+        (output / 'development_snapshot.sha256').write_text(hashlib.sha256(data).hexdigest(),
+                                                              encoding='ascii')
+    with _exclusive_investigation(output):
+        with threadpool_limits(limits=1):
+            result = run_experiment(
+                X,
+                y,
+                target,
+                output,
+                options=options,
+                text_options=text_options,
+                groups=None,
+                reserved_holdout_signature=partition_signature(
+                    dataset.X_validation.index, dataset.Y_validation
+                ) if not resume else reserved_signature,
+                progress=None,
+                on_event=on_event,
+                study_context=context,
+                resume=resume,
+                pause_event=pause_event,
+            )
     result["output_directory"] = str(output)
     return result
 

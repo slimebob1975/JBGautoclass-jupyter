@@ -1,3 +1,4 @@
+- [x] Revision 140: checkpoint-safe candidate-level parallelism and matching Profile/Recover run layout.
 - [x] Revision 136: configurable tree class weighting, fixed binary target threshold, zero-MCC baseline tie protection, TP/FP/FN previews, and removal of duplicate budget/tree dropdowns.
 - [ ] Evaluate fold-internal threshold tuning/calibration, balanced objective constraints, and identifier-aware exclusion on a fixed independent cohort before adding automatic optimization.
 - [x] Add selectable Random Forest alongside Extra Trees, plus Quick/Standard/Extended/Custom search budgets (revision 135).
@@ -279,3 +280,7 @@ Current coverage includes numeric binary/multiclass classification, 4/13/30-feat
 - [x] 138 — Add fixed FUTV Combination investigative estimator, fold-local PCA after optional SMOTE, and explicit Apply gate for assisted/reuse Continue. See `docs/feature_search_138.md`.
 - [ ] Feature search: optional FUTV voting-weight parameter study with training-only nested selection; compare with ordinary JBG grid, without sharing validation data across tuning steps.
 - [ ] Investigate group-aware splits for repeated claimant identifiers, and optional leakage warnings for identifier-like columns.
+
+- [x] 139 — Crash-resumable feature search with atomic candidate and outer-fit checkpoints, saved data snapshot, Pause/Resume GUI and baseline performance warning. See `docs/feature_search_139.md`.
+- [ ] 140 — Configurable parallel candidate evaluations, with deterministic worker seeds, checkpoint-safe job scheduling and memory controls.
+- [ ] Investigate fold-level checkpointing to avoid repeating partially finished expensive FUTV candidates after a forced shutdown.

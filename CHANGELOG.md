@@ -1,3 +1,27 @@
+## Revision 140 — checkpoint-safe candidate parallelism
+
+- Add 1/2/4 candidate worker processes for nested CV feature searches.
+- Keep candidate ordering, CV partitions and committed results deterministic; parent-only checkpoint writes.
+- Spawn persistent workers per search scope, cap worker native numerical threads, preserve grouped CV and pause/recovery.
+- Set matching Profile/Recover run selector widths.
+- Verify serial/parallel, grouped-CV and interrupted/resumed equivalence.
+
+## Revision 139 Hotfix 1 — explicit investigation recovery
+
+- Select paused/interrupted runs explicitly instead of implicitly choosing the latest.
+- Restore all investigative settings from the checkpoint, independently of the new GUI state.
+- Retain checksum, fingerprint, version and single-writer checks.
+- Add checkpoint recovery regression tests; see `docs/feature_search_139_hotfix_1.md`.
+
+## Revision 139 — Recoverable feature-selection investigations
+
+- Run GUI feature investigations asynchronously so Pause can be requested during a long fit.
+- Save immutable development training snapshot plus value-aware resume fingerprint; never re-fetch random SQL rows for Resume.
+- Commit candidate scores and outer-fold validation results atomically; repair torn CSV reports on restart.
+- Pause cooperatively between candidate evaluations or outer-model fits, and resume with the same study ID, folds and options.
+- Warn when nested feature subset selection underperforms the full-column baseline.
+- Include regression tests and `docs/feature_search_139.md`.
+
 ## Revision 138 — FUTV Combination, PCA and assisted Continue gate
 
 - Add a fixed FUTV soft-voting investigative model (MLPC / RF / AdaBoost, weights 1:2:1).

@@ -1,10 +1,14 @@
 """Experimental original-column wrapper search; no application state is written."""
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
 from itertools import combinations
 import json
+import os
+import threading
 from numbers import Real
 from pathlib import Path
 import platform
@@ -64,6 +68,7 @@ class SearchOptions:
     tree_min_samples_leaf: int = 1
     tree_class_weight: str = 'None'
     tree_positive_threshold: float = 0.5
+    parallel_workers: int = 1
 
     @property
     def planned_fit_upper_bound(self):
@@ -72,7 +77,7 @@ class SearchOptions:
     def validate(self):
         for name in ('trials', 'inner_folds', 'outer_folds', 'top_sets', 'max_evaluations',
                      'max_iterations', 'non_linear_max_iterations', 'tree_n_estimators',
-                     'tree_min_samples_leaf'):
+                     'tree_min_samples_leaf', 'parallel_workers'):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f'{name} must be a positive integer')
         if self.inner_folds < 2 or self.outer_folds < 2:
@@ -374,22 +379,101 @@ def ranking(row):
     return (-row['mean_mcc'], 0 if baseline_tie else 1, row['n_columns'], row['std_mcc'], row['columns'])
 
 
+class InvestigationPaused(Exception):
+    """Cooperative pause at a completed candidate or outer-model boundary."""
+
+
+def _checkpoint_fingerprint(X, y, target, options, text_options, groups, holdout_signature):
+    """Bind checkpoints to feature VALUES, row ordering, labels and settings."""
+    digest = hashlib.sha256()
+    for frame in (X, y, groups):
+        if frame is None:
+            digest.update(b'NO_GROUPS')
+            continue
+        digest.update(pd.util.hash_pandas_object(frame, index=True).to_numpy(dtype='<u8').tobytes())
+        if isinstance(frame, pd.DataFrame):
+            digest.update(json.dumps([(str(k), str(v)) for k, v in frame.dtypes.items()],
+                                     ensure_ascii=False).encode('utf-8'))
+    payload = dict(columns=list(X.columns), target=str(target), options=asdict(options),
+                   text_options=text_options or {}, reserved_holdout_signature=holdout_signature)
+    digest.update(json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str).encode('utf-8'))
+    return digest.hexdigest()
+
+
+def _atomic_json(path, record):
+    path = Path(path)
+    temp = path.with_suffix(path.suffix + '.tmp')
+    with temp.open('w', encoding='utf-8') as stream:
+        json.dump(record, stream, ensure_ascii=False, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temp, path)
+
+
+def _restore_rows(path):
+    if not Path(path).exists():
+        return []
+    result = []
+    for record in pd.read_csv(path, sep=';', encoding='utf-8-sig').to_dict('records'):
+        for key in ('columns', 'fold_mcc', 'seed_columns', 'before_columns', 'after_columns'):
+            if key in record and isinstance(record[key], str):
+                record[key] = tuple(json.loads(record[key])) if key != 'fold_mcc' else json.loads(record[key])
+        if pd.isna(record.get('error')):
+            record['error'] = ''
+        result.append(record)
+    return result
+
+
+def _load_committed_records(directory, prefix):
+    records = []
+    for file in sorted((Path(directory) / '.checkpoints').glob(prefix + '*.json')):
+        record = json.loads(file.read_text(encoding='utf-8'))
+        for key in ('columns', 'seed_columns', 'before_columns', 'after_columns'):
+            if key in record:
+                record[key] = tuple(record[key])
+        records.append(record)
+    return records
+
+
+def _commit_record(directory, identifier, record):
+    destination = Path(directory) / '.checkpoints'
+    destination.mkdir(exist_ok=True)
+    _atomic_json(destination / (identifier + '.json'), record)
+
+
+
+def _parallel_candidate_job(X, y, target, options, text_options, groups, columns, stage):
+    """Evaluate a single subset in an isolated process; workers never write checkpoints."""
+    from threadpoolctl import threadpool_limits
+    with threadpool_limits(limits=1):
+        local = Search(X, y, target, options, text_options, 'worker', lambda row: None, groups=groups)
+        row = local.evaluate(columns, stage)
+    return row, local.fit_count
+
+
 class Search:
     def __init__(self, X, y, target, options, text_options, scope, sink, groups=None, progress=None,
-                 on_event=None):
+                 on_event=None, previous=None, pause_event=None, checkpoint_directory=None):
         self.X, self.y, self.target = X, y, target
         self.options, self.text_options = options, text_options
         self.scope, self.sink, self.progress = scope, sink, progress
+        self.groups = groups
         self.folds = folds_for(X, y, options.inner_folds, options.seed, groups)
-        self.cache, self.moves = {}, []
+        self.cache = {tuple(r["columns"]): r for r in (previous or [])}
+        self.moves = []
+        self.pause_event = pause_event
+        self.checkpoint_directory = checkpoint_directory
         self.fit_count = 0
         self.on_event = on_event
+        self.executor = None
 
     def emit(self, event, **values):
         if self.on_event:
             self.on_event(dict(event=event, scope=self.scope, model_type=self.options.model_type, **values))
 
     def evaluate(self, columns, stage):
+        if self.pause_event is not None and self.pause_event.is_set():
+            raise InvestigationPaused('Paused at candidate checkpoint')
         columns = tuple(c for c in self.X.columns if c in columns)
         if columns in self.cache:
             return self.cache[columns]
@@ -440,16 +524,83 @@ class Search:
                           f'{len(columns)} columns, MCC={row["mean_mcc"]:.4f}' + (' FAILED' if error else ''))
         return row
 
+    def evaluate_batch(self, requests):
+        """Commit in input order, even when worker completion order differs.
+
+        Batches never exceed worker count: on termination, at most one small
+        batch of calculated but uncommitted scores can need recomputation.
+        """
+        if self.options.parallel_workers == 1:
+            return [self.evaluate(columns, stage) for columns, stage in requests]
+        results = [None] * len(requests)
+        pending = []
+        reserved = set(self.cache)
+        for index, (requested, stage) in enumerate(requests):
+            columns = tuple(c for c in self.X.columns if c in requested)
+            if columns in self.cache:
+                results[index] = self.cache[columns]
+            elif columns in reserved or len(reserved) >= self.options.max_evaluations:
+                results[index] = None
+            else:
+                reserved.add(columns)
+                pending.append((index, columns, stage))
+        if self.pause_event is not None and self.pause_event.is_set():
+            raise InvestigationPaused('Paused at parallel batch boundary')
+        # A single persistent executor for the current batch. Never share sink,
+        # progress callback, threads, lock or GUI state across processes.
+        for offset in range(0, len(pending), self.options.parallel_workers):
+            batch = pending[offset:offset + self.options.parallel_workers]
+            if self.pause_event is not None and self.pause_event.is_set():
+                raise InvestigationPaused('Paused at parallel batch boundary')
+            futures = [self.executor.submit(_parallel_candidate_job, self.X, self.y, self.target,
+                       self.options, self.text_options, self.groups, columns, stage)
+                       for _, columns, stage in batch]
+            for (index, columns, stage), future in zip(batch, futures):
+                row, n_fits = future.result()
+                row['scope'] = self.scope
+                row['candidate'] = len(self.cache) + 1
+                self.cache[columns] = row
+                self.fit_count += n_fits
+                # Process workers don't send GUI callbacks. Report committed
+                # fit units on the parent thread after the result is durable.
+                for fold_number in range(n_fits):
+                    self.emit('fit_started', phase='inner', candidate=row['candidate'],
+                              fold=fold_number + 1, folds=len(self.folds),
+                              n_columns=len(columns), stage=stage)
+                self.sink(row)
+                self.emit('candidate_completed', candidate=len(self.cache),
+                          max_evaluations=self.options.max_evaluations,
+                          n_columns=len(columns), mean_mcc=row['mean_mcc'] if not row['error'] else None,
+                          error=row['error'])
+                if self.progress:
+                    self.progress(f'{self.scope}: candidate {len(self.cache)}/{self.options.max_evaluations}, '
+                                  f'{len(columns)} columns, MCC={row["mean_mcc"]:.4f}')
+                results[index] = row
+        return results
+
     def run(self):
-        self.emit('search_started', max_evaluations=self.options.max_evaluations)
+        if self.options.parallel_workers == 1:
+            return self._run_impl()
+        # 'spawn' is safe from the Jupyter/Voilà background callback thread,
+        # unlike forking an already multithreaded kernel.
+        with ProcessPoolExecutor(max_workers=self.options.parallel_workers,
+                                 mp_context=get_context('spawn')) as self.executor:
+            try:
+                return self._run_impl()
+            finally:
+                self.executor = None
+
+    def _run_impl(self):
+        self.emit('search_started' , max_evaluations=self.options.max_evaluations)
         columns = tuple(self.X.columns)
         self.evaluate(columns, 'full_baseline')
-        for subset in random_subsets(columns, self.options):
-            self.evaluate(subset, 'random')
-        successful = sorted((r for r in self.cache.values() if not r['error']), key=ranking)
+        self.evaluate_batch([(subset, 'random') for subset in random_subsets(columns, self.options)])
+        # Exclude refinement results when reconstructing seed frontier on resume.
+        successful = sorted((r for r in self.cache.values()
+                             if not r['error'] and r.get('stage') != 'refine'), key=ranking)
         if not successful:
             raise ValueError(f'{self.scope}: no subset completed all CV folds; inspect subsets.csv')
-        for seed_row in successful[:self.options.top_sets]:
+        for seed_number, seed_row in enumerate(successful[:self.options.top_sets], 1):
             current = seed_row
             for round_number in range(self.options.refine_rounds):
                 base = current['columns']
@@ -466,22 +617,36 @@ class Search:
                     neighbours.append((proposal, operation, feature))
                 remaining = self.options.max_evaluations - len(self.cache)
                 pending = [(p, op, feature) for p, op, feature in neighbours if p not in self.cache]
-                if remaining <= 0:
-                    break
-                # A full neighbourhood can require O(number of columns) CV
-                # evaluations. Under a bounded budget, examine a reproducible
-                # subset instead of silently skipping refinement entirely.
-                # Existing cached neighbours always participate in the decision.
-                if len(pending) > remaining:
-                    rng = np.random.default_rng(self.options.seed + 1009 * (round_number + 1) + 7919 * len(base))
-                    indices = sorted(rng.choice(len(pending), size=remaining, replace=False).tolist())
-                    chosen = [pending[i] for i in indices]
-                    allowed = {p for p, _, _ in chosen} | set(self.cache)
+                plan_path = (Path(self.checkpoint_directory) / '.checkpoints' /
+                             f'refinement_plan_{self.scope}_seed{seed_number}_round{round_number + 1}.json'
+                             if self.checkpoint_directory is not None else None)
+                if plan_path is not None and plan_path.is_file():
+                    plan = json.loads(plan_path.read_text(encoding='utf-8'))
+                    if tuple(plan['base_columns']) != tuple(base):
+                        raise ValueError('Checkpoint refinement plan does not match the reconstructed search')
+                    allowed = {tuple(value) for value in plan['allowed_columns']}
                     neighbours = [entry for entry in neighbours if entry[0] in allowed]
-                    self.emit('refinement_budget_limited', round=round_number + 1,
-                              proposed=len(pending), evaluated_new=len(chosen),
-                              remaining_before=remaining)
-                evaluated = [(self.evaluate(p, 'refine'), operation, feature) for p, operation, feature in neighbours]
+                else:
+                    if remaining <= 0:
+                        break
+                    # Persist this immutable neighbourhood decision BEFORE fitting
+                    # any proposals. Recomputing it after a pause could spend the
+                    # reduced remaining budget on different candidates.
+                    if len(pending) > remaining:
+                        rng = np.random.default_rng(self.options.seed + 1009 * (round_number + 1) + 7919 * len(base))
+                        indices = sorted(rng.choice(len(pending), size=remaining, replace=False).tolist())
+                        chosen = [pending[i] for i in indices]
+                        allowed = {p for p, _, _ in chosen} | set(self.cache)
+                        neighbours = [entry for entry in neighbours if entry[0] in allowed]
+                        self.emit('refinement_budget_limited', round=round_number + 1,
+                                  proposed=len(pending), evaluated_new=len(chosen),
+                                  remaining_before=remaining)
+                    if plan_path is not None:
+                        plan_path.parent.mkdir(exist_ok=True)
+                        _atomic_json(plan_path, dict(base_columns=list(base),
+                                                     allowed_columns=[list(p) for p, _, _ in neighbours]))
+                rows = self.evaluate_batch([(p, 'refine') for p, _, _ in neighbours])
+                evaluated = [(row, operation, feature) for row, (_, operation, feature) in zip(rows, neighbours)]
                 usable = [(r, op, feature) for r, op, feature in evaluated if r is not None and not r['error']]
                 if not usable:
                     break
@@ -512,7 +677,8 @@ def export_frame(rows, path, append=False, columns=None):
 
 
 def run_experiment(X, y, target, output, options=None, text_options=None, groups=None,
-                   reserved_holdout_signature=None, progress=print, on_event=None, study_context=None):
+                   reserved_holdout_signature=None, progress=print, on_event=None, study_context=None,
+                   resume=False, pause_event=None):
     """Nested CV evaluates selection on training data; external holdout never enters.
 
     A final search on all development rows supplies a recommendation, not an
@@ -540,12 +706,36 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         folds_for(X.iloc[train], y.iloc[train], options.inner_folds, options.seed,
                   groups.iloc[train] if groups is not None else None)
     output = Path(output)
-    if output.exists() and any(output.iterdir()):
-        raise ValueError('Output directory must be new or empty; previous results are never overwritten')
+    summary_path = output / 'summary.json'
+    fingerprint = _checkpoint_fingerprint(X, y, target, options, text_options, groups,
+                                          reserved_holdout_signature)
+    if resume:
+        if not summary_path.is_file():
+            raise ValueError('No checkpoint summary.json to resume')
+        existing = json.loads(summary_path.read_text(encoding='utf-8'))
+        if existing.get('checkpoint_fingerprint') != fingerprint:
+            raise ValueError('Checkpoint does not match current feature data, labels, settings or holdout')
+        old_provenance = existing.get('provenance', {})
+        for key in ('backend_source_sha256', 'sklearn_version'):
+            if old_provenance.get(key) != provenance.get(key):
+                raise ValueError('Checkpoint implementation or scikit-learn version changed; safe resume is unavailable')
+        if existing.get('status') == 'completed':
+            raise ValueError('This investigation is already completed')
+    elif output.exists() and any(p.name not in ('development_snapshot.pkl', 'development_snapshot.sha256', 'investigation.lock') for p in output.iterdir()):
+        raise ValueError('Output directory must be new or empty (except a new development snapshot); previous results are never overwritten')
     output.mkdir(parents=True, exist_ok=True)
-    all_rows, moves, outer_rows, selected_sets = [], [], [], []
+    all_rows = _load_committed_records(output, 'candidate_') if resume else []
+    moves, selected_sets = [], []
+    outer_rows = _load_committed_records(output, 'outer_') if resume else []
+    if resume:
+        # Rebuild human-readable exports from atomic commits; a forced shutdown
+        # may have torn the trailing line of a CSV append.
+        if all_rows:
+            export_frame(all_rows, output / 'subsets.csv')
+        if outer_rows:
+            export_frame(outer_rows, output / 'outer_validation.csv')
     signatures = dict(development=partition_signature(X.index, y), reserved_holdout=reserved_holdout_signature)
-    manifest = dict(schema_version=2, study_id=str(uuid4()),
+    manifest = dict(schema_version=3, study_id=str(uuid4()),
                     started_at=datetime.now(timezone.utc).isoformat(),
                     status='running', experimental=True, options=asdict(options), target=str(target),
                     investigative_model=identity, provenance=provenance,
@@ -554,16 +744,24 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
                     evaluation=dict(type='multiclass' if is_multiclass else 'binary',
                                     ranking='mean fold multiclass MCC' if is_multiclass else 'mean fold MCC',
                                     target=str(target), class_labels=[str(v) for v in labels]),
-                    planned_fit_upper_bound=options.planned_fit_upper_bound, attempted_fits=0)
+                    planned_fit_upper_bound=options.planned_fit_upper_bound, attempted_fits=0,
+                    checkpoint_fingerprint=fingerprint)
     if groups is not None:
         manifest['signatures']['development_groups'] = hashlib.sha256(
             pd.util.hash_pandas_object(groups, index=True).to_numpy(dtype='<u8').tobytes()).hexdigest()
-    (output / 'summary.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+    if resume:
+        manifest = existing
+        manifest['status'] = 'running'
+        manifest.pop('error', None)
+        manifest['resumed_at'] = datetime.now(timezone.utc).isoformat()
+    _atomic_json(summary_path, manifest)
     def sink(row):
+        # Atomic candidate commit is authoritative; CSV is an expendable export.
+        _commit_record(output, f"candidate_{row['scope']}_{row['candidate']:04d}", row)
         all_rows.append(row)
-        # Append each completed candidate so an interrupted run retains its evidence.
         export_frame([row], output / 'subsets.csv', append=True)
     event_callback = on_event
+    run_started = perf_counter()
     def emit(event):
         nonlocal event_callback
         if event['event'] == 'fit_started':
@@ -572,20 +770,27 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
             try:
                 event_callback(dict(schema_version=1, study_id=manifest['study_id'],
                                     attempted_fits=manifest['attempted_fits'],
+                                    completed_candidates=len(all_rows),
+                                    elapsed_seconds=perf_counter() - run_started,
                                     planned_fit_upper_bound=options.planned_fit_upper_bound, **event))
             except Exception as ex:
                 manifest['progress_reporting_error'] = type(ex).__name__
                 event_callback = None
                 warnings.warn('Feature-search progress callback failed; investigation continues.', RuntimeWarning)
     try:
-        emit(dict(event='study_started', model_type=options.model_type))
+        emit(dict(event='study_resumed' if resume else 'study_started', model_type=options.model_type))
         for fold, (train, test) in enumerate(outer, 1):
             search = Search(X.iloc[train], y.iloc[train], target, options, text_options,
-                f'outer_{fold}', sink, groups.iloc[train] if groups is not None else None, progress, emit)
+                f'outer_{fold}', sink, groups.iloc[train] if groups is not None else None, progress, emit,
+                previous=[r for r in all_rows if r['scope'] == f'outer_{fold}'], pause_event=pause_event, checkpoint_directory=output)
             best = search.run()
             moves.extend(search.moves)
             selected_sets.append(best['columns'])
             for name, subset in [('selected', best['columns']), ('full_baseline', tuple(X.columns))]:
+                if any(r['fold'] == fold and r['model'] == name for r in outer_rows):
+                    continue
+                if pause_event is not None and pause_event.is_set():
+                    raise InvestigationPaused('Paused at outer-validation checkpoint')
                 model = make_pipeline(subset, options, text_options)
                 with warnings.catch_warnings(record=True) as recorded:
                     warnings.simplefilter('always', ConvergenceWarning)
@@ -601,11 +806,14 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
                     validation_signature=partition_signature(X.iloc[test].index, y.iloc[test]),
                     **metrics(classification_counts(y.iloc[test], predicted, target)),
                     **(multiclass_diagnostics(y.iloc[test], predicted, labels) if is_multiclass else {})))
+                _commit_record(output, f'outer_{fold}_{name}', outer_rows[-1])
+                export_frame(outer_rows, output / 'outer_validation.csv')
             export_frame(outer_rows, output / 'outer_validation.csv')
             export_frame(moves, output / 'refinement.csv', columns=['scope', 'seed_columns', 'round', 'operation', 'feature', 'before_columns', 'after_columns', 'before_mcc', 'after_mcc', 'gain'])
             emit(dict(event='outer_validation_completed', scope=f'outer_{fold}',
                       model_type=options.model_type, fold=fold, folds=len(outer)))
-        search = Search(X, y, target, options, text_options, 'development', sink, groups, progress, emit)
+        search = Search(X, y, target, options, text_options, 'development', sink, groups, progress, emit,
+                        previous=[r for r in all_rows if r['scope'] == 'development'], pause_event=pause_event, checkpoint_directory=output)
         best = search.run()
         moves.extend(search.moves)
         export_frame(moves, output / 'refinement.csv', columns=['scope', 'seed_columns', 'round', 'operation', 'feature', 'before_columns', 'after_columns', 'before_mcc', 'after_mcc', 'gain'])
@@ -638,15 +846,18 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
             search_mean_mcc=best['mean_mcc'], search_std_mcc=best['std_mcc'],
             score_status='Exploratory search-CV score; not independent validation of this exact subset')
         (output / 'selected_features.json').write_text(json.dumps(recommendation, ensure_ascii=False, indent=2), encoding='utf-8')
+        if summaries['selected']['mean_mcc'] < summaries['full_baseline']['mean_mcc']:
+            manifest['baseline_warning'] = ('Nested selected-subset procedure underperforms the full-column baseline; '
+                                            'do not apply the reduced subset without independent review.')
         manifest.update(status='completed', evaluated_subsets=len(all_rows),
             nested_validation=summaries, paired_outer_mcc_gains=paired, recommendation=recommendation,
             interpretation='Outer CV evaluates the entire selection procedure, not the exact final development subset. No external holdout evaluation or application configuration/model update.',
             limitations='Best/worst contrasts and selection frequency are model-dependent clues, not intrinsic feature importance. Search scores are optimistic. Group CV measures new-group generalization only when the supplied groups represent it.')
     except BaseException as ex:
-        manifest.update(status='interrupted' if isinstance(ex, KeyboardInterrupt) else 'failed',
+        manifest.update(status='paused' if isinstance(ex, InvestigationPaused) else ('interrupted' if isinstance(ex, KeyboardInterrupt) else 'failed'),
                         error=f'{type(ex).__name__}: {ex}', evaluated_subsets=len(all_rows))
         manifest['finished_at'] = datetime.now(timezone.utc).isoformat()
-        (output / 'summary.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+        _atomic_json(summary_path, manifest)
         # Reporting must not replace the original failure/interruption.
         try:
             emit(dict(event='study_' + manifest['status'], model_type=options.model_type,
@@ -656,5 +867,5 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         raise
     manifest['finished_at'] = datetime.now(timezone.utc).isoformat()
     emit(dict(event='study_completed', model_type=options.model_type))
-    (output / 'summary.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+    _atomic_json(summary_path, manifest)
     return manifest
