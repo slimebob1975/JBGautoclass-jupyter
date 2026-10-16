@@ -71,7 +71,7 @@ def _exclusive_investigation(output):
 
 
 def run_training_feature_search(config, logger, options: SearchOptions, on_event=None, output=None,
-                                resume=False, pause_event=None):
+                                resume=False, pause_event=None, investigation_mode="selection_plus_diagnostics", subgroup_column=None):
     """Fetch and split data exactly once, then expose only original training rows to the search.
 
     The normal JBG holdout remains reserved. This service never runs the classifier task runner,
@@ -110,6 +110,8 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         options = SearchOptions(**parameters)
         options.validate()
         target = record['target']
+        investigation_mode = summary.get('investigation_mode', 'selection_plus_diagnostics')
+        subgroup_column = summary.get('subgroup_column')
     else:
         datalayer = DataLayer(config=config, logger=investigation_logger)
         rows = datalayer.get_dataset()
@@ -185,6 +187,7 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
                 study_context=context,
                 resume=resume,
                 pause_event=pause_event,
+                investigation_mode=investigation_mode, subgroup_column=subgroup_column,
             )
     result["output_directory"] = str(output)
     return result

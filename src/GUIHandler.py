@@ -462,7 +462,7 @@ class GUIHandler:
             )
         return self.run_classifier(config_params=config_params, output=output)
 
-    def run_feature_selection_investigation(self, config_params: dict, options, on_event=None, row_limit=None, output=None, resume=False, pause_event=None):
+    def run_feature_selection_investigation(self, config_params: dict, options, on_event=None, row_limit=None, output=None, resume=False, pause_event=None, investigation_mode="selection_plus_diagnostics", subgroup_column=None):
         """Run the GUI-assisted feature investigation without touching classifier state."""
         from JBGFeatureSearchService import run_training_feature_search
 
@@ -485,6 +485,7 @@ class GUIHandler:
             output=output,
             resume=resume,
             pause_event=pause_event,
+            investigation_mode=investigation_mode, subgroup_column=subgroup_column,
         )
 
     def resume_saved_feature_selection_investigation(self, output, on_event=None, pause_event=None):

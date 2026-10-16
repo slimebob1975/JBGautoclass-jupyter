@@ -483,6 +483,8 @@ class Config:
         feature_search_tree_n_estimators: int = 100
         feature_search_tree_max_depth: int = 0
         feature_search_tree_min_samples_leaf: int = 1
+        feature_search_catboost_class_weight: str = "None"
+        feature_search_catboost_iterations: int = 400
 
         def __post_init__(self) -> None:
             # New configurations default to the separated alpha adjustment for
@@ -556,8 +558,12 @@ class Config:
                 raise ValueError("Argument feature_selection_mode must be manual, assisted or reuse")
             if not isinstance(self.feature_selection_profile_id, str):
                 raise TypeError("Argument feature_selection_profile_id must be a string")
-            if self.feature_search_model_type not in ("Linear", "Non-linear", "Tree", "Combination"):
-                raise ValueError("Argument feature_search_model_type must be Linear, Non-linear, Tree or Combination")
+            if self.feature_search_model_type not in ("Linear", "Non-linear", "Tree", "Combination", "CatBoost"):
+                raise ValueError("Argument feature_search_model_type must be Linear, Non-linear, Tree, Combination or CatBoost")
+            if self.feature_search_catboost_class_weight not in ("None", "Balanced"):
+                raise ValueError("Unknown CatBoost class weighting")
+            if type(self.feature_search_catboost_iterations) is not int or not 1 <= self.feature_search_catboost_iterations <= 10000:
+                raise ValueError("CatBoost iterations must be in [1, 10000]")
             if self.feature_search_preset not in ("Quick", "Standard", "Extended", "Custom"):
                 raise ValueError("Unknown feature search preset")
             if self.feature_search_tree_estimator not in ("Extra Trees", "Random Forest"):
@@ -1031,7 +1037,7 @@ class Config:
             "feature_search_preset", "feature_search_tree_estimator", "feature_search_tree_class_weight", "feature_search_tree_positive_threshold",
             "feature_search_preset", "feature_search_tree_estimator", "feature_search_tree_class_weight", "feature_search_tree_positive_threshold",
             "feature_search_tree_n_estimators", "feature_search_tree_max_depth",
-            "feature_search_tree_min_samples_leaf",
+            "feature_search_tree_min_samples_leaf", "feature_search_catboost_class_weight", "feature_search_catboost_iterations",
         ):
             if not hasattr(saved_config.mode, field_name):
                 setattr(saved_config.mode, field_name, copy.deepcopy(getattr(feature_search_defaults, field_name)))
@@ -1178,6 +1184,8 @@ class Config:
                 feature_search_tree_n_estimators=int(module.mode.get("feature_search_tree_n_estimators", 100)),
                 feature_search_tree_max_depth=int(module.mode.get("feature_search_tree_max_depth", 0)),
                 feature_search_tree_min_samples_leaf=int(module.mode.get("feature_search_tree_min_samples_leaf", 1)),
+                feature_search_catboost_class_weight=module.mode.get("feature_search_catboost_class_weight", "None"),
+                feature_search_catboost_iterations=int(module.mode.get("feature_search_catboost_iterations", 400)),
             ),
             io=Config.IO(
                 verbose=module.io["verbose"],

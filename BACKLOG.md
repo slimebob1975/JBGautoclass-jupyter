@@ -1,3 +1,6 @@
+- [x] Revision 141: CatBoost investigative classifier with native categorical processing and class weighting.
+- [ ] Verify two-worker Pause/Resume on Windows after Revision 140 (deferred by user).
+- [ ] Consider CatBoost in ordinary JBG training grids after experimental monthly-data validation.
 - [x] Revision 140: checkpoint-safe candidate-level parallelism and matching Profile/Recover run layout.
 - [x] Revision 136: configurable tree class weighting, fixed binary target threshold, zero-MCC baseline tie protection, TP/FP/FN previews, and removal of duplicate budget/tree dropdowns.
 - [ ] Evaluate fold-internal threshold tuning/calibration, balanced objective constraints, and identifier-aware exclusion on a fixed independent cohort before adding automatic optimization.

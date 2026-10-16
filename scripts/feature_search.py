@@ -41,7 +41,7 @@ def parser():
     p.add_argument('--oversampling', choices=['NOG', 'RND', 'SME'], default='NOG',
                    help='JBG oversampling: NOG=none, RND=random, SME=SMOTE; training folds only')
     p.add_argument('--reduction', choices=['NOR', 'PCA'], default='NOR')
-    p.add_argument('--model-type', choices=['Linear', 'Non-linear', 'Tree', 'Combination'], default='Linear',
+    p.add_argument('--model-type', choices=['Linear', 'Non-linear', 'Tree', 'Combination', 'CatBoost'], default='Linear',
                    help='Fixed investigative model, independent of the normal classifier')
     p.add_argument('--C', type=float, default=1., help='Linear inverse regularization strength')
     p.add_argument('--max-iterations', '--linear-max-iterations', type=int, default=2000,
@@ -50,6 +50,8 @@ def parser():
     p.add_argument('--non-linear-alpha', type=float, default=0.0001)
     p.add_argument('--non-linear-hidden-layers', type=int, nargs='+', default=[100])
     p.add_argument('--non-linear-learning-rate', type=float, default=0.001)
+    p.add_argument('--catboost-iterations', type=int, default=400)
+    p.add_argument('--catboost-class-weight', choices=['None', 'Balanced'], default='None')
     p.add_argument('--tree-estimator', choices=['Extra Trees', 'Random Forest'], default='Extra Trees')
     p.add_argument('--tree-n-estimators', type=int, default=100)
     p.add_argument('--tree-max-depth', type=int, help='Omit for unrestricted depth')
@@ -166,7 +168,8 @@ def main(argv=None):
         non_linear_hidden_layers=tuple(args.non_linear_hidden_layers),
         non_linear_learning_rate=args.non_linear_learning_rate,
         tree_estimator=args.tree_estimator, tree_n_estimators=args.tree_n_estimators, tree_max_depth=args.tree_max_depth,
-        tree_min_samples_leaf=args.tree_min_samples_leaf)
+        tree_min_samples_leaf=args.tree_min_samples_leaf,
+        catboost_iterations=args.catboost_iterations, catboost_class_weight=args.catboost_class_weight)
     try:
         options.validate()
         X, y, target, text_options, reserved_signature = load_development(args)

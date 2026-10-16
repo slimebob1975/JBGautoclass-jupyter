@@ -20,12 +20,12 @@ import warnings
 import numpy as np
 import pandas as pd
 import sklearn
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, ClassifierMixin
 from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier, AdaBoostClassifier, VotingClassifier
 from sklearn.exceptions import ConvergenceWarning
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import matthews_corrcoef, confusion_matrix
+from sklearn.metrics import matthews_corrcoef, confusion_matrix, roc_auc_score, average_precision_score, brier_score_loss
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 from sklearn.neural_network import MLPClassifier
 from sklearn.decomposition import PCA
@@ -69,6 +69,10 @@ class SearchOptions:
     tree_class_weight: str = 'None'
     tree_positive_threshold: float = 0.5
     parallel_workers: int = 1
+    catboost_iterations: int = 400
+    catboost_depth: int = 6
+    catboost_learning_rate: float = 0.05
+    catboost_class_weight: str = 'None'
 
     @property
     def planned_fit_upper_bound(self):
@@ -77,7 +81,7 @@ class SearchOptions:
     def validate(self):
         for name in ('trials', 'inner_folds', 'outer_folds', 'top_sets', 'max_evaluations',
                      'max_iterations', 'non_linear_max_iterations', 'tree_n_estimators',
-                     'tree_min_samples_leaf', 'parallel_workers'):
+                     'tree_min_samples_leaf', 'parallel_workers', 'catboost_iterations', 'catboost_depth'):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f'{name} must be a positive integer')
         if self.inner_folds < 2 or self.outer_folds < 2:
@@ -104,8 +108,14 @@ class SearchOptions:
             raise ValueError('tree_positive_threshold must be in (0, 1)')
         if self.tree_estimator not in ('Extra Trees', 'Random Forest'):
             raise ValueError('tree_estimator must be Extra Trees or Random Forest')
-        if self.model_type not in ('Linear', 'Non-linear', 'Tree', 'Combination'):
-            raise ValueError('model_type must be Linear, Non-linear, Tree or Combination')
+        if self.model_type not in ('Linear', 'Non-linear', 'Tree', 'Combination', 'CatBoost'):
+            raise ValueError('model_type must be Linear, Non-linear, Tree, Combination or CatBoost')
+        if self.catboost_depth > 16 or not finite_number(self.catboost_learning_rate) or not 0 < self.catboost_learning_rate <= 1:
+            raise ValueError('CatBoost depth must be <= 16 and learning rate in (0, 1]')
+        if self.catboost_class_weight not in ('None', 'Balanced'):
+            raise ValueError('CatBoost class weight must be None or Balanced')
+        if self.model_type == 'CatBoost' and (self.oversampling != 'NOG' or self.reduction != 'NOR'):
+            raise ValueError('CatBoost native categoricals require No Oversampling and No Reduction; SMOTE/PCA are incompatible')
         if (not isinstance(self.non_linear_hidden_layers, tuple) or not self.non_linear_hidden_layers
                 or any(type(n) is not int or n < 1 for n in self.non_linear_hidden_layers)):
             raise ValueError('non_linear_hidden_layers must be a tuple of positive integers')
@@ -115,6 +125,64 @@ class SearchOptions:
             raise ValueError('non_linear_learning_rate must be finite and positive')
         if self.tree_max_depth is not None and (type(self.tree_max_depth) is not int or self.tree_max_depth < 1):
             raise ValueError('tree_max_depth must be None or a positive integer')
+
+
+class NativeCatBoostEncoder(TransformerMixin, BaseEstimator):
+    """Preserve original categorical values (not one-hot/text converted)."""
+    def __init__(self, columns, text_options=None):
+        self.columns = columns
+        self.text_options = text_options
+
+    def fit(self, X, y=None):
+        settings = self.text_options or {}
+        configured = set(settings.get('text_columns', ())) | set(settings.get('category_columns', ()))
+        self.categorical_columns_ = tuple(c for c in self.columns
+            if c in configured or not pd.api.types.is_numeric_dtype(X[c]))
+        return self
+
+    def transform(self, X):
+        frame = X.loc[:, list(self.columns)].copy()
+        for name in self.columns:
+            if name in self.categorical_columns_:
+                # CatBoost requires categorical missing values to be strings.
+                frame[name] = frame[name].astype('string').fillna('__MISSING__').astype(str)
+            else:
+                frame[name] = pd.to_numeric(frame[name], errors='coerce').astype(float)
+        return frame
+
+
+class NativeCatBoostClassifier(ClassifierMixin, BaseEstimator):
+    """Cloneable estimator detecting native categorical columns after fold-local encoding."""
+    def __init__(self, iterations=400, depth=6, learning_rate=0.05,
+                 class_weight='None', random_seed=42):
+        self.iterations = iterations
+        self.depth = depth
+        self.learning_rate = learning_rate
+        self.class_weight = class_weight
+        self.random_seed = random_seed
+
+    def fit(self, X, y):
+        try:
+            from catboost import CatBoostClassifier
+        except ImportError as exc:
+            raise ImportError('CatBoost requires the optional catboost package: pip install catboost') from exc
+        categorical = [name for name in X.columns
+                       if not pd.api.types.is_numeric_dtype(X[name])]
+        self.estimator_ = CatBoostClassifier(
+            iterations=self.iterations, depth=self.depth,
+            learning_rate=self.learning_rate, random_seed=self.random_seed,
+            auto_class_weights=('Balanced' if self.class_weight == 'Balanced' else None),
+            cat_features=categorical, thread_count=1, verbose=False,
+            allow_writing_files=False)
+        self.estimator_.fit(X, y)
+        self.classes_ = np.asarray(self.estimator_.classes_)
+        return self
+
+    def predict(self, X):
+        return np.asarray(self.estimator_.predict(X)).ravel()
+
+    def predict_proba(self, X):
+        return self.estimator_.predict_proba(X)
 
 
 def make_estimator(options):
@@ -129,6 +197,10 @@ def make_estimator(options):
             learning_rate_init=options.non_linear_learning_rate,
             max_iter=options.non_linear_max_iterations, random_state=options.seed,
             early_stopping=False, warm_start=False)
+    if options.model_type == 'CatBoost':
+        return 'catboost', NativeCatBoostClassifier(iterations=options.catboost_iterations,
+            depth=options.catboost_depth, learning_rate=options.catboost_learning_rate,
+            class_weight=options.catboost_class_weight, random_seed=options.seed)
     if options.model_type == 'Combination':
         # Mirror JBG's FUTV: soft voting over MLP, RandomForest and AdaBoost.
         # The original grid searches voting weights; investigative weights are
@@ -237,6 +309,9 @@ class FoldColumnEncoder(TransformerMixin, BaseEstimator):
 
 def make_pipeline(columns, options, text_options):
     name, estimator = make_estimator(options)
+    if options.model_type == 'CatBoost':
+        return Pipeline([('columns', NativeCatBoostEncoder(tuple(columns), text_options)),
+                         (name, estimator)])
     scaler = MaxAbsScaler() if options.scaler == 'MAX' else StandardScaler(with_mean=False)
     steps = [
         ('columns', FoldColumnEncoder(tuple(columns), text_options)),
@@ -676,9 +751,104 @@ def export_frame(rows, path, append=False, columns=None):
                  header=not exists, encoding='utf-8' if exists else 'utf-8-sig')
 
 
+def probability_diagnostics(y, scores, target):
+    """Pooled out-of-fold ranking and descriptive, NOT optimized, thresholds."""
+    actual = np.asarray(y) == target
+    scores = np.asarray(scores, dtype=float)
+    if len(scores) != len(actual) or not np.isfinite(scores).all() or ((scores < 0) | (scores > 1)).any():
+        raise ValueError('Invalid out-of-fold probabilities')
+    if len(np.unique(actual)) != 2:
+        raise ValueError('Diagnostics require positive and negative observations')
+    thresholds = [0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.5, 0.7, 0.9]
+    rows = []
+    for threshold in thresholds:
+        predicted = scores >= threshold
+        tp = int(np.sum(actual & predicted))
+        fp = int(np.sum(~actual & predicted))
+        fn = int(np.sum(actual & ~predicted))
+        tn = int(np.sum(~actual & ~predicted))
+        rows.append(dict(threshold=threshold, tp=tp, fp=fp, fn=fn, tn=tn,
+                         precision=tp / (tp + fp) if tp + fp else 0.,
+                         recall=tp / (tp + fn) if tp + fn else 0.,
+                         specificity=tn / (tn + fp) if tn + fp else 0.,
+                         mcc=float(matthews_corrcoef(actual, predicted))))
+    bins = np.linspace(0., 1., 11)
+    calibration = []
+    for index in range(10):
+        mask = ((scores >= bins[index]) & (scores < bins[index+1])) if index < 9 else ((scores >= bins[index]) & (scores <= bins[index+1]))
+        if mask.any():
+            calibration.append(dict(lower=float(bins[index]), upper=float(bins[index+1]),
+                count=int(mask.sum()), mean_probability=float(scores[mask].mean()),
+                observed_rate=float(actual[mask].mean())))
+    return dict(roc_auc=float(roc_auc_score(actual, scores)),
+        average_precision=float(average_precision_score(actual, scores)),
+        prevalence=float(actual.mean()), brier_score=float(brier_score_loss(actual, scores)),
+        threshold_analysis=rows, calibration_bins=calibration,
+        interpretation='Descriptive thresholds on pooled out-of-fold predictions; no threshold selected or independently validated.')
+
+
+def subgroup_probability_diagnostics(y, scores, target, values, minimum_positives=30):
+    """Compare pooled OOF scores within each stratum; never refit on stratum data."""
+    values = pd.Series(values, index=y.index)
+    if not values.index.equals(y.index):
+        raise ValueError('Subgroup values must align with development labels')
+    result = []
+    names = values.astype('string').fillna('<missing>')
+    if names.nunique() > 100:
+        raise ValueError('Subgroup column has over 100 values; bin continuous columns first')
+    for name in sorted(names.unique()):
+        mask = (names == name).to_numpy(dtype=bool)
+        positive = int((np.asarray(y)[mask] == target).sum())
+        negative = int(mask.sum() - positive)
+        row = dict(value=str(name), rows=int(mask.sum()), positives=positive,
+                   negatives=negative, prevalence=positive / int(mask.sum()))
+        if positive == 0 or negative == 0:
+            row.update(status='undefined_single_class', roc_auc=None, average_precision=None,
+                       brier_score=None, threshold_analysis=[], calibration_bins=[])
+        elif positive < minimum_positives:
+            row.update(status='insufficient_positives', roc_auc=None, average_precision=None,
+                       brier_score=None, threshold_analysis=[], calibration_bins=[])
+        else:
+            row.update(status='ok', **probability_diagnostics(y.iloc[np.flatnonzero(mask)],
+                                                               np.asarray(scores)[mask], target))
+        result.append(row)
+    return result
+
+
+def evaluate_probability_diagnostics(X, y, target, options, text_options, groups=None,
+                                     columns=None, pause_event=None, on_event=None,
+                                     subgroup_column=None):
+    """Fold-local training; each development record is predicted exactly once."""
+    if len(set(y)) != 2:
+        raise ValueError('Probability diagnostics currently support binary classification')
+    columns = tuple(columns if columns is not None else X.columns)
+    scores = np.full(len(y), np.nan, dtype=float)
+    for fold, (train, test) in enumerate(folds_for(X, y, options.outer_folds, options.seed, groups), 1):
+        if pause_event is not None and pause_event.is_set():
+            raise InvestigationPaused('Paused before diagnostics fold')
+        model = make_pipeline(columns, options, text_options)
+        if on_event is not None:
+            on_event(dict(event='fit_started', phase='diagnostics', model_type=options.model_type, fold=fold, folds=options.outer_folds))
+        model.fit(X.iloc[train], y.iloc[train])
+        if not hasattr(model, 'predict_proba'):
+            raise ValueError('Model does not expose predict_proba for diagnostics')
+        classes = list(model.classes_)
+        scores[test] = model.predict_proba(X.iloc[test])[:, classes.index(target)]
+        if on_event is not None:
+            on_event(dict(event='diagnostics_fold_completed', fold=fold, folds=options.outer_folds))
+    report = probability_diagnostics(y, scores, target)
+    if subgroup_column:
+        if subgroup_column not in X.columns:
+            raise ValueError(f'Unknown subgroup column: {subgroup_column}')
+        report['subgroups'] = subgroup_probability_diagnostics(y, scores, target,
+                                                                 X[subgroup_column])
+        report['subgroup_column'] = subgroup_column
+    return report
+
+
 def run_experiment(X, y, target, output, options=None, text_options=None, groups=None,
                    reserved_holdout_signature=None, progress=print, on_event=None, study_context=None,
-                   resume=False, pause_event=None):
+                   resume=False, pause_event=None, investigation_mode="selection_plus_diagnostics", subgroup_column=None):
     """Nested CV evaluates selection on training data; external holdout never enters.
 
     A final search on all development rows supplies a recommendation, not an
@@ -686,6 +856,8 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
     """
     options = options or SearchOptions()
     options.validate()
+    if investigation_mode not in ('diagnostics_only', 'selection_plus_diagnostics'):
+        raise ValueError('Unknown investigation mode')
     if not isinstance(X, pd.DataFrame) or X.empty or X.shape[1] == 0 or X.columns.has_duplicates or not all(isinstance(c, str) for c in X.columns):
         raise ValueError('Need a nonempty DataFrame of uniquely named original columns')
     if not isinstance(y, pd.Series) or not X.index.equals(y.index) or X.index.has_duplicates:
@@ -698,6 +870,8 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         raise ValueError('Custom positive threshold requires binary classification; use 0.5 for multiclass')
     if groups is not None and not groups.index.equals(X.index):
         raise ValueError('Group labels and original rows must align')
+    if subgroup_column is not None and subgroup_column not in X.columns:
+        raise ValueError(f'Unknown subgroup column: {subgroup_column}')
     provenance = study_provenance(X, study_context)
     identity = model_identity(options)
     # Validate every inner partition before starting an expensive study.
@@ -713,6 +887,8 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         if not summary_path.is_file():
             raise ValueError('No checkpoint summary.json to resume')
         existing = json.loads(summary_path.read_text(encoding='utf-8'))
+        if existing.get('subgroup_column') != subgroup_column:
+            raise ValueError('Checkpoint subgroup variable mismatch')
         if existing.get('checkpoint_fingerprint') != fingerprint:
             raise ValueError('Checkpoint does not match current feature data, labels, settings or holdout')
         old_provenance = existing.get('provenance', {})
@@ -744,8 +920,9 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
                     evaluation=dict(type='multiclass' if is_multiclass else 'binary',
                                     ranking='mean fold multiclass MCC' if is_multiclass else 'mean fold MCC',
                                     target=str(target), class_labels=[str(v) for v in labels]),
-                    planned_fit_upper_bound=options.planned_fit_upper_bound, attempted_fits=0,
-                    checkpoint_fingerprint=fingerprint)
+                    planned_fit_upper_bound=(options.outer_folds if investigation_mode == 'diagnostics_only' else options.planned_fit_upper_bound + 2 * options.outer_folds), attempted_fits=0,
+                    checkpoint_fingerprint=fingerprint, investigation_mode=investigation_mode,
+                    subgroup_column=subgroup_column)
     if groups is not None:
         manifest['signatures']['development_groups'] = hashlib.sha256(
             pd.util.hash_pandas_object(groups, index=True).to_numpy(dtype='<u8').tobytes()).hexdigest()
@@ -754,6 +931,7 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         manifest['status'] = 'running'
         manifest.pop('error', None)
         manifest['resumed_at'] = datetime.now(timezone.utc).isoformat()
+        investigation_mode = existing.get('investigation_mode', 'selection_plus_diagnostics')
     _atomic_json(summary_path, manifest)
     def sink(row):
         # Atomic candidate commit is authoritative; CSV is an expendable export.
@@ -772,12 +950,23 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
                                     attempted_fits=manifest['attempted_fits'],
                                     completed_candidates=len(all_rows),
                                     elapsed_seconds=perf_counter() - run_started,
-                                    planned_fit_upper_bound=options.planned_fit_upper_bound, **event))
+                                    planned_fit_upper_bound=manifest['planned_fit_upper_bound'], **event))
             except Exception as ex:
                 manifest['progress_reporting_error'] = type(ex).__name__
                 event_callback = None
                 warnings.warn('Feature-search progress callback failed; investigation continues.', RuntimeWarning)
     try:
+        if investigation_mode == 'diagnostics_only':
+            manifest['diagnostics'] = {'full_baseline': evaluate_probability_diagnostics(
+                X, y, target, options, text_options, groups, pause_event=pause_event, on_event=emit,
+                subgroup_column=subgroup_column)}
+            if subgroup_column:
+                export_frame(manifest['diagnostics']['full_baseline']['subgroups'],
+                             output / 'subgroup_diagnostics_full_baseline.csv')
+            manifest['status'] = 'completed'
+            manifest['finished_at'] = datetime.now(timezone.utc).isoformat()
+            _atomic_json(summary_path, manifest)
+            return manifest
         emit(dict(event='study_resumed' if resume else 'study_started', model_type=options.model_type))
         for fold, (train, test) in enumerate(outer, 1):
             search = Search(X.iloc[train], y.iloc[train], target, options, text_options,
@@ -849,6 +1038,16 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         if summaries['selected']['mean_mcc'] < summaries['full_baseline']['mean_mcc']:
             manifest['baseline_warning'] = ('Nested selected-subset procedure underperforms the full-column baseline; '
                                             'do not apply the reduced subset without independent review.')
+        diagnostics = {}
+        for name, columns in (('selected', recommendation['selected_columns']),
+                              ('full_baseline', X.columns)):
+            diagnostics[name] = evaluate_probability_diagnostics(
+                X, y, target, options, text_options, groups, columns=columns,
+                pause_event=pause_event, on_event=emit, subgroup_column=subgroup_column)
+        manifest['diagnostics'] = diagnostics
+        if subgroup_column:
+            for report_name, report in diagnostics.items():
+                export_frame(report['subgroups'], output / f'subgroup_diagnostics_{report_name}.csv')
         manifest.update(status='completed', evaluated_subsets=len(all_rows),
             nested_validation=summaries, paired_outer_mcc_gains=paired, recommendation=recommendation,
             interpretation='Outer CV evaluates the entire selection procedure, not the exact final development subset. No external holdout evaluation or application configuration/model update.',

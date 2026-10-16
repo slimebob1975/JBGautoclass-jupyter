@@ -1,3 +1,23 @@
+## Revision 143 — pooled-model subgroup diagnostics
+
+- Add optional comparison column for per-value evaluation of the existing pooled OOF predictions.
+- Report subgroup prevalence, ROC AUC, average precision, Brier score, calibration and descriptive thresholds; flag groups with fewer than 30 positives or only one class.
+- Support both diagnostics-only and selection-plus-diagnostics modes; export subgroup tables to CSV.
+- Keep all subgroup predictions from training-only folds, without additional fitting or use of reserved holdout.
+
+## Revision 142 — Classification diagnostics
+
+- Add out-of-fold ROC AUC, average precision, Brier calibration score, descriptive threshold and reliability-bin diagnostics.
+- Add diagnostics-only mode and Diagnostics tab, with training-only CV and no feature recommendation.
+- Move CatBoost class weight and iteration widgets to investigative model parameters.
+
+## Revision 141 — CatBoost investigative classifier
+
+- Add CatBoost to the feature-selection modelling model selector with native categorical columns, fold-local imputation semantics, and None/Balanced class weighting.
+- Expose CatBoost iterations; disallow PCA and oversampling for native categorical processing; bypass numeric scaling.
+- Preserve nested CV, deterministic seeds and candidate-level parallel checkpoints; document optional dependency and CLI flags.
+- Include CatBoost-specific regression tests; ordinary JBG training classifier grids remain unchanged.
+
 ## Revision 140 — checkpoint-safe candidate parallelism
 
 - Add 1/2/4 candidate worker processes for nested CV feature searches.

@@ -269,6 +269,36 @@ class DataLayer(DataLayerBase):
             self.logger.print_dragon(e)
             raise DataLayerException(f"Uniqueness stats failed for column '{column}': {str(e)}")
         
+    def get_column_cardinalities(self, data_catalog: str, data_table: str,
+                                 columns: list[str]) -> dict[str, int]:
+        """Fetch all class-candidate distinct counts in a single database query.
+
+        SQL COUNT(DISTINCT) ignores NULL. Count NULL as an additional class value,
+        because NULL also appears in the class distribution UI.
+        """
+        if not columns:
+            return {}
+        known = self.get_id_columns(database=data_catalog, table=data_table)
+        if any(column not in known for column in columns):
+            raise ValueError('Unknown column in cardinality request')
+        table = f"[{period_to_brackets(data_catalog)}].[{period_to_brackets(data_table)}]"
+        expressions = []
+        for index, column in enumerate(columns):
+            quoted = '[' + column.replace(']', ']]') + ']'
+            # SQL Server cannot COUNT(DISTINCT) on legacy text/ntext or (max)
+            # columns. Convert string categories to a comparable bounded type.
+            expression = (f"CONVERT(NVARCHAR(4000), {quoted})"
+                          if known[column] in ('text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar')
+                          else quoted)
+            expressions.append(
+                f"COUNT(DISTINCT {expression}) + MAX(CASE WHEN {quoted} IS NULL THEN 1 ELSE 0 END) AS cardinality_{index}")
+        try:
+            row = self.get_data_list_from_query(f"SELECT {', '.join(expressions)} FROM {table}")[0]
+            return {column: int(row[index]) for index, column in enumerate(columns)}
+        except Exception as exc:
+            self.logger.print_dragon(exc)
+            raise DataLayerException(f'Could not read column cardinalities: {exc}') from exc
+
     def get_unique_int_id_columns(self, data_catalog: str, data_table: str, int_columns: list[str]) -> list[str]:
         """Filter integer columns to globally non-null/distinct identifier candidates.
 
