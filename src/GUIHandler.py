@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import time
+import traceback
 from datetime import timedelta
 from pathlib import Path
 
@@ -514,6 +515,10 @@ class GUIHandler:
             output=output, resume=True, pause_event=pause_event,
         )
 
+    def _classifier_diagnostic(self, message: str, level: str = "INFO") -> None:
+        """Write startup diagnostics to disk, independently of the GUI output widget."""
+        self.logger.log_file.write_message(f"[classifier-init] {message}", level=level)
+
     def run_classifier(
         self,
         config_params: dict,
@@ -521,40 +526,72 @@ class GUIHandler:
         set_rerun: bool = True,
         regression_suite: bool = False,
     ):
-        """ Sets up the classifier and then runs it"""
-
-        if not regression_suite:
-            try:
-                self.save_last_classifier_run(config_params)
-            except Exception as ex:
-                with output, self.logger.capture_console_output():
-                    self.logger.print_warning(
-                        f"Could not save previous-run configuration: {type(ex).__name__}: {ex}"
+        """Run classification, with file-based diagnostic boundaries for startup."""
+        stage = "callback entry"
+        started = time.monotonic()
+        self._classifier_diagnostic("callback entered")
+        try:
+            if not regression_suite:
+                stage = "persist last run"
+                self._classifier_diagnostic("persist last run: begin")
+                try:
+                    self.save_last_classifier_run(config_params)
+                except Exception as ex:
+                    self._classifier_diagnostic(
+                        f"persist last run: failed ({type(ex).__name__}: {ex})", "WARNING"
                     )
+                    with output, self.logger.capture_console_output():
+                        self.logger.print_warning(
+                            f"Could not save previous-run configuration: {type(ex).__name__}: {ex}"
+                        )
+                self._classifier_diagnostic("persist last run: end")
 
-        self.get_classifier_datalayer(config_params = config_params)
+            stage = "construct configuration and classifier data layer"
+            self._classifier_diagnostic("data layer construction: begin")
+            self.get_classifier_datalayer(config_params=config_params)
+            self._classifier_diagnostic("data layer construction: end")
 
-        self.logger.set_enable_quiet(not config_params["io"].verbose)
-        
-        result = {"mispredicted": None} # Fullösning för nu
-        with output, self.logger.capture_console_output():
-            the_classifier = autoclass(
-                config=self.classifier_datalayer.get_config(),
-                logger=self.logger,
-                datalayer=self.classifier_datalayer,
-                regression_suite=regression_suite,
+            stage = "set output verbosity"
+            self.logger.set_enable_quiet(not config_params["io"].verbose)
+            result = {"mispredicted": None}
+            stage = "construct classifier"
+            self._classifier_diagnostic("classifier construction: begin")
+            with output, self.logger.capture_console_output():
+                the_classifier = autoclass(
+                    config=self.classifier_datalayer.get_config(),
+                    logger=self.logger,
+                    datalayer=self.classifier_datalayer,
+                    regression_suite=regression_suite,
+                )
+                self._classifier_diagnostic("classifier construction: end")
+                stage = "classifier.run (includes database fetch)"
+                self._classifier_diagnostic("classifier.run: begin (database fetch follows in task runner)")
+                result = the_classifier.run()
+                self._classifier_diagnostic("classifier.run: end")
+                if not result:
+                    self.logger.print_info("No data was fetched from database!")
+
+            stage = "post-run GUI"
+            if result and result["mispredicted"] is not None:
+                try:
+                    self.widgets.handle_mispredicted(**result)
+                except Exception as exc:
+                    with output, self.logger.capture_console_output():
+                        self.logger.print_warning(
+                            f"Reclassification widget unavailable; model run completed: "
+                            f"{type(exc).__name__}: {exc}"
+                        )
+            if set_rerun:
+                self.widgets.set_rerun()
+            self._classifier_diagnostic(f"callback completed; elapsed={time.monotonic()-started:.1f}s")
+            return result
+        except Exception:
+            # Preserve the original traceback; do not log configuration values/credentials.
+            self._classifier_diagnostic(
+                f"failure at stage={stage}; elapsed={time.monotonic()-started:.1f}s\n"
+                + traceback.format_exc(), "ERROR"
             )
-            result = the_classifier.run()
-            if not result:
-                self.logger.print_info("No data was fetched from database!")
-            
-        
-        if result and result["mispredicted"] is not None:
-            self.widgets.handle_mispredicted(**result)    
-        
-        if set_rerun:
-            self.widgets.set_rerun()
-        return result
+            raise
 
     @classmethod
     def _regression_suite_dataset_labels(cls) -> str:

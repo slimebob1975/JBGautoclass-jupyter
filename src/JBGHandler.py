@@ -612,10 +612,8 @@ class DatasetHandler:
         # ordinary TF-IDF/one-hot converter is deliberately not fitted here.
         selected = self.handler.config.get_algorithm_abbreviations()
         if "CBST" in selected:
-            if selected != ["CBST"]:
-                raise ValueError("Native CatBoost must be the only selected ordinary classifier")
-            self.handler.logger.print_info("Native CatBoost: retaining original categorical columns")
-            return None
+            raise ValueError("CBST is no longer an ordinary pipeline-search option; "
+                             "select CatBoost under Feature modelling")
         if getattr(model, "algorithm", None) == Algorithm.CBST:
             return None  # Prediction-only loaded CatBoost model.
 

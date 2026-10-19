@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import copy
+import ast
+import json
+import logging
+from types import SimpleNamespace
 import enum
 import os
 import sys
@@ -1005,6 +1009,96 @@ class Config:
         with open(filepath, "w", encoding="utf-8") as fout:
            fout.writelines(lines)
 
+        # Transitional dual-write: keep the legacy .py artifact for Repeat Last
+        # and existing entrypoints, while also providing an executable-code-free JSON.
+        if Path(filepath).suffix.lower() == ".py":
+            json_path = Path(filepath).with_suffix(".json")
+            # JSON is supplementary. Failure must not prevent constructing Config,
+            # running classification, or preserving the already-written .py file.
+            try:
+                payload = self._config_to_json()
+                with open(json_path, "w", encoding="utf-8") as fout:
+                    json.dump(payload, fout, ensure_ascii=False, indent=2, sort_keys=True)
+                    fout.write("\n")
+            except Exception as exc:
+                logging.getLogger(__name__).warning(
+                    "Optional JSON configuration export failed (%s): %s",
+                    type(exc).__name__, exc,
+                )
+
+    def _config_to_json(self) -> dict:
+        """Serialize actual settings, not the generated Python template.
+
+        The legacy template includes unquoted multi-word tokens (Extra Trees),
+        which cannot be parsed as Python. Keep this export data-only.
+        """
+        sections = {"connection": {}, "mode": {}, "io": {}, "debug": {}}
+        for tag in self.TEMPLATE_TAGS:
+            if tag == "name":
+                continue
+            section, key = tag.split(".", 1)
+            value = getattr(getattr(self, section), key, None)
+            if tag == "connection.sql_password":
+                value = ""
+            elif tag == "mode.oversamplers":
+                value = self.get_oversampler_abbreviations()
+            elif tag == "mode.undersamplers":
+                value = self.get_undersampler_abbreviations()
+            elif tag in ("mode.feature_search_sizes", "mode.feature_search_non_linear_hidden_layers"):
+                value = ",".join(str(item) for item in value)
+            elif isinstance(value, enum.Enum):
+                value = value.name
+            elif isinstance(value, list):
+                # Existing .py template joins lists as CSV. Keep string values
+                # for compatibility with Config.load_config's normalization.
+                value = ",".join(str(item) for item in value)
+            elif not isinstance(value, (str, int, float, bool, type(None), dict)):
+                value = str(value)
+            sections[section][key] = value
+        return {"schema_version": 1, "name": self.name, **sections}
+
+    @staticmethod
+    def _legacy_config_to_json(source: str) -> dict:
+        """Parse generated Python configuration as data, without executing it."""
+        values = {}
+        for node in ast.parse(source).body:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                name = node.targets[0].id
+                if name in ("name", "version", "connection", "mode", "io", "debug", "mail"):
+                    # Some legacy template fields are emitted as unquoted enum-like
+                    # tokens (e.g. Quick). Treat those tokens as plain strings.
+                    class BareNamesAsStrings(ast.NodeTransformer):
+                        def visit_Name(self, item):
+                            return ast.copy_location(ast.Constant(value=item.id), item)
+                    values[name] = ast.literal_eval(BareNamesAsStrings().visit(node.value))
+        required = ("name", "connection", "mode", "io", "debug")
+        if not all(key in values for key in required):
+            raise ConfigException("Generated configuration is missing required sections")
+        values["schema_version"] = 1
+        values.pop("version", None)
+        values["connection"]["sql_password"] = ""
+        return values
+
+    @classmethod
+    def load_config_from_json(cls: Type[T], filepath: Path) -> T:
+        """Load a versioned JSON configuration, reusing established validation."""
+        try:
+            with open(filepath, encoding="utf-8") as stream:
+                payload = json.load(stream)
+        except (OSError, ValueError) as exc:
+            raise ConfigException(f"Unable to read JSON configuration {filepath}: {exc}") from exc
+        if not isinstance(payload, dict) or type(payload.get("schema_version")) is not int or payload["schema_version"] != 1:
+            raise ConfigException("Unsupported JSON configuration schema_version (expected 1)")
+        required = ("name", "connection", "mode", "io", "debug")
+        if any(key not in payload for key in required) or any(not isinstance(payload[key], dict) for key in required[1:]):
+            raise ConfigException("JSON configuration must include name, connection, mode, io and debug")
+        connection = dict(payload["connection"])
+        connection["sql_password"] = ""  # Only runtime credentials may supply this value.
+        module = SimpleNamespace(name=payload["name"], connection=connection,
+                                 mode=payload["mode"], io=payload["io"],
+                                 debug=payload["debug"], mail=payload.get("mail", {}))
+        return cls.load_config(module)
+
     def check_config_against_data_configuration(self, columns: list) -> bool:
         """ Check that the columns in the given table matches the config """
         class_check = [self.get_class_column_name() in columns]
@@ -1091,6 +1185,12 @@ class Config:
 
     @classmethod
     def load_config_from_module(cls: Type[T], argv) -> T:
+        # JSON files are data, not importable Python modules. Keep legacy -f .py.
+        if "-f" in argv or "--file" in argv:
+            option = "-f" if "-f" in argv else "--file"
+            position = argv.index(option)
+            if position + 1 < len(argv) and Path(argv[position + 1]).suffix.lower() == ".json":
+                return cls.load_config_from_json(Path(argv[position + 1]))
         module = Helpers.check_input_arguments(argv)
         
         version = '1.0'
@@ -1501,6 +1601,14 @@ class Config:
         """ Returns callable algorithms from mode.algorithm """
 
         from JBGModelSettings import configure_estimator
+        # Native CatBoost uses raw categorical columns and cannot share the ordinary
+        # global text converter. Keep legacy CBST metadata for loading older models,
+        # but do not advertise it as a candidate in the exhaustive pipeline search.
+        if "CBST" in self.get_algorithm_abbreviations():
+            raise ValueError(
+                "CBST is not supported in ordinary exhaustive pipeline search. "
+                "Use CatBoost in Feature modelling instead."
+            )
         algorithms = self.mode.algorithm.list_callable_algorithms(size, max_iterations)
         return [(algorithm, configure_estimator(algorithm.name, estimator,
                  getattr(self.mode, "model_parameters", {}))) for algorithm, estimator in algorithms]

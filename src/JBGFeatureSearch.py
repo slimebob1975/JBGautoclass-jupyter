@@ -627,30 +627,58 @@ class Search:
             batch = pending[offset:offset + self.options.parallel_workers]
             if self.pause_event is not None and self.pause_event.is_set():
                 raise InvestigationPaused('Paused at parallel batch boundary')
-            futures = [self.executor.submit(_parallel_candidate_job, self.X, self.y, self.target,
-                       self.options, self.text_options, self.groups, columns, stage)
-                       for _, columns, stage in batch]
-            for (index, columns, stage), future in zip(batch, futures):
-                row, n_fits = future.result()
-                row['scope'] = self.scope
-                row['candidate'] = len(self.cache) + 1
-                self.cache[columns] = row
-                self.fit_count += n_fits
-                # Process workers don't send GUI callbacks. Report committed
-                # fit units on the parent thread after the result is durable.
-                for fold_number in range(n_fits):
-                    self.emit('fit_started', phase='inner', candidate=row['candidate'],
-                              fold=fold_number + 1, folds=len(self.folds),
-                              n_columns=len(columns), stage=stage)
-                self.sink(row)
-                self.emit('candidate_completed', candidate=len(self.cache),
-                          max_evaluations=self.options.max_evaluations,
-                          n_columns=len(columns), mean_mcc=row['mean_mcc'] if not row['error'] else None,
-                          error=row['error'])
-                if self.progress:
-                    self.progress(f'{self.scope}: candidate {len(self.cache)}/{self.options.max_evaluations}, '
-                                  f'{len(columns)} columns, MCC={row["mean_mcc"]:.4f}')
-                results[index] = row
+            # Bound the outstanding work to one batch. Checkpoint writes stay in
+            # the parent process and take place before the next batch starts.
+            self.emit('parallel_batch_started', batch_size=len(batch),
+                      parallel_workers=self.options.parallel_workers,
+                      remaining=len(pending) - offset)
+            futures = []
+            try:
+                for _, columns, stage in batch:
+                    futures.append(self.executor.submit(
+                        _parallel_candidate_job, self.X, self.y, self.target,
+                        self.options, self.text_options, self.groups, columns, stage))
+                for (index, columns, stage), future in zip(batch, futures):
+                    try:
+                        row, n_fits = future.result()
+                    except Exception as ex:
+                        # Do not retry failed fits: we cannot know if the worker
+                        # executed the candidate. A safe resume will re-evaluate
+                        # only candidates not durably committed in the parent.
+                        add_note = getattr(ex, 'add_note', None)
+                        if callable(add_note):
+                            add_note(f'Feature search worker failure: scope={self.scope}, '
+                                     f'batch_offset={offset}, columns={columns!r}, '
+                                     f'parallel_workers={self.options.parallel_workers}')
+                        self.emit('parallel_batch_failed', batch_size=len(batch),
+                                  candidate_columns=list(columns),
+                                  error_type=type(ex).__name__, error=str(ex))
+                        raise
+                    row['scope'] = self.scope
+                    row['candidate'] = len(self.cache) + 1
+                    self.cache[columns] = row
+                    self.fit_count += n_fits
+                    # Workers cannot send GUI callbacks. Report committed fit units
+                    # on the parent thread only after collecting each result.
+                    for fold_number in range(n_fits):
+                        self.emit('fit_started', phase='inner', candidate=row['candidate'],
+                                  fold=fold_number + 1, folds=len(self.folds),
+                                  n_columns=len(columns), stage=stage)
+                    self.sink(row)
+                    self.emit('candidate_completed', candidate=len(self.cache),
+                              max_evaluations=self.options.max_evaluations,
+                              n_columns=len(columns), mean_mcc=row['mean_mcc'] if not row['error'] else None,
+                              error=row['error'])
+                    if self.progress:
+                        self.progress(f'{self.scope}: candidate {len(self.cache)}/{self.options.max_evaluations}, '
+                                      f'{len(columns)} columns, MCC={row["mean_mcc"]:.4f}')
+                    results[index] = row
+                self.emit('parallel_batch_completed', batch_size=len(batch),
+                          committed=len(batch), parallel_workers=self.options.parallel_workers)
+            except BaseException:
+                for future in futures:
+                    future.cancel()
+                raise
         return results
 
     def run(self):

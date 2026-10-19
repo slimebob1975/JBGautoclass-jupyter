@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 import json
+import logging
 from IPython.display import display
 
 from typing import Callable, Iterable, Protocol
@@ -1330,6 +1331,7 @@ class Widgets:
 
     def start_button_actions(self) -> None:
         """ Complex actions when button is clicked """
+        self.guihandler._classifier_diagnostic("start button action entered")
         if self.rerun_state:
             if not self.regression_suite_state:
                 self.update_class_summary()
@@ -1357,30 +1359,59 @@ class Widgets:
             self.start_button.description = "Rerun"
             self.start_button.tooltip = "Rerun the classifier with the same setting as last time"
         
+    # Each GridBox cell creates a comm-backed ipywidget. Limit the initial view to
+    # keep large results from overwhelming the Voilà/Jupyter frontend.
+    MISPREDICTED_RENDER_LIMIT = 40
+
     def handle_mispredicted(self, mispredicted: DataFrame, unique_classes: list[str]) -> None:
-        """ Creates a gridbox with one row for each item and a dropdown to select whether to change the value in the database """
-        items = [widgets.Label(x).add_class("header") for x in [mispredicted.index.name] + mispredicted.columns.tolist() + ["Reclassify as"]]
-        
-        cols = len(items)
-        for i in mispredicted.index:
-            row = mispredicted.loc[i]
-            row_name = str(row.name)
-            row_items = [widgets.Label(row_name)]
-            for item in row.index: 
-                row_items.append(self.get_text_widget(row[item]))
-            row_items.append(self.reclassify_dropdown(unique_classes, row_name))
-            items += row_items 
-        
-        
-        self.mispredicted_gridbox.children = items
-        self.mispredicted_gridbox.layout.grid_template_columns = f"repeat({cols}, max-content)"
-        
-        header = widgets.HTML("<h3>Reclassification table for most mispredicted</h3>")
-        
-        with self.mispredicted_output:
-            display(self.create_inpage_styles("mispredicted"))
-            display(header)
-            display(self.mispredicted_gridbox)
+        """Render a bounded, editable preview; never fail the completed ML run.
+
+        Full results remain in the classifier output. Rendering is intentionally
+        capped because one interactive widget is allocated per table cell.
+        """
+        total_rows = len(mispredicted)
+        total_columns = len(mispredicted.columns) + 2
+        displayed_rows = min(total_rows, self.MISPREDICTED_RENDER_LIMIT)
+        logger = logging.getLogger(__name__)
+        try:
+            preview = mispredicted.iloc[:displayed_rows]
+            headers = [str(mispredicted.index.name or "Index"), *map(str, mispredicted.columns), "Reclassify as"]
+            items = [widgets.Label(value=label).add_class("header") for label in headers]
+            # iterrows, not loc[index]: duplicate index labels must not turn a row
+            # into an entire DataFrame or duplicate rendered output.
+            for row_index, row in preview.iterrows():
+                row_name = str(row_index)
+                items.append(widgets.Label(value=row_name))
+                items.extend(self.get_text_widget(value) for value in row)
+                items.append(self.reclassify_dropdown(unique_classes, row_name))
+
+            grid = self.mispredicted_gridbox
+            grid.layout.grid_template_columns = f"repeat({total_columns}, max-content)"
+            grid.children = tuple(items)
+            with self.mispredicted_output:
+                display(self.create_inpage_styles("mispredicted"))
+                display(widgets.HTML("<h3>Reclassification table for most mispredicted</h3>"))
+                if total_rows > displayed_rows:
+                    display(widgets.HTML(
+                        f"<p>Displaying the first {displayed_rows} of {total_rows} rows "
+                        "to limit interactive widget load. Full results are available "
+                        "in the classifier output.</p>"
+                    ))
+                display(grid)
+            logger.info("Mispredicted widget rendered: rows=%d/%d columns=%d widgets=%d",
+                        displayed_rows, total_rows, total_columns, len(items))
+        except Exception:
+            logger.exception("Mispredicted widget rendering failed: rows=%d columns=%d "
+                             "attempted_rows=%d", total_rows, total_columns, displayed_rows)
+            # A failed display must not mask a completed model training run.
+            try:
+                with self.mispredicted_output:
+                    display(widgets.HTML(
+                        "<p>Could not display the interactive reclassification table. "
+                        "Training results are unaffected; see the server log for details.</p>"
+                    ))
+            except Exception:
+                logger.exception("Could not display the mispredicted fallback message")
 
     def create_inpage_styles(self, section: str) -> widgets.HTML:
         """ 
@@ -2697,15 +2728,20 @@ class Widgets:
                 control.tooltip = tooltip
             elif "description_tooltip" in control.traits():
                 control.description_tooltip = tooltip
-        for action, tooltip in zip(actions, (
-            "Run feature subset search on labelled training rows.",
-            "Apply the current compatible recommendation to the selected data columns.",
-            "Save the completed investigation as a candidate recommendation.",
-            "Review the selected saved recommendation and its validation metrics.",
-            "Delete the selected saved recommendation after confirmation.",
-        )):
-            if "tooltip" in action.traits():
-                action.tooltip = tooltip
+        # Explicit mapping avoids positional drift when new buttons are inserted.
+        action_help = {
+            "feature_search_investigate_button": "Start an exploratory feature-subset investigation using labelled training rows.",
+            "feature_search_pause_button": "Request a safe pause after the current evaluation and save a checkpoint.",
+            "feature_search_resume_button": "Resume the selected incomplete investigation from its checkpoint.",
+            "feature_search_apply_button": "Apply the current compatible feature recommendation to selected columns.",
+            "feature_search_save_button": "Save the completed investigation as a candidate recommendation (not yet validated).",
+            "feature_search_review_button": "Review a saved recommendation and its validation evidence without applying it.",
+            "feature_search_delete_button": "Delete the selected saved recommendation after confirmation.",
+        }
+        for name, tooltip in action_help.items():
+            control = getattr(self, name)
+            if "tooltip" in control.traits():
+                control.tooltip = tooltip
 
         # Only the group contents collapse: controls remain the same widget
         # instances so existing enable/disable rules and saved settings survive.
@@ -3470,7 +3506,8 @@ class Widgets:
     def algorithm_dropdown(self) -> widgets.Dropdown:
         name = sys._getframe().f_code.co_name # Current function name
         return self._load_widget(name, handler=self.eventhandler.algorithm_dropdown_handler, \
-            calculated_params={"options": Algorithm.get_sorted_list()})
+            calculated_params={"options": [(label, value) for label, value in Algorithm.get_sorted_list()
+                                          if value != "CBST" and getattr(value, "name", value) != "CBST"]})
         
     @property
     def preprocess_dropdown(self) -> widgets.Dropdown:

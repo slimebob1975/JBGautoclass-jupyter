@@ -1,3 +1,13 @@
+## Revision 156a — Initialization diagnostics
+
+- Add file-backed stage markers around the classification callback, saved-run snapshot, Config/DataLayer creation, classifier construction and classifier execution.
+- Log complete Python traceback on exceptions, independently of Script output. No credentials or full configuration values are included in stage markers.
+- No memory guard or ML parameter changes.
+
+## Revision 155 — JSON export and Feature modelling button help
+
+Transitional versioned JSON export with legacy Python config compatibility; corrected action tooltips. See `docs/configuration_155.md`.
+
 ## Revision 144 (candidate): ordinary native CatBoost
 
 - Adds CBST ordinary classifier with guarded NOS/NOR/NOG/NUG compatibility.
@@ -832,3 +842,24 @@ rather than reconstructed from guesswork.
 
 - Switched sparse fractional PCA to `covariance_eigh` and fixed failed-candidate propagation so
   CV failures cannot be treated as successful or have their root cause overwritten.
+
+## 152 — Active BACKLOG consolidation (documentation only)
+
+- Replaced the accumulated active BACKLOG with a prioritized, general-purpose roadmap.
+- Archived the unmodified pre-152 backlog content at `docs/backlog_archive_pre_152.md` (with a short archival header).
+- Marked <private-identifier> work concluded and preserved revision-151 CatBoost scope; no runtime code, defaults, or tests changed.
+- This is triage, not a runtime validation or proof that historical unchecked items are implemented.
+
+## 153 — Guarded reclassification widget rendering
+
+- Render a maximum of 40 reclassification rows per run to bound comm-backed widget payloads; leave classifier result export intact.
+- Use positional row iteration to support duplicated row indices and handle display exceptions separately from successful training.
+- Log attempted dimensions and exception traceback for display failures, with a short fallback message.
+- Add focused regression coverage; Windows/Voilà reproduction remains to be verified.
+
+## 154 — Parallel feature-search diagnostics and bounded failure handling
+
+- Preserve deterministic candidate order and checkpointing while emitting parent-side parallel batch started/completed/failure events.
+- Annotate unexpected worker failures with scope, candidate columns, batch offset and worker count while preserving the original exception.
+- Cancel pending futures after an interrupted batch; never silently retry a potentially executed candidate.
+- Add targeted regression tests. Windows two-worker forced-interruption and joblib warning reproduction remain field verification tasks.
