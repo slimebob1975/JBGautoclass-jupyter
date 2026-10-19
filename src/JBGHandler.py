@@ -23,13 +23,19 @@ from sklearn.feature_selection import RFE
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_auc_score, make_scorer, f1_score, get_scorer
-from sklearn.model_selection import (StratifiedKFold, cross_validate,
+from sklearn.model_selection import (StratifiedKFold, StratifiedGroupKFold, cross_validate, cross_val_predict,
                                      train_test_split, GridSearchCV, ParameterGrid)
 from tensorflow import keras
 from imblearn.pipeline import Pipeline
+from JBGDecisionPolicy import DecisionPipeline, validate_decision_policy
+from JBGThresholdDiagnostics import build_threshold_table, identity_overlap
+from JBGModelBenchmark150 import summarize_binary_oof
+from JBGValidation148 import person_disjoint_indices
+from JBGValidation149 import validation_folds, parse_excluded_columns
 from stop_words import get_stop_words
 
 from Config import Config
+from JBGNativeCatBoost import RawCatBoostColumns, prepare_model_input
 from JBGMeta import (Algorithm, Library, Preprocess, Reduction, RateType, Estimator, Transform,
                      Oversampling, Undersampling, NgramRange)
 from JBGExceptions import (DatasetException, MissingScorerException, ModelException, HandlerException, ModelInitializationException, 
@@ -602,6 +608,17 @@ class DatasetHandler:
     # Text handling a more nice way
     def convert_text_and_categorical_features(self, model: Model):
         
+        # Native CatBoost must receive the original mixed-type schema.  The
+        # ordinary TF-IDF/one-hot converter is deliberately not fitted here.
+        selected = self.handler.config.get_algorithm_abbreviations()
+        if "CBST" in selected:
+            if selected != ["CBST"]:
+                raise ValueError("Native CatBoost must be the only selected ordinary classifier")
+            self.handler.logger.print_info("Native CatBoost: retaining original categorical columns")
+            return None
+        if getattr(model, "algorithm", None) == Algorithm.CBST:
+            return None  # Prediction-only loaded CatBoost model.
+
         # Get the old converter even if None
         ttnc = model.text_converter
         
@@ -852,10 +869,29 @@ class DatasetHandler:
             return False
         else:
         
-            # Split data validation dataset from the upper part
-            self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split( 
-                self.X, self.Y, test_size = self.handler.config.get_test_size(), shuffle = True, random_state = 42, 
-                stratify = self.Y)
+            # Preserve validation groups *before* excluding identifiers as predictors.
+            mode = self.handler.config.mode
+            group_column = str(getattr(mode, "validation_group_column", "iafId") or "").strip()
+            need_groups = (getattr(mode, "grouped_cross_validation", False) or
+                           getattr(mode, "holdout_split_mode", "stratified_rows") == "person_disjoint")
+            if need_groups and (not group_column or group_column not in self.X.columns):
+                raise ValueError(f"Group validation requires a present group column: {group_column!r}")
+            split_mode = getattr(self.handler.config.mode, "holdout_split_mode", "stratified_rows")
+            if split_mode == "person_disjoint":
+                train_idx, holdout_idx = person_disjoint_indices(
+                    self.X, self.Y, test_size=self.handler.config.get_test_size(),
+                    group_column=group_column)
+                self.X_train, self.X_validation = self.X.iloc[train_idx], self.X.iloc[holdout_idx]
+                self.Y_train, self.Y_validation = self.Y.iloc[train_idx], self.Y.iloc[holdout_idx]
+                self.handler.logger.print_info(
+                    f"Group-disjoint holdout: {group_column} groups have zero overlap. "
+                    "CV uses its own configured split strategy; this is not nested validation.")
+            elif split_mode == "stratified_rows":
+                self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split(
+                    self.X, self.Y, test_size=self.handler.config.get_test_size(),
+                    shuffle=True, random_state=42, stratify=self.Y)
+            else:
+                raise ValueError(f"Unsupported holdout split mode: {split_mode!r}")
 
             for label, X_part, Y_part in (("training", self.X_train, self.Y_train),
                                           ("holdout", self.X_validation, self.Y_validation)):
@@ -865,6 +901,27 @@ class DatasetHandler:
                     "Signatures identify membership and labels, not feature values."
                 )
 
+            overlap = identity_overlap(self.X_train, self.X_validation, group_column) if group_column else None
+            if overlap is not None:
+                self.handler.logger.print_info(
+                    f"Group split audit ({group_column}): {overlap[0]} groups appear in both "
+                    f"training and holdout ({overlap[1]} distinct training, "
+                    f"{overlap[2]} distinct holdout). "
+                    f"Holdout method: {split_mode}.")
+
+            self._validation_group_train = (self.X_train[group_column].to_numpy(copy=True)
+                                            if need_groups else None)
+            excluded = parse_excluded_columns(getattr(mode, "excluded_predictor_columns", ""))
+            if excluded:
+                unknown = set(excluded) - set(self.X.columns)
+                if unknown:
+                    raise ValueError(f"Unknown excluded predictor columns: {sorted(unknown)}")
+                self.X = self.X.drop(columns=list(excluded))
+                self.X_train = self.X_train.drop(columns=list(excluded))
+                self.X_validation = self.X_validation.drop(columns=list(excluded))
+                if self.X_prediction is not None:
+                    self.X_prediction = self.X_prediction.drop(columns=list(excluded), errors="ignore")
+                self.handler.logger.print_info(f"Excluded predictors (not removed from validation grouping): {excluded}")
             if getattr(self.handler.config, "should_calculate_feature_importance", lambda: False)():
                 # Snapshot the held-out original input columns before text/category conversion.
                 # The optional analysis later reuses only the fitted training converter.
@@ -1077,6 +1134,7 @@ class ModelHandler:
             raise ModelException(f"Something unknown went wrong on training model: {str(e)}")
 
     def get_model_from(self, dh: DatasetHandler, cross_validation_filepath: str) -> Model:
+        self._active_dataset_handler = dh
         # Use the actual training target, not an approximation from full data.
         # Every sampling candidate shares these folds; infeasible pairs are reported
         # individually rather than disabling oversampling or changing the CV split.
@@ -1127,16 +1185,56 @@ class ModelHandler:
                     model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
             t1 = time.time()
             self.handler.logger.print_info(f"Final training of model {alg_name} took {str(round(t1-t0,2))} secs.")
+            if getattr(self.handler.config.mode, "threshold_diagnostics", False):
+                self._run_threshold_diagnostics(model.pipeline, dh, k, cross_validation_filepath)
         except Exception as ex:
             raise ModelException(f"Model from spot_check_machine_learning_models failed: {str(ex)}")
 
         return model
 
+    def _run_threshold_diagnostics(self, fitted_pipeline, dh, k, output_path):
+        """Post-selection exploratory OOF curve, never used to select or refit a model.
+
+        A model already selected using the same development data makes this diagnostic
+        exploratory, not a nested-CV performance estimate. Holdout is not accessed.
+        """
+        if not hasattr(fitted_pipeline, "predict_proba"):
+            self.handler.logger.print_warning("Threshold diagnostics skipped: no predict_proba().")
+            return
+        counts = Counter(dh.Y_train)
+        if len(counts) != 2:
+            self.handler.logger.print_warning("Threshold diagnostics require binary training labels.")
+            return
+        try:
+            positive = min(counts, key=lambda label: (counts[label], str(label)))
+            estimator_X = prepare_model_input(dh.X_train, fitted_pipeline, prefer_numpy=True)
+            folds = self._configured_cv_folds(dh.X_train, dh.Y_train, k)
+            # The selected hyperparameters are cloned into each OOF fit.
+            probabilities = call_with_sparse_input_retry(
+                lambda X_input: cross_val_predict(
+                    clone(fitted_pipeline), X_input, dh.Y_train.to_numpy(),
+                    cv=folds, method="predict_proba", n_jobs=1),
+                estimator_X, logger=self.handler.logger,
+                context="threshold OOF analysis", estimator=fitted_pipeline)
+            classes = list(fitted_pipeline.classes_)
+            frame = build_threshold_table(
+                dh.Y_train.to_numpy(), probabilities[:, classes.index(positive)], positive)
+            csv_path = os.path.splitext(str(output_path))[0] + "_threshold_oof.csv"
+            Helpers.save_matrix_as_csv(frame, csv_path)
+            self.handler.logger.print_info(
+                "Exploratory development-only OOF threshold table; no holdout labels used. "
+                "Model/pipeline selection precedes this analysis, so values are not nested-CV estimates. "
+                "A threshold chosen from this table requires a fresh untouched test set for unbiased evaluation.")
+            self.handler.logger.print_code(
+                "OOF probability threshold analysis", Helpers.create_download_link(csv_path, title=""))
+        except Exception as error:
+            self.handler.logger.print_warning(f"Optional threshold diagnostics unavailable: {error}")
+
     # Train ml model
     def train_picked_model(self, model: Pipeline, X: pd.DataFrame, Y: pd.DataFrame) -> Pipeline:
         
         # Train model. Preserve sparse text features as SciPy CSR at the estimator boundary.
-        estimator_X = Helpers.prepare_estimator_input(X)
+        estimator_X = prepare_model_input(X, model)
         try:
             return call_with_sparse_input_retry(
                 lambda X_input: model.fit(X_input, Y), estimator_X,
@@ -1173,7 +1271,7 @@ class ModelHandler:
         try:
             search_params, baseline = include_extra_trees_baseline(model, search_params)
             # Make a stratified kfold
-            kfold = StratifiedKFold(n_splits=n_splits, random_state=1, shuffle=True)
+            kfold = self._configured_cv_folds(X, Y, n_splits)
 
             # Create a scoring mechanism compatible with the observed target shape.
             selection_scorer = self._resolve_scoring_mechanism_for_target(Y)
@@ -1233,7 +1331,7 @@ class ModelHandler:
             estimate = self._report_grid_search_estimate(
                 n_param_combos, n_splits, search.n_jobs, history=history, timing_key=timing_key,
             )
-            estimator_X = Helpers.prepare_estimator_input(X)
+            estimator_X = prepare_model_input(X, model)
             started = time.perf_counter()
             try:
                 call_with_sparse_input_retry(
@@ -1392,7 +1490,7 @@ class ModelHandler:
 
     def _fit_pipeline_for_validation(self, pipeline: Pipeline, dh: DatasetHandler) -> None:
         """Fit a spot-check pipeline with a confirmed sparse-input retry only."""
-        estimator_X = Helpers.prepare_estimator_input(dh.X_train)
+        estimator_X = prepare_model_input(dh.X_train, pipeline)
         call_with_sparse_input_retry(
             lambda X_input: pipeline.fit(X_input, dh.Y_train), estimator_X,
             logger=self.handler.logger, context="validation fit", estimator=pipeline,
@@ -1418,7 +1516,7 @@ class ModelHandler:
         """Score an already fitted spot-check pipeline on the validation split."""
         target_Y = getattr(dh, 'Y_train', dh.Y_validation)
         scorer = self._resolve_scoring_mechanism_for_target(target_Y)
-        estimator_X = Helpers.prepare_estimator_input(dh.X_validation)
+        estimator_X = prepare_model_input(dh.X_validation, pipeline)
 
         if not isinstance(scorer, str):
             return call_with_sparse_input_retry(
@@ -1445,7 +1543,7 @@ class ModelHandler:
     def generate_roc_auc_score(self, pipeline: Pipeline, dh: DatasetHandler):
         
         # Multilabel case does not raise an ValueError
-        estimator_X = Helpers.prepare_estimator_input(dh.X_validation)
+        estimator_X = prepare_model_input(dh.X_validation, pipeline)
         try:
             probabilities = call_with_sparse_input_retry(
                 pipeline.predict_proba, estimator_X, logger=self.handler.logger,
@@ -1557,6 +1655,11 @@ class ModelHandler:
         normal training path is allowed to continue. DummyClassifier without feature reduction is
         retained as the useful no-signal baseline.
         """
+        if algorithm == Algorithm.CBST:
+            if preprocessor != Preprocess.NOS or reduction != Reduction.NOR:
+                return "Native CatBoost requires NOS preprocessing and NOR reduction"
+            return None
+
         sparse_input = (
             scipy_sparse.issparse(X_train) or Helpers.dataframe_has_sparse_columns(X_train)
         )
@@ -1677,8 +1780,23 @@ class ModelHandler:
     # Spot Check Algorithms.
     # We do an extensive search of the best algorithm in comparison with the best
     # preprocessing.
+    def _configured_cv_folds(self, X, y, k):
+        grouped = bool(getattr(self.handler.config.mode, "grouped_cross_validation", False))
+        groups = getattr(self._active_dataset_handler, "_validation_group_train", None) if grouped else None
+        if grouped and groups is None:
+            raise ValueError("Grouped CV requested but training group identifiers are unavailable")
+        folds = validation_folds(X, y, groups=groups, n_splits=k)
+        if grouped:
+            self.handler.logger.print_info(
+                f"Group-disjoint CV: {k} folds, 0 groups shared within each train/test fold; "
+                "the holdout remains excluded from CV. Not nested validation.")
+        return folds
+
     def _create_spot_check_kfold(self, k: int) -> StratifiedKFold:
         try:
+            if getattr(self.handler.config.mode, "grouped_cross_validation", False):
+                dh = self._active_dataset_handler
+                return self._configured_cv_folds(dh.X_train, dh.Y_train, k)
             return StratifiedKFold(n_splits=k, random_state=1, shuffle=True)
         except Exception as ex:
             self.handler.logger.print_dragon(exception=ex)
@@ -1882,6 +2000,9 @@ class ModelHandler:
                 state.best_undersampler = undersampler
             if candidate_is_stable:
                 candidate_success = True
+                if getattr(self.handler.config.mode, "model_benchmark_150", False):
+                    self._benchmark_candidate_150(current_pipeline, dh, kfold,
+                        algorithm, preprocessor, reduction, oversampler, undersampler)
 
             candidate_results.append(self._build_spot_check_result(
                 preprocessor=preprocessor,
@@ -1907,6 +2028,34 @@ class ModelHandler:
                 break
 
         return candidate_results, candidate_success
+
+    def _benchmark_candidate_150(self, pipeline, dh, folds, algorithm, preprocessor,
+                                 reduction, oversampler, undersampler):
+        """Extra OOF fits on development data, with the same group-aware folds as CV."""
+        try:
+            if not hasattr(pipeline, "predict_proba"):
+                raise ValueError("Estimator has no predict_proba")
+            X = prepare_model_input(dh.X_train, pipeline, prefer_numpy=True)
+            probabilities = call_with_sparse_input_retry(
+                lambda X_input: cross_val_predict(clone(pipeline), X_input,
+                    dh.Y_train.to_numpy(), cv=folds, method="predict_proba", n_jobs=1),
+                X, logger=self.handler.logger, context="rev150 model OOF benchmark",
+                estimator=pipeline)
+            classes = sorted(set(dh.Y_train))
+            stats = summarize_binary_oof(dh.Y_train.to_numpy(), probabilities, classes,
+                threshold=float(getattr(self.handler.config.mode, "probability_threshold", 0.5)))
+            stats.update(algorithm=algorithm.name, preprocessing=preprocessor.name,
+                reduction=reduction.name, oversampling=oversampler.name,
+                undersampling=undersampler.name,
+                grouped_cv=bool(getattr(self.handler.config.mode, "grouped_cross_validation", False)),
+                group_column=str(getattr(self.handler.config.mode, "validation_group_column", "")),
+                excluded_predictors=str(getattr(self.handler.config.mode, "excluded_predictor_columns", "")))
+            self._benchmark_150_rows.append(stats)
+            self.handler.logger.print_info(
+                f"Rev150 {algorithm.name} OOF: AP={stats['average_precision']:.5f}, "
+                f"Brier={stats['brier']:.5f}, MCC={stats['mcc']:.5f}")
+        except Exception as exc:
+            self.handler.logger.print_warning(f"Optional Rev150 benchmark {algorithm.name} failed: {exc}")
 
     def _apply_spot_check_state(self, state: _SpotCheckState) -> Model:
         updates = {
@@ -1940,6 +2089,8 @@ class ModelHandler:
         self._selected_cv_score = None
         self._last_grid_search_summary = None
         self._nystroem_runtime_rows = []
+        self._benchmark_150_rows = []
+        self._benchmark_150_path = cross_validation_filepath
         standard_progress_text = "Check and train algorithms for best model"
         self.handler.logger.print_info("Spot-checking ML algorithms")
 
@@ -1951,6 +2102,13 @@ class ModelHandler:
         preprocessors = self.handler.config.get_callable_preprocessors()
         oversamplers = [Oversampling[name] for name in self.handler.config.get_oversampler_abbreviations()]
         undersamplers = [Undersampling[name] for name in self.handler.config.get_undersampler_abbreviations()]
+
+        if any(algo == Algorithm.CBST for algo, _ in algorithms):
+            if (len(algorithms) != 1 or len(preprocessors) != 1 or
+                preprocessors[0][0] != Preprocess.NOS or len(reductions) != 1 or
+                reductions[0][0] != Reduction.NOR or oversamplers != [Oversampling.NOG] or
+                undersamplers != [Undersampling.NUG]):
+                raise ModelException("Native CatBoost requires CBST only, NOS, NOR, NOG and NUG")
 
         progress_key = "training_model"
         number_of_tries = (len(oversamplers) * len(undersamplers)
@@ -2037,6 +2195,15 @@ class ModelHandler:
         self.handler.logger.print_test_performance(list_of_results, cross_validation_filepath)
         self.handler.logger.end_inline_progress(progress_key)
         self._export_nystroem_runtime(cross_validation_filepath)
+        if self._benchmark_150_rows:
+            path = os.path.splitext(str(cross_validation_filepath))[0] + "_benchmark_150.csv"
+            Helpers.save_matrix_as_csv(pd.DataFrame(self._benchmark_150_rows), path)
+            self.handler.logger.print_info(
+                "Rev150 benchmark: exploratory training-only OOF metrics, not nested CV. "
+                "Average precision is the area under the stepwise precision-recall curve. "
+                "ECE uses 10 equal-width bins. Use identical data partitions and features "
+                "when comparing separate algorithm runs; holdout not accessed.")
+            self.handler.logger.print_code("OOF model benchmark", Helpers.create_download_link(path, title=""))
 
         if state.trained_pipeline is None:
             raise ModelException(
@@ -2074,7 +2241,7 @@ class ModelHandler:
         if feature_reducer is None or not hasattr(feature_reducer, "n_components"):
             return feature_reducer
 
-        n_splits = max(2, int(kfold.get_n_splits()))
+        n_splits = max(2, int(len(kfold) if isinstance(kfold, list) else kfold.get_n_splits()))
         min_fold_train = max(1, int(n_train) - ceil(int(n_train) / n_splits))
         if int(feature_reducer.n_components) <= min_fold_train:
             return feature_reducer
@@ -2090,7 +2257,7 @@ class ModelHandler:
         if feature_reducer is None or not hasattr(feature_reducer, "n_components"):
             return feature_reducer
 
-        n_splits = max(2, int(kfold.get_n_splits()))
+        n_splits = max(2, int(len(kfold) if isinstance(kfold, list) else kfold.get_n_splits()))
         min_fold_train = max(1, int(n_train) - ceil(int(n_train) / n_splits))
         max_components = max(1, min(min_fold_train, int(n_features)))
         if int(feature_reducer.n_components) <= max_components:
@@ -2119,8 +2286,22 @@ class ModelHandler:
                 n_features=dh.X_train.shape[1],
             )
 
+        decision_mode = getattr(getattr(self.handler.config, "mode", None), "decision_policy", "default")
+        if decision_mode == "fixed":
+            counts = Counter(dh.Y_train)
+            if len(counts) != 2:
+                raise PipelineException("Fixed probability threshold requires two training classes")
+            # Resolve the minority positive class exclusively from development data.
+            self._threshold_positive_label = min(counts, key=lambda label: (counts[label], str(label)))
+        if algorithm == Algorithm.CBST:
+            config_cat = (set(self.handler.config.get_text_column_names()) |
+                          set(self.handler.config.get_categorical_text_column_names()))
+            self._catboost_original_columns = tuple(dh.X_train.columns)
+            self._catboost_categorical_columns = tuple(c for c in dh.X_train.columns
+                if c in config_cat or not pd.api.types.is_numeric_dtype(dh.X_train[c]))
+
         class_count = min(Counter(dh.Y_train).values())
-        neighbor_limit = class_count - ceil(class_count / kfold.get_n_splits()) - 1
+        neighbor_limit = class_count - ceil(class_count / (len(kfold) if isinstance(kfold, list) else kfold.get_n_splits())) - 1
         if oversampler not in (Oversampling.NOG, Oversampling.RND) and neighbor_limit < 1:
             raise PipelineException("Sampling needs at least two minority rows in every CV training fold.")
         return self.get_pipeline(
@@ -2164,6 +2345,26 @@ class ModelHandler:
                 oversampler: Oversampling, undersampler: Undersampling, max_features: int, \
                 rfe_features: int = None, max_k_neighbors: int = None) -> Union[Pipeline, Estimator]:
        
+        policy, threshold = validate_decision_policy(
+            getattr(getattr(self.handler.config, "mode", None), "decision_policy", "default"),
+            getattr(getattr(self.handler.config, "mode", None), "probability_threshold", 0.5))
+        if policy == "fixed" and not hasattr(estimator, "predict_proba"):
+            raise PipelineException(f"{algorithm.name} does not expose predict_proba()")
+        pipeline_type = DecisionPipeline if policy == "fixed" else Pipeline
+        decision_args = ({"decision_policy": policy, "probability_threshold": threshold,
+                          "positive_label": getattr(self, "_threshold_positive_label", None)}
+                         if policy == "fixed" else {})
+        if algorithm == Algorithm.CBST:
+            if (preprocessor != Preprocess.NOS or reduction != Reduction.NOR or
+                oversampler != Oversampling.NOG or undersampler != Undersampling.NUG):
+                raise PipelineException("Native CatBoost requires NOS/NOR/NOG/NUG (no scaling, reduction or sampling)")
+            if not hasattr(self, "_catboost_original_columns"):
+                raise PipelineException("Native CatBoost schema was not initialized")
+            return pipeline_type(steps=[
+                ("native_columns", RawCatBoostColumns(
+                    self._catboost_original_columns, self._catboost_categorical_columns)),
+                (algorithm.name, clone(estimator)),
+            ], verbose=False, **decision_args)
         try:
             # First, put estimator/algorithm in pipeline
             # CV clones share fixed randomness without mutating enum factory objects.
@@ -2228,7 +2429,7 @@ class ModelHandler:
         except Exception as ex:
             raise PipelineException(f"Could not build Pipeline correctly: {str(ex)}") from ex
         
-        return Pipeline(steps=steps, verbose=False)
+        return pipeline_type(steps=steps, verbose=False, **decision_args)
 
     # Find number of components in reduction step in Pipeline
     def get_components_from_pipeline(self, reduction, pipeline, num_features) -> int:
@@ -2288,8 +2489,8 @@ class ModelHandler:
         # CSR so sklearn can preserve sparsity through cross-validation.
         # CV has one task per fold. execute_n_job applies CPU and positive
         # configured caps; a global -1 must not erase this finite task bound.
-        n_jobs_desired = kfold.get_n_splits()
-        estimator_X = Helpers.prepare_estimator_input(dh.X_train, prefer_numpy=True)
+        n_jobs_desired = len(kfold) if isinstance(kfold, list) else kfold.get_n_splits()
+        estimator_X = prepare_model_input(dh.X_train, pipeline, prefer_numpy=True)
         self._last_execution_n_jobs = None
         cv_pipeline, cv_scorer, profiled = pipeline, diagnostic_scorer, False
         try:
@@ -2313,7 +2514,7 @@ class ModelHandler:
         
         wall_seconds = time.perf_counter() - started
         timing = CVTiming.from_results(
-            cv_results, kfold.get_n_splits(), self._last_execution_n_jobs,
+            cv_results, len(kfold) if isinstance(kfold, list) else kfold.get_n_splits(), self._last_execution_n_jobs,
             wall_seconds,
         )
         self._last_cv_timing = (pipeline, timing)
@@ -2544,7 +2745,7 @@ class PredictionsHandler:
     # Make predictions on dataset
     def make_predictions(self, model: Pipeline, X: pd.DataFrame, classes: pd.Series, Y: pd.DataFrame = None) -> bool:
         could_predict_proba = False
-        estimator_X = Helpers.prepare_estimator_input(X)
+        estimator_X = prepare_model_input(X, model)
         try:
             predictions = call_with_sparse_input_retry(
                 model.predict, estimator_X, logger=self.handler.logger,
@@ -2795,7 +2996,7 @@ class PredictionsHandler:
             return
 
         # Make predictions for both models, preserving sparse text input where present.
-        estimator_X = Helpers.prepare_estimator_input(X)
+        estimator_X = prepare_model_input(X, ct_pipe)
         y_pred_ct = call_with_sparse_input_retry(
             ct_pipe.predict, estimator_X, logger=self.handler.logger,
             context="cross-trained misprediction analysis", estimator=ct_pipe,
@@ -2867,7 +3068,7 @@ class PredictionsHandler:
         could_predict_proba = False
         Y_prob = None
 
-        estimator_X_misp = Helpers.prepare_estimator_input(X_misp_feat)
+        estimator_X_misp = prepare_model_input(X_misp_feat, full_pipe)
         try:
             prob_ct = call_with_sparse_input_retry(
                 ct_pipe.predict_proba, estimator_X_misp, logger=self.handler.logger,
@@ -2992,7 +3193,7 @@ class PredictionsHandler:
         corrs = {}
         corr_sources = {}
         corr_models = {}
-        estimator_X = Helpers.prepare_estimator_input(X)
+        estimator_X = prepare_model_input(X, model)
         mh = self.handler.get_handler("model")
         recovery_level_unestimable_statuses = {
             "zero_recovery",
@@ -3278,7 +3479,7 @@ class PredictionsHandler:
                 evaluation_sets = [(f"D_model_{model_index + 1}_full", X, Y, True)]
 
             for estimate_name, X_eval, Y_eval, include_in_combined in evaluation_sets:
-                estimator_X = Helpers.prepare_estimator_input(X_eval)
+                estimator_X = prepare_model_input(X_eval, model)
                 context = f"Dark Number {estimate_name} - {model_name}"
                 if model_index in dense_models:
                     estimator_X = prepare_known_dense_input(
@@ -3344,7 +3545,7 @@ class PredictionsHandler:
             if required_labels:
                 if model_index in dense_models:
                     corr_X = prepare_known_dense_input(
-                        Helpers.prepare_estimator_input(corr_X), logger=self.handler.logger,
+                        prepare_model_input(corr_X, model), logger=self.handler.logger,
                         context=f"Dark Number correction input - {model_name}", estimator=model,
                     )
                 corrs, sources, corr_models = self._calculate_dark_number_corrections(

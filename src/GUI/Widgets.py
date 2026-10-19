@@ -22,6 +22,7 @@ from JBGScoring import score_metric_help
         
 from JBGExceptions import GuiWidgetsException
 import Helpers
+from JBGModelSettings import REGISTRY, defaults, validate
 from JBGSampling import sampling_names
 from JBGFeatureSearch import SearchOptions
 from JBGFeatureProfiles import save_candidate, load_candidates, find_candidate, review_compatibility, profile_display_name, delete_candidate
@@ -514,6 +515,11 @@ class Widgets:
         self._load_default_widgets()
         #print(self.widgets)
         
+        self._model_parameter_controls = {}
+        self._model_settings_panel = self._create_model_settings_panel()
+        # Keep this observer independent of the readiness/locking event handler.
+        self.algorithm_dropdown.observe(self._model_selection_changed, names="value")
+        self.refresh_model_settings_panel()
         self.forms = {
             "connection": [self.sql_username, self.sql_password, self.data_catalogs_dropdown, self.data_tables_dropdown],
             "models": [self.models_dropdown, self.field_status("models")],
@@ -887,6 +893,8 @@ class Widgets:
     def update_from_model_config(self, model: str = None ) -> None:
         """ Sets values based on the config in the chosen model """
         config = self.load_model_config(model)
+        self.restore_model_parameters(getattr(config.mode, "model_parameters", {}))
+        self.restore_decision_policy(config.mode)
         self.categorize_columns.options = config.get_text_column_names()
         saved_dark_number_target = config.get_dark_number_target()
         if saved_dark_number_target:
@@ -987,6 +995,8 @@ class Widgets:
         """
         connection = config_params["connection"]
         mode = config_params["mode"]
+        self.restore_model_parameters(getattr(mode, "model_parameters", {}))
+        self.restore_decision_policy(mode)
         io = config_params["io"]
         debug = config_params["debug"]
 
@@ -1503,6 +1513,15 @@ class Widgets:
                 oversamplers = list(self.oversampler_dropdown.value),
                 undersamplers = list(self.undersampler_dropdown.value),
                 algorithm = AlgorithmTuple(self.algorithm_dropdown.value),
+                model_parameters = self.get_model_parameters(),
+                decision_policy = self.decision_policy_widget.value,
+                probability_threshold = self.probability_threshold_widget.value,
+                threshold_diagnostics = self.threshold_diagnostics_widget.value,
+                model_benchmark_150 = self.model_benchmark_150_widget.value,
+                holdout_split_mode = self.holdout_split_mode_widget.value,
+                validation_group_column = self.validation_group_column_widget.value.strip(),
+                grouped_cross_validation = self.grouped_cv_widget.value,
+                excluded_predictor_columns = self.excluded_predictors_widget.value,
                 preprocessor = PreprocessTuple(self.preprocess_dropdown.value),
                 feature_selection = ReductionTuple(self.reduction_dropdown.value),
                 num_selected_features = None,
@@ -2688,13 +2707,15 @@ class Widgets:
             if "tooltip" in action.traits():
                 action.tooltip = tooltip
 
-        # Separate what is searched, how it is validated, and which estimator
-        # performs each fit. Keep the current numeric values and persistence.
+        # Only the group contents collapse: controls remain the same widget
+        # instances so existing enable/disable rules and saved settings survive.
         def setting_group(label, controls):
-            return widgets.VBox([
-                widgets.HTML(f"<b>{label}</b>"),
-                widgets.HBox(controls, layout=widgets.Layout(flex_flow="row wrap", width="100%")),
-            ], layout=widgets.Layout(width="100%"))
+            content = widgets.HBox(controls, layout=widgets.Layout(
+                flex_flow="row wrap", width="100%"))
+            accordion = widgets.Accordion(children=[content], selected_index=None,
+                                          layout=widgets.Layout(width="100%"))
+            accordion.set_title(0, label)
+            return accordion
 
         strategy_group = setting_group("Search strategy", [
             self.feature_search_preset, self.feature_search_trials, self.feature_search_sizes,
@@ -2756,10 +2777,130 @@ class Widgets:
         form.children[1].layout.align_items = "flex-start"
         return form
     
+    def _create_model_settings_panel(self):
+        """Create an initially collapsed panel; no extra permanent row in the main GUI."""
+        sections = []
+        self._model_parameter_panels = {}
+        for algorithm, definitions in REGISTRY.items():
+            controls = {}
+            for key, spec in definitions.items():
+                common = dict(description=spec.label, style={"description_width": "initial"},
+                              layout=widgets.Layout(width="280px"))
+                if spec.kind == "int":
+                    widget = widgets.BoundedIntText(value=spec.default, min=spec.minimum,
+                                                    max=spec.maximum, **common)
+                elif spec.kind == "float":
+                    widget = widgets.BoundedFloatText(value=spec.default, min=spec.minimum,
+                                                      max=spec.maximum, **common)
+                else:
+                    widget = widgets.Dropdown(value=spec.default, options=spec.options, **common)
+                controls[key] = widget
+            self._model_parameter_controls[algorithm] = controls
+            content = widgets.Box(list(controls.values()), layout=widgets.Layout(
+                display="flex", flex_flow="row wrap", width="100%"))
+            self._model_parameter_panels[algorithm] = content
+            sections.append((algorithm, content))
+        tabs = widgets.Accordion(children=[], selected_index=None)
+        self._model_settings_tabs = tabs
+        self.decision_policy_widget = widgets.Dropdown(
+            description="Decision policy", options=[("Default classifier prediction", "default"),
+              ("Fixed probability threshold (binary)", "fixed")], value="default",
+            style={"description_width": "initial"}, layout=widgets.Layout(width="390px"))
+        self.probability_threshold_widget = widgets.BoundedFloatText(
+            description="Positive-class threshold", value=0.5, min=0.001, max=0.999,
+            step=0.01, disabled=True, style={"description_width": "initial"},
+            layout=widgets.Layout(width="300px"))
+        self.decision_policy_widget.observe(
+            lambda change: setattr(self.probability_threshold_widget, "disabled",
+                                   change["new"] != "fixed"), names="value")
+        self.threshold_diagnostics_widget = widgets.Checkbox(
+            value=False, description="Analyze training-only CV thresholds (extra fits)",
+            indent=False, style={"description_width": "initial"},
+            layout=widgets.Layout(width="460px"))
+        self.model_benchmark_150_widget = widgets.Checkbox(
+            value=False, description="OOF model benchmark (extra CV fits)",
+            indent=False, layout=widgets.Layout(width="460px"))
+        self.holdout_split_mode_widget = widgets.Dropdown(
+            description="Holdout validation",
+            options=[("Stratified rows (existing)", "stratified_rows"),
+                     ("Group-disjoint (selected column)", "person_disjoint")],
+            value="stratified_rows",
+            style={"description_width": "initial"},
+            layout=widgets.Layout(width="410px"))
+        self.validation_group_column_widget = widgets.Text(
+            description="Group column", value="iafId",
+            style={"description_width": "initial"}, layout=widgets.Layout(width="390px"))
+        self.grouped_cv_widget = widgets.Checkbox(
+            description="Group-disjoint cross-validation (extra validation safeguard)",
+            value=False, indent=False, layout=widgets.Layout(width="490px"))
+        self.excluded_predictors_widget = widgets.Text(
+            description="Exclude predictors (CSV)", value="",
+            style={"description_width": "initial"}, layout=widgets.Layout(width="510px"))
+        decision_panel = widgets.VBox([self.holdout_split_mode_widget,
+                                       self.validation_group_column_widget,
+                                       self.grouped_cv_widget,
+                                       self.excluded_predictors_widget,
+                                       self.decision_policy_widget,
+                                       self.probability_threshold_widget,
+                                       self.threshold_diagnostics_widget,
+                                       self.model_benchmark_150_widget])
+        inner = widgets.Accordion(children=[tabs, decision_panel], selected_index=None)
+        inner.set_title(0, "Classifier hyperparameters")
+        inner.set_title(1, "Classification decision policy")
+        panel = widgets.Accordion(children=[inner], selected_index=None)
+        panel.set_title(0, "Model settings (advanced)")
+        panel.layout.width = "100%"
+        return panel
+
+    def _model_selection_changed(self, change):
+        if change.get("name") == "value":
+            self.refresh_model_settings_panel()
+
+    def refresh_model_settings_panel(self):
+        """Show only configured, selected model families; retain all widget values."""
+        if not hasattr(self, "_model_settings_tabs"):
+            return
+        selected = tuple(dict.fromkeys(self.algorithm_dropdown.value))
+        visible = [(code, self._model_parameter_panels[code])
+                   for code in selected if code in self._model_parameter_panels]
+        tabs = self._model_settings_tabs
+        if tuple(tabs.children) == tuple(content for _, content in visible):
+            return
+        tabs.children = tuple(content for _, content in visible)
+        tabs.selected_index = None
+        for index, (code, _) in enumerate(visible):
+            tabs.set_title(index, f"{Algorithm[code].full_name} ({code})")
+
+    def restore_decision_policy(self, mode):
+        policy = getattr(mode, "decision_policy", "default")
+        self.decision_policy_widget.value = policy if policy in ("default", "fixed") else "default"
+        self.probability_threshold_widget.value = float(getattr(mode, "probability_threshold", 0.5))
+        self.threshold_diagnostics_widget.value = bool(getattr(mode, "threshold_diagnostics", False))
+        self.model_benchmark_150_widget.value = bool(getattr(mode, "model_benchmark_150", False))
+        self.validation_group_column_widget.value = str(getattr(mode, "validation_group_column", "iafId"))
+        self.grouped_cv_widget.value = bool(getattr(mode, "grouped_cross_validation", False))
+        self.excluded_predictors_widget.value = str(getattr(mode, "excluded_predictor_columns", ""))
+        split_mode = getattr(mode, "holdout_split_mode", "stratified_rows")
+        self.holdout_split_mode_widget.value = (
+            split_mode if split_mode in ("stratified_rows", "person_disjoint")
+            else "stratified_rows")
+
+    def get_model_parameters(self):
+        return validate({algorithm: {key: control.value for key, control in controls.items()}
+                         for algorithm, controls in self._model_parameter_controls.items()})
+
+    def restore_model_parameters(self, settings):
+        validated = validate(settings)
+        baseline = defaults()
+        for algorithm, controls in self._model_parameter_controls.items():
+            for key, control in controls.items():
+                control.value = validated.get(algorithm, {}).get(key, baseline[algorithm][key])
+
     def algorithm_form(self) -> widgets.Box:
         form = self.create_section_form("Model selection", self.forms["algorithm"], widgets.Box)
         form.children[1].layout.flex_flow = "row wrap"
         form.children[1].layout.width = "100%"
+        form.children = tuple(form.children) + (self._model_settings_panel,)
         return form
     
     def data_handling_form(self) -> widgets.Box:

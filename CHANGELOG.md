@@ -1,3 +1,10 @@
+## Revision 144 (candidate): ordinary native CatBoost
+
+- Adds CBST ordinary classifier with guarded NOS/NOR/NOG/NUG compatibility.
+- Maintains categorical schema through CV, prediction and correction inputs.
+- Adds clone, persistence and categorical regression smoke tests.
+- Leaves dark-number formulas and threshold policy unchanged.
+
 ## Revision 143 — pooled-model subgroup diagnostics
 
 - Add optional comparison column for per-value evaluation of the existing pooled OOF predictions.

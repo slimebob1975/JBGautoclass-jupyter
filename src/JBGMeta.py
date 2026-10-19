@@ -327,6 +327,7 @@ class AlgorithmGridSearchParams(MetaEnum):
     PCN = {"parameters": {'penalty': ('l2', 'l1', 'elasticnet'), 'alpha': (1e-3, 1e-4, 1e-5), 
            'class_weight': ('balanced', None)}}
     PAC = {"parameters": {'class_weight': ('balanced', None)}}
+    CBST = {"parameters": {}, "identifier": "CBST"}
     RFCL = {"parameters": {'criterion': ('gini', 'entropy', 'log_loss'), 'n_estimators':[10,50,100,200], 
             'max_features': ('sqrt', 'log2'), 'class_weight': ('balanced', 'balanced_subsample', None)}}
     LSVC = {"parameters": [
@@ -472,6 +473,7 @@ class Algorithm(MetaEnum):
     REC = { "full_name": "Ridge Classifier", "search_params": AlgorithmGridSearchParams.REC, "rfe_compatible": True, "lib": Library.SCIKIT}
     PCN = { "full_name": "Perceptron", "search_params": AlgorithmGridSearchParams.PCN, "rfe_compatible": True, "lib": Library.SCIKIT}
     PAC = { "full_name": "Passive Aggressive Classifier", "search_params": AlgorithmGridSearchParams.PAC, "rfe_compatible": True, "lib": Library.SCIKIT}
+    CBST = { "full_name": "CatBoost (native categorical)", "search_params": AlgorithmGridSearchParams.CBST, "rfe_compatible": False, "lib": Library.SCIKIT}
     RFCL = { "full_name": "Random Forest Classifier", "search_params": AlgorithmGridSearchParams.RFCL, "rfe_compatible": True, "lib": Library.SCIKIT}
     LSVC = { "full_name":  "Linear Support Vector", "search_params": AlgorithmGridSearchParams.LSVC, "rfe_compatible": True, "lib": Library.SCIKIT}
     SLSV = { "full_name": "Stacked Linear SVC", "search_params": AlgorithmGridSearchParams.SLSV, "rfe_compatible": False, "lib": Library.SCIKIT}
@@ -619,6 +621,11 @@ class Algorithm(MetaEnum):
             loss="hinge", penalty=None, learning_rate="pa1", eta0=1.0,
             max_iter=max_iterations
         )
+
+    def do_CBST(self, max_iterations: int, size: int):
+        from JBGNativeCatBoost import OrdinaryNativeCatBoostClassifier
+        return OrdinaryNativeCatBoostClassifier(iterations=400, depth=6, learning_rate=0.05,
+                                        class_weight="None", random_seed=42)
 
     def do_RFCL(self, max_iterations: int, size: int)-> RandomForestClassifier:
         return RandomForestClassifier()

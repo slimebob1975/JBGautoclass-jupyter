@@ -287,3 +287,5 @@ Current coverage includes numeric binary/multiclass classification, 4/13/30-feat
 - [x] 139 — Crash-resumable feature search with atomic candidate and outer-fit checkpoints, saved data snapshot, Pause/Resume GUI and baseline performance warning. See `docs/feature_search_139.md`.
 - [ ] 140 — Configurable parallel candidate evaluations, with deterministic worker seeds, checkpoint-safe job scheduling and memory controls.
 - [ ] Investigate fold-level checkpointing to avoid repeating partially finished expensive FUTV candidates after a forced shutdown.
+
+- **After R144:** Test native CatBoost ordinary training, holdout, save/reload and dark-number correction on Windows/Voila; expose main CatBoost parameters; validate thresholds and uncertainty with group-aware leakage checks.

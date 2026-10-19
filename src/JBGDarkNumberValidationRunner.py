@@ -24,7 +24,7 @@ import pandas as pd
 from Config import Config, DarkNumberAlpha, DarkNumberMethod
 from JBGDarkNumberValidation import DarkNumberValidationHarness
 from JBGHandler import JBGHandler
-from Helpers import prepare_estimator_input
+from JBGNativeCatBoost import prepare_model_input
 from JBGMeta import (
     AlgorithmTuple,
     NgramRange,
@@ -169,7 +169,7 @@ def load_validation_inputs(config: Config, logger: JBGLogger, model_path: Path):
     # sklearn warns and densifies pandas SparseDtype frames. The production code
     # already normalizes those to SciPy CSR; do the same in validation so larger
     # text datasets do not acquire an avoidable dense-memory copy.
-    X = prepare_estimator_input(X)
+    X = prepare_model_input(X, pipeline)
     y = np.asarray(dataset_handler.Y)
 
     if n_features_out not in (None, 0) and X.shape[1] != int(n_features_out):

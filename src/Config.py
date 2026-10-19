@@ -448,7 +448,16 @@ class Config:
         undersampler: Undersampling = field(default_factory=Undersampling.defaultUndersampler)
         oversamplers: list[str] = None
         undersamplers: list[str] = None
-        algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple.defaultAlgorithmTuple)        
+        algorithm: AlgorithmTuple = field(default_factory=AlgorithmTuple.defaultAlgorithmTuple)
+        model_parameters: dict = field(default_factory=dict)
+        decision_policy: str = "default"
+        probability_threshold: float = 0.5
+        threshold_diagnostics: bool = False
+        model_benchmark_150: bool = False
+        holdout_split_mode: str = "stratified_rows"
+        validation_group_column: str = "iafId"
+        grouped_cross_validation: bool = False
+        excluded_predictor_columns: str = ""
         preprocessor: PreprocessTuple = field(default_factory=PreprocessTuple.defaultPreprocessTuple)
         feature_selection: ReductionTuple = field(default_factory=ReductionTuple.defaultReductionTuple)
         num_selected_features: int = None
@@ -710,6 +719,15 @@ class Config:
                 "Undersampling candidates":              ", ".join(sampling_names(getattr(self, "undersamplers", None), Undersampling, self.undersampler)),
                 "Undersampling technique":               self.undersampler.full_name,
                 "Algorithms of choice":                  self.algorithm.full_name,
+                "Model parameters":                      str(getattr(self, "model_parameters", {})),
+                "Decision policy":                       self.decision_policy,
+                "Probability threshold":                 self.probability_threshold,
+                "Training-only threshold diagnostics":  getattr(self, "threshold_diagnostics", False),
+                "OOF model benchmark (extra fits)": getattr(self, "model_benchmark_150", False),
+                "Holdout split mode":                  getattr(self, "holdout_split_mode", "stratified_rows"),
+                "Validation group column": getattr(self, "validation_group_column", "iafId"),
+                "Grouped cross-validation": getattr(self, "grouped_cross_validation", False),
+                "Excluded predictor columns": getattr(self, "excluded_predictor_columns", ""),
                 "Preprocessing method of choice":        self.preprocessor.full_name,
                 "Scoring method":                        self.scoring.full_name,
                 "Feature selection":                     self.feature_selection.full_name,
@@ -1150,6 +1168,15 @@ class Config:
                 oversamplers=module.mode.get("oversamplers") or None,
                 undersamplers=module.mode.get("undersamplers") or None,
                 algorithm=AlgorithmTuple.from_string(module.mode["algorithm"]),
+                model_parameters=module.mode.get("model_parameters", {}),
+                decision_policy=module.mode.get("decision_policy", "default"),
+                probability_threshold=float(module.mode.get("probability_threshold", 0.5)),
+                threshold_diagnostics=bool(module.mode.get("threshold_diagnostics", False)),
+                model_benchmark_150=bool(module.mode.get("model_benchmark_150", False)),
+                holdout_split_mode=module.mode.get("holdout_split_mode", "stratified_rows"),
+                validation_group_column=module.mode.get("validation_group_column", "iafId"),
+                grouped_cross_validation=bool(module.mode.get("grouped_cross_validation", False)),
+                excluded_predictor_columns=module.mode.get("excluded_predictor_columns", ""),
                 preprocessor=PreprocessTuple.from_string(module.mode["preprocessor"]),
                 feature_selection=ReductionTuple.from_string(module.mode["feature_selection"]),
                 num_selected_features=num_selected_features,
@@ -1473,7 +1500,10 @@ class Config:
     def get_callable_algorithms(self, size: int, max_iterations: int) -> list:
         """ Returns callable algorithms from mode.algorithm """
 
-        return self.mode.algorithm.list_callable_algorithms(size, max_iterations)
+        from JBGModelSettings import configure_estimator
+        algorithms = self.mode.algorithm.list_callable_algorithms(size, max_iterations)
+        return [(algorithm, configure_estimator(algorithm.name, estimator,
+                 getattr(self.mode, "model_parameters", {}))) for algorithm, estimator in algorithms]
 
     def get_callable_preprocessors(self) -> list:
         """ Returns callable preprocessors from mode.algorithm """
