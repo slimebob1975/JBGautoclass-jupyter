@@ -1338,8 +1338,12 @@ class Widgets:
         else:
             self.rerun_state = True
         
+        # The disk log must reveal whether a blank Script output is caused by
+        # clearing the widget, constructing settings, or executing the runner.
+        self.guihandler._classifier_diagnostic("Script output widget: clear begin")
         self.output.clear_output(wait=True)
         self.mispredicted_output.clear_output()
+        self.guihandler._classifier_diagnostic("Script output widget: clear end")
         if self.regression_suite_state:
             config_params = self.get_regression_suite_base_config_params()
             self.guihandler.run_regression_suite(base_config_params=config_params, output=self.output)

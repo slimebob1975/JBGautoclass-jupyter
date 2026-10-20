@@ -299,13 +299,14 @@ class JBGLogger(terminal.Logger):
         if self._enable_quiet:
             # This function should only run if info can be shown
             return False
-        self._set_widget_value("progress_label", "Investigate dataset (see console)")
+        self.print_progress(message="Investigating dataset (see run log)")
         self.print_dataset_investigation(dataset, class_column, show_class_distribution)
 
         if show_statistics:
             #Give some statistical overview of the training material
             self.show_statistics_on_dataset(dataset)
 
+        self.print_progress(message="Dataset investigation completed")
         return True
 
     # Investigating dataset -- make some printouts to standard output

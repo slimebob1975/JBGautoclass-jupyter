@@ -1,3 +1,25 @@
+## Revision 159 — safe Voilà shutdown diagnostics
+
+Add a read-only kernel-lifecycle report for HTTP 403 shutdown failures and kernel starts; report explicitly distinguishes logged shutdown attempts from live processes. Integrate a report at normal Voilà exit. No XSRF bypass or destructive kernel cleanup; awaiting Windows/browser reproduction for frontend fix.
+
+## Revision 158 — Voilà/kernel and Script output diagnostics
+
+Added persistent log boundaries around Script output capture, widget clearing, and post-run GUI completion; classify Voilà shutdown 403 as a server warning and report runtime dependency versions at launch. No CSRF bypass, kernel shutdown override, or ML concurrency changes. The underlying shutdown request still requires Windows/Voilà reproduction.
+
+## Revision 157a — Parallel worker-count correction
+
+- GridSearchCV and Dark Numbers resolve `DEFAULT_N_JOBS_DESIRED=-1` as available CPU cores rather than incorrectly applying `min(..., -1)`.
+- Explicit positive worker caps, independent job counts, and the revision 157 memory guard are preserved.
+- Added focused tests in `tests/test_parallelism_157a.py`.
+
+### Revision 157 — GridSearchCV resource observability (post-156b)
+
+- Restore file-only GridSearchCV heartbeat without rev156 GUIHandler lifecycle edits, retaining 156a diagnostics and 156b JSON hotfix.
+- Report system free RAM and best-effort aggregate RSS of the JBG process tree every 30 seconds during fit.
+- Cap newly launched ordinary GridSearchCV to one worker when free RAM is under 15% or 1 GiB; never terminate running models.
+- Finish dataset investigation progress label rather than leaving the initial label indefinitely.
+- Add isolated resource monitor regression tests.
+
 ## Revision 156a — Initialization diagnostics
 
 - Add file-backed stage markers around the classification callback, saved-run snapshot, Config/DataLayer creation, classifier construction and classifier execution.

@@ -53,6 +53,11 @@ function Write-ServerLogLine {
     elseif ($Line -match '(?i)\bwarn(ing)?\b' -or $Line -match '^\s*W\s' -or $Line -match ':\s*W\s') {
         $Level = 'WARNING'
     }
+    # A 403 on the shutdown endpoint is a kernel lifecycle failure, not an
+    # ordinary informational access log. Keep the XSRF protection enabled.
+    if ($Line -match '403 POST /voila/api/shutdown/') {
+        $Level = 'WARNING'
+    }
     elseif ($Line -match '(?i)\bdebug\b') {
         $Level = 'DEBUG'
     }
@@ -119,7 +124,24 @@ $env:PYTHONIOENCODING = 'utf-8'
 
 Write-ServerLogLine -Line "Server log started. Working directory: $DevRoot" -LogPath $ServerLog
 Write-ServerLogLine -Line "Voila executable: $Voila; notebook: $Notebook; port: $VoilaPort" -LogPath $ServerLog
+# Versions are diagnostic only. They must not prevent startup if import fails.
+try {
+    $VersionDetails = & $Py -c "import importlib.metadata as m; print('; '.join(f'{name}={m.version(name)}' for name in ('voila', 'jupyter_server', 'ipywidgets', 'ipykernel', 'tornado')))" 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-ServerLogLine -Line "Runtime versions: $VersionDetails" -LogPath $ServerLog
+    }
+    else {
+        Write-ServerLogLine -Line "Runtime version query failed (non-fatal)" -LogPath $ServerLog
+    }
+}
+catch {
+    Write-ServerLogLine -Line "Runtime version query unavailable (non-fatal)" -LogPath $ServerLog
+}
 Write-Host "Server log: $ServerLog"
+# On restart/reload, an invalid shutdown POST can leave an old kernel alive.
+# Do not disable XSRF or terminate kernels here: long-running model fits may
+# still be active. The companion diagnostic summarizes failures after exit.
+Write-ServerLogLine -Line "Kernel lifecycle: rejected shutdown requests are diagnostic; 403 does not prove orphaning. XSRF checks remain enabled." -LogPath $ServerLog
 
 $VoilaExitCode = 0
 try {
@@ -132,6 +154,12 @@ try {
         $script:VoilaExitCode = $LASTEXITCODE
     }
     Write-ServerLogLine -Line "Voila exited with code $VoilaExitCode" -LogPath $ServerLog
+    try {
+        & $Py (Join-Path $DevRoot 'scripts\diagnose_voila_sessions.py') $ServerLog
+    }
+    catch {
+        Write-ServerLogLine -Line "Kernel-lifecycle report unavailable (non-fatal)" -LogPath $ServerLog
+    }
 }
 finally {
     [Console]::OutputEncoding = $PreviousConsoleOutputEncoding

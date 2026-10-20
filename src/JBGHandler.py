@@ -70,6 +70,7 @@ from JBGTrainingTiming import (
 )
 from JBGNystroemRuntime import prepare_runtime_cv, build_runtime_rows, format_runtime_summary
 from JBGFinalSearch import include_extra_trees_baseline, final_search_summary
+from JBGResourceMonitor157 import safe_grid_workers, training_heartbeat
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
 from pickle import PicklingError
@@ -1282,7 +1283,16 @@ class ModelHandler:
 
             # Limit jobs to CPU cores
             max_cores = psutil.cpu_count(logical=True)
-            n_jobs_desired = min(total_jobs, max_cores, self.handler.STANDARD_DESIRED_N_JOBS)
+            # Resolve -1 as all available cores before applying the memory guard.
+            # min(..., -1) accidentally forced every GridSearchCV to one worker.
+            n_jobs_desired = self._resolve_n_jobs(total_jobs, max_cores)
+            # Read system pressure only before launching a new GridSearchCV.
+            # Do not change currently running searches or candidate accounting.
+            requested_workers = max(1, n_jobs_desired)
+            n_jobs_desired, resource_note = safe_grid_workers(requested_workers)
+            if resource_note:
+                self.handler.logger.log_file.write_message(resource_note, level="WARNING")
+                self.handler.logger.print_warning(resource_note)
 
             # Keep sklearn/joblib worker output quiet. With process-based parallelism,
             # GridSearchCV verbose output bypasses the application's stdout capture and
@@ -1332,10 +1342,20 @@ class ModelHandler:
             estimator_X = prepare_model_input(X, model)
             started = time.perf_counter()
             try:
-                call_with_sparse_input_retry(
-                    lambda X_input: search.fit(X_input, Y), estimator_X,
-                    logger=self.handler.logger, context="GridSearchCV fit", estimator=model,
+                self.handler.logger.log_file.write_message(
+                    f"Grid search fit started: model={type(model).__name__}; "
+                    f"candidates={n_param_combos}; folds={n_splits}; "
+                    f"fits={total_jobs}; workers={search.n_jobs}", level="INFO",
                 )
+                with training_heartbeat(
+                    self.handler.logger.log_file,
+                    f"GridSearchCV model={type(model).__name__} "
+                    f"candidates={n_param_combos} folds={n_splits} workers={search.n_jobs}",
+                ):
+                    call_with_sparse_input_retry(
+                        lambda X_input: search.fit(X_input, Y), estimator_X,
+                        logger=self.handler.logger, context="GridSearchCV fit", estimator=model,
+                    )
             except TypeError:
                 raise
             except Exception as e:
@@ -3222,11 +3242,16 @@ class PredictionsHandler:
                 min_n_repeats=2,
                 max_multiplier=3
             )
-            total_jobs = min(
-                n_splits * n_repeats,
-                psutil.cpu_count(logical=True),
-                self.handler.STANDARD_DESIRED_N_JOBS
-            )
+            # Apply the same negative-cap semantics as the shared CV executor.
+            # A configured -1 means unlimited up to the logical CPU count.
+            # PredictionsHandler does not implement ModelHandler._resolve_n_jobs.
+            # Resolve the global cap here without a cross-class method call.
+            available_cores = max(1, psutil.cpu_count(logical=True) or 1)
+            configured_cap = self.handler.STANDARD_DESIRED_N_JOBS
+            total_jobs = min(n_splits * n_repeats, available_cores)
+            if configured_cap is not None and configured_cap > 0:
+                total_jobs = min(total_jobs, configured_cap)
+            total_jobs = max(1, total_jobs)
             if DARK_NUMBER_DEBUG_LOGGING:
                 self.handler.logger.print_info(
                     f"[DEBUG] Setting n_splits: {n_splits} and n_repeats: {n_repeats} for corr_estimator"

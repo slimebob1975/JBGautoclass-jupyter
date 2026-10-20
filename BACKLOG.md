@@ -1,3 +1,6 @@
+- [ ] Revision 159 follow-up: identify the Voilà/frontend version responsible for missing XSRF headers on shutdown; compare upstream issue #1458; verify actual live-kernel counts separately before implementing cleanup. Never bypass CSRF or kill running training jobs.
+- [ ] Revision 158: review Voilà server runtime versions and shutdown 403 diagnostics; test repeated reload/disconnect and Script output widget lifecycle on Windows. Do not disable XSRF; source-level diagnostics alone do not fix the browser shutdown request.
+- [ ] After revision 157: validate memory guard and process-tree heartbeat on Windows/Voilà; assess GaussianProcessClassifier large-data cost and separate Feature modelling concurrency; continue investigating missing Script output and Voilà kernel shutdown _xsrf failures.
 ## Revision 155 — JSON export and Feature modelling button help
 
 Transitional versioned JSON export with legacy Python config compatibility; corrected action tooltips. See `docs/configuration_155.md`.
@@ -57,6 +60,15 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 - [ ] **Native CatBoost ordinary-search integration (deferred):** consider only as a general
   pipeline-local preprocessing architecture, with candidate-specific encoders, correct CV isolation,
   comparable metrics and serialization tests. Otherwise retain revision-151 separation.
+- [ ] **XGBoost classifier integration (deferred; P2, after reliability/resource priorities):**
+  add `XGBClassifier` as an opt-in ordinary pipeline-search candidate using JBG's existing
+  fold-local numeric preprocessing; subsequently consider Feature modelling integration.
+  Keep estimator-level threading bounded (e.g. `n_jobs=1` under parallel search) to avoid
+  oversubscription; evaluate memory/fit cost before enabling broader search budgets.
+  Test class-label encoding, multiclass behavior, imbalance options, scoring/CV isolation,
+  model save -> fresh-process reload -> predict, Repeat Last, and dependency compatibility.
+  Defer native categorical handling and early stopping until their data/CV contracts are verified.
+  Do not prioritize ahead of the remaining P1 stability and live Windows/Voila checks.
 
 ## P2 — Configuration, packaging and architecture
 
@@ -124,3 +136,6 @@ revisions must verify current code behavior before implementing any listed item.
 - [ ] Measure time and memory of parallel searches before tuning default worker counts.
 
 - [ ] Revision 156a: correlate file-based startup stage markers with GUI and SQL progress; investigate Voilà kernel lifecycle separately.
+
+- Revision 157a: Corrected negative global worker-cap handling in GridSearchCV and Dark Numbers; verify live Windows parallel execution and continue investigating resource pressure.
+- [ ] **Threads versus processes (investigation only):** benchmark joblib `threading` versus `loky` / process-based CV and pipeline search on representative CPU-bound and NumPy/scikit-learn workloads; measure GIL behavior, memory sharing, nested BLAS/OpenMP parallelism, estimator thread safety, isolation after native crashes, and reproducibility. Do not change the default backend without Windows/Voila evidence.

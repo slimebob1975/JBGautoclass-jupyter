@@ -556,6 +556,7 @@ class GUIHandler:
             result = {"mispredicted": None}
             stage = "construct classifier"
             self._classifier_diagnostic("classifier construction: begin")
+            self._classifier_diagnostic("Script output capture: entering")
             with output, self.logger.capture_console_output():
                 the_classifier = autoclass(
                     config=self.classifier_datalayer.get_config(),
@@ -571,6 +572,7 @@ class GUIHandler:
                 if not result:
                     self.logger.print_info("No data was fetched from database!")
 
+            self._classifier_diagnostic("Script output capture: exited")
             stage = "post-run GUI"
             if result and result["mispredicted"] is not None:
                 try:
@@ -583,6 +585,7 @@ class GUIHandler:
                         )
             if set_rerun:
                 self.widgets.set_rerun()
+            self._classifier_diagnostic("post-run GUI: completed")
             self._classifier_diagnostic(f"callback completed; elapsed={time.monotonic()-started:.1f}s")
             return result
         except Exception:
