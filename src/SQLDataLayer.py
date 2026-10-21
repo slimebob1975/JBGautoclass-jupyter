@@ -199,7 +199,7 @@ class DataLayer(DataLayerBase):
         where = f"TABLE_CATALOG = {database} AND CONCAT(CONCAT(TABLE_SCHEMA,'.'),TABLE_NAME) = {table}"
         order_by = "DATA_TYPE DESC"
         query = f"SELECT {select} WHERE {where} ORDER BY {order_by}"
-        
+
         data = self.get_data_list_from_query(query)
 
         return {column[0]:column[1] for column in data}
@@ -273,8 +273,8 @@ class DataLayer(DataLayerBase):
                                  columns: list[str]) -> dict[str, int]:
         """Fetch all class-candidate distinct counts in a single database query.
 
-        SQL COUNT(DISTINCT) ignores NULL. Count NULL as an additional class value,
-        because NULL also appears in the class distribution UI.
+        SQL COUNT(DISTINCT) ignores NULL, as required: unlabelled rows do not
+        constitute a separate target class.
         """
         if not columns:
             return {}
@@ -291,7 +291,7 @@ class DataLayer(DataLayerBase):
                           if known[column] in ('text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar')
                           else quoted)
             expressions.append(
-                f"COUNT(DISTINCT {expression}) + MAX(CASE WHEN {quoted} IS NULL THEN 1 ELSE 0 END) AS cardinality_{index}")
+                f"COUNT(DISTINCT {expression}) AS cardinality_{index}")
         try:
             row = self.get_data_list_from_query(f"SELECT {', '.join(expressions)} FROM {table}")[0]
             return {column: int(row[index]) for index, column in enumerate(columns)}

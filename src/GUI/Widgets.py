@@ -147,7 +147,7 @@ class EventHandler:
         # Programmatic state restoration mutates options/value while the GUI can
         # still contain the default ``N/A`` selection. Do not query the database
         # until the persisted dataset/class state has been restored completely.
-        if self.lock_observe_1:
+        if self.lock_observe_1 or getattr(self.widgets, "_updating_column_options", False):
             return
 
         if change.name not in ["index", "disabled"]:
@@ -155,6 +155,12 @@ class EventHandler:
         
         if change.name == "disabled" and change.name:
             # This is still disabled
+            return
+
+        if self.widgets.class_column.value is None:
+            self.widgets.summarise_state = False
+            self.widgets.update_id_column()
+            self.widgets.update_data_columns()
             return
 
         self.widgets.summarise_state = True # NB: It will not update the summary if summarise_state = False
@@ -1721,10 +1727,22 @@ class Widgets:
                     and 2 <= self._class_cardinalities.get(name, ceiling + 1) <= ceiling]
         # Changing options fires the existing class_column observer, which updates
         # the unique ID, feature selection, and the remaining data widgets.
-        self.class_column.options = eligible
-        self.class_column.value = old if old in eligible else (eligible[0] if eligible else None)
-        if old == self.class_column.value:
-            self.refresh_feature_search_compare_options()
+        self._updating_column_options = True
+        try:
+            self.class_column.options = eligible
+            self.class_column.value = old if old in eligible else (eligible[0] if eligible else None)
+        finally:
+            self._updating_column_options = False
+        # Update dependent widgets only after class choice is internally consistent.
+        if hasattr(self, "unique_id_columns"):
+            self.update_id_column()
+            self.update_data_columns()
+        self.refresh_feature_search_compare_options()
+        if self.class_column.value is not None and old != self.class_column.value:
+            self.summarise_state = True
+            self.update_class_summary()
+        elif self.class_column.value is None:
+            self.summarise_state = False
 
     def refresh_feature_search_compare_options(self) -> None:
         """Follow eligible selected source features, preserving a valid selection."""
@@ -1750,8 +1768,6 @@ class Widgets:
                     if columns[name] in (Config.TEXT_DATATYPES + Config.INT_DATATYPES)]
         self._class_cardinalities = self.datalayer.get_column_cardinalities(
             self.data_catalogs_dropdown.value, self.data_tables_dropdown.value, eligible)
-        self.refresh_class_column_options()
-        
         integer_columns = [
             var for var in columns_list if self.datatype_dict[var] in Config.INT_DATATYPES
         ]
@@ -1761,9 +1777,35 @@ class Widgets:
             )
             if integer_columns else []
         )
+        self.refresh_class_column_options()
         self.id_column.options = [
             var for var in self.unique_id_columns if var != self.class_column.value
         ]
+        # The SQL datatype (int NOT NULL) does not guarantee uniqueness.
+        # Explain the exclusion rather than leaving the ID selector empty.
+        self.id_column_diagnostic.value = ""
+        if "id" in integer_columns and "id" not in self.unique_id_columns:
+            try:
+                stats = self.datalayer.get_column_uniqueness_stats(
+                    self.data_catalogs_dropdown.value, self.data_tables_dropdown.value, "id"
+                )
+                self.id_column_diagnostic.value = (
+                    "<b>Column 'id' is not eligible as a unique identifier.</b> "
+                    f"Rows: {stats['total']}; non-NULL: {stats['nonnull']}; "
+                    f"distinct: {stats['distinct']}. "
+                    "The ID column must be non-NULL and distinct in every row."
+                )
+            except Exception as exc:
+                self.id_column_diagnostic.value = (
+                    "<b>Column 'id' failed the uniqueness check.</b> "
+                    "Inspect NULL and duplicate values in SQL Server. "
+                    + html.escape(str(exc))
+                )
+        elif not self.id_column.options:
+            self.id_column_diagnostic.value = (
+                "<b>No eligible ID column.</b> JBG requires a globally unique, "
+                "non-NULL integer column. SQL int NOT NULL alone does not guarantee uniqueness."
+            )
         if self.id_column.options:
             self.id_column.value = self.id_column.options[0]
         else:
@@ -2639,6 +2681,12 @@ class Widgets:
     def connection_form(self) -> widgets.Box:
         return self.create_section_form("Database connection", self.forms["connection"], widgets.Box)
 
+    @property
+    def id_column_diagnostic(self) -> widgets.HTML:
+        if not hasattr(self, "_id_column_diagnostic_widget"):
+            self._id_column_diagnostic_widget = widgets.HTML(value="")
+        return self._id_column_diagnostic_widget
+
     def data_form(self) -> widgets.Box:
         # Keep the slider directly above its class choices, not as a separate
         # column beside the class selector. Preserve the original form fields
@@ -2646,7 +2694,8 @@ class Widgets:
         class_controls = widgets.VBox([self.class_cardinality_limit, self.class_column])
         return self.create_section_form(
             "Dataset columns",
-            [class_controls, self.id_column, self.data_columns, self.text_columns],
+            [class_controls, widgets.VBox([self.id_column, self.id_column_diagnostic]),
+             self.data_columns, self.text_columns],
             widgets.Box,
         )
 

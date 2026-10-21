@@ -22,7 +22,7 @@ class GuiColumnFilterTests(unittest.TestCase):
     def test_sql_cardinality_cached_per_dataset(self):
         self.assertIn('def get_column_cardinalities(', SQL)
         self.assertIn('COUNT(DISTINCT', SQL)
-        self.assertIn('CASE WHEN', SQL)
+        self.assertNotIn(' + MAX(CASE WHEN', SQL)
         self.assertIn('self._class_cardinalities = self.datalayer.get_column_cardinalities(', WIDGETS)
 
     def test_compare_by_selected_categorical_or_integer_columns(self):

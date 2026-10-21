@@ -303,7 +303,15 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
         
     # Fit converter to data
     def fit(self, X: pd.DataFrame):
-        
+        # Persist the raw input schema with the fitted converter. This is
+        # serialized together with the model and survives a fresh process.
+        # Legacy saved converters lack this attribute and stay readable.
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("Text converter expects a pandas DataFrame during fit.")
+        if not X.columns.is_unique:
+            raise ValueError("Training features contain duplicate column names.")
+        self.input_feature_columns_ = tuple(X.columns)
+
         if self.text_columns_:
         
             # Investigate language option
@@ -340,8 +348,25 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
             self.ordinalencoder_ = OrdinalEncoder(handle_unknown='use_encoded_value', unknown_value=-1).fit(X_category)
 
     def transform(self, X: pd.DataFrame):
-        
+
         check_is_fitted(self)
+        # Fail before vectorization or prediction if an SQL query has changed
+        # the input schema. Reorder compatible columns deterministically.
+        expected = getattr(self, "input_feature_columns_", None)
+        if expected is not None:
+            if not isinstance(X, pd.DataFrame):
+                raise TypeError("Prediction features must be a pandas DataFrame.")
+            if not X.columns.is_unique:
+                raise ValueError("Prediction features contain duplicate column names.")
+            missing = [name for name in expected if name not in X.columns]
+            unexpected = [name for name in X.columns if name not in expected]
+            if missing or unexpected:
+                raise ValueError(
+                    "Saved-model feature schema mismatch: "
+                    f"missing={missing!r}; unexpected={unexpected!r}. "
+                    "Use the same input columns as during training."
+                )
+            X = X.loc[:, list(expected)]
 
         # Prepare placeholders for converted data (are dropped silently in concat below if None)
         X_document = None
