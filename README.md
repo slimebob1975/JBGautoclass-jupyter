@@ -215,7 +215,7 @@ Go into `src` and run `python .\AutomaticClassifier.py -f .\config\<filename>.py
 
 ```powershell
 Set-Location .\src
-python .\AutomaticClassifier.py -f .\config\autoclassconfig_iris_abc0123.py
+python .\AutomaticClassifier.py -f .\config\autoclassconfig_example_abc0123.py
 ```
 
 Use the generated filename present in `src/config/`.

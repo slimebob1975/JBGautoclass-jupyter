@@ -26,3 +26,5 @@ src/output/logs/
 
 # Generated local persistence-test artifacts. Keep serialized pickle/dill models out of Git.
 tests/fixtures/*.sav
+# Local documentation privacy blocklist; may contain private identifiers and must never be committed.
+.jbg_doc_privacy_blocklist

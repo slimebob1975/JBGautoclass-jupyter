@@ -1,3 +1,6 @@
+- [x] Revision 163 follow-up: repeated Train/Rerun/Repeat Last behavior was live-verified on
+  Windows/Voilà after the reclassification widget lifecycle hardening; no `Error displaying widget`
+  recurrence was reported. Reopen only if browser/server evidence shows a new rendering failure.
 - [ ] Revision 159 follow-up: identify the Voilà/frontend version responsible for missing XSRF headers on shutdown; compare upstream issue #1458; verify actual live-kernel counts separately before implementing cleanup. Never bypass CSRF or kill running training jobs.
 - [ ] Revision 158: review Voilà server runtime versions and shutdown 403 diagnostics; test repeated reload/disconnect and Script output widget lifecycle on Windows. Do not disable XSRF; source-level diagnostics alone do not fix the browser shutdown request.
 - [ ] After revision 157: validate memory guard and process-tree heartbeat on Windows/Voilà; assess GaussianProcessClassifier large-data cost and separate Feature modelling concurrency; continue investigating missing Script output and Voilà kernel shutdown _xsrf failures.
@@ -15,7 +18,7 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 
 ## Decisions and scope
 
-- [x] <private-identifier> investigation is concluded at the user's request. No more <private-identifier>-specific experiments
+- [x] The prior private-dataset investigation is concluded at the user's request. No more dataset-specific experiments
   are planned in the main product backlog. Historical findings remain in the archive.
 - [x] Revision 151 policy: native CatBoost is retained for **Feature modelling**, and is not an
   ordinary exhaustive-pipeline candidate. Legacy artifact loading is intended to remain supported;
@@ -31,9 +34,22 @@ runtime features. A checked box below is a **documentation disposition**, not ne
   column/type compatibility and converter-setting equivalence when applying saved feature
   recommendations or loading/reusing model artifacts. Explicitly describe unverified assumptions;
   never silently promote exploratory recommendations to validated status.
-- [ ] **Windows/Voilà regression:** reproduce and diagnose intermittent `Error displaying widget`
-  after the most-mispredicted reclassification table; capture exceptions and payload/size details.
-  Distinguish widget rendering errors from model-training failures.
+- [x] **Windows/Voilà regression:** revision 163 was live-verified after the reclassification
+  lifecycle hardening with no recurrence of `Error displaying widget`. Keep widget rendering failures
+  distinct from successful model training and reopen with browser/server evidence if it returns.
+- [x] **Documentation privacy guard (revision 164):** scan committed Markdown for common high-risk
+  identifiers and support a local git-ignored private blocklist for organization-specific person,
+  table, database and project names. Never echo private blocklist values in checker output.
+- [x] **Git-history privacy audit tooling (revision 165):** extend the documentation privacy checker
+  with a fail-closed `--history` mode that requires the local private blocklist and a complete non-shallow
+  clone, scans reachable Markdown history plus commit messages, and never echoes matched values or source
+  lines. The audit is read-only and must never rewrite history automatically.
+- [ ] **Pre-publication history privacy remediation (revision 166):** the revision-165 audit has now been run
+  on the authoritative repository and confirmed historical private-blocklist findings confined to root
+  `BACKLOG.md`/`CHANGELOG.md` content while the tracked working tree is clean. Revision 166 adds a narrow,
+  local-only dry-run/apply rewrite with an external verified bundle backup and post-rewrite history audit.
+  Run it deliberately, then coordinate any required remote force-push/reclone before external publication;
+  deletion from the current tree alone is not sufficient.
 - [ ] **Server/kernel lifecycle:** investigate Voilà `_xsrf` 403 during reload/shutdown and verify
   clean kernel/session termination without weakening CSRF protections.
 - [ ] **Pause/Resume concurrency:** verify the revision-140 candidate-level checkpoint/resume flow
@@ -47,8 +63,13 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 
 ## P2 — Efficient, understandable pipeline and feature search
 
+- [ ] **Feature modelling panel cleanup:** remove the user-facing `Search workers` control and derive
+  candidate parallelism from the same shared CPU/resource policy used elsewhere in JBG. Put `Search rows`
+  on its own row; order pipeline controls by execution (`Scaling` → `Oversampling` → `Reduction` → `Model`)
+  and keep fit/search-budget controls visually separate. Preserve spawn/checkpoint safety and avoid nested
+  estimator/BLAS oversubscription when candidate-level parallelism is active.
 - [ ] **Search budget and cost:** measure fit counts, elapsed times, memory and candidate-family
-  costs on representative *non-<private-identifier>* datasets; improve Quick/Standard/Extended/Custom estimates
+  costs on representative general-purpose datasets; improve Quick/Standard/Extended/Custom estimates
   and safe preflight controls. Avoid inflating default budgets without evidence.
 - [ ] **High-dimensional feature search:** assess subset-size coverage, adaptive refinement limits,
   class imbalance, and reproducible nested-CV behavior for the original-column search.
@@ -81,11 +102,20 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 - [ ] **Module boundaries and paths:** reduce `sys.path` mutation and working-directory dependence;
   incrementally split oversized `JBGMeta.py` behind backward-compatible import facades so existing
   serialized models continue loading.
-- [ ] **Serialization review:** assess whether `dill` dependence can be reduced with module-level
-  callables, without changing the trusted-artifact security boundary.
+- [ ] **Model serializer migration:** write new model artifacts with standard-library `pickle` and
+  make `dill` an optional legacy-read dependency rather than an unconditional application/test import.
+  Record serializer/version explicitly; preserve old dill artifacts when `dill` is installed and give an
+  actionable legacy-dependency error otherwise. Regression-test train → save → fresh-process load → predict
+  → retrain across representative model families. Keep the trusted-artifact security boundary unchanged.
+- [ ] **P2 — GUI framework architecture spike (Panel / NiceGUI):** evaluate whether moving away from
+  JupyterLab/Voilà/ipywidgets is worth the migration cost. First separate configuration, job lifecycle,
+  progress events, results and ML core behind stable application interfaces. Prototype only configuration,
+  Script output and progress; compare lifecycle/reconnection, resources, UX, maintenance and packaging.
+  No full rewrite without a demonstrable benefit over stabilized Voilà.
 
 ## P3 — Usability and diagnostics
 
+- [ ] **README cleanup:** remove revision-by-revision change history from `README.md` and keep it focused on the current product: functionality, prerequisites/setup, configuration, how to run it, core workflows and user-facing troubleshooting. Keep historical release details in `CHANGELOG.md` instead. Preserve only current, generic examples and keep the documentation-privacy rules in force while rewriting.
 - [ ] Rename GUI section `Model selection` → `Machine learning pipeline selection` and label
   `Algorithm:` → `Model:`; migrate legacy saved label keys if required.
 - [ ] Restrict integer class-column choices to source-table columns with at most five distinct
@@ -135,7 +165,35 @@ revisions must verify current code behavior before implementing any listed item.
 - [ ] Verify two-worker pause, resume and forced worker failure on Windows/Voilà; inspect any joblib worker-termination warning separately (the Feature modelling executor uses `concurrent.futures`, not joblib).
 - [ ] Measure time and memory of parallel searches before tuning default worker counts.
 
+## Revision 163 status
+
+- [x] Reclassification reruns now detach and close stale comm-backed preview widgets before a new render.
+- [x] The preview is bounded by both row count and a total grid-widget budget; over-wide results fail closed to a plain-text notice without invalidating the completed ML run.
+- [x] Post-run file diagnostics distinguish render, fallback and unexpected Python-side failure paths.
+- [x] Repeated Train/Rerun/Repeat Last behavior was live-verified on Windows/Voilà after revision 163 with no reported `Error displaying widget` recurrence.
+
+## Revision 164 status
+
+- [x] Reconstructed revisions 160–162d in CHANGELOG from the supplied original patch files without copying runtime-specific identifiers.
+- [x] Added a dependency-free Markdown privacy checker plus an optional local, git-ignored private blocklist.
+- [x] Removed the revision-161 test dependency on the absent `docs/` directory; the architecture-spike item now lives in this active BACKLOG.
+- [ ] The local private blocklist remains an operator responsibility because arbitrary person/table names cannot be recognized reliably by syntax alone.
+
 - [ ] Revision 156a: correlate file-based startup stage markers with GUI and SQL progress; investigate Voilà kernel lifecycle separately.
 
 - Revision 157a: Corrected negative global worker-cap handling in GridSearchCV and Dark Numbers; verify live Windows parallel execution and continue investigating resource pressure.
 - [ ] **Threads versus processes (investigation only):** benchmark joblib `threading` versus `loky` / process-based CV and pipeline search on representative CPU-bound and NumPy/scikit-learn workloads; measure GIL behavior, memory sharing, nested BLAS/OpenMP parallelism, estimator thread safety, isolation after native crashes, and reproducibility. Do not change the default backend without Windows/Voila evidence.
+
+## Revision 165 status
+
+- [x] Added a read-only reachable-history mode to the documentation privacy checker.
+- [x] History mode requires the local private blocklist and refuses shallow repositories.
+- [x] Historical Markdown blobs and commit messages are scanned without printing source lines or matched private values; sensitive paths are redacted.
+- [x] The audit was run on the authoritative local Git repository with the real private blocklist. After local-only untracked notes were removed, the tracked working tree passed and the remaining findings were confined to historical root `BACKLOG.md`/`CHANGELOG.md` content.
+
+## Revision 166 status
+
+- [x] Added a fail-closed, local-only remediation script for private blocklist matches in historical root `BACKLOG.md` and `CHANGELOG.md`; all other file paths, filenames, commit messages and built-in-pattern findings abort remediation.
+- [x] Default privacy scanning in a Git repository now checks tracked Markdown only; `--include-untracked` explicitly opts into local-note scanning.
+- [x] Remediation dry-run is read-only. Apply mode requires a clean, non-shallow, single-worktree repository with attached HEAD, refuses annotated tags/signed commit metadata, creates and verifies an external pre-rewrite bundle, rewrites local refs, and requires the history audit to pass afterward.
+- [ ] Run revision 166 dry-run/apply on the authoritative repository, verify the rewritten history, and coordinate remote history replacement if the affected commits were already pushed. No fetch/push/force-push or local object pruning is automated.

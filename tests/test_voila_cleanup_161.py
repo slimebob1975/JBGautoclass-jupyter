@@ -4,7 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = (ROOT / "scripts" / "cleanup_voila_kernels.ps1").read_text(encoding="utf-8")
-BACKLOG = (ROOT / "docs" / "gui_migration_backlog_161.md").read_text(encoding="utf-8")
+BACKLOG = (ROOT / "BACKLOG.md").read_text(encoding="utf-8")
 
 class CleanupSafety161(unittest.TestCase):
     def test_checks_listener_and_fails_closed(self):

@@ -1,0 +1,186 @@
+"""Revision 166 regression checks for scoped documentation-history remediation."""
+
+from contextlib import redirect_stdout
+from importlib.util import module_from_spec, spec_from_file_location
+from io import StringIO
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPTS = ROOT / "scripts"
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+PRIVACY_SOURCE = SCRIPTS / "check_documentation_privacy.py"
+PRIVACY_SPEC = spec_from_file_location("check_documentation_privacy", PRIVACY_SOURCE)
+PRIVACY = module_from_spec(PRIVACY_SPEC)
+sys.modules[PRIVACY_SPEC.name] = PRIVACY
+assert PRIVACY_SPEC.loader is not None
+PRIVACY_SPEC.loader.exec_module(PRIVACY)
+
+REWRITE_SOURCE = SCRIPTS / "rewrite_documentation_history.py"
+REWRITE_SPEC = spec_from_file_location("rewrite_documentation_history", REWRITE_SOURCE)
+REWRITE = module_from_spec(REWRITE_SPEC)
+sys.modules[REWRITE_SPEC.name] = REWRITE
+assert REWRITE_SPEC.loader is not None
+REWRITE_SPEC.loader.exec_module(REWRITE)
+
+
+def git(root: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess[bytes]:
+    return subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=check,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def commit_all(root: Path, message: str) -> None:
+    git(root, "add", ".")
+    git(root, "commit", "-m", message)
+
+
+class DocumentationPrivacy166(unittest.TestCase):
+    def make_repository(self, directory: str) -> Path:
+        root = Path(directory)
+        git(root, "init")
+        git(root, "config", "user.name", "Privacy Test")
+        git(root, "config", "user.email", "privacy-test@example.invalid")
+        return root
+
+    def make_sanitized_repository_with_history_leak(self, directory: str, private_value: str) -> Path:
+        root = self.make_repository(directory)
+        (root / "README.md").write_text("Generic current product documentation.\n", encoding="utf-8")
+        (root / "BACKLOG.md").write_text(
+            f"Historical private reference: {private_value}.\n",
+            encoding="utf-8",
+        )
+        (root / "CHANGELOG.md").write_text("Generic initial history.\n", encoding="utf-8")
+        commit_all(root, "Initial documentation")
+
+        (root / "BACKLOG.md").write_text("Current generic backlog.\n", encoding="utf-8")
+        (root / "CHANGELOG.md").write_text("Current generic changelog.\n", encoding="utf-8")
+        commit_all(root, "Sanitize current documentation")
+        return root
+
+    def test_default_working_tree_scan_ignores_untracked_markdown(self):
+        private_value = "ExamplePrivateIdentifier"
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.make_repository(directory)
+            (root / "README.md").write_text("Generic tracked documentation.\n", encoding="utf-8")
+            commit_all(root, "Tracked documentation")
+            (root / "local-notes.md").write_text(private_value + "\n", encoding="utf-8")
+
+            blocklist = [private_value.casefold()]
+            self.assertEqual(PRIVACY.scan_repository(root, blocklist), [])
+            findings = PRIVACY.scan_repository(root, blocklist, include_untracked=True)
+            self.assertTrue(any(finding.path.name == "local-notes.md" for finding in findings))
+
+    def test_dry_run_is_read_only_and_does_not_echo_private_value(self):
+        private_value = "ExamplePrivateDatabase"
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.make_sanitized_repository_with_history_leak(directory, private_value)
+            blocklist = root / PRIVACY.LOCAL_BLOCKLIST
+            blocklist.write_text(private_value + "\n", encoding="utf-8")
+            before = git(root, "rev-parse", "HEAD").stdout
+
+            output = StringIO()
+            with redirect_stdout(output):
+                result = REWRITE.main(["--root", str(root)])
+
+            after = git(root, "rev-parse", "HEAD").stdout
+            rendered = output.getvalue()
+            self.assertEqual(result, 0)
+            self.assertEqual(before, after)
+            self.assertIn("Dry run only", rendered)
+            self.assertNotIn(private_value.casefold(), rendered.casefold())
+
+    def test_apply_rewrites_only_target_history_and_creates_verified_backup(self):
+        private_value = "ExamplePrivateDatabase"
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as backup_directory:
+            root = self.make_sanitized_repository_with_history_leak(directory, private_value)
+            blocklist = root / PRIVACY.LOCAL_BLOCKLIST
+            blocklist.write_text(private_value + "\n", encoding="utf-8")
+            backup = Path(backup_directory) / "before.bundle"
+            original_head = git(root, "rev-parse", "HEAD").stdout.decode("ascii").strip()
+
+            output = StringIO()
+            with redirect_stdout(output):
+                result = REWRITE.main(
+                    ["--root", str(root), "--apply", "--backup", str(backup)]
+                )
+
+            rewritten_head = git(root, "rev-parse", "HEAD").stdout.decode("ascii").strip()
+            rendered = output.getvalue()
+            self.assertEqual(result, 0)
+            self.assertNotEqual(original_head, rewritten_head)
+            self.assertTrue(backup.is_file())
+            git(root, "bundle", "verify", str(backup))
+            self.assertEqual(PRIVACY.scan_git_history(root, [private_value.casefold()]), [])
+            self.assertEqual(PRIVACY.scan_repository(root, [private_value.casefold()]), [])
+            self.assertEqual(git(root, "status", "--porcelain", "--untracked-files=no").stdout, b"")
+            self.assertNotIn(private_value.casefold(), rendered.casefold())
+
+            historical_backlog = git(root, "show", f"{rewritten_head}^:BACKLOG.md").stdout.decode("utf-8")
+            self.assertIn(REWRITE.REPLACEMENT, historical_backlog)
+            self.assertNotIn(private_value.casefold(), historical_backlog.casefold())
+
+    def test_preflight_refuses_private_findings_in_other_markdown(self):
+        private_value = "ExamplePrivateDataset"
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.make_repository(directory)
+            (root / "README.md").write_text(private_value + "\n", encoding="utf-8")
+            (root / "BACKLOG.md").write_text("Generic backlog.\n", encoding="utf-8")
+            (root / "CHANGELOG.md").write_text("Generic changelog.\n", encoding="utf-8")
+            commit_all(root, "Initial documentation")
+            (root / "README.md").write_text("Generic current README.\n", encoding="utf-8")
+            commit_all(root, "Sanitize current README")
+
+            with self.assertRaises(REWRITE.HistoryRewriteError) as caught:
+                REWRITE.build_plan(root, [private_value.casefold()])
+            self.assertIn("outside the permitted", str(caught.exception))
+
+    def test_preflight_refuses_commit_message_findings(self):
+        private_value = "ExamplePrivateProject"
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.make_repository(directory)
+            (root / "BACKLOG.md").write_text("Generic backlog.\n", encoding="utf-8")
+            (root / "CHANGELOG.md").write_text("Generic changelog.\n", encoding="utf-8")
+            commit_all(root, f"Historical reference to {private_value}")
+
+            with self.assertRaises(REWRITE.HistoryRewriteError) as caught:
+                REWRITE.build_plan(root, [private_value.casefold()])
+            self.assertIn("outside the permitted", str(caught.exception))
+
+    def test_preflight_refuses_tracked_worktree_changes(self):
+        private_value = "ExamplePrivateTable"
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.make_sanitized_repository_with_history_leak(directory, private_value)
+            (root / "README.md").write_text("Uncommitted tracked change.\n", encoding="utf-8")
+
+            with self.assertRaises(REWRITE.HistoryRewriteError) as caught:
+                REWRITE.build_plan(root, [private_value.casefold()])
+            self.assertIn("Tracked working-tree changes", str(caught.exception))
+
+    def test_apply_refuses_backup_inside_repository(self):
+        private_value = "ExamplePrivateTable"
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.make_sanitized_repository_with_history_leak(directory, private_value)
+            plan = REWRITE.build_plan(root, [private_value.casefold()])
+
+            with self.assertRaises(REWRITE.HistoryRewriteError) as caught:
+                REWRITE.rewrite_history(
+                    root,
+                    [private_value.casefold()],
+                    plan,
+                    root / "private-backup.bundle",
+                )
+            self.assertIn("outside the repository", str(caught.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

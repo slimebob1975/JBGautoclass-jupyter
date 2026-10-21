@@ -1,3 +1,91 @@
+## Revision 166 — scoped documentation-history privacy remediation
+
+- Added `scripts/rewrite_documentation_history.py`, a fail-closed local Git-history remediation tool restricted to private-blocklist replacements in repository-root `BACKLOG.md` and `CHANGELOG.md`. Findings in commit messages, filenames, other Markdown files or built-in privacy categories abort the rewrite instead of broadening its scope.
+- The default invocation is a read-only preflight. `--apply` requires a clean, non-shallow, single-worktree repository with attached HEAD; refuses annotated tags and signed/merge-tag commit metadata; creates and verifies an external Git bundle containing the pre-rewrite history; rewrites local direct commit refs; and requires the revision-165 history audit to pass after the rewrite. It never fetches, pushes, force-pushes, expires reflogs or garbage-collects automatically.
+- Normal working-tree privacy scans now prefer Git-tracked Markdown so unrelated untracked local notes do not appear to be repository leaks. `--include-untracked` restores an explicit local-note scan when desired.
+- Added dependency-free synthetic-Git regression coverage for read-only dry-run behavior, scoped apply/rewrite, backup verification, private-output redaction, untracked Markdown handling and fail-closed scope/cleanliness checks. No ML, SQL, GUI or model-persistence runtime behavior changes are made.
+
+## Revision 165 — fail-closed Git-history documentation privacy audit
+
+- Extended `scripts/check_documentation_privacy.py` with a read-only `--history` mode that scans all reachable local Git refs for historical Markdown blobs and commit messages while reusing the revision-164 privacy rules.
+- History mode requires an organization-specific local private blocklist and refuses shallow repositories so an incomplete or syntax-only scan cannot be mistaken for a complete privacy audit. Results report only commit/location/category metadata; matched private values and source lines are never printed, and Markdown paths containing a private token are redacted.
+- Added dependency-free synthetic-Git regression coverage for identifiers removed from the current tree, commit-message scanning, mandatory blocklist behavior, non-Markdown exclusion and sensitive-path redaction.
+- The audit never rewrites history. A real pre-publication audit/rewrite remains an operator task on the authoritative repository because reconstructed revision workspaces cannot establish that the user's complete Git history is clean. No ML, SQL, persistence or GUI runtime behavior changes are made.
+
+## Revision 164a — README cleanup backlog follow-up
+
+- Added a BACKLOG item to refocus `README.md` on current functionality, setup, configuration, operation and user-facing troubleshooting, with revision history kept in `CHANGELOG.md`. The future cleanup must preserve the revision-164 documentation-privacy rules.
+- No runtime or README content changes are made in this follow-up.
+
+## Revision 164 — documentation privacy guard and recent history repair
+
+- Reconstructed the missing revision 160–162d CHANGELOG history from the supplied original patch files. The history distinguishes compatibility/corrected delivery patches from independent runtime changes instead of assuming every patch file was applied sequentially.
+- Added a dependency-free Markdown privacy checker. It flags common high-risk identifier forms and can consume a local `.jbg_doc_privacy_blocklist` for organization-specific person, table, database and project identifiers; the file is git-ignored and matched values are never echoed by the checker. The checker protects the current Markdown tree; existing Git history requires a separate local audit/rewrite before external publication if it already contains private identifiers.
+- Replaced known runtime-specific dataset/table identifiers in tracked Markdown with generic descriptions and made the revision-161 regression test read the active root BACKLOG rather than require the absent `docs/` directory. No historical docs directory is restored.
+- Added the requested serializer-migration and Feature modelling panel-cleanup work to BACKLOG, restored the revision-161 GUI architecture-spike item there, and recorded successful live Windows/Voilà verification of revision 163 with no reported `Error displaying widget` recurrence.
+- No ML, SQL, model-persistence or GUI runtime behavior changes are made in this revision.
+
+## Revision 163 — reclassification widget lifecycle hardening
+
+- Reclassification previews now clear the visible Output, detach the old GridBox children and close
+  stale comm-backed table/header widgets before reruns or replacement renders, preventing repeated
+  runs from accumulating abandoned frontend widget models.
+- The existing 40-row preview limit is supplemented by a 240-grid-widget budget. Wide result tables
+  automatically render fewer rows, and a table whose header plus first data row cannot fit the
+  budget skips the interactive preview with a plain-text notice while leaving the completed ML run intact.
+- Failed preview construction now releases partially created widgets and uses a non-widget fallback
+  message. File diagnostics distinguish render, fallback and unexpected Python-side failure paths.
+- Added focused lifecycle/widget-budget regression coverage. Live Windows/Voilà verification remains
+  required because browser-side widget-manager failures cannot be proven absent by Python tests.
+
+## Revision 162d — class NULL semantics and atomic selector refresh
+
+- Treat SQL NULL as unlabelled rather than as an additional target class when computing class-candidate cardinality.
+- Suppress re-entrant class observers while rebuilding selector options, initialize unique-ID candidates before dependent selector refresh, and handle an empty class selection without issuing an invalid database query.
+- Add focused regression coverage for NULL cardinality semantics and selector-refresh ordering/state.
+
+## Revision 162c2 — corrected GUI metadata restore patch
+
+- Rebase the revision-162c restore cleanly on top of revision 162b and update its regression expectations. Restore the established GUI metadata query path while retaining the explicit-catalog helper for callers that need it.
+- This is a corrected delivery of the 162c intent, not a separate functional feature.
+
+## Revision 162c — restore working GUI column metadata path
+
+- Restore the established GUI metadata query after the revision-162b delegation produced empty column selectors in live Windows use. Retain the explicit-catalog metadata helper for other callers.
+- The initial patch was superseded by the corrected 162c2 delivery against the actual 162b base.
+
+## Revision 162b — explicit-catalog metadata lookup
+
+- Route GUI column metadata through the explicit-catalog helper so metadata resolution follows the selected catalog rather than relying on a connection default.
+- Add source-level regression coverage for catalog qualification and bracket escaping. This behavior was subsequently narrowed by revision 162c2 after live selector regression evidence.
+
+## Revision 162a — unique-ID candidate diagnostics
+
+- Explain why the conventional integer ID candidate is unavailable by reporting row, non-NULL and distinct counts when uniqueness fails; show a generic diagnostic when no eligible unique integer ID exists.
+- Keep diagnostics adjacent to the ID selector without changing the underlying uniqueness requirement.
+
+## Revision 162 — saved-model input schema guard
+
+- Persist the raw fitted input-column schema with the text/data converter. Prediction accepts the same columns in a different order and reorders them deterministically before conversion.
+- Reject missing, unexpected or duplicate prediction columns before vectorization/prediction. Legacy saved converters without the new schema attribute remain readable.
+- Add focused regression coverage for compatible reordering, mismatch refusal, duplicate columns and legacy behavior.
+
+## Revision 161b — compatibility delivery of revision 161
+
+- Reissue revision 161's runtime cleanup safeguards against the branch where active documentation files could not be modified without conflict. The runtime PowerShell changes are the same safety intent as revision 161.
+- The compatibility patch temporarily placed the GUI architecture note in a separate documentation file for its regression check; revision 164 removes that dependency because the current repository intentionally contains no `docs/` directory.
+
+## Revision 161 — cleanup safety guard and GUI migration backlog
+
+- Refuse operator-requested kernel cleanup when the logged Voilà TCP port is still listening, even if the launcher PID is gone. Recheck the port immediately before destructive work and fail closed when listener verification is unavailable.
+- Retain dry-run behavior and explicit kernel-UUID opt-in. Add a P2 architecture/prototype comparison for Panel/NiceGUI; make no CSRF, ML or automatic-cleanup behavior change.
+
+## Revision 160 — operator-controlled orphan kernel cleanup
+
+- Add a Windows PowerShell dry-run and explicit opt-in cleanup for kernels associated with one stopped Voilà server session. Candidates must match the session-specific connection directory and appear as both started and shutdown-rejected in that server log.
+- Refuse action while the launcher is active, require explicit kernel UUIDs and revalidate process command lines immediately before stop. Do not add automatic reload cleanup, weaken XSRF protections or alter ML workers.
+- Add dependency-free source-level safety regression checks.
+
 ## Revision 159 — safe Voilà shutdown diagnostics
 
 Add a read-only kernel-lifecycle report for HTTP 403 shutdown failures and kernel starts; report explicitly distinguishes logged shutdown attempts from live processes. Integrate a report at normal Voilà exit. No XSRF bypass or destructive kernel cleanup; awaiting Windows/browser reproduction for frontend fix.
@@ -461,40 +549,40 @@ Tree class weighting and an explicit fixed binary target cutoff; preserve defaul
 
 ## 089 — Default-on experimental perturbed Dark Number fallback
 
-- Runtime-verified 088 on the 160-row `text_regression` reproduction with nine paired seeds. `perturbed_same_model` activated for 100% of correction attempts for both targets and correction-factor stability remained strong (`corr_cv` CV about 0.090 for `incident` and 0.064 for `request`). `D_cv_full` truth MAE improved versus the unestimable-sentinel baseline but retained a clear negative bias, so the method remains explicitly experimental rather than being treated as a validated standard estimator.
+- Runtime-verified 088 on a 160-row private runtime reproduction with nine paired seeds. `perturbed_same_model` activated for 100% of correction attempts for both targets and correction-factor stability remained strong (`corr_cv` CV about 0.090 for `target A` and 0.064 for `target B`). `D_cv_full` truth MAE improved versus the unestimable-sentinel baseline but retained a clear negative bias, so the method remains explicitly experimental rather than being treated as a validated standard estimator.
 - Promoted the already validated shadow-clone mechanism into the normal Dark Number correction path behind a dedicated `Experimental perturbed fallback` checkbox. The checkbox is checked by default, is disabled whenever Dark Numbers are disabled, persists through generated configs/model config loading/Repeat Last, and can be unchecked to restore the previous immediate `fallback/unestimable` behavior. Older configs/artifacts that predate the setting default to enabled.
 - Production hard/direct correction still has absolute precedence. Recovery-level statistical failures (`zero_recovery`, `nonfinite`, `nan_recovery`) may invoke five same-model shadow clones with deliberately perturbed random-state parameters and class-stratified bootstrap samples; at least three finite clone correction factors and coefficient of variation <= 0.50 are required, after which the median is used with provenance `perturbed_same_model`. `insufficient_sample` remains unestimable and resource/execution failures retain the existing `regressed_same_model` path. No alternate estimator is introduced.
 - Added explicit `EXPERIMENTAL` logging for every attempted/accepted/rejected shadow-clone fallback and aggregate structured telemetry in `dark_number_experimental_fallback_*`. The telemetry contains model/target, direct failure status, clone correction factors, valid-clone count, median/mean/std/CV/range, acceptance reason, final correction and provenance; it does not store source rows or raw text. Normal Dark Number output continues to expose `corr_model` and `corr_source`.
-- Added focused regression coverage for config defaults/opt-out, generated-config persistence, Repeat Last GUI restoration/dependency state, and production zero-recovery routing into `perturbed_same_model`. Validation: `py_compile`, `git diff --check`, direct shadow-clone helper smoke coverage, GUI-settings smoke coverage and exact apply-check against the 088 baseline passed. Targeted pytest collection remains blocked locally by missing `dill`. Runtime production verification: **verified** on a normal 160-row `text_regression` training run after 090. The default-on setting was visible in configuration, all four direct correction attempts ended in `zero_recovery`, the experimental fallback accepted all five shadow clones in every case with CV 0.074-0.181, `corr_source=perturbed_same_model` propagated into the Dark Number table, and `dark_number_experimental_fallback_*` telemetry was emitted.
+- Added focused regression coverage for config defaults/opt-out, generated-config persistence, Repeat Last GUI restoration/dependency state, and production zero-recovery routing into `perturbed_same_model`. Validation: `py_compile`, `git diff --check`, direct shadow-clone helper smoke coverage, GUI-settings smoke coverage and exact apply-check against the 088 baseline passed. Targeted pytest collection remains blocked locally by missing `dill`. Runtime production verification: **verified** on a normal 160-row private runtime training run after 090. The default-on setting was visible in configuration, all four direct correction attempts ended in `zero_recovery`, the experimental fallback accepted all five shadow clones in every case with CV 0.074-0.181, `corr_source=perturbed_same_model` propagated into the Dark Number table, and `dark_number_experimental_fallback_*` telemetry was emitted.
 
 ## 088 — Perturbed same-model robustness evidence
 
-- Runtime-verified 087 on the 160-row `text_regression` zero-recovery reproduction. Perturbed shadow clones activated for every correction attempt for both targets, with accepted clone-factor coefficient of variation roughly 0.15-0.37. The candidate improved `D_cv_full` truth MAE for both targets, materially worsened `D_cv_test`, and left `D_retrained_full` unchanged; it therefore remains validation-only and is not promoted to production.
+- Runtime-verified 087 on a 160-row private runtime zero-recovery reproduction. Perturbed shadow clones activated for every correction attempt for both targets, with accepted clone-factor coefficient of variation roughly 0.15-0.37. The candidate improved `D_cv_full` truth MAE for both targets, materially worsened `D_cv_test`, and left `D_retrained_full` unchanged; it therefore remains validation-only and is not promoted to production.
 - Strengthened the 087 comparison summary with estimable-only truth-error profiles for each Dark Number output. Rows whose correction source is `fallback/unestimable` are excluded so the harness's internal 1.0 sentinel cannot be mistaken for an observed estimate. Each profile reports estimable count/rate, MAE, median absolute error, p90 absolute error, mean signed error (bias) and signed-error standard deviation.
 - Added separate correction-factor stability profiles for CV and retrained corrections, restricted to accepted `perturbed_same_model` sources. The summary now records activation count/rate, mean, median, standard deviation, coefficient of variation, IQR and range.
 - Marked `D_cv_full` as the primary full-data diagnostic for this robustness experiment while keeping `D_cv_test` and `D_retrained_full` visible as separate outcomes. The standalone runner now defaults to nine paired seeds instead of three and writes `dark_number_perturbed_same_model_robustness_*` artifacts. Production Dark Number behavior and persisted model artifacts remain unchanged.
-- Added focused regression coverage proving unestimable sentinel rows are excluded from robust truth-error metrics, correction stability uses only accepted perturbed sources, and the runner defaults to nine paired seeds. Validation: `git diff --check`, `py_compile`, direct robustness-helper smoke coverage, and exact apply-check against the 087 baseline passed. Targeted pytest collection remains blocked locally by missing `dill`. Runtime/empirical robustness validation: **completed** on `text_regression` with nine paired seeds; activation was 100% for both targets, correction-factor CV was low, `D_cv_full` improved but remained negatively biased, so 089 exposes the method only as an explicitly experimental default-on fallback.
+- Added focused regression coverage proving unestimable sentinel rows are excluded from robust truth-error metrics, correction stability uses only accepted perturbed sources, and the runner defaults to nine paired seeds. Validation: `git diff --check`, `py_compile`, direct robustness-helper smoke coverage, and exact apply-check against the 087 baseline passed. Targeted pytest collection remains blocked locally by missing `dill`. Runtime/empirical robustness validation: **completed** on the private runtime reproduction with nine paired seeds; activation was 100% for both targets, correction-factor CV was low, `D_cv_full` improved but remained negatively biased, so 089 exposes the method only as an explicitly experimental default-on fallback.
 
 ## 087 — Perturbed same-model shadow-clone validation candidate
 
-- Runtime-verified 086 on the 160-row `text_regression` zero-recovery reproduction. For both `incident` and `request`, every lower-noise hard-recovery probe at 10%, 12.5%, 15% and 17.5% remained `zero_recovery` across all paired runs. Adaptive activation was therefore 0%, candidate unestimability stayed 100%, and the conservative fallback correctly emitted no estimate. `adaptive_noise_same_model` is not promoted to production.
+- Runtime-verified 086 on a 160-row private runtime zero-recovery reproduction. For both private target classes, every lower-noise hard-recovery probe at 10%, 12.5%, 15% and 17.5% remained `zero_recovery` across all paired runs. Adaptive activation was therefore 0%, candidate unestimability stayed 100%, and the conservative fallback correctly emitted no estimate. `adaptive_noise_same_model` is not promoted to production.
 - Added validation-only `perturbed_same_model`. Hard/direct correction still has absolute precedence. Only recovery-level statistical failures may create local shadow clones of the same target pipeline; estimator family and ordinary hyperparameters are preserved, while random-state parameters are deliberately reseeded and each clone receives a class-stratified bootstrap sample with unchanged class counts. Correction estimation still uses hard predictions at the configured target noise.
 - A perturbed fallback is accepted only when at least three shadow clones independently produce valid finite correction factors and their coefficient of variation is at or below 0.50 by default. The robust median correction factor is then reported with provenance `perturbed_same_model`; otherwise the result remains `fallback/unestimable`. Defaults are configurable in the validation runner with `--perturbation-clones`, `--perturbation-min-valid` and `--perturbation-max-cv`.
 - The perturbed correction candidate itself uses hard `predict()` recovery, but the standalone real-data harness continues to require `predict_proba()` for its separate probability-ranked enrichment diagnostics. The gate message now states that reason instead of referring to the rejected soft fallback. Output artifacts now use `dark_number_perturbed_same_model_validation_*`.
-- Added focused regression coverage for deliberate perturbation seeding, reproducible class-stratified bootstrap sampling, direct/insufficient-sample precedence, stable-clone acceptance and unstable-clone rejection. Production Dark Number behavior and persisted model artifacts remain unchanged. Runtime/empirical validation: **promising but not production-ready** on `text_regression`; 100% activation, stable accepted clone factors, improved `D_cv_full` MAE for both targets, worse `D_cv_test`, unchanged `D_retrained_full`.
+- Added focused regression coverage for deliberate perturbation seeding, reproducible class-stratified bootstrap sampling, direct/insufficient-sample precedence, stable-clone acceptance and unstable-clone rejection. Production Dark Number behavior and persisted model artifacts remain unchanged. Runtime/empirical validation: **promising but not production-ready** on the private runtime reproduction; 100% activation, stable accepted clone factors, improved `D_cv_full` MAE for both targets, worse `D_cv_test`, unchanged `D_retrained_full`.
 
 ## 086 — Adaptive-noise same-model validation candidate
 
-- Recorded the completed 083/084 real-data experiment on the 160-row `text_regression` zero-recovery reproduction. `soft_same_model` activated for 100% of correction attempts and eliminated formal unestimability, but its truth error was substantially worse: `D_cv_test` MAE rose to 2.579925/5.275031 for `incident`/`request`, `D_cv_full` MAE rose to 0.318511/0.499714, and `D_retrained_full` did not improve. The baseline MAE values use the harness 1.0 sentinel and are not treated as valid competing estimates. The soft candidate is therefore retained only as a documented rejected validation experiment and is not promoted to production.
+- Recorded the completed 083/084 real-data experiment on a 160-row private runtime zero-recovery reproduction. `soft_same_model` activated for 100% of correction attempts and eliminated formal unestimability, but its truth error was substantially worse: `D_cv_test` MAE rose to 2.579925/5.275031 for `target A`/`target B`, `D_cv_full` MAE rose to 0.318511/0.499714, and `D_retrained_full` did not improve. The baseline MAE values use the harness 1.0 sentinel and are not treated as valid competing estimates. The soft candidate is therefore retained only as a documented rejected validation experiment and is not promoted to production.
 - Added a validation-only `adaptive_noise_same_model` candidate. Hard/direct correction still runs first and always wins when valid. Only recovery-level unestimable outcomes may retry the same estimator with the same hard class decisions at lower correction-noise fractions (50%, 62.5%, 75% and 87.5% of the configured target). At least three valid lower-noise recovery points are required; recovery rate is linearly extrapolated to the target noise and must remain finite and within `(0, 1]`, otherwise the candidate remains `fallback/unestimable`. No alternate estimator is introduced.
 - Corrected the validation summary's misleading coverage delta. Estimability coverage is now derived from correction-source provenance (`fallback/unestimable` versus an observed candidate source), while Dark Number interval-coverage delta is reported separately. This fixes the observed 0.0 coverage delta when the soft experiment actually moved from 100% unestimable to 0% unestimable.
 - Reused the production `prepare_estimator_input()` helper in the real-data validation runner so pandas SparseDtype feature frames are converted to SciPy CSR before sklearn fitting. This removes the repeated sparse-DataFrame-to-dense warnings seen in the 084 real-data run and avoids an unnecessary dense-memory copy on larger text datasets.
 - Switched the standalone validation runner from the rejected soft candidate to the adaptive-noise candidate; output artifacts are now named `dark_number_adaptive_noise_validation_*`. Production Dark Number calculation and persisted model artifacts remain unchanged.
-- Added focused regression coverage for adaptive extrapolation, the minimum-three-point guard, corrected estimability coverage semantics and sparse-frame CSR conversion. Validation: `py_compile`, `git diff --check`, direct adaptive-noise smoke coverage and clean apply-check against exact 085 baseline; full pytest collection remains blocked locally by missing `dill`. Runtime/empirical validation: **completed** on `text_regression`; all lower-noise probes remained `zero_recovery`, adaptive activation was 0%, and the candidate correctly stayed `fallback/unestimable`.
+- Added focused regression coverage for adaptive extrapolation, the minimum-three-point guard, corrected estimability coverage semantics and sparse-frame CSR conversion. Validation: `py_compile`, `git diff --check`, direct adaptive-noise smoke coverage and clean apply-check against exact 085 baseline; full pytest collection remains blocked locally by missing `dill`. Runtime/empirical validation: **completed** on the private runtime reproduction; all lower-noise probes remained `zero_recovery`, adaptive activation was 0%, and the candidate correctly stayed `fallback/unestimable`.
 
 ## 085 — Fix NumPy dataset truth-value check in 084 runner
 
-- Fixed the standalone Dark Number validation runner after its first real-data execution fetched all 160 `text_regression` rows successfully but crashed before validation with `ValueError: The truth value of an array with more than one element is ambiguous`. `JBGHandler.get_dataset()` returns a NumPy array, so the runner now checks `data is None or len(data) == 0` instead of evaluating the array as a boolean.
+- Fixed the standalone Dark Number validation runner after its first real-data execution fetched all 160 private runtime rows successfully but crashed before validation with `ValueError: The truth value of an array with more than one element is ambiguous`. `JBGHandler.get_dataset()` returns a NumPy array, so the runner now checks `data is None or len(data) == 0` instead of evaluating the array as a boolean.
 - Added focused regression coverage that passes a non-empty NumPy dataset through `load_validation_inputs()` and verifies it reaches dataset loading, saved-converter reuse and pipeline return without triggering ambiguous truth-value evaluation.
 - Production classifier/Dark Number behavior is unchanged. Runtime verification: **verified** by the corrected 085 run, which passed data preparation, completed both target-class comparisons and wrote the paired CSV/JSON outputs.
 - Validation: `py_compile`, `git diff --check`, direct NumPy-array smoke coverage and clean `git apply --check` against the exact 084 baseline. Targeted pytest collection remains subject to the existing local dependency blocker (`dill`).
@@ -505,8 +593,8 @@ Tree class weighting and an explicit fixed binary target cutoff; preserve defaul
 - By default the runner validates every observed class as a one-vs-rest target, with optional repeated `--target` filters. It reports baseline unestimable rate, `soft_same_model` activation rate, candidate unestimable rate, coverage-rate delta, the known injected-noise truth and baseline/candidate MAE for `D_cv_test`, `D_cv_full` and `D_retrained_full`.
 - Added paired CSV and JSON-summary artifacts under the existing `output/csvs` directory, and a dedicated persistent `jbg-dark-number-validation_*` log so empirical runs can be audited separately from ordinary training logs.
 - Strengthened the 083 paired contract for stochastic estimators: validation clones now fill only otherwise-unset `random_state` parameters with the paired seed while preserving explicitly configured seeds. This prevents MLP/random-forest initialization noise from being mistaken for a fallback-method effect. Production estimator settings remain untouched.
-- The most recent ordinary `text_regression` run after 083 re-confirmed that production remains isolated: all four hard/direct correction attempts still ended at `fallback/unestimable`; no `soft_same_model` path appeared in normal training output.
-- Added regression coverage for estimator seeding, all-observed-target runner orchestration, unknown-target rejection and output artifact creation. Validation: `py_compile` and focused direct runner/harness smoke checks pass; targeted pytest collection remains blocked in this environment by missing project dependency `dill`. Runtime verification: **verified after 085** on the real `text_regression` reproduction; both targets completed and dedicated CSV/JSON artifacts were written. The run also exposed the coverage-delta reporting bug and sparse-densification warnings fixed in 086.
+- The most recent ordinary private runtime run after 083 re-confirmed that production remains isolated: all four hard/direct correction attempts still ended at `fallback/unestimable`; no `soft_same_model` path appeared in normal training output.
+- Added regression coverage for estimator seeding, all-observed-target runner orchestration, unknown-target rejection and output artifact creation. Validation: `py_compile` and focused direct runner/harness smoke checks pass; targeted pytest collection remains blocked in this environment by missing project dependency `dill`. Runtime verification: **verified after 085** on the private runtime reproduction; both targets completed and dedicated CSV/JSON artifacts were written. The run also exposed the coverage-delta reporting bug and sparse-densification warnings fixed in 086.
 
 ## 083 — Validation-only soft same-model correction fallback
 
@@ -515,8 +603,8 @@ Tree class weighting and an explicit fixed binary target cutoff; preserve defaul
 - If the estimator lacks `predict_proba()` or the soft estimate is also invalid/unestimable, the harness retains `fallback/unestimable`. Resource/execution failures still follow 082's `regressed_same_model` path rather than being reclassified as statistical fallback cases.
 - Added a paired comparison helper that runs baseline and soft-candidate validation on identical random seeds and reports source activation/unestimable rates plus mean absolute error for `D_cv_test`, `D_cv_full`, and `D_retrained_full` against the known injected-noise truth. This makes candidate adoption depend on accuracy/coverage evidence rather than merely obtaining a finite factor.
 - Added focused coverage for a deterministic same-model classifier with zero hard recovery but non-zero target probability mass: baseline remains unestimable while the soft path yields a finite factor; separate guards prove direct estimates take precedence and that a failed soft attempt remains unestimable. No alternate-model/FUTV fallback is introduced.
-- 082 runtime verification: the 160-row `text_regression` reproduction with stop words and uni/bi/tri-grams produced `zero_recovery` for both targets in both cross-trained and retrained models. Every case logged that sample-size regression was not applicable and used `fallback/unestimable`, while `corr_model` identified the target model correctly.
-- Validation: Python compile and a direct end-to-end harness smoke test passed; the deterministic case produced baseline `(1.0, fallback/unestimable)` and soft `(4.0, soft_same_model)`, and paired runs used identical seeds with 100% soft activation. Targeted pytest collection remains blocked by missing `dill` in `conftest`. Empirical result after 085: **rejected for production in its current form**. On `text_regression`, soft activated for all correction attempts but materially worsened MAE for CV-based estimates and did not improve the retrained estimate.
+- 082 runtime verification: a 160-row private runtime reproduction with stop words and uni/bi/tri-grams produced `zero_recovery` for both targets in both cross-trained and retrained models. Every case logged that sample-size regression was not applicable and used `fallback/unestimable`, while `corr_model` identified the target model correctly.
+- Validation: Python compile and a direct end-to-end harness smoke test passed; the deterministic case produced baseline `(1.0, fallback/unestimable)` and soft `(4.0, soft_same_model)`, and paired runs used identical seeds with 100% soft activation. Targeted pytest collection remains blocked by missing `dill` in `conftest`. Empirical result after 085: **rejected for production in its current form**. On the private runtime reproduction, soft activated for all correction attempts but materially worsened MAE for CV-based estimates and did not improve the retrained estimate.
 
 ## 082 — Dark Number correction fallback taxonomy
 
@@ -525,7 +613,7 @@ Tree class weighting and an explicit fixed binary target cutoff; preserve defaul
 - Added `corr_model` to Dark Number results alongside `corr_source`, and include the correction model in per-target logs. Current direct/regressed paths therefore identify the same target estimator explicitly; a future alternate fallback model can be reported without masquerading as the target model.
 - Updated the standalone 050 validation harness to use the same failure taxonomy and provenance contract. Added focused regression coverage proving zero recovery does not invoke the regressor, resource failure does, and model-specific Dark Number rows carry the correction-model identity.
 - 081 runtime verification: a broad Breast Cancer ROC-AUC run produced a 108-candidate spot-check table containing CV metrics only, then performed FUTV GridSearchCV, then exposed the final holdout for the first time in `Evaluate trained model`. Full-data retraining, misprediction analysis and Dark Numbers completed normally; all four observed correction factors were direct estimates.
-- Validation: `py_compile`, `git diff --check`, and a direct fallback-taxonomy smoke test passed. Pytest collection is blocked in this environment by missing project dependencies (`dill` first). Runtime verification: **verified** on the 160-row `text_regression` reproduction documented in 083; all four statistically unestimable hard/direct cases bypassed sample-size regression and reported `fallback/unestimable` with explicit `corr_model`.
+- Validation: `py_compile`, `git diff --check`, and a direct fallback-taxonomy smoke test passed. Pytest collection is blocked in this environment by missing project dependencies (`dill` first). Runtime verification: **verified** on a 160-row private runtime reproduction documented in 083; all four statistically unestimable hard/direct cases bypassed sample-size regression and reported `fallback/unestimable` with explicit `corr_model`.
 
 ## 081 — Untouched final-holdout training contract
 
@@ -869,7 +957,7 @@ rather than reconstructed from guesswork.
 
 - Replaced the accumulated active BACKLOG with a prioritized, general-purpose roadmap.
 - Archived the unmodified pre-152 backlog content at `docs/backlog_archive_pre_152.md` (with a short archival header).
-- Marked <private-identifier> work concluded and preserved revision-151 CatBoost scope; no runtime code, defaults, or tests changed.
+- Marked the prior private-dataset investigation concluded and preserved revision-151 CatBoost scope; no runtime code, defaults, or tests changed.
 - This is triage, not a runtime validation or proof that historical unchecked items are implemented.
 
 ## 153 — Guarded reclassification widget rendering

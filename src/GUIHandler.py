@@ -575,9 +575,16 @@ class GUIHandler:
             self._classifier_diagnostic("Script output capture: exited")
             stage = "post-run GUI"
             if result and result["mispredicted"] is not None:
+                self._classifier_diagnostic("mispredicted widget: begin")
                 try:
-                    self.widgets.handle_mispredicted(**result)
+                    rendered = self.widgets.handle_mispredicted(**result)
+                    self._classifier_diagnostic(
+                        "mispredicted widget: " + ("rendered" if rendered else "fallback")
+                    )
                 except Exception as exc:
+                    self._classifier_diagnostic(
+                        f"mispredicted widget: failed ({type(exc).__name__}: {exc})", "WARNING"
+                    )
                     with output, self.logger.capture_console_output():
                         self.logger.print_warning(
                             f"Reclassification widget unavailable; model run completed: "

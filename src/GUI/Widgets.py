@@ -1328,7 +1328,7 @@ class Widgets:
         """Run the persisted previous configuration without rebuilding it from current widgets."""
         self.regression_suite_state = False
         self.output.clear_output(wait=True)
-        self.mispredicted_output.clear_output()
+        self.clear_mispredicted_output()
         self.guihandler.repeat_last_classifier_run(
             output=self.output,
             sql_username=self.sql_username.value,
@@ -1348,7 +1348,7 @@ class Widgets:
         # clearing the widget, constructing settings, or executing the runner.
         self.guihandler._classifier_diagnostic("Script output widget: clear begin")
         self.output.clear_output(wait=True)
-        self.mispredicted_output.clear_output()
+        self.clear_mispredicted_output()
         self.guihandler._classifier_diagnostic("Script output widget: clear end")
         if self.regression_suite_state:
             config_params = self.get_regression_suite_base_config_params()
@@ -1372,17 +1372,92 @@ class Widgets:
     # Each GridBox cell creates a comm-backed ipywidget. Limit the initial view to
     # keep large results from overwhelming the Voilà/Jupyter frontend.
     MISPREDICTED_RENDER_LIMIT = 40
+    MISPREDICTED_WIDGET_LIMIT = 240
 
-    def handle_mispredicted(self, mispredicted: DataFrame, unique_classes: list[str]) -> None:
+    def clear_mispredicted_output(self) -> None:
+        """Clear the preview and release comm-backed widgets from the previous run.
+
+        Clearing an Output widget removes the visible view but does not close the
+        child widget models that were created for the reclassification table. On
+        repeated runs those stale models can otherwise accumulate in the frontend.
+        """
+        logger = logging.getLogger(__name__)
+        grid = self.mispredicted_gridbox
+        children = tuple(getattr(grid, "children", ()))
+        display_widgets = tuple(getattr(self, "_mispredicted_display_widgets", ()))
+
+        try:
+            # Remove the old view before closing child models referenced by it.
+            self.mispredicted_output.clear_output(wait=False)
+        except Exception:
+            logger.exception("Could not clear the previous mispredicted Output widget")
+
+        try:
+            grid.children = ()
+        except Exception:
+            logger.exception("Could not detach previous mispredicted grid children")
+
+        closed = 0
+        for widget in (*children, *display_widgets):
+            try:
+                widget.close()
+                closed += 1
+            except Exception:
+                # Cleanup diagnostics must never prevent a new model run.
+                logger.debug("Could not close a stale mispredicted widget", exc_info=True)
+        self._mispredicted_display_widgets = ()
+
+        if children or display_widgets:
+            logger.info(
+                "Mispredicted widget cleanup: detached=%d display_widgets=%d closed=%d",
+                len(children), len(display_widgets), closed,
+            )
+
+    def handle_mispredicted(self, mispredicted: DataFrame, unique_classes: list[str]) -> bool:
         """Render a bounded, editable preview; never fail the completed ML run.
 
         Full results remain in the classifier output. Rendering is intentionally
-        capped because one interactive widget is allocated per table cell.
+        capped because one comm-backed widget is allocated per table cell.
         """
         total_rows = len(mispredicted)
         total_columns = len(mispredicted.columns) + 2
-        displayed_rows = min(total_rows, self.MISPREDICTED_RENDER_LIMIT)
         logger = logging.getLogger(__name__)
+        widget_budget = max(1, int(getattr(self, "MISPREDICTED_WIDGET_LIMIT", 240)))
+        row_limit = max(0, int(getattr(self, "MISPREDICTED_RENDER_LIMIT", 40)))
+        grid = self.mispredicted_gridbox
+        items = []
+        display_widgets = []
+
+        # This also makes direct/programmatic calls safe; GUI button actions clear
+        # earlier so stale widget models do not remain alive throughout training.
+        Widgets.clear_mispredicted_output(self)
+
+        # Headers also consume widget models. If a non-empty preview cannot fit
+        # both its header and at least one data row, skip the interactive grid
+        # instead of asking the frontend to render an effectively unusable model
+        # graph. The full result remains in the classifier output.
+        minimum_preview_widgets = total_columns * (2 if total_rows else 1)
+        if minimum_preview_widgets > widget_budget:
+            logger.warning(
+                "Mispredicted widget skipped: rows=%d columns=%d minimum_widgets=%d "
+                "widget_budget=%d",
+                total_rows, total_columns, minimum_preview_widgets, widget_budget,
+            )
+            try:
+                with self.mispredicted_output:
+                    print(
+                        "Interactive reclassification preview skipped because its header and "
+                        f"first row require {minimum_preview_widgets} grid widgets, exceeding "
+                        f"the frontend widget budget of {widget_budget}. Training results are "
+                        "unaffected; use the full "
+                        "classifier output for inspection."
+                    )
+            except Exception:
+                logger.exception("Could not display the mispredicted budget fallback message")
+            return False
+
+        max_rows_by_widget_budget = max(0, widget_budget // total_columns - 1)
+        displayed_rows = min(total_rows, row_limit, max_rows_by_widget_budget)
         try:
             preview = mispredicted.iloc[:displayed_rows]
             headers = [str(mispredicted.index.name or "Index"), *map(str, mispredicted.columns), "Reclassify as"]
@@ -1395,33 +1470,58 @@ class Widgets:
                 items.extend(self.get_text_widget(value) for value in row)
                 items.append(self.reclassify_dropdown(unique_classes, row_name))
 
-            grid = self.mispredicted_gridbox
             grid.layout.grid_template_columns = f"repeat({total_columns}, max-content)"
             grid.children = tuple(items)
+
+            display_widgets = [
+                self.create_inpage_styles("mispredicted"),
+                widgets.HTML("<h3>Reclassification table for most mispredicted</h3>"),
+            ]
+            if total_rows > displayed_rows:
+                display_widgets.append(widgets.HTML(
+                    f"<p>Displaying the first {displayed_rows} of {total_rows} rows "
+                    "to limit frontend widget load. Full results are available "
+                    "in the classifier output.</p>"
+                ))
+            self._mispredicted_display_widgets = tuple(
+                widget for widget in display_widgets if widget is not None
+            )
+
             with self.mispredicted_output:
-                display(self.create_inpage_styles("mispredicted"))
-                display(widgets.HTML("<h3>Reclassification table for most mispredicted</h3>"))
-                if total_rows > displayed_rows:
-                    display(widgets.HTML(
-                        f"<p>Displaying the first {displayed_rows} of {total_rows} rows "
-                        "to limit interactive widget load. Full results are available "
-                        "in the classifier output.</p>"
-                    ))
+                for widget in display_widgets:
+                    if widget is not None:
+                        display(widget)
                 display(grid)
-            logger.info("Mispredicted widget rendered: rows=%d/%d columns=%d widgets=%d",
-                        displayed_rows, total_rows, total_columns, len(items))
+            logger.info(
+                "Mispredicted widget rendered: rows=%d/%d columns=%d grid_widgets=%d budget=%d",
+                displayed_rows, total_rows, total_columns, len(items), widget_budget,
+            )
+            return True
         except Exception:
             logger.exception("Mispredicted widget rendering failed: rows=%d columns=%d "
                              "attempted_rows=%d", total_rows, total_columns, displayed_rows)
+            try:
+                grid.children = ()
+            except Exception:
+                logger.debug("Could not detach failed mispredicted grid children", exc_info=True)
+            for widget in (*items, *display_widgets):
+                if widget is None:
+                    continue
+                try:
+                    widget.close()
+                except Exception:
+                    logger.debug("Could not close failed mispredicted widget", exc_info=True)
+            self._mispredicted_display_widgets = ()
             # A failed display must not mask a completed model training run.
             try:
                 with self.mispredicted_output:
-                    display(widgets.HTML(
-                        "<p>Could not display the interactive reclassification table. "
-                        "Training results are unaffected; see the server log for details.</p>"
-                    ))
+                    print(
+                        "Could not display the interactive reclassification table. "
+                        "Training results are unaffected; see the server log for details."
+                    )
             except Exception:
                 logger.exception("Could not display the mispredicted fallback message")
+            return False
 
     def create_inpage_styles(self, section: str) -> widgets.HTML:
         """ 

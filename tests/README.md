@@ -22,6 +22,57 @@ Test-related files:
 - `.coveragerc`
 - `pyproject.toml`
 
+## Documentation privacy check
+
+Before committing documentation changes, run from the repository root:
+
+```text
+python .\scripts\check_documentation_privacy.py
+```
+
+For organization-specific person, table, database or project identifiers, create a local
+`.jbg_doc_privacy_blocklist` with one literal identifier per line. The file is git-ignored and
+the checker reports only the entry number, never the matched private value. The built-in patterns
+are deliberately conservative, so the local blocklist and manual review remain required for names
+that have no reliable syntactic signature. The default command checks the current Markdown tree only.
+Before external publication, use the same local blocklist to audit reachable Git history as well:
+
+```text
+python .\scripts\check_documentation_privacy.py --history
+```
+
+Revision 166 makes the normal working-tree privacy scan Git-aware: tracked Markdown is
+checked by default, while local untracked notes are included only when explicitly requested:
+
+```powershell
+python .\scripts\check_documentation_privacy.py --include-untracked
+```
+
+When a real `--history` audit is clean in the working tree but reports private blocklist
+matches only in the repository-root `BACKLOG.md`/`CHANGELOG.md` history, first run the
+revision-166 remediation in read-only mode:
+
+```powershell
+python .\scripts\rewrite_documentation_history.py
+```
+
+After reviewing the preflight and committing all tracked changes, apply it locally with:
+
+```powershell
+python .\scripts\rewrite_documentation_history.py --apply
+python .\scripts\check_documentation_privacy.py --history
+```
+
+Apply mode creates a verified pre-rewrite Git bundle outside the repository. That bundle
+contains the private historical data and must itself be kept private. The tool never pushes,
+force-pushes, fetches, expires reflogs or runs garbage collection.
+
+History mode is deliberately fail-closed: it requires a non-empty local private blocklist and refuses
+shallow repositories. It scans historical Markdown blobs and commit messages reachable from local refs,
+reports commit/path/line/category metadata without printing matched values or source lines, and never
+rewrites history. Run it on the authoritative full repository; if it reports findings, stop publication
+and plan a backed-up history rewrite separately before re-running the audit.
+
 ## Coverage
 
 - All modules: `pytest --cov-report html:coverage --cov=./`
