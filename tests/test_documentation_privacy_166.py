@@ -1,4 +1,4 @@
-"""Revision 166/166a regression checks for scoped documentation-history remediation."""
+"""Revision 166/166a/166b regression checks for scoped documentation-history remediation."""
 
 from contextlib import redirect_stdout
 from importlib.util import module_from_spec, spec_from_file_location
@@ -88,6 +88,32 @@ class DocumentationPrivacy166(unittest.TestCase):
         ).stdout.decode("ascii").strip()
         git(root, "update-ref", f"refs/tags/{refname}", tag_oid)
         return tag_oid
+
+    def create_fake_signed_commit(self, root: Path, message: str = "Signed checkpoint") -> str:
+        parent = git(root, "rev-parse", "HEAD").stdout.decode("ascii").strip()
+        tree = git(root, "rev-parse", "HEAD^{tree}").stdout.decode("ascii").strip()
+        identity = "Privacy Test <privacy-test@example.invalid> 0 +0000"
+        raw = (
+            f"tree {tree}\n"
+            f"parent {parent}\n"
+            f"author {identity}\n"
+            f"committer {identity}\n"
+            "gpgsig -----BEGIN PGP SIGNATURE-----\n"
+            " synthetic-test-signature\n"
+            " -----END PGP SIGNATURE-----\n\n"
+            f"{message}\n"
+        ).encode("utf-8")
+        commit_oid = subprocess.run(
+            ["git", "-C", str(root), "hash-object", "-w", "-t", "commit", "--stdin"],
+            input=raw,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).stdout.decode("ascii").strip()
+        branch = git(root, "symbolic-ref", "HEAD").stdout.decode("utf-8").strip()
+        git(root, "update-ref", branch, commit_oid, parent)
+        git(root, "reset", "--hard", commit_oid)
+        return commit_oid
 
     def test_default_working_tree_scan_ignores_untracked_markdown(self):
         private_value = "ExamplePrivateIdentifier"
@@ -188,6 +214,58 @@ class DocumentationPrivacy166(unittest.TestCase):
                 REWRITE.build_plan(root, [private_value.casefold()])
             self.assertIn("Tracked working-tree changes", str(caught.exception))
 
+
+    def test_unaffected_signed_commit_is_preserved_when_later_history_changes(self):
+        private_value = "ExamplePrivateDatabase"
+        with tempfile.TemporaryDirectory() as directory, tempfile.TemporaryDirectory() as backup_directory:
+            root = self.make_repository(directory)
+            (root / "README.md").write_text("Generic current product documentation.\n", encoding="utf-8")
+            (root / "BACKLOG.md").write_text("Generic initial backlog.\n", encoding="utf-8")
+            (root / "CHANGELOG.md").write_text("Generic initial history.\n", encoding="utf-8")
+            commit_all(root, "Generic base")
+            signed_commit = self.create_fake_signed_commit(root)
+
+            (root / "BACKLOG.md").write_text(
+                f"Historical private reference: {private_value}.\n",
+                encoding="utf-8",
+            )
+            commit_all(root, "Historical documentation")
+            (root / "BACKLOG.md").write_text("Current generic backlog.\n", encoding="utf-8")
+            commit_all(root, "Sanitize current documentation")
+
+            plan = REWRITE.build_plan(root, [private_value.casefold()])
+            self.assertNotIn(signed_commit, plan.changed_revisions)
+            backup = Path(backup_directory) / "before.bundle"
+            REWRITE.rewrite_history(root, [private_value.casefold()], plan, backup)
+
+            self.assertEqual(git(root, "cat-file", "-t", signed_commit).stdout.strip(), b"commit")
+            self.assertEqual(PRIVACY.scan_git_history(root, [private_value.casefold()]), [])
+
+    def test_affected_signed_commit_still_blocks_rewrite(self):
+        private_value = "ExamplePrivateDatabase"
+        with tempfile.TemporaryDirectory() as directory:
+            root = self.make_sanitized_repository_with_history_leak(directory, private_value)
+            signed_commit = self.create_fake_signed_commit(root)
+
+            with self.assertRaises(REWRITE.HistoryRewriteError) as caught:
+                REWRITE.build_plan(root, [private_value.casefold()])
+            rendered = str(caught.exception)
+            self.assertIn("signed commit", rendered.lower())
+            self.assertIn(signed_commit[:12], rendered)
+            self.assertNotIn(private_value.casefold(), rendered.casefold())
+
+    def test_unsupported_commit_header_detection_distinguishes_signature_and_mergetag(self):
+        raw = (
+            b"tree 0000000000000000000000000000000000000000\n"
+            b"gpgsig -----BEGIN PGP SIGNATURE-----\n"
+            b" synthetic\n"
+            b"mergetag object 1111111111111111111111111111111111111111\n\n"
+            b"Generic message\n"
+        )
+        self.assertEqual(
+            REWRITE._commit_unsupported_header_kinds(raw),
+            frozenset({"signed-commit", "merge-tag"}),
+        )
 
     def test_unsigned_annotated_tag_is_recreated_when_target_changes(self):
         private_value = "ExamplePrivateDatabase"

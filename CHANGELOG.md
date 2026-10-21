@@ -1,3 +1,9 @@
+## Revision 166b — affected-history signature scoping
+
+- Scope signed-commit and merge-tag safety checks to the exact commit set whose tree or ancestry must change during the documentation privacy rewrite. Signed commits that are true ancestors of the affected range are now preserved byte-for-byte instead of blocking remediation merely because they are reachable.
+- Skip untouched commits entirely during object reconstruction, so unsupported signature metadata in unaffected history is never parsed into a replacement object. A signed or merge-tag-bearing commit inside the affected descendant closure still fails closed because rewriting it would invalidate or require reconstructing cryptographic metadata.
+- Failures now report only counts and short affected commit IDs, never private blocklist values or source text. Added synthetic regression coverage for unaffected signed-history preservation, affected signed-commit refusal and signature/merge-tag header classification. No ML, SQL, GUI or model-persistence runtime behavior changes are made.
+
 ## Revision 166a — annotated-tag-aware documentation history remediation
 
 - Relaxed revision 166's blanket annotated-tag refusal. Unsigned annotated tags are now recreated only when their target commits are rewritten, preserving tag annotation metadata while moving the tag to the sanitized commit graph; annotated tags whose targets are unaffected remain byte-for-byte untouched.

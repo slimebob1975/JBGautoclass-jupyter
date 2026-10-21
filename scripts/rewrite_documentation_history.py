@@ -8,9 +8,10 @@ filenames, Python/source files, or arbitrary Markdown paths.
 The default invocation is a read-only dry run. ``--apply`` requires a clean, non-shallow,
 single-worktree repository, creates and verifies an external Git bundle backup, rewrites
 reachable direct commit refs locally, safely recreates unsigned annotated tags whose target
-commits change, and re-runs the history audit. Signed annotated tags are refused only when
-their target commits would change. No push, fetch, remote mutation, reflog expiry, or garbage
-collection is performed automatically.
+commits change, and re-runs the history audit. Signed annotated tags and signed/merge-tag commit
+metadata are refused only when the specific tag/commit would need a new object ID. Unaffected
+signed history is preserved byte-for-byte. No push, fetch, remote mutation, reflog expiry, or
+garbage collection is performed automatically.
 
 The backup bundle intentionally contains the pre-rewrite private history. Keep it private.
 """
@@ -140,22 +141,41 @@ def topological_revisions(root: Path) -> list[str]:
     return [line.strip() for line in output.splitlines() if line.strip()]
 
 
-def _commit_has_unsupported_headers(raw_commit: bytes) -> bool:
+def _commit_unsupported_header_kinds(raw_commit: bytes) -> frozenset[str]:
     header, _separator, _message = raw_commit.partition(b"\n\n")
-    return any(
-        line.startswith((b"gpgsig ", b"gpgsig-sha256 ", b"mergetag "))
-        for line in header.splitlines()
-    )
+    kinds: set[str] = set()
+    for line in header.splitlines():
+        if line.startswith((b"gpgsig ", b"gpgsig-sha256 ")):
+            kinds.add("signed-commit")
+        elif line.startswith(b"mergetag "):
+            kinds.add("merge-tag")
+    return frozenset(kinds)
+
+
+def _commit_has_unsupported_headers(raw_commit: bytes) -> bool:
+    return bool(_commit_unsupported_header_kinds(raw_commit))
 
 
 def _validate_history_shapes(root: Path, revisions: Iterable[str]) -> None:
+    signed: list[str] = []
+    merge_tagged: list[str] = []
     for revision in revisions:
         raw = _run_git(root, "cat-file", "commit", revision).stdout
-        if _commit_has_unsupported_headers(raw):
-            raise HistoryRewriteError(
-                "Reachable history contains signed commits or merge-tag metadata. "
-                "Revision 166 refuses to invalidate or reconstruct those signatures automatically."
-            )
+        kinds = _commit_unsupported_header_kinds(raw)
+        if "signed-commit" in kinds:
+            signed.append(revision)
+        if "merge-tag" in kinds:
+            merge_tagged.append(revision)
+
+    if signed or merge_tagged:
+        samples = sorted(set(signed + merge_tagged))[:5]
+        sample_text = ", ".join(revision[:12] for revision in samples)
+        raise HistoryRewriteError(
+            "History that must be rewritten contains "
+            f"{len(signed)} signed commit(s) and {len(merge_tagged)} commit(s) with merge-tag metadata"
+            + (f" (affected commit id(s): {sample_text})" if sample_text else "")
+            + ". Revision 166b refuses to invalidate or reconstruct those signatures automatically."
+        )
 
 
 def _tag_has_signature(raw_tag: bytes) -> bool:
@@ -325,8 +345,8 @@ def build_plan(root: Path, blocklist: Iterable[str]) -> RewritePlan:
 
     refs = ref_states(root)
     revisions = tuple(topological_revisions(root))
-    _validate_history_shapes(root, revisions)
     changed_revisions = _changed_revisions(root, revisions, blocklist)
+    _validate_history_shapes(root, changed_revisions)
     direct_refs, annotated_tags = _validate_refs(root, refs, changed_revisions)
     return RewritePlan(
         findings=history_findings,
@@ -568,6 +588,9 @@ def rewrite_history(
     blobs_changed = 0
 
     for revision in plan.revisions:
+        if revision not in plan.changed_revisions:
+            commit_map[revision] = revision
+            continue
         new_revision, changed_blob_count, changed = _rewrite_commit(
             root,
             revision,

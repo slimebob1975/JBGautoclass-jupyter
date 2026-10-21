@@ -200,3 +200,9 @@ revisions must verify current code behavior before implementing any listed item.
 - [x] Default privacy scanning in a Git repository now checks tracked Markdown only; `--include-untracked` explicitly opts into local-note scanning.
 - [x] Remediation dry-run is read-only. Apply mode requires a clean, non-shallow, single-worktree repository with attached HEAD, refuses annotated tags/signed commit metadata, creates and verifies an external pre-rewrite bundle, rewrites local refs, and requires the history audit to pass afterward.
 - [ ] Run revision 166 dry-run/apply on the authoritative repository, verify the rewritten history, and coordinate remote history replacement if the affected commits were already pushed. No fetch/push/force-push or local object pruning is automated.
+
+## Revision 166b status
+
+- [x] Signed-commit/merge-tag preflight is limited to commits that must actually receive new object IDs; unaffected signed ancestors no longer block remediation.
+- [x] Untouched commits are mapped to their original object IDs without reconstruction.
+- [ ] Re-run dry-run/apply on the authoritative repository. If an affected signed or merge-tag-bearing commit remains, decide explicitly whether to preserve the signed history and abandon rewrite or perform a separately reviewed signature-dropping remediation.
