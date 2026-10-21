@@ -1,3 +1,10 @@
+## Revision 166a — annotated-tag-aware documentation history remediation
+
+- Relaxed revision 166's blanket annotated-tag refusal. Unsigned annotated tags are now recreated only when their target commits are rewritten, preserving tag annotation metadata while moving the tag to the sanitized commit graph; annotated tags whose targets are unaffected remain byte-for-byte untouched.
+- A cryptographically signed annotated tag now blocks remediation only when its target commit would change, avoiding unnecessary refusal for unrelated signed release tags while still preventing silent signature invalidation. Nested annotated tags remain fail-closed.
+- Extended the history privacy audit to scan annotated-tag ref names and tag messages without echoing private values or annotations. Findings there remain outside the narrow BACKLOG/CHANGELOG remediation scope and therefore abort the rewrite.
+- Added synthetic Git regression coverage for unsigned affected tags, affected signed-tag refusal, unaffected signed-tag preservation and private tag-message detection. No ML, SQL, GUI or model-persistence runtime behavior changes are made.
+
 ## Revision 166 — scoped documentation-history privacy remediation
 
 - Added `scripts/rewrite_documentation_history.py`, a fail-closed local Git-history remediation tool restricted to private-blocklist replacements in repository-root `BACKLOG.md` and `CHANGELOG.md`. Findings in commit messages, filenames, other Markdown files or built-in privacy categories abort the rewrite instead of broadening its scope.

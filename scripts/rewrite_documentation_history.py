@@ -7,8 +7,10 @@ filenames, Python/source files, or arbitrary Markdown paths.
 
 The default invocation is a read-only dry run. ``--apply`` requires a clean, non-shallow,
 single-worktree repository, creates and verifies an external Git bundle backup, rewrites
-reachable direct commit refs locally, and re-runs the revision-165 history audit. No push,
-fetch, remote mutation, reflog expiry, or garbage collection is performed automatically.
+reachable direct commit refs locally, safely recreates unsigned annotated tags whose target
+commits change, and re-runs the history audit. Signed annotated tags are refused only when
+their target commits would change. No push, fetch, remote mutation, reflog expiry, or garbage
+collection is performed automatically.
 
 The backup bundle intentionally contains the pre-rewrite private history. Keep it private.
 """
@@ -44,10 +46,20 @@ class RefState:
 
 
 @dataclass(frozen=True)
+class AnnotatedTagState:
+    ref: RefState
+    target_id: str
+    target_type: str
+    signed: bool
+
+
+@dataclass(frozen=True)
 class RewritePlan:
     findings: tuple[privacy.HistoryViolation, ...]
     direct_commit_refs: tuple[RefState, ...]
+    annotated_tags: tuple[AnnotatedTagState, ...]
     revisions: tuple[str, ...]
+    changed_revisions: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -146,18 +158,119 @@ def _validate_history_shapes(root: Path, revisions: Iterable[str]) -> None:
             )
 
 
-def _validate_refs(refs: Iterable[RefState]) -> tuple[RefState, ...]:
+def _tag_has_signature(raw_tag: bytes) -> bool:
+    _header, _separator, message = raw_tag.partition(b"\n\n")
+    return any(
+        marker in message
+        for marker in (
+            b"-----BEGIN PGP SIGNATURE-----",
+            b"-----BEGIN SSH SIGNATURE-----",
+            b"-----BEGIN SIGNED MESSAGE-----",
+        )
+    )
+
+
+def _annotated_tag_state(root: Path, ref: RefState) -> AnnotatedTagState:
+    raw = _run_git(root, "cat-file", "tag", ref.object_id).stdout
+    header, separator, _message = raw.partition(b"\n\n")
+    if not separator:
+        raise HistoryRewriteError("Unexpected annotated tag object while preparing history rewrite.")
+
+    target_id: str | None = None
+    target_type: str | None = None
+    for line in header.splitlines():
+        if line.startswith(b"object "):
+            target_id = line[7:].decode("ascii")
+        elif line.startswith(b"type "):
+            target_type = line[5:].decode("ascii")
+
+    if not target_id or not target_type:
+        raise HistoryRewriteError("Annotated tag object is missing its target metadata.")
+    if target_type == "tag":
+        raise HistoryRewriteError(
+            "Nested annotated tags are present. Revision 166a refuses to rewrite nested tag objects automatically."
+        )
+    return AnnotatedTagState(
+        ref=ref,
+        target_id=target_id,
+        target_type=target_type,
+        signed=_tag_has_signature(raw),
+    )
+
+
+def _target_tree_needs_rewrite(root: Path, tree_id: str, blocklist: Iterable[str]) -> bool:
+    output = _run_git(root, "ls-tree", "-z", tree_id).stdout
+    for record in output.split(b"\0"):
+        if not record:
+            continue
+        try:
+            metadata, raw_name = record.split(b"\t", 1)
+            _mode, object_type, object_id = metadata.split(b" ", 2)
+        except ValueError as exc:
+            raise HistoryRewriteError("Unexpected root-tree record during history preflight.") from exc
+        if object_type != b"blob":
+            continue
+        name = raw_name.decode("utf-8", errors="surrogateescape")
+        if name not in TARGET_PATHS:
+            continue
+        raw = _run_git(root, "cat-file", "blob", object_id.decode("ascii")).stdout
+        try:
+            text = raw.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise HistoryRewriteError("A target Markdown blob is not valid UTF-8; refusing lossy rewrite.") from exc
+        _updated, changed = _replace_private_values(text, blocklist)
+        if changed:
+            return True
+    return False
+
+
+def _changed_revisions(
+    root: Path, revisions: Iterable[str], blocklist: Iterable[str]
+) -> frozenset[str]:
+    changed: set[str] = set()
+    for revision in revisions:
+        raw = _run_git(root, "cat-file", "commit", revision).stdout
+        header, separator, _message = raw.partition(b"\n\n")
+        if not separator:
+            raise HistoryRewriteError("Unexpected commit object during history preflight.")
+
+        tree_id: str | None = None
+        parents: list[str] = []
+        for line in header.splitlines():
+            if line.startswith(b"tree "):
+                tree_id = line[5:].decode("ascii")
+            elif line.startswith(b"parent "):
+                parents.append(line[7:].decode("ascii"))
+        if tree_id is None:
+            raise HistoryRewriteError("Commit object is missing its tree during history preflight.")
+
+        if _target_tree_needs_rewrite(root, tree_id, blocklist) or any(parent in changed for parent in parents):
+            changed.add(revision)
+    return frozenset(changed)
+
+
+def _validate_refs(
+    root: Path,
+    refs: Iterable[RefState],
+    changed_revisions: frozenset[str],
+) -> tuple[tuple[RefState, ...], tuple[AnnotatedTagState, ...]]:
     direct_commits: list[RefState] = []
+    annotated_tags: list[AnnotatedTagState] = []
     for ref in refs:
         if ref.object_type == "tag":
-            raise HistoryRewriteError(
-                "Annotated tags are present. Revision 166 refuses to rewrite annotated tag objects automatically."
-            )
+            tag = _annotated_tag_state(root, ref)
+            if tag.target_type == "commit" and tag.target_id in changed_revisions and tag.signed:
+                raise HistoryRewriteError(
+                    "A signed annotated tag points to history that must be rewritten. "
+                    "Revision 166a refuses to invalidate that tag signature automatically."
+                )
+            annotated_tags.append(tag)
+            continue
         if ref.object_type == "commit" and not ref.symref:
             direct_commits.append(ref)
     if not direct_commits:
         raise HistoryRewriteError("No direct commit refs are available to rewrite.")
-    return tuple(direct_commits)
+    return tuple(direct_commits), tuple(annotated_tags)
 
 
 def _validate_findings(findings: Iterable[privacy.HistoryViolation]) -> tuple[privacy.HistoryViolation, ...]:
@@ -202,16 +315,25 @@ def build_plan(root: Path, blocklist: Iterable[str]) -> RewritePlan:
 
     history_findings = _validate_findings(privacy.scan_git_history(root, blocklist))
     if not history_findings:
-        return RewritePlan(findings=(), direct_commit_refs=(), revisions=())
+        return RewritePlan(
+            findings=(),
+            direct_commit_refs=(),
+            annotated_tags=(),
+            revisions=(),
+            changed_revisions=frozenset(),
+        )
 
     refs = ref_states(root)
-    direct_refs = _validate_refs(refs)
     revisions = tuple(topological_revisions(root))
     _validate_history_shapes(root, revisions)
+    changed_revisions = _changed_revisions(root, revisions, blocklist)
+    direct_refs, annotated_tags = _validate_refs(root, refs, changed_revisions)
     return RewritePlan(
         findings=history_findings,
         direct_commit_refs=direct_refs,
+        annotated_tags=annotated_tags,
         revisions=revisions,
+        changed_revisions=changed_revisions,
     )
 
 
@@ -341,7 +463,42 @@ def _rewrite_commit(
     return new_revision, changed_blobs, True
 
 
-def _update_refs(root: Path, refs: Iterable[RefState], commit_map: dict[str, str]) -> list[tuple[RefState, str]]:
+def _rewrite_annotated_tag(
+    root: Path, tag: AnnotatedTagState, new_target: str
+) -> str:
+    if tag.target_type != "commit" or new_target == tag.target_id:
+        return tag.ref.object_id
+    raw = _run_git(root, "cat-file", "tag", tag.ref.object_id).stdout
+    if _tag_has_signature(raw):
+        raise HistoryRewriteError("A signed annotated tag became rewrite-relevant after preflight; refusing rewrite.")
+
+    header, separator, message = raw.partition(b"\n\n")
+    if not separator:
+        raise HistoryRewriteError("Unexpected annotated tag object during rewrite.")
+    old_line = b"object " + tag.target_id.encode("ascii")
+    new_line = b"object " + new_target.encode("ascii")
+    lines = header.splitlines()
+    matches = sum(1 for line in lines if line == old_line)
+    if matches != 1:
+        raise HistoryRewriteError("Annotated tag target metadata changed after preflight; refusing rewrite.")
+    rewritten = b"\n".join(new_line if line == old_line else line for line in lines) + separator + message
+    return _run_git(
+        root,
+        "hash-object",
+        "-w",
+        "-t",
+        "tag",
+        "--stdin",
+        input_bytes=rewritten,
+    ).stdout.decode("ascii").strip()
+
+
+def _update_refs(
+    root: Path,
+    refs: Iterable[RefState],
+    annotated_tags: Iterable[AnnotatedTagState],
+    commit_map: dict[str, str],
+) -> list[tuple[RefState, str]]:
     changes: list[tuple[RefState, str]] = []
     commands: list[str] = ["start"]
     for ref in refs:
@@ -350,6 +507,15 @@ def _update_refs(root: Path, refs: Iterable[RefState], commit_map: dict[str, str
             continue
         changes.append((ref, new_object))
         commands.append(f"update {ref.name} {new_object} {ref.object_id}")
+
+    for tag in annotated_tags:
+        new_target = commit_map.get(tag.target_id, tag.target_id)
+        new_tag_object = _rewrite_annotated_tag(root, tag, new_target)
+        if new_tag_object == tag.ref.object_id:
+            continue
+        changes.append((tag.ref, new_tag_object))
+        commands.append(f"update {tag.ref.name} {new_tag_object} {tag.ref.object_id}")
+
     commands.extend(["prepare", "commit", ""])
 
     if changes:
@@ -414,7 +580,7 @@ def rewrite_history(
 
     ref_changes: list[tuple[RefState, str]] = []
     try:
-        ref_changes = _update_refs(root, plan.direct_commit_refs, commit_map)
+        ref_changes = _update_refs(root, plan.direct_commit_refs, plan.annotated_tags, commit_map)
         post_findings = privacy.scan_git_history(root, blocklist)
         if post_findings:
             raise HistoryRewriteError(
@@ -484,9 +650,15 @@ def main(argv: list[str] | None = None) -> int:
         print("Documentation history remediation not needed: reachable Git history is already clean for the local blocklist.")
         return 0
 
+    affected_tags = sum(
+        1
+        for tag in plan.annotated_tags
+        if tag.target_type == "commit" and tag.target_id in plan.changed_revisions
+    )
     print(
         "Documentation history remediation preflight passed: "
-        f"{len(plan.findings)} historical finding(s) are confined to BACKLOG.md/CHANGELOG.md content."
+        f"{len(plan.findings)} historical finding(s) are confined to BACKLOG.md/CHANGELOG.md content; "
+        f"{affected_tags} unsigned annotated tag(s) require target recreation."
     )
     print("No matched private blocklist values or source lines are printed.")
 

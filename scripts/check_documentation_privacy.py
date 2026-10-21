@@ -14,6 +14,9 @@ reports only location/category metadata, and never rewrites Git history.
 Revision 166 makes the normal working-tree scan prefer Git-tracked Markdown so local notes
 that cannot be committed accidentally do not obscure repository findings. Use
 ``--include-untracked`` when a deliberate scan of local Markdown is desired.
+
+Revision 166a also audits annotated-tag ref names and tag messages. This closes a history
+visibility gap without printing tag annotations or matched private values.
 """
 
 from __future__ import annotations
@@ -257,6 +260,35 @@ def git_commit_message(root: Path, revision: str) -> str:
     return _run_git(root, "show", "-s", "--format=%B", revision).decode("utf-8", errors="replace")
 
 
+def git_annotated_tags(root: Path) -> list[tuple[str, str]]:
+    """Return ``(refname, tag_object_oid)`` for annotated tags only."""
+    output = _run_git(
+        root,
+        "for-each-ref",
+        "--format=%(refname)\t%(objecttype)\t%(objectname)",
+        "refs/tags",
+    ).decode("utf-8", errors="surrogateescape")
+    tags: list[tuple[str, str]] = []
+    for line in output.splitlines():
+        if not line:
+            continue
+        fields = line.split("\t", 2)
+        if len(fields) != 3:
+            raise GitHistoryAuditError("Unexpected Git tag ref record while auditing history.")
+        refname, object_type, object_id = fields
+        if object_type == "tag":
+            tags.append((refname, object_id))
+    return tags
+
+
+def git_tag_message(root: Path, object_id: str) -> str:
+    raw = _run_git(root, "cat-file", "tag", object_id)
+    _header, separator, message = raw.partition(b"\n\n")
+    if not separator:
+        raise GitHistoryAuditError("Unexpected annotated tag object while auditing history.")
+    return message.decode("utf-8", errors="replace")
+
+
 def _safe_history_path(path: str, blocklist: Iterable[str]) -> str:
     """Avoid echoing a repository path when that path itself contains a private token."""
     if scan_text(Path("<git-path>"), path, blocklist):
@@ -265,7 +297,7 @@ def _safe_history_path(path: str, blocklist: Iterable[str]) -> str:
 
 
 def scan_git_history(root: Path, blocklist: Iterable[str]) -> list[HistoryViolation]:
-    """Scan unique reachable Markdown blobs and commit messages from all local refs.
+    """Scan annotated tags, unique reachable Markdown blobs, and commit messages from local refs.
 
     The same ``path + blob`` pair is scanned once even if it survives through many commits.
     The reported revision is therefore an example reachable commit containing that historical
@@ -285,6 +317,27 @@ def scan_git_history(root: Path, blocklist: Iterable[str]) -> list[HistoryViolat
     seen_blobs: set[tuple[str, str]] = set()
     seen_paths: set[str] = set()
     findings: list[HistoryViolation] = []
+
+    for refname, object_id in git_annotated_tags(root):
+        safe_ref = _safe_history_path(refname, private_values)
+        for finding in scan_text(Path("<git-ref>"), refname, private_values):
+            findings.append(
+                HistoryViolation(
+                    revision=object_id[:12],
+                    path=safe_ref,
+                    line=0,
+                    category=f"ref-{finding.category}",
+                )
+            )
+        for finding in scan_text(Path("<tag-message>"), git_tag_message(root, object_id), private_values):
+            findings.append(
+                HistoryViolation(
+                    revision=object_id[:12],
+                    path="<tag-message>",
+                    line=finding.line,
+                    category=finding.category,
+                )
+            )
 
     for revision in revisions:
         short_revision = revision[:12]
@@ -352,7 +405,7 @@ def main(argv: list[str] | None = None) -> int:
         "--history",
         action="store_true",
         help=(
-            "Also scan reachable Markdown history and commit messages. Requires a local private blocklist "
+            "Also scan annotated tags, reachable Markdown history and commit messages. Requires a local private blocklist "
             "and a complete non-shallow clone."
         ),
     )

@@ -64,11 +64,14 @@ python .\scripts\check_documentation_privacy.py --history
 ```
 
 Apply mode creates a verified pre-rewrite Git bundle outside the repository. That bundle
-contains the private historical data and must itself be kept private. The tool never pushes,
+contains the private historical data and must itself be kept private. Revision 166a permits
+ordinary unsigned annotated tags: only tags whose target commits change are recreated, while
+unaffected tags remain untouched. An affected cryptographically signed tag still stops the
+rewrite rather than invalidating its signature automatically. The tool never pushes,
 force-pushes, fetches, expires reflogs or runs garbage collection.
 
 History mode is deliberately fail-closed: it requires a non-empty local private blocklist and refuses
-shallow repositories. It scans historical Markdown blobs and commit messages reachable from local refs,
+shallow repositories. It scans annotated-tag names/messages, historical Markdown blobs and commit messages reachable from local refs,
 reports commit/path/line/category metadata without printing matched values or source lines, and never
 rewrites history. Run it on the authoritative full repository; if it reports findings, stop publication
 and plan a backed-up history rewrite separately before re-running the audit.

@@ -44,12 +44,15 @@ runtime features. A checked box below is a **documentation disposition**, not ne
   with a fail-closed `--history` mode that requires the local private blocklist and a complete non-shallow
   clone, scans reachable Markdown history plus commit messages, and never echoes matched values or source
   lines. The audit is read-only and must never rewrite history automatically.
-- [ ] **Pre-publication history privacy remediation (revision 166):** the revision-165 audit has now been run
+- [ ] **Pre-publication history privacy remediation (revisions 166/166a):** the revision-165 audit has now been run
   on the authoritative repository and confirmed historical private-blocklist findings confined to root
   `BACKLOG.md`/`CHANGELOG.md` content while the tracked working tree is clean. Revision 166 adds a narrow,
   local-only dry-run/apply rewrite with an external verified bundle backup and post-rewrite history audit.
-  Run it deliberately, then coordinate any required remote force-push/reclone before external publication;
-  deletion from the current tree alone is not sufficient.
+  Revision 166a handles ordinary unsigned annotated tags by recreating only tag objects whose target commits
+  change; unaffected annotated tags remain untouched, while an affected cryptographically signed tag still
+  aborts remediation rather than silently invalidating its signature. Run the dry-run/apply deliberately,
+  then coordinate any required remote force-push/reclone before external publication; deletion from the current
+  tree alone is not sufficient.
 - [ ] **Server/kernel lifecycle:** investigate Voilà `_xsrf` 403 during reload/shutdown and verify
   clean kernel/session termination without weakening CSRF protections.
 - [ ] **Pause/Resume concurrency:** verify the revision-140 candidate-level checkpoint/resume flow
