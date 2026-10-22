@@ -32,9 +32,24 @@ def test_timestamped_log_file_assigns_and_preserves_levels(tmp_path):
     log_file.close()
 
 
-def test_timestamped_log_file_references_server_log_from_environment(tmp_path, monkeypatch):
+def test_timestamped_log_file_redacts_server_log_path_by_default(tmp_path, monkeypatch):
     server_log = tmp_path / "jbg-server.log"
     monkeypatch.setenv("JBG_SERVER_LOG", str(server_log))
+    monkeypatch.delenv("JBG_LOG_SENSITIVE_DATA", raising=False)
+
+    log_file = TimestampedLogFile(log_dir=tmp_path, filename="application.log")
+    text = read_log(log_file)
+
+    assert "[INFO] Server log: <local-path>" in text
+    assert str(server_log) not in text
+
+    log_file.close()
+
+
+def test_timestamped_log_file_can_include_server_log_path_with_explicit_opt_in(tmp_path, monkeypatch):
+    server_log = tmp_path / "jbg-server.log"
+    monkeypatch.setenv("JBG_SERVER_LOG", str(server_log))
+    monkeypatch.setenv("JBG_LOG_SENSITIVE_DATA", "1")
 
     log_file = TimestampedLogFile(log_dir=tmp_path, filename="application.log")
     text = read_log(log_file)

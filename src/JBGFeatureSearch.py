@@ -12,6 +12,7 @@ import threading
 from numbers import Real
 from pathlib import Path
 import platform
+import psutil
 import re
 from time import perf_counter
 from uuid import uuid4
@@ -35,10 +36,67 @@ from sklearn.preprocessing import MaxAbsScaler, StandardScaler
 
 from Helpers import prepare_estimator_input
 from JBGCVReporting import partition_signature
+from JBGResourceMonitor157 import resolve_parallel_workers, safe_grid_workers
+from JBGModelCompatibility import sql_type_family
 
 
 def finite_number(value):
     return isinstance(value, Real) and not isinstance(value, (bool, np.bool_)) and np.isfinite(value)
+
+
+def resolve_feature_search_workers(max_evaluations, *, max_cores=None, configured_cap=None,
+                                   available=None, total=None):
+    """Derive candidate concurrency from JBG's shared CPU and memory policy.
+
+    Candidate estimators themselves stay single-threaded, so this is the one
+    process-level parallelism control for feature search. The number of workers
+    can never exceed the distinct-subset budget.
+    """
+    requested = resolve_parallel_workers(
+        max(1, int(max_evaluations)), max_cores=max_cores, configured_cap=configured_cap
+    )
+    return safe_grid_workers(
+        requested, available=available, total=total, operation="Feature search"
+    )
+
+
+def describe_feature_search_parallelism(max_evaluations, selected_workers, *, logical_cpus=None,
+                                        configured_cap=None):
+    """Describe the already-selected worker count without changing runtime policy."""
+    if logical_cpus is None:
+        logical_cpus = psutil.cpu_count(logical=True) or os.cpu_count() or 1
+    logical_cpus = max(1, int(logical_cpus or 1))
+
+    if configured_cap is None:
+        try:
+            configured_cap = int(os.environ.get("DEFAULT_N_JOBS_DESIRED", "-1"))
+        except (TypeError, ValueError):
+            configured_cap = -1
+
+    candidate_budget = max(1, int(max_evaluations))
+    selected_workers = max(1, int(selected_workers))
+    global_cap = int(configured_cap) if int(configured_cap) > 0 else None
+    pre_memory_cap = min(
+        candidate_budget,
+        logical_cpus,
+        global_cap if global_cap is not None else logical_cpus,
+    )
+    if selected_workers < pre_memory_cap:
+        memory_guard = "triggered"
+    elif selected_workers == pre_memory_cap:
+        memory_guard = "clear"
+    else:
+        # The environment/global cap can change between GUI option creation and
+        # execution. Report that drift rather than claiming a false memory cause.
+        memory_guard = "policy-changed-since-selection"
+
+    return (
+        f"Feature search parallelism: workers={selected_workers}, "
+        f"logical_cpus={logical_cpus}, "
+        f"global_cap={global_cap if global_cap is not None else 'unlimited'}, "
+        f"candidate_budget={candidate_budget}, pre_memory_cap={pre_memory_cap}, "
+        f"memory_guard={memory_guard}"
+    )
 
 
 @dataclass(frozen=True)
@@ -242,8 +300,8 @@ def model_identity(options):
                             for key, value in estimator.get_params(deep=False).items()})
 
 
-def study_provenance(X, context=None):
-    """Accept explicit source identifiers, never arbitrary application configs."""
+def study_provenance(X, context=None, source_sql_schema=None):
+    """Accept explicit source identifiers/schema, never arbitrary application configs."""
     context = dict(context or {})
     fields = {'project', 'source_kind', 'source_tables', 'class_column', 'id_column',
               'excluded_columns', 'group_column'}
@@ -256,6 +314,20 @@ def study_provenance(X, context=None):
         elif not isinstance(value, str):
             raise ValueError(f'{key} must be a string')
     schema = [{'name': c, 'dtype': str(X[c].dtype)} for c in X.columns]
+    sql_schema = []
+    if source_sql_schema is not None:
+        if not isinstance(source_sql_schema, dict):
+            raise ValueError('source_sql_schema must be a column-to-SQL-type mapping')
+        missing_sql = [name for name in X.columns if name not in source_sql_schema]
+        if missing_sql:
+            raise ValueError(
+                f'Source SQL schema is missing {len(missing_sql)} investigated feature column(s)'
+            )
+        # Persist only investigated predictors, never unrelated table schema.
+        for name in X.columns:
+            sql_type = str(source_sql_schema[name] or '').lower()
+            sql_schema.append({'name': str(name), 'sql_type': sql_type,
+                               'family': sql_type_family(sql_type)})
     digest = hashlib.sha256(json.dumps(schema, ensure_ascii=False).encode('utf-8'))
     digest.update(pd.util.hash_pandas_object(X, index=True).to_numpy(dtype='<u8').tobytes())
     source_dir = Path(__file__).resolve().parent
@@ -265,13 +337,13 @@ def study_provenance(X, context=None):
         code.update((source_dir / name).read_bytes())
     changelog = source_dir.parent / 'CHANGELOG.md'
     revision = re.search(r'^## (\d+)\b', changelog.read_text(encoding='utf-8-sig'), re.MULTILINE) if changelog.exists() else None
-    return dict(context=context, original_column_schema=schema,
+    return dict(context=context, original_column_schema=schema, source_sql_schema=sql_schema,
                 development_feature_sha256=digest.hexdigest(),
                 feature_search_revision='130', jbg_revision=revision.group(1) if revision else None,
                 backend_source_sha256=code.hexdigest(), python_version=platform.python_version(),
                 sklearn_version=sklearn.__version__,
                 validation_status='candidate',
-                limitations='Source dtypes are loaded pandas types, not verified SQL schema or feature meanings. '
+                limitations='SQL types and loaded pandas dtypes are recorded, but semantic feature meaning is not independently verified. '
                             'Nested CV validates the procedure, not the exact final subset or another table.')
 
 
@@ -876,7 +948,8 @@ def evaluate_probability_diagnostics(X, y, target, options, text_options, groups
 
 def run_experiment(X, y, target, output, options=None, text_options=None, groups=None,
                    reserved_holdout_signature=None, progress=print, on_event=None, study_context=None,
-                   resume=False, pause_event=None, investigation_mode="selection_plus_diagnostics", subgroup_column=None):
+                   source_sql_schema=None, resume=False, pause_event=None,
+                   investigation_mode="selection_plus_diagnostics", subgroup_column=None):
     """Nested CV evaluates selection on training data; external holdout never enters.
 
     A final search on all development rows supplies a recommendation, not an
@@ -900,7 +973,7 @@ def run_experiment(X, y, target, output, options=None, text_options=None, groups
         raise ValueError('Group labels and original rows must align')
     if subgroup_column is not None and subgroup_column not in X.columns:
         raise ValueError(f'Unknown subgroup column: {subgroup_column}')
-    provenance = study_provenance(X, study_context)
+    provenance = study_provenance(X, study_context, source_sql_schema=source_sql_schema)
     identity = model_identity(options)
     # Validate every inner partition before starting an expensive study.
     outer = folds_for(X, y, options.outer_folds, options.seed, groups)

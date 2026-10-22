@@ -3,7 +3,7 @@
   recurrence was reported. Reopen only if browser/server evidence shows a new rendering failure.
 - [ ] Revision 159 follow-up: identify the Voilà/frontend version responsible for missing XSRF headers on shutdown; compare upstream issue #1458; verify actual live-kernel counts separately before implementing cleanup. Never bypass CSRF or kill running training jobs.
 - [ ] Revision 158: review Voilà server runtime versions and shutdown 403 diagnostics; test repeated reload/disconnect and Script output widget lifecycle on Windows. Do not disable XSRF; source-level diagnostics alone do not fix the browser shutdown request.
-- [ ] After revision 157: validate memory guard and process-tree heartbeat on Windows/Voilà; assess GaussianProcessClassifier large-data cost and separate Feature modelling concurrency; continue investigating missing Script output and Voilà kernel shutdown _xsrf failures.
+- [ ] After revision 157: validate memory guard and process-tree heartbeat on Windows/Voilà; assess GaussianProcessClassifier large-data cost; Feature modelling concurrency was separated/automated in revision 169; continue investigating missing Script output and Voilà kernel shutdown _xsrf failures.
 ## Revision 155 — JSON export and Feature modelling button help
 
 Transitional versioned JSON export with legacy Python config compatibility; corrected action tooltips. See `docs/configuration_155.md`.
@@ -30,10 +30,25 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 
 ## P1 — Correctness, reliability and compatibility
 
-- [ ] **Saved-model/data compatibility:** enforce source SQL schema, semantic feature definitions,
-  column/type compatibility and converter-setting equivalence when applying saved feature
-  recommendations or loading/reusing model artifacts. Explicitly describe unverified assumptions;
-  never silently promote exploratory recommendations to validated status.
+- [x] **Saved-model/data compatibility (revisions 173/173a/173b):** new model artifacts carry a privacy-safe
+  source fingerprint, required SQL type-family contract, feature-role signature, fitted converter-input
+  dtype families and configured/fitted text-representation roles. Prediction-only reuse verifies the
+  selected source before loading saved settings; incompatible required-column/schema changes fail closed,
+  while physical source-provenance changes, same-family SQL type changes and ODBC-driver changes remain
+  explicit unverified warnings. Legacy model artifacts
+  remain loadable with an explicit warning that these checks are unavailable. Saved Feature modelling
+  candidates now record only investigated predictor SQL types and must match source identity, selected
+  schema and saved converter representation before explicit application; they remain candidate evidence,
+  never silently promoted to independently validated settings. Revision 173a also allows configured predictors
+  that were globally all-NaN and deliberately dropped before converter fit, while unexpected fitted inputs still fail closed.
+  Revision 173b treats the exact physical SQL source as provenance rather than a hard compatibility key, so
+  a separate prediction table is allowed when every fitted-model-required column remains schema-compatible;
+  extra unused source columns are ignored and required-column/type mismatches still fail closed.
+- [x] **Prediction-only all-NULL target restoration (revision 168):** when reusing a saved model,
+  keep that model's exact configured class column selectable if it exists in the chosen source table,
+  even when generic training discovery excludes it because the current table has fewer than two observed
+  target values. Keep the ordinary training cardinality rule unchanged and do not expose unrelated empty
+  columns as class candidates.
 - [x] **Windows/Voilà regression:** revision 163 was live-verified after the reclassification
   lifecycle hardening with no recurrence of `Error displaying widget`. Keep widget rendering failures
   distinct from successful model training and reopen with browser/server evidence if it returns.
@@ -44,33 +59,51 @@ runtime features. A checked box below is a **documentation disposition**, not ne
   with a fail-closed `--history` mode that requires the local private blocklist and a complete non-shallow
   clone, scans reachable Markdown history plus commit messages, and never echoes matched values or source
   lines. The audit is read-only and must never rewrite history automatically.
-- [ ] **Pre-publication history privacy remediation (revisions 166/166a):** the revision-165 audit has now been run
-  on the authoritative repository and confirmed historical private-blocklist findings confined to root
-  `BACKLOG.md`/`CHANGELOG.md` content while the tracked working tree is clean. Revision 166 adds a narrow,
-  local-only dry-run/apply rewrite with an external verified bundle backup and post-rewrite history audit.
-  Revision 166a handles ordinary unsigned annotated tags by recreating only tag objects whose target commits
-  change; unaffected annotated tags remain untouched, while an affected cryptographically signed tag still
-  aborts remediation rather than silently invalidating its signature. Run the dry-run/apply deliberately,
-  then coordinate any required remote force-push/reclone before external publication; deletion from the current
-  tree alone is not sufficient.
+- [x] **Pre-publication history privacy remediation (revisions 166/166a/166b):** the authoritative repository
+  was audited with the local private blocklist, the affected BACKLOG/CHANGELOG history was rewritten locally with
+  a verified external bundle backup, and the rewritten `dev` branch was published with an explicit
+  `--force-with-lease`. Local and reachable Git history subsequently passed the private-blocklist audit; `main`
+  and `prod` were left unchanged. Keep the pre-rewrite bundle private because it intentionally contains the old
+  history.
+- [x] **Persistent-log privacy baseline (revision 170):** keep full SQL and row-level dataset previews
+  available to the active operator UI, but omit them from persistent run logs by default. Provide an explicit
+  local-only `JBG_LOG_SENSITIVE_DATA=1` opt-in for trusted diagnostics, and route generated/misprediction SQL
+  through the same privacy path.
+- [x] **Broader application runtime-log privacy audit (revisions 172/172a/172b):** persistent application logs now
+  summarize or omit local paths, configuration matrices, schema/statistics tables, class-labelled evaluation
+  matrices, row-level prediction/reclassification details, split class labels/signatures, feature-importance
+  column names and embedded download payloads by default. The active GUI keeps the operator-visible details,
+  and `JBG_LOG_SENSITIVE_DATA=1` remains the explicit trusted-local opt-in for full persistent diagnostics.
+  Revision 172a preserves valid HTML closing tags while the path redactor removes real local paths; revision 172b fixes the legacy formatted-info markup so bold status messages emit a complete `</b>` closing tag before redaction.
+- [ ] **Voilà server-log privacy without breaking cleanup:** the separate launcher/server log can still contain
+  local runtime paths, including the exact connection-directory path used by the guarded kernel-cleanup tooling.
+  Do not redact that path until cleanup has a replacement machine-readable source of the same evidence; treat
+  server logs as sensitive local diagnostics in the meantime.
 - [ ] **Server/kernel lifecycle:** investigate Voilà `_xsrf` 403 during reload/shutdown and verify
   clean kernel/session termination without weakening CSRF protections.
 - [ ] **Pause/Resume concurrency:** verify the revision-140 candidate-level checkpoint/resume flow
-  with two workers on Windows, including forced interruption, deterministic recovery and failure
+  with automatic parallelism on Windows (set the shared global cap to two workers for a reproducible test),
+  including forced interruption, deterministic recovery and failure
   reporting. Investigate `A worker stopped while some jobs were given to the executor` if reproduced.
-- [ ] **Numerical sampler correctness:** runtime-verify fold-local scaler-before-numerical-SMOTE
-  behavior (revision 122), and separately examine categorical SMOTE-NC/SMOTE-N dtype semantics;
-  do not interpolate categorical codes as continuous values.
+- [x] **Sampler correctness (revision 174):** numerical neighbor-based oversamplers retain the
+  fold-local scaler-before-sampler contract and now validate that ordering at pipeline construction.
+  Categorical SMOTE no longer relies on dtype auto-detection after ordinal conversion: SMOTE-NC receives
+  explicit categorical feature indices from the fitted converter, while SMOTE-N is accepted only when
+  every converted predictor is explicitly categorical. Ambiguous/missing categorical roles fail closed,
+  and regression tests verify that synthetic categorical values remain discrete.
 - [ ] **Compatibility smoke tests:** verify ordinary train → save → fresh-process reload → predict,
   as well as Repeat Last, after future persistence/configuration refactors.
 
 ## P2 — Efficient, understandable pipeline and feature search
 
-- [ ] **Feature modelling panel cleanup:** remove the user-facing `Search workers` control and derive
-  candidate parallelism from the same shared CPU/resource policy used elsewhere in JBG. Put `Search rows`
-  on its own row; order pipeline controls by execution (`Scaling` → `Oversampling` → `Reduction` → `Model`)
-  and keep fit/search-budget controls visually separate. Preserve spawn/checkpoint safety and avoid nested
-  estimator/BLAS oversubscription when candidate-level parallelism is active.
+- [x] **Feature modelling panel cleanup (revision 169):** remove the user-facing `Search workers`
+  control and derive candidate parallelism from JBG's shared logical-CPU/global-cap policy plus the
+  existing pre-search memory guard. Put `Search rows` on its own row; order pipeline controls by execution
+  (`Scaling` → `Oversampling` → `Reduction` → `Model`) and keep fit/search-budget controls visually
+  separate. Candidate estimators remain single-threaded and the existing spawn/checkpoint safety is retained.
+  The revised layout was live-confirmed on Windows/Voilà. Revision 170 adds a persistent start diagnostic that
+  records the selected worker count and its CPU/global-cap/search-budget/memory-guard constraints; pause/resume
+  and forced worker-failure behavior remain to be smoke-tested with the shared global cap set to two workers.
 - [ ] **Search budget and cost:** measure fit counts, elapsed times, memory and candidate-family
   costs on representative general-purpose datasets; improve Quick/Standard/Extended/Custom estimates
   and safe preflight controls. Avoid inflating default budgets without evidence.
@@ -84,6 +117,13 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 - [ ] **Native CatBoost ordinary-search integration (deferred):** consider only as a general
   pipeline-local preprocessing architecture, with candidate-specific encoders, correct CV isolation,
   comparable metrics and serialization tests. Otherwise retain revision-151 separation.
+- [ ] **fastai tabular classifier integration (deferred; P2):** evaluate fastai's `TabularPandas`/
+  `tabular_learner` as an opt-in neural tabular candidate rather than forcing it into the existing sklearn
+  pipeline contract. Prototype a JBG estimator adapter with fold-local preprocessing, deterministic validation
+  splits, class/probability mapping, bounded PyTorch workers, save → fresh-process reload → predict/retrain,
+  and comparable CV/scoring semantics. Prefer fastai's model/state persistence where appropriate instead of
+  pickling a whole live `Learner`; do not add the dependency until the adapter and resource cost show a clear
+  benefit over the existing sklearn/PyTorch models.
 - [ ] **XGBoost classifier integration (deferred; P2, after reliability/resource priorities):**
   add `XGBClassifier` as an opt-in ordinary pipeline-search candidate using JBG's existing
   fold-local numeric preprocessing; subsequently consider Feature modelling integration.
@@ -105,11 +145,12 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 - [ ] **Module boundaries and paths:** reduce `sys.path` mutation and working-directory dependence;
   incrementally split oversized `JBGMeta.py` behind backward-compatible import facades so existing
   serialized models continue loading.
-- [ ] **Model serializer migration:** write new model artifacts with standard-library `pickle` and
-  make `dill` an optional legacy-read dependency rather than an unconditional application/test import.
-  Record serializer/version explicitly; preserve old dill artifacts when `dill` is installed and give an
-  actionable legacy-dependency error otherwise. Regression-test train → save → fresh-process load → predict
-  → retrain across representative model families. Keep the trusted-artifact security boundary unchanged.
+- [ ] **Model serializer migration (revision 167 implementation):** new model artifacts now prefer
+  standard-library `pickle`; `dill` is optional and used only for legacy loading or as a compatibility fallback
+  when a current model is not pickle-compatible. The loader reports an actionable optional-dependency error when
+  dill is required but unavailable, and tests no longer import dill unconditionally. Complete Windows validation
+  with existing legacy `.sav` files plus representative sklearn, PyTorch/skorch, Keras and Flax models before
+  closing this item. Keep the trusted-artifact security boundary unchanged.
 - [ ] **P2 — GUI framework architecture spike (Panel / NiceGUI):** evaluate whether moving away from
   JupyterLab/Voilà/ipywidgets is worth the migration cost. First separate configuration, job lifecycle,
   progress events, results and ML core behind stable application interfaces. Prototype only configuration,
@@ -118,7 +159,7 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 
 ## P3 — Usability and diagnostics
 
-- [ ] **README cleanup:** remove revision-by-revision change history from `README.md` and keep it focused on the current product: functionality, prerequisites/setup, configuration, how to run it, core workflows and user-facing troubleshooting. Keep historical release details in `CHANGELOG.md` instead. Preserve only current, generic examples and keep the documentation-privacy rules in force while rewriting.
+- [x] **README cleanup (revision 171):** `README.md` now describes the current product, prerequisites/setup, configuration, startup, core workflows, model persistence, Feature modelling, runtime-log privacy, testing and troubleshooting. Revision-by-revision material and stale historical links were removed; development history remains in `CHANGELOG.md`. Generic privacy-safe examples are retained.
 - [ ] Rename GUI section `Model selection` → `Machine learning pipeline selection` and label
   `Algorithm:` → `Model:`; migrate legacy saved label keys if required.
 - [ ] Restrict integer class-column choices to source-table columns with at most five distinct
@@ -128,6 +169,15 @@ runtime features. A checked box below is a **documentation disposition**, not ne
   define rounding and boundaries and preserve representation through Repeat Last/configuration.
 - [ ] Improve GUI feedback and actionable error messages for estimator incompatibilities and
   candidate skips, while keeping routine progress compact.
+- [ ] **Reclassification preview widget density:** replace comm-backed widgets for read-only table
+  cells with a lighter HTML/table rendering approach and retain interactive widgets only where editing is
+  required. Preserve the revision-163 lifecycle cleanup and fail-safe fallback; prefer reducing widget
+  count over merely increasing the current frontend widget budget, and make any truncation notice explain
+  the limiting factor clearly. Revision 174a moved the static style/heading/truncation decorations off
+  ipywidget comm models after a live `model not found` recurrence and was live-verified without the
+  frontend error. Revision 174b raises the interim bounded grid-widget budget from 240 to 640 so wide
+  previews show a useful number of rows while the lighter read-only HTML/table redesign remains the
+  preferred long-term fix.
 
 ## Research / optional work — not ordinary release blockers
 

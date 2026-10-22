@@ -89,7 +89,7 @@ def eligible_for_reuse(record):
     return False
 
 
-def review_compatibility(record, *, project, tables, class_column, id_column, columns, column_schema=None):
+def review_compatibility(record, *, project, tables, class_column, id_column, columns, column_schema=None, sql_schema=None):
     """Report mismatches without granting reuse permission. Fail closed on missing metadata."""
     problems = []
     if record.get("profile_schema") != PROFILE_SCHEMA:
@@ -113,9 +113,40 @@ def review_compatibility(record, *, project, tables, class_column, id_column, co
         for entry in stored_schema:
             if entry.get("name") in selected and actual.get(entry.get("name")) != entry.get("dtype"):
                 problems.append("Selected column dtype differs: " + str(entry.get("name")))
+    stored_sql_schema = record.get("provenance", {}).get("source_sql_schema") or []
+    stored_sql_names = {str(item.get("name")) for item in stored_sql_schema if isinstance(item, dict) and item.get("name")}
+    if not stored_sql_schema or stored_sql_names != set(original):
+        problems.append("Saved SQL schema is unavailable or incomplete")
+    elif sql_schema is not None:
+        current_sql = {str(name): str(dtype or "").lower() for name, dtype in sql_schema.items()}
+        saved_sql = {str(item.get("name")): str(item.get("sql_type") or "").lower()
+                     for item in stored_sql_schema}
+        for name in selected:
+            if name not in saved_sql or name not in current_sql or saved_sql[name] != current_sql[name]:
+                problems.append("Selected feature SQL schema differs from the saved investigation")
+                break
+    text_options = record.get("text_options")
+    if not isinstance(text_options, dict):
+        problems.append("Saved preprocessing settings are unavailable")
+    else:
+        text_columns = tuple(text_options.get("text_columns", ()))
+        category_columns = tuple(text_options.get("category_columns", ()))
+        if not set(text_columns).issubset(set(original)):
+            problems.append("Saved text-column semantics are inconsistent with the study inputs")
+        if not set(category_columns).issubset(set(text_columns)):
+            problems.append("Saved categorical-text semantics are inconsistent with the saved text columns")
+        ngram_range = tuple(text_options.get("ngram_range", ()))
+        if ngram_range not in ((1, 1), (1, 2), (1, 3), (2, 2), (2, 3), (3, 3)):
+            problems.append("Saved n-gram representation is unsupported")
+        if text_options.get("limit_categorize") != 30 or text_options.get("language") != "sv" or text_options.get("df") != 1.0:
+            problems.append("Saved text representation cannot be reproduced by the current converter contract")
+        for key in ("stop_words", "use_encryption", "use_categorization"):
+            if type(text_options.get(key)) is not bool:
+                problems.append("Saved text representation settings are incomplete")
+                break
     if record.get("validation_status") != "candidate":
         problems.append("Unrecognized profile validation status")
-    return problems
+    return list(dict.fromkeys(problems))
 
 
 def find_candidate(store, profile_id):

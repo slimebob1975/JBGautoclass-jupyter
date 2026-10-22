@@ -9,7 +9,7 @@ import subprocess
 import sys
 from types import SimpleNamespace
 
-import dill
+import pickle
 import numpy as np
 import pytest
 from sklearn.linear_model import LogisticRegression
@@ -206,7 +206,7 @@ def test_config_path_relocation_through_actual_model_readers(tmp_path, format):
     artifact = build_model_artifact(*values) if format == "envelope" else list(values) if format == "legacy" else [config]
     path = tmp_path / "saved.sav"
     with path.open("wb") as stream:
-        dill.dump(artifact, stream)
+        pickle.dump(artifact, stream)
     assert load_model_config(path).script_path == SOURCE_DIR
     if format != "config-only":
         assert load_model_artifact(path)[0].config_path == SOURCE_DIR / "config"

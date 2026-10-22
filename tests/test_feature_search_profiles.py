@@ -12,8 +12,15 @@ def example():
         'provenance': {'context': {'project':'p', 'source_tables':['db.table'],
                                    'class_column':'label', 'id_column':'id'},
                        'original_column_schema':[{'name':'a','dtype':'int64'},
-                                                 {'name':'b','dtype':'float64'}]},
+                                                 {'name':'b','dtype':'float64'}],
+                       'source_sql_schema':[{'name':'a','sql_type':'int','family':'numeric'},
+                                            {'name':'b','sql_type':'float','family':'numeric'}]},
         'nested_validation': {'selected': {'mean_mcc': 0.2}},
+        'text_options': {
+            'text_columns': ('a',), 'category_columns': (), 'limit_categorize': 30,
+            'language': 'sv', 'stop_words': True, 'df': 1.0, 'ngram_range': (1, 1),
+            'use_encryption': True, 'use_categorization': True,
+        },
     }
 
 class ProfileTests(unittest.TestCase):
@@ -36,10 +43,18 @@ class ProfileTests(unittest.TestCase):
             record = load_candidates(directory)[0]
             self.assertEqual(find_candidate(directory, record["profile_id"])["profile_id"], record["profile_id"])
             self.assertIsNone(find_candidate(directory, "../bad.json"))
-            kw = dict(project="p", tables=["db.table"], class_column="label", id_column="id", columns=["a", "b"])
+            kw = dict(project="p", tables=["db.table"], class_column="label", id_column="id", columns=["a", "b"],
+                      sql_schema={"a": "int", "b": "float"})
             self.assertEqual(review_compatibility(record, **kw), [])
             self.assertTrue(review_compatibility(record, **dict(kw, tables=["other.table"])))
             self.assertTrue(review_compatibility(record, **dict(kw, column_schema=[{"name":"a", "dtype":"text"}])))
+            self.assertTrue(review_compatibility(record, **dict(kw, sql_schema={"a": "nvarchar", "b": "float"})))
+            broken = dict(record)
+            broken["text_options"] = dict(record["text_options"], ngram_range=(9, 9))
+            self.assertTrue(review_compatibility(broken, **kw))
+            incomplete_sql = dict(record)
+            incomplete_sql["provenance"] = dict(record["provenance"], source_sql_schema=record["provenance"]["source_sql_schema"][:1])
+            self.assertTrue(review_compatibility(incomplete_sql, **kw))
             self.assertFalse(eligible_for_reuse(record))
 
     def test_delete_exact_selected_profile_only_with_audit(self):

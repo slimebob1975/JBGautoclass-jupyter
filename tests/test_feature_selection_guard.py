@@ -4,7 +4,10 @@ import warnings
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-import dill
+try:
+    import dill
+except ModuleNotFoundError:
+    dill = None
 import numpy as np
 import pandas as pd
 import pytest
@@ -133,7 +136,7 @@ def test_empty_selection_exception_survives_real_cv_workers(workers):
         cross_val_score(slsv(), X, y, cv=3, n_jobs=workers, error_score="raise")
 
 
-@pytest.mark.parametrize("serializer", [pickle, dill])
+@pytest.mark.parametrize("serializer", [pickle] + ([dill] if dill is not None else []))
 def test_new_and_historical_selectors_remain_serializable(serializer):
     X, y = strong_data()
     for selector_type in (NonEmptySelectFromModel, SelectFromModel):

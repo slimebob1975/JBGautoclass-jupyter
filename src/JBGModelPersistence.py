@@ -1,27 +1,29 @@
 """Versioned serialization contract for JBG model artifacts.
 
-The project still uses dill for compatibility with existing model files, but the
-on-disk object now has an explicit format marker and schema version.  Legacy
-six-item list/tuple artifacts remain readable so existing saved models continue
-to work.
+New model artifacts prefer the Python standard-library pickle serializer.  Dill is
+optional and is used only as a compatibility fallback for legacy/current objects
+that standard pickle cannot deserialize/serialize.  Legacy six-item list/tuple
+artifacts remain readable so existing saved models continue to work.
 
-Serialized model artifacts are trusted-input-only.  Loading dill/pickle data can
+Serialized model artifacts are trusted-input-only.  Loading pickle/dill data can
 execute code and must never be used for untrusted files.
 """
 
 from __future__ import annotations
 
 import copy
+import importlib
 import os
+import pickle
 from pathlib import Path
 from typing import Any, Mapping
-
-import dill
 
 from JBGPaths import relocate_saved_config_paths
 
 MODEL_ARTIFACT_FORMAT = "JBGAutoClassification.model"
 MODEL_ARTIFACT_VERSION = 1
+MODEL_ARTIFACT_DEFAULT_SERIALIZER = "pickle"
+MODEL_ARTIFACT_SUPPORTED_SERIALIZERS = frozenset(("pickle", "dill"))
 KERAS_MODEL_FILE_EXTENSION = ".keras"
 MODEL_ARTIFACT_FIELDS = (
     "config",
@@ -100,12 +102,18 @@ def build_model_artifact(
     pipeline,
     keras_name,
     n_features_out,
+    *,
+    serializer: str = MODEL_ARTIFACT_DEFAULT_SERIALIZER,
+    compatibility: Mapping | None = None,
 ) -> dict[str, Any]:
     """Build the current versioned model artifact envelope."""
+    if serializer not in MODEL_ARTIFACT_SUPPORTED_SERIALIZERS:
+        raise ModelArtifactError(f"Unsupported model artifact serializer {serializer!r}.")
     return {
         "format": MODEL_ARTIFACT_FORMAT,
         "version": MODEL_ARTIFACT_VERSION,
-        "serializer": "dill",
+        "serializer": serializer,
+        "compatibility": dict(compatibility) if compatibility is not None else None,
         "payload": {
             "config": config,
             "text_converter": text_converter,
@@ -125,6 +133,12 @@ def unpack_model_artifact(serialized: Any) -> tuple:
             raise ModelArtifactError(
                 f"Unsupported model artifact version {version!r}; "
                 f"supported version is {MODEL_ARTIFACT_VERSION}."
+            )
+
+        serializer = serialized.get("serializer")
+        if serializer is not None and serializer not in MODEL_ARTIFACT_SUPPORTED_SERIALIZERS:
+            raise ModelArtifactError(
+                f"Unsupported model artifact serializer metadata {serializer!r}."
             )
 
         payload = serialized.get("payload")
@@ -165,16 +179,71 @@ def unpack_model_artifact(serialized: Any) -> tuple:
     )
 
 
+def _import_optional_dill():
+    """Return dill when installed, otherwise None without making it a hard dependency."""
+    try:
+        return importlib.import_module("dill")
+    except ModuleNotFoundError as error:
+        if error.name == "dill":
+            return None
+        raise
+
+
+def _load_serialized(filename: str | Path):
+    """Load trusted serialized data, preferring stdlib pickle before legacy dill."""
+    with open(filename, "rb") as infile:
+        try:
+            return pickle.load(infile)
+        except Exception as pickle_error:
+            infile.seek(0)
+            dill_module = _import_optional_dill()
+            if dill_module is None:
+                raise ModelArtifactError(
+                    "Could not load the model artifact with standard pickle. If this is a "
+                    "legacy dill-based model, install the optional 'dill' package and retry. "
+                    f"Original pickle error: {type(pickle_error).__name__}: {pickle_error}"
+                ) from pickle_error
+            try:
+                return dill_module.load(infile)
+            except Exception as dill_error:
+                raise ModelArtifactError(
+                    "Could not load the model artifact with standard pickle or legacy dill. "
+                    f"Pickle error: {type(pickle_error).__name__}: {pickle_error}; "
+                    f"dill error: {type(dill_error).__name__}: {dill_error}"
+                ) from dill_error
+
+
+def unpack_model_compatibility(serialized: Any):
+    """Return optional revision-173 compatibility metadata without changing payload arity."""
+    if isinstance(serialized, Mapping) and serialized.get("format") == MODEL_ARTIFACT_FORMAT:
+        compatibility = serialized.get("compatibility")
+        if compatibility is None:
+            return None
+        if not isinstance(compatibility, Mapping):
+            raise ModelArtifactError("Model artifact compatibility metadata is not a mapping.")
+        return dict(compatibility)
+    return None
+
+
 def load_model_artifact(filename: str | Path) -> tuple:
     """Load and validate a trusted model artifact from disk."""
-    with open(filename, "rb") as infile:
-        return unpack_model_artifact(dill.load(infile))
+    return unpack_model_artifact(_load_serialized(filename))
+
+
+def load_model_compatibility(filename: str | Path):
+    """Load optional compatibility metadata from a trusted model artifact."""
+    return unpack_model_compatibility(_load_serialized(filename))
+
+
+def load_model_artifact_with_compatibility(filename: str | Path) -> tuple[tuple, Mapping | None]:
+    """Load the six-field payload and compatibility metadata in one file read."""
+    serialized = _load_serialized(filename)
+    return unpack_model_artifact(serialized), unpack_model_compatibility(serialized)
 
 
 def load_model_config(filename: str | Path):
     """Load persisted configuration while preserving legacy config-only compatibility."""
-    with open(filename, "rb") as infile:
-        serialized = dill.load(infile)
+    serialized = _load_serialized(filename)
 
     if isinstance(serialized, Mapping) and serialized.get("format") == MODEL_ARTIFACT_FORMAT:
         return unpack_model_artifact(serialized)[0]
@@ -198,8 +267,10 @@ def save_model_artifact(
     pipeline,
     keras_name,
     n_features_out,
+    *,
+    compatibility: Mapping | None = None,
 ) -> None:
-    """Atomically write the current model artifact format with dill."""
+    """Atomically persist a model, preferring stdlib pickle with optional dill fallback."""
     filename = Path(filename)
     temporary = filename.with_name(filename.name + ".tmp")
     artifact = build_model_artifact(
@@ -209,11 +280,37 @@ def save_model_artifact(
         pipeline=pipeline,
         keras_name=keras_name,
         n_features_out=n_features_out,
+        serializer="pickle",
+        compatibility=compatibility,
     )
 
     try:
-        with open(temporary, "wb") as outfile:
-            dill.dump(artifact, outfile)
+        try:
+            with open(temporary, "wb") as outfile:
+                pickle.dump(artifact, outfile, protocol=pickle.HIGHEST_PROTOCOL)
+        except (OSError, MemoryError):
+            raise
+        except Exception as pickle_error:
+            dill_module = _import_optional_dill()
+            if dill_module is None:
+                raise ModelArtifactError(
+                    "This model contains state that standard pickle cannot serialize. "
+                    "Install the optional 'dill' package to allow the compatibility fallback, "
+                    "or use a pickle-compatible model. "
+                    f"Original pickle error: {type(pickle_error).__name__}: {pickle_error}"
+                ) from pickle_error
+            artifact = build_model_artifact(
+                config=config,
+                text_converter=text_converter,
+                model_components=model_components,
+                pipeline=pipeline,
+                keras_name=keras_name,
+                n_features_out=n_features_out,
+                serializer="dill",
+                compatibility=compatibility,
+            )
+            with open(temporary, "wb") as outfile:
+                dill_module.dump(artifact, outfile)
         os.replace(temporary, filename)
     finally:
         if temporary.exists():

@@ -5,6 +5,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import Helpers
+from JBGModelCompatibility import pandas_dtype_family
 import langdetect
 import numpy as np
 import pandas as pd
@@ -53,7 +54,7 @@ class BaseNeuralNetClassifier(ClassifierMixin, BaseEstimator):
         state = self.__dict__.copy()
         if state.get("net") is not None:
             # Skorch supports standard pickle. Encode only that component so
-            # outer dill artifacts do not traverse Torch optimizer internals.
+            # outer model artifacts do not traverse Torch optimizer internals.
             state["_jbg_skorch_pickle"] = pickle.dumps(state.pop("net"))
         return state
 
@@ -287,6 +288,10 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
             self.category_columns_ = category_columns.copy()
         else:
             self.category_columns_ = []
+        # Preserve requested representation settings separately from fitted state.
+        # Auto-categorization mutates text_columns_/category_columns_ during fit.
+        self.configured_text_columns_ = tuple(text_columns or ())
+        self.configured_category_columns_ = tuple(category_columns or ())
         self.limit_categorize_ = limit_categorize
         self.language_ = language
         self.stop_words_ = stop_words
@@ -311,6 +316,9 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
         if not X.columns.is_unique:
             raise ValueError("Training features contain duplicate column names.")
         self.input_feature_columns_ = tuple(X.columns)
+        self.input_feature_type_families_ = {
+            str(column): pandas_dtype_family(X[column].dtype) for column in X.columns
+        }
 
         if self.text_columns_:
         
@@ -367,6 +375,17 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
                     "Use the same input columns as during training."
                 )
             X = X.loc[:, list(expected)]
+            expected_families = getattr(self, "input_feature_type_families_", None)
+            if expected_families is not None:
+                mismatched = [
+                    name for name in expected
+                    if expected_families.get(str(name)) != pandas_dtype_family(X[name].dtype)
+                ]
+                if mismatched:
+                    raise ValueError(
+                        "Saved-model feature type mismatch: "
+                        f"{len(mismatched)} input column(s) changed dtype family since training."
+                    )
 
         # Prepare placeholders for converted data (are dropped silently in concat below if None)
         X_document = None

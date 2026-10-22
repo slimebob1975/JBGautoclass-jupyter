@@ -31,7 +31,11 @@ class FakeWidget:
 
 class FakeWidgets:
     Label = FakeWidget
-    HTML = FakeWidget
+
+
+class FakeStaticHTML:
+    def __init__(self, value=""):
+        self.value = value
 
 
 class FakeLayout:
@@ -91,6 +95,7 @@ def load_widgets_contract():
     ast.fix_missing_locations(isolated)
     namespace = {
         "DataFrame": pd.DataFrame,
+        "DisplayHTML": FakeStaticHTML,
         "display": lambda *args, **kwargs: None,
         "logging": logging,
         "widgets": FakeWidgets,
@@ -99,7 +104,7 @@ def load_widgets_contract():
     return namespace["Widgets"]
 
 
-def make_view(widget_budget=240, row_limit=40):
+def make_view(widget_budget=640, row_limit=40):
     return SimpleNamespace(
         MISPREDICTED_RENDER_LIMIT=row_limit,
         MISPREDICTED_WIDGET_LIMIT=widget_budget,
@@ -107,7 +112,7 @@ def make_view(widget_budget=240, row_limit=40):
         mispredicted_gridbox=FakeGrid(),
         get_text_widget=lambda value: FakeWidget(value=str(value)),
         reclassify_dropdown=lambda classes, name: FakeWidget(value=(tuple(classes), name)),
-        create_inpage_styles=lambda section: FakeWidget(value=section),
+        create_inpage_styles=lambda section: FakeStaticHTML(value=section),
     )
 
 
@@ -127,6 +132,19 @@ class WidgetRender163(unittest.TestCase):
         self.assertTrue(rendered)
         self.assertEqual(len(view.mispredicted_gridbox.children), 88)
         self.assertLessEqual(len(view.mispredicted_gridbox.children), 100)
+
+
+    def test_default_budget_gives_wide_preview_more_room(self):
+        view = make_view()
+        data = pd.DataFrame({f"c{i}": range(20) for i in range(58)})
+
+        rendered = self.Widgets.handle_mispredicted(view, data, ["ok", "bad"])
+
+        # 58 data columns + index + reclassify = 60 widgets per grid row.
+        # The 640-widget default fits the header plus nine data rows (600 widgets).
+        self.assertTrue(rendered)
+        self.assertEqual(len(view.mispredicted_gridbox.children), 600)
+        self.assertLessEqual(len(view.mispredicted_gridbox.children), 640)
 
     def test_existing_40_row_behavior_is_preserved_for_small_tables(self):
         view = make_view(widget_budget=240, row_limit=40)
@@ -157,7 +175,7 @@ class WidgetRender163(unittest.TestCase):
         self.assertTrue(self.Widgets.handle_mispredicted(view, data.iloc[:1], ["ok"]))
 
         self.assertTrue(all(widget.closed for widget in old_grid_widgets))
-        self.assertTrue(all(widget.closed for widget in old_display_widgets))
+        self.assertEqual(old_display_widgets, ())
         self.assertGreaterEqual(len(view.mispredicted_output.clear_calls), 2)
         self.assertTrue(all(wait is False for wait in view.mispredicted_output.clear_calls))
 

@@ -11,6 +11,10 @@ from io import StringIO
 from Helpers import build_model_performance_matrix, html_wrapper, print_html, save_matrix_as_csv
 from JBGLogFile import TeeStream, TimestampedLogFile, capture_console_output, normalize_log_level
 from JBGScoring import evaluation_diagnostics
+from JBGLogPrivacy import (redacted_table_log_message, safe_code_log_message,
+                           safe_prediction_query_log_message, safe_prediction_values_log_message,
+                           safe_query_log_message, safe_reclassification_log_message, safe_local_path,
+                           sensitive_log_data_enabled)
 import re
 
 _TAG_RE = re.compile(r"<[^>]+>")
@@ -115,21 +119,29 @@ class JBGLogger(terminal.Logger):
             self.print_unformatted(title)
         
         self.print_unformatted("Execution started at: {0:>30s} \n".format(str(date_now)))
-        self.print_key_value_pair("Log file", self.get_log_filename(), print_always=True)
+        log_filename = self.get_log_filename()
+        self.print_privacy_safe(
+            f"Log file: {log_filename}",
+            f"Log file: {safe_local_path(log_filename)}",
+            print_always=True,
+        )
 
         self.print_config_settings(config)
 
     def print_code(self, key: str, code: str) -> None:
-        """ Prints out a text with a (in output) code-tagged end """
+        """Show code/download details while keeping persistent logs privacy-safe."""
+        raw_key = str(key)
+        raw_code = str(code)
+        log_message = safe_code_log_message(raw_key, raw_code)
 
-        if not self.in_terminal:
-            key = f"<em>{key}</em>"
-            code = f"<code>{code}</code>"
+        if self.in_terminal:
+            if sensitive_log_data_enabled():
+                return self.writeln("unformatted", f"{raw_key}:\n\t{raw_code}")
+            return self.writeln("unformatted", log_message)
 
-        else:
-            code = f"\n\t{code}"
-        
-        self.print_unformatted(f"{key}: {code}")
+        print_html(f"<em>{raw_key}</em>: <code>{raw_code}</code>")
+        self.log_file.write_message(log_message)
+        return self
 
     def print_key_value_pair(self, key: str, value, print_always: bool = False) -> None:
         """ Prints out '<key>: <value>'"""
@@ -157,7 +169,10 @@ class JBGLogger(terminal.Logger):
         for index, subclass_dict in enumerate(config_dict.values()):
             subclass_title = f"{index + 1}. {subclass_dict.pop('title')}"
             df = pd.DataFrame.from_dict(data=subclass_dict, orient="index", columns=[""])
-            self.display_matrix(subclass_title, df, print_always=False)
+            self.display_matrix(
+                subclass_title, df, print_always=False,
+                log_matrix=sensitive_log_data_enabled(),
+            )
 
 
     def print_components(self, component, components, exception = None) -> None:
@@ -172,7 +187,7 @@ class JBGLogger(terminal.Logger):
         if self.in_terminal:
             message = f" -- {message} --"
         else:
-            message = f"<b>{message}</b"
+            message = f"<b>{message}</b>"
         
         self.print_unformatted(message)
 
@@ -185,18 +200,40 @@ class JBGLogger(terminal.Logger):
             self.print_unformatted(*args, **kwargs)
 
     
+    def print_privacy_safe(self, full_message: str, safe_message: str, level: str = "INFO",
+                           html_function=None, print_always: bool = False):
+        """Show full operator detail but persist only the safe form by default."""
+        if self._enable_quiet and not print_always:
+            return self
+        log_message = full_message if sensitive_log_data_enabled() else safe_message
+        if self.in_terminal:
+            return self.writeln(level, log_message)
+        rich = html_function(full_message) if html_function else full_message
+        print_html(rich)
+        if print_always:
+            self._log_buffer.write(self._strip_html(str(log_message)) + "\n")
+        self.log_file.write_message(log_message, level=level)
+        return self
+
+
     def print_prediction_results(self, results: dict) -> None:
-        """ Prints a nicely formatted query and the number of rows """
+        """Show retrieval SQL interactively while keeping persistent logs privacy-safe."""
         if self._enable_quiet:
             return self
 
+        query_text = str(results['query'])
+        safe_log = safe_prediction_query_log_message(results['row_count'], query_text)
         if self.in_terminal:
-            query = f"\n\n{results['query']}"
-        else:
-            query = f"<pre>{results['query']}</pre>"
-            
-        line = f"Added {results['row_count']} rows to prediction table. Get them with SQL query: {query}"
-        self.print_unformatted(line)
+            # Terminal output is tee'd to the persistent log, so use the safe form.
+            return self.writeln('unformatted', safe_log)
+
+        display_query = f"<pre>{query_text}</pre>"
+        print_html(
+            f"Added {results['row_count']} rows to prediction table. "
+            f"Get them with SQL query: {display_query}"
+        )
+        self.log_file.write_message(safe_log)
+        return self
 
 
     def print_prediction_info(self, predictions: dict, rates: tuple = None) -> None:
@@ -206,7 +243,10 @@ class JBGLogger(terminal.Logger):
 
         h3 = partial(html_wrapper, "h3")
         self.print_unformatted("Predictions for the unknown data", html_function=h3)
-        self.print_unformatted(f"Predictions: {predictions}")
+        self.print_privacy_safe(
+            f"Predictions: {predictions}",
+            safe_prediction_values_log_message(predictions),
+        )
         
         if rates:
             mean, std = rates
@@ -252,8 +292,16 @@ class JBGLogger(terminal.Logger):
         evaluation_dict.update({name: str(value) for name, value in evaluation_diagnostics(confusion_matrix).items()})
     
         self.display_matrix("Evaluation information", pd.DataFrame.from_dict(data=evaluation_dict, orient="index", columns=[""]))
-        self.display_matrix(f"Confusion matrix for evaluation data", pd.DataFrame(confusion_matrix, columns=class_labels, index=class_labels))
-        self.display_matrix(f"Classification matrix for evaluation data", pd.DataFrame.from_dict(classification_matrix).transpose())
+        self.display_matrix(
+            "Confusion matrix for evaluation data",
+            pd.DataFrame(confusion_matrix, columns=class_labels, index=class_labels),
+            log_matrix=sensitive_log_data_enabled(),
+        )
+        self.display_matrix(
+            "Classification matrix for evaluation data",
+            pd.DataFrame.from_dict(classification_matrix).transpose(),
+            log_matrix=sensitive_log_data_enabled(),
+        )
 
     def print_progress(self, message: str = None, percent: float = None) -> None:
         """ Updates the progress bar and prints out a value in the terminal of no bar"""
@@ -318,16 +366,25 @@ class JBGLogger(terminal.Logger):
             # 1. shape
             self.print_unformatted("Shape", dataset.shape)
             
-            # 2. head
-            self.display_matrix("Head", dataset.head(20))
+            # 2. head. Keep the operator-visible preview, but omit row-level
+            # values from persistent logs unless explicitly enabled locally.
+            self.display_matrix(
+                "Head", dataset.head(20), log_matrix=sensitive_log_data_enabled()
+            )
             
             # 3. Data types
-            self.display_matrix("Datatypes", pd.DataFrame(dataset.dtypes, columns=["Datatype"]))
+            self.display_matrix(
+                "Datatypes", pd.DataFrame(dataset.dtypes, columns=["Datatype"]),
+                log_matrix=sensitive_log_data_enabled(),
+            )
             
             if show_class_distribution:
                 # 4. Class distribution
-                self.display_matrix("Class distribution", pd.DataFrame(dataset.groupby(dataset[class_column]).size(), \
-                    columns=["Support"]))
+                self.display_matrix(
+                    "Class distribution",
+                    pd.DataFrame(dataset.groupby(dataset[class_column]).size(), columns=["Support"]),
+                    log_matrix=sensitive_log_data_enabled(),
+                )
         except Exception as e:
             self.print_warning(f"An error occured in investigate_dataset: {str(e)}")
 
@@ -340,7 +397,10 @@ class JBGLogger(terminal.Logger):
         pd.set_option('display.precision', 3)
         #description = dataset.describe(datetime_is_numeric = True)
         description = dataset.describe()
-        self.display_matrix("Description", pd.DataFrame(description))
+        self.display_matrix(
+            "Description", pd.DataFrame(description),
+            log_matrix=sensitive_log_data_enabled(),
+        )
         
         # 2. Correlations
         pd.set_option('display.width', 100)
@@ -349,31 +409,43 @@ class JBGLogger(terminal.Logger):
             correlations = dataset.corr('pearson', numeric_only=False)
         except Exception:
             correlations = dataset.corr('pearson', numeric_only=True)
-        self.display_matrix("Correlation between attributes", pd.DataFrame(correlations))
+        self.display_matrix(
+            "Correlation between attributes", pd.DataFrame(correlations),
+            log_matrix=sensitive_log_data_enabled(),
+        )
 
         # 3. Skew
         try:
             skew = dataset.skew(numeric_only=False)
         except Exception:
             skew = dataset.skew(numeric_only=True)
-        self.display_matrix("Skew of Univariate descriptions", pd.DataFrame(skew, columns=["Skew"]))
+        self.display_matrix(
+            "Skew of Univariate descriptions", pd.DataFrame(skew, columns=["Skew"]),
+            log_matrix=sensitive_log_data_enabled(),
+        )
 
 
     def is_quiet(self) -> bool:
         return self._enable_quiet
 
     def print_query(self, type: str, query: str) -> None:
+        """Show SQL in the active UI, but redact it from persistent logs by default."""
+        safe_log = safe_query_log_message(type, query)
         if self.in_terminal:
-            message = f"Query for {type}: {query}"
-            self.debug(message)
-        else:
-            message = f"Query for <em>{type}</em>: <pre>{query}</pre>"
-            self.print_unformatted(message)
+            # Terminal output is tee'd to the persistent log, so use the safe form.
+            self.debug(safe_log)
+            return
+
+        print_html(f"Query for <em>{type}</em>: <pre>{query}</pre>")
+        self.log_file.write_message(safe_log)
         
 
     def print_correcting_mispredicted(self, new_class: str, index: int, query: str) -> None:
-        """ Prints out notice about correcting mispredicted class in class_catalog """
-        self.print_unformatted(f"Changing data row {index} to {new_class}: ")
+        """Show reclassification details while omitting row/class identifiers from logs."""
+        self.print_privacy_safe(
+            f"Changing data row {index} to {new_class}: ",
+            safe_reclassification_log_message(index, new_class),
+        )
         self.print_query("mispredicted", query)
 
     def print_dragon(self, exception: Exception) -> None:
@@ -505,8 +577,9 @@ class JBGLogger(terminal.Logger):
         save_matrix_as_csv(resultsMatrix, cross_validation_filepath)
         self.display_matrix(f"Model cross-validation performance in descending order", resultsMatrix)
 
-    def display_matrix(self, title: str, matrix: pd.DataFrame, print_always: bool = True, precision: int = 2) -> None:
-        """Shows rich table in notebook, but logs a text + HTML snapshot to internal buffers (no duplicate text in output)."""
+    def display_matrix(self, title: str, matrix: pd.DataFrame, print_always: bool = True, precision: int = 2,
+                       log_matrix: bool = True) -> None:
+        """Show a rich table and optionally omit its values from persistent logs."""
         if self._enable_quiet and not print_always:
             return self
 
@@ -524,6 +597,14 @@ class JBGLogger(terminal.Logger):
         IPython.display.display(matrix)
 
         # ---------- Logging snapshots (do NOT send to TeeStream / stdout) ----------
+        if not log_matrix:
+            placeholder = redacted_table_log_message(matrix)
+            self._log_buffer.write(f"{title}\n{placeholder}\n\n")
+            self.log_file.write_message(placeholder, level="TABLE")
+            if hasattr(self, "_log_buffer_html"):
+                self._log_buffer_html.write(f"<h3>{title}</h3>\n<p>{placeholder}</p>\n")
+            return self
+
         # Text snapshot (good for plain-text emails)
         try:
             # nicer layout if user has 'tabulate' installed

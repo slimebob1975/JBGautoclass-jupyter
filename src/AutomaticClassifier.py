@@ -28,6 +28,9 @@ import SQLDataLayer
 import JBGLogger
 import JBGTaskRunner
 from JBGHandler import JBGHandler
+from JBGExceptions import ConfigException
+from JBGModelCompatibility import review_current_source_compatibility
+from JBGModelPersistence import load_model_compatibility
 
 class AutomaticClassifier:
 
@@ -46,9 +49,42 @@ class AutomaticClassifier:
 
         self.datalayer = datalayer
 
-        # Replaces, if needed, the given config
+        # Replaces, if needed, the given config. Before doing so, keep the live
+        # source identity and SQL schema available for compatibility verification.
         if not self.config.should_train():
-            self.config = Config.Config.load_config_from_model_file(self.config.get_model_filename(), config=self.config)
+            model_filename = self.config.get_model_filename()
+            compatibility = load_model_compatibility(model_filename)
+            connection = self.config.connection
+            if compatibility is None:
+                self.logger.print_warning(
+                    "Legacy saved model has no revision-173 source/schema compatibility metadata; "
+                    "current source identity and SQL types cannot be fully verified."
+                )
+            else:
+                try:
+                    source_schema = self.datalayer.get_table_columns(
+                        connection.data_catalog, connection.data_table
+                    )
+                except Exception as exc:
+                    raise ConfigException(
+                        "Saved-model compatibility check could not read the current SQL source schema."
+                    ) from exc
+                review = review_current_source_compatibility(
+                    compatibility,
+                    driver=connection.odbc_driver,
+                    host=connection.host,
+                    catalog=connection.data_catalog,
+                    table=connection.data_table,
+                    source_schema=source_schema,
+                )
+                if review.issues:
+                    raise ConfigException(
+                        "Saved model is not compatible with the selected data source: "
+                        + "; ".join(review.issues)
+                    )
+                for warning in review.warnings:
+                    self.logger.print_warning(warning)
+            self.config = Config.Config.load_config_from_model_file(model_filename, config=self.config)
 
         self.dh, self.mh, self.ph = self.create_handlers()
         

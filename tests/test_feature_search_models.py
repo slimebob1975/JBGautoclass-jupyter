@@ -144,12 +144,13 @@ class FeatureSearchModelTests(unittest.TestCase):
                 self.assertEqual(result['recommendation'], repeats['recommendation'])
                 self.assertEqual(result['nested_validation'], repeats['nested_validation'])
                 self.assertEqual(result['attempted_fits'], len(seen))
-                self.assertEqual(result['attempted_fits'], 42)
+                expected_fits = options.planned_fit_upper_bound + 2 * options.outer_folds
+                self.assertEqual(result['attempted_fits'], expected_fits)
                 started = [e for e in events if e['event'] == 'fit_started']
-                self.assertEqual([e['attempted_fits'] for e in started], list(range(1, 43)))
+                self.assertEqual([e['attempted_fits'] for e in started], list(range(1, expected_fits + 1)))
                 self.assertEqual(events[0]['event'], 'study_started')
                 self.assertEqual(events[-1]['event'], 'study_completed')
-                self.assertTrue(all(e['model_type'] == family for e in events))
+                self.assertTrue(all(e['model_type'] == family for e in events if 'model_type' in e))
                 self.assertEqual(result['signatures']['reserved_holdout'], 'untouched')
                 scores, counts = [], Counter()
                 for fold, (train, test) in enumerate(fs.folds_for(self.X, self.y, 3, 42)):
@@ -187,13 +188,18 @@ class FeatureSearchModelTests(unittest.TestCase):
     def test_provenance_tracks_values_types_context_and_rejects_credentials(self):
         context = dict(project='monthly', source_kind='sql', source_tables=['db.dbo.first'],
                        class_column='label', id_column='id', excluded_columns=['PaymentId'])
-        first = fs.study_provenance(self.X, context)
-        self.assertEqual(first, fs.study_provenance(self.X.copy(), context))
+        sql_schema = {name: 'float' for name in self.X.columns}
+        first = fs.study_provenance(self.X, context, source_sql_schema=sql_schema)
+        self.assertEqual(first, fs.study_provenance(self.X.copy(), context, source_sql_schema=sql_schema))
         changed = self.X.copy()
         changed.iloc[0, 0] += 1
         self.assertNotEqual(first['development_feature_sha256'],
-                            fs.study_provenance(changed, context)['development_feature_sha256'])
+                            fs.study_provenance(changed, context, source_sql_schema=sql_schema)['development_feature_sha256'])
         self.assertEqual(first['original_column_schema'][0], {'name': 'a', 'dtype': 'float64'})
+        self.assertEqual(first['source_sql_schema'][0], {'name': 'a', 'sql_type': 'float', 'family': 'numeric'})
+        self.assertEqual({entry['name'] for entry in first['source_sql_schema']}, set(self.X.columns))
+        with self.assertRaisesRegex(ValueError, 'missing 1 investigated feature'):
+            fs.study_provenance(self.X, context, source_sql_schema={name: 'float' for name in self.X.columns[:-1]})
         self.assertEqual(first['context'], context)
         self.assertEqual(first['feature_search_revision'], '130')
         self.assertEqual(len(first['backend_source_sha256']), 64)
@@ -242,7 +248,8 @@ class FeatureSearchModelTests(unittest.TestCase):
                 self.options, progress=None, on_event=lambda event: 1 / 0)
         self.assertEqual(result['status'], 'completed')
         self.assertEqual(result['progress_reporting_error'], 'ZeroDivisionError')
-        self.assertEqual(result['attempted_fits'], 42)
+        self.assertEqual(result['attempted_fits'],
+                         self.options.planned_fit_upper_bound + 2 * self.options.outer_folds)
         self.assertEqual(sum('callback failed' in str(w.message) for w in recorded), 1)
 
     def test_cli_legacy_aliases_and_family_settings(self):

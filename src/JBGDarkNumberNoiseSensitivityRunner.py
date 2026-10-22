@@ -43,6 +43,7 @@ from JBGDarkNumberSensitivityCheckpoint import (
     load_input_snapshot, save_input_snapshot,
 )
 from JBGStreamedLogger import JBGLogger
+from JBGLogPrivacy import sensitive_log_data_enabled
 
 
 DEFAULT_FLIP_FRACTIONS = (0.05, 0.10, 0.15, 0.20)
@@ -816,7 +817,10 @@ def main(argv=None) -> int:
         )
         detail_path, summary_path, metadata_path = save_outputs(config, detailed, summary, metadata)
         logger.print_info("Dark Number correction-noise sensitivity summary")
-        logger.display_matrix("Dark Number correction-noise sensitivity", summary, precision=6)
+        logger.display_matrix(
+            "Dark Number correction-noise sensitivity", summary, precision=6,
+            log_matrix=sensitive_log_data_enabled(),
+        )
         logger.print_info(f"Detailed sensitivity CSV: {detail_path}")
         logger.print_info(f"Sensitivity summary CSV: {summary_path}")
         logger.print_info(f"Sensitivity metadata JSON: {metadata_path}")

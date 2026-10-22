@@ -76,6 +76,24 @@ reports commit/path/line/category metadata without printing matched values or so
 rewrites history. Run it on the authoritative full repository; if it reports findings, stop publication
 and plan a backed-up history rewrite separately before re-running the audit.
 
+## Application/build identity
+
+Revision 175 keeps the controlled application version separate from repository state. Focused tests verify Git branch/tag/short-SHA resolution, modified-worktree marking, packaged-build environment overrides, non-Git fallback, GUI placement directly below the title, and the same identity in application-log startup lines.
+
+## Runtime log privacy
+
+Revision 170 keeps full SQL and row-level dataset previews out of persistent logs by default while
+leaving the rich operator-visible diagnostics intact. For a trusted local debugging session only, set:
+
+```powershell
+$env:JBG_LOG_SENSITIVE_DATA = "1"
+```
+
+The opt-in affects persistent SQL and the dataset `Head` snapshot. Do not enable it when logs may be
+shared externally without a separate privacy review. Feature modelling also writes a start diagnostic
+showing its selected candidate-worker count and the CPU/global-cap/search-budget/memory-guard constraints
+that produced it.
+
 ## Coverage
 
 - All modules: `pytest --cov-report html:coverage --cov=./`

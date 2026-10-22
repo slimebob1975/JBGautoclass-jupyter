@@ -13,6 +13,7 @@ from JBGExceptions import PredictionsException, ModelException, DatasetException
 from JBGHandler import JBGHandler
 import Helpers
 from JBGFeatureImportance import compute_feature_importance
+from JBGLogPrivacy import sensitive_log_data_enabled
 
 class Logger(Protocol):
     """ Hides implementation """
@@ -398,7 +399,9 @@ class TaskRunner:
             Helpers.save_matrix_as_csv(report.table, summary_path)
             Helpers.save_matrix_as_csv(pd.DataFrame.from_dict(details, orient="index", columns=["Value"]), details_path)
             self.logger.display_matrix(
-                "Feature importance — top 20 original inputs (mean score decrease)", report.table.iloc[:20, :4]
+                "Feature importance — top 20 original inputs (mean score decrease)",
+                report.table.iloc[:20, :4],
+                log_matrix=sensitive_log_data_enabled(),
             )
             self.logger.print_code("All feature importance scores and repeats", Helpers.create_download_link(summary_path, title=""))
             self.logger.print_code("Feature importance settings and baseline", Helpers.create_download_link(details_path, title=""))

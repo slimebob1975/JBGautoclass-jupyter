@@ -13,6 +13,8 @@ from typing import Optional, TextIO, Union
 import warnings
 
 from JBGPaths import LOG_DIR
+from JBGLogPrivacy import redact_local_paths, safe_local_path
+from JBGVersion import APP_NAME, get_build_identity
 
 
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -114,12 +116,15 @@ class TimestampedLogFile:
         self._at_line_start = True
         self._lock = threading.RLock()
         self.write_message("Log started", level="INFO")
+        build = get_build_identity()
+        self.write_message(f"Application: {APP_NAME} v{build.app_version}", level="INFO")
+        self.write_message(f"Repository: {build.repository_label}", level="INFO")
         self.write_message(f"Process ID: {os.getpid()}", level="INFO")
         self.write_message(f"Python: {sys.version.split()[0]}", level="INFO")
-        self.write_message(f"Working directory: {Path.cwd()}", level="INFO")
+        self.write_message(f"Working directory: {safe_local_path(Path.cwd())}", level="INFO")
         server_log = os.environ.get("JBG_SERVER_LOG")
         if server_log:
-            self.write_message(f"Server log: {server_log}", level="INFO")
+            self.write_message(f"Server log: {safe_local_path(server_log)}", level="INFO")
         atexit.register(self.close)
 
     def _timestamp(self) -> str:
@@ -152,6 +157,7 @@ class TimestampedLogFile:
             return 0
 
         text = _ANSI_ESCAPE_RE.sub("", str(data)).replace("\r", "\n")
+        text = redact_local_paths(text)
         if not text:
             return 0
 
@@ -190,7 +196,7 @@ def _show_warning(message, category, filename, lineno, file=None, line=None) -> 
     """Render Python warnings as a single structured WARNING line."""
     del file, line
     print(
-        f"[WARNING] {category.__name__}: {message} ({filename}:{lineno})",
+        f"[WARNING] {category.__name__}: {message} ({safe_local_path(filename)}:{lineno})",
         file=sys.stderr,
     )
 

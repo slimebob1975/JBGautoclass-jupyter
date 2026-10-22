@@ -1,263 +1,346 @@
-<!--THE README INSTRUCTION FILE FOR JBG classification with an additional Jupyter GUI.-->
-# JBG automatic spotchecking of classifiers
+# JBG AutoClassification
 
-## Summary
-This project aims on collecting many different data classifiers from several different
-libraries under a common Jupyter GUI with the purpose of simplifying inital testing and 
-spot-checking of algorithms for a particular dataset. For the time being JBG is limited
-to a Windows and SQL Server environment and works for numerical, categorical and textual
-data. It is partly a Building AI course project.
+JBG AutoClassification is a Windows-oriented machine-learning application for rapid classifier
+spot-checking, pipeline comparison, training, evaluation and prediction from SQL Server data. The
+primary interface is a Jupyter/Voilà GUI backed by the Python modules in `src/`.
 
-### Experimental original-column feature search (129-131)
+JBG is designed for mixed tabular datasets containing numerical, categorical and text features. It
+combines preprocessing, resampling, dimensionality reduction, model selection, cross-validation,
+final search, saved-model reuse and diagnostic tooling in one workflow.
 
-Start with `python scripts/feature_search.py --demo --trials 8 --sizes 2 4 6 --inner-folds 3 --outer-folds 3 --top-sets 1 --refine-rounds 1 --max-evaluations 30`. Then run `python scripts/feature_search.py --last-run --target Inkorrekt` from the repo root using the JBG Python environment. The diagnostic searches original-column subsets with a fixed Linear (logistic regression), Non-linear (MLPC), or Tree (Extra Trees) investigative model, validates the entire procedure through nested CV within the training partition, and preserves the normal JBG holdout. `--model-type` selects the family; separate family controls retain the legacy Linear defaults. It exports recommendations without applying them. See [experimental feature-search instructions](docs/feature_search_models.md) for input alternatives, fit budgets, group CV, result interpretation and CSVs to return. Revision 131 adds the three-mode "Feature selection modelling" GUI panel, training-only assisted investigation, progress/preview, explicit candidate application, and generated-config/Repeat Last persistence. Saved validated profiles and compatible-profile reuse remain pending; Windows/Voilà verification of the new panel is still required.
+## Main capabilities
 
-## Development records
+- Read training and prediction data from Microsoft SQL Server through ODBC.
+- Work with numerical, categorical and free-text input columns.
+- Compare a broad classifier set from scikit-learn and imbalanced-learn, plus native CatBoost,
+  PyTorch/skorch, Keras and Flax model families.
+- Configure scaling, over/undersampling, dimensionality reduction, scoring and final model search.
+- Train and evaluate on a deterministic train/holdout split with cross-validation inside the
+  training partition.
+- Save trained models and reuse them for later prediction or retraining.
+- Use a separate prediction table whose target column is present but entirely `NULL`; when a saved
+  model is selected, JBG can restore the model's expected target column.
+- Run Feature selection modelling to investigate original-column subsets with Linear, Non-linear,
+  Tree, Combination or CatBoost investigative model families.
+- Run permutation-based feature importance on the final holdout for a freshly trained model.
+- Inspect mispredictions and use the reclassification workflow for supported database-backed runs.
+- Optionally run Dark Number diagnostics and validation utilities.
+- Persist generated settings and use Repeat Last for supported workflows.
+- Show the controlled application version and Git repository provenance below the GUI title and at the start of each application log; non-Git deployments fall back safely when repository metadata is unavailable.
+- Record application and server diagnostics while keeping the persistent application log privacy-safe by
+  default; SQL, row-level data and other identifying runtime details require explicit local opt-in.
 
-- `CHANGELOG.md` is the append-only history of numbered development revisions and their verification status.
-- `BACKLOG.md` tracks open issues, priorities and deferred work.
+`CHANGELOG.md` contains development history. `BACKLOG.md` contains planned and deferred work.
 
-### Source tree and logs (119)
+## Requirements
 
-The application modules and their `GUI`, `DataLayer`, `SqlHelper`, `config`, `sql`, `model` and `output` directories now live directly under `src/`. The root notebook remains `JBG_SML_GUI.ipynb`, importing `src.GUIHandler`. Default application, validation/sensitivity-runner and PowerShell server logs now go to `<repo-root>/logs/`, determined from the checkout rather than the current working directory. An explicitly supplied Python `log_dir` still takes precedence. CSVs, checkpoint companions and timing history stay under `src/output/`; models and Keras sidecars stay together under `src/model/`.
+JBG is primarily developed and verified in a Windows environment. A typical installation needs:
 
-Stop Voilà and its kernels before applying the structural patch. Git moves tracked files; ignored models, generated configs, previous outputs and logs need a one-time local migration. From the checkout root, using the application's Python environment, run:
+- Python with `venv` support; an Anaconda-based interpreter can also be used.
+- Access to Microsoft SQL Server.
+- A compatible Microsoft SQL Server ODBC driver.
+- A browser for the Voilà interface.
+- Git if you maintain the checkout from source control.
+
+Install the Python dependencies from the repository root:
 
 ```powershell
-python .\scripts\migrate_source_layout.py --dry-run
-if ($LASTEXITCODE -ne 0) { throw "Resolve the migration collision before continuing." }
-python .\scripts\migrate_source_layout.py
-if ($LASTEXITCODE -ne 0) { throw "Migration stopped; check the reported path." }
+python -m pip install --upgrade pip
+python -m pip install -r .\requirements.txt
+python -m pip install --upgrade ipykernel jupyterlab voila
 ```
 
-The helper preserves empty directories and verifies copied bytes before removing originals. It moves all remaining local contents of `src/JBGclassification/` into `src/`, routes its `output/logs/` (and any interim `src/output/logs/`) into root `logs/`, reconciles identical copies after interruption, and refuses differing-file/directory collisions before moving any files. Resolve a collision manually and rerun; the helper never chooses between different versions of a model, config or log. Fresh checkouts and subsequent reruns are no-ops. Existing sensitivity checkpoint companions are preserved, but the existing code/dependency fingerprint guard refuses resuming an earlier-revision study under 119; finish such a study first or resume it in its original checkout.
-
-Branch switches do not relocate ignored runtime files: keep an old-layout `main`/`prod` checkout in a separate worktree if it must continue using its existing runtime files while `dev` is migrated.
-
-The launcher template performs the same migration before opening Voilà. If you use a customized launcher, update its log destination to `$LogDir = Join-Path $DevRoot 'logs'` and run the migration once before restarting it. Use your existing virtual-environment interpreter if `python` names a different environment. The Python migration helper needs no third-party packages.
-
-Historical top-level module names remain available. A compatibility import hook resolves saved references to `src.JBGclassification.*` / `JBGclassification.*` to the same current class, function and enum objects without recreating the old directory. Saved config paths under the historical source directory are rebased to this checkout's `src/`; explicitly configured paths outside that directory remain unchanged. Model serialization format, algorithm values, training and predictions are unchanged. Windows/Voilà verification of the structural migration and saved-model prediction remains pending.
-
-### PyTorch variants and training profile (116–117)
-
-All six named variants remain available: TORA/TORS use ReLU, TOTA/TOTS use Tanh, and TOSA/TOSS use Sigmoid; the final A/S selects Adam/SGD. The selected activation and optimizer now remain fixed during that variant's final search. Adam is passed to skorch explicitly rather than silently training its variants with the default SGD. Inference disables dropout and repeated probability predictions are deterministic for a fixed fitted CPU model.
-
-| Variants | Initial learning rate | Search learning rates | Hidden stages | Widths |
-| --- | --- | --- | --- | --- |
-| TORA/TOTA/TOSA (Adam) | 0.001 | 0.0003, 0.001, 0.003 | 3 | 48, 100 |
-| TORS/TOTS (ReLU/Tanh + SGD) | 0.02 | 0.01, 0.02, 0.05 | 3 | 48, 100 |
-| TOSS (Sigmoid + SGD) | 0.1 | 0.02, 0.05, 0.1 | 1 | 48, 100 |
-
-Each named search has six combinations (60 CV fits plus one refit with ten folds), replacing the old shared 1944-combination search (19440 CV fits plus one refit). The profile fixes 50 epochs, batch size 128, dropout 0.1 and skorch's internal stratified validation split. TOSS uses zero **additional** hidden stages after the first input-to-hidden layer (one hidden stage in total); the other five variants use two additional stages (three in total). The constructor's depth interpretation and its default of two additional stages remain compatible with existing code/artifacts. It still accepts custom epochs/depth/dropout and `train_split=False`; the generic GUI iteration setting does not set PyTorch epochs. Widths/rates and the 50-epoch budget are bounded starting choices rather than evidence of convergence or optimal accuracy on every dataset. Validate them on appropriately scaled data and inspect minority-class performance.
-
-Revision 117 responds to the weak scaled Sigmoid+SGD results in the 116 Breast Cancer run. A paired CPU study of depth and learning rate found that the shallower profile improved AUC in all 18 fold/seed/preprocessing comparisons, with improved malignant-class recall. This supports a bounded TOSS-specific starting profile, not a universal choice or a claim about every reduction/dataset. See [the measurements and reproducible study](docs/verification/117_pytorch_sigmoid_sgd.md). Existing fitted models keep their stored architecture/rate when loaded; retrain to use the new profile. The runtime grid getter preserves revision-116 enum values for serialized artifacts.
-
-Each fit/fold/refit/retry writes checkpoints in its own temporary subdirectory under `output/nn_checkpoints`, restores the chosen weights before deleting its temporary files, and preserves unrelated historical files. The callback restores the best validation-loss checkpoint (training-loss checkpoint without internal validation); despite its historical helper name it does **not** perform early stopping. Softmax with skorch's NLLLoss probability contract is retained. Fitted prediction and saved model reload do not depend on checkpoint files. Only the skorch component is encoded with standard pickle inside the existing dill artifact to avoid dill traversing Torch optimizer internals; the historical plain-net state remains readable. Historical Algorithm/PYNN enum values and class import paths remain unchanged. Retrain to obtain the corrected Adam behavior; loading previous weights does not retrain them. Existing automatic CUDA selection and the sequential experimental framework fallback policy are retained; local validation is CPU-only and does not establish GPU memory/concurrency behavior.
-
-API references: [skorch optimizer/probability/loss contract](https://skorch.readthedocs.io/en/stable/user/neuralnet.html), [Checkpoint versus EarlyStopping](https://skorch.readthedocs.io/en/stable/callbacks.html), and [PyTorch dropout](https://docs.pytorch.org/docs/stable/generated/torch.nn.Dropout.html).
-
-### GridSearch time estimates (118)
-
-Final-search estimates apply to every model using the shared GridSearch path. A first search uses the selected pipeline's measured CV times, concurrent batches, startup/dispatch allowance and approximate sequential refit. A successful search records its actual/base duration ratio in `src/output/grid_search_timing.json`. Future matching searches multiply the current CV-based estimate by the median of up to five matching observations from the last 30 days. The file holds at most 64 profiles and survives a kernel restart; delete it to reset calibration. Existing log files are not imported automatically.
-
-Matching covers the data source/table/target, training shape/input container, feature names/types and class counts; unfitted pipeline parameters and complete search grid; scorer, fold count, resolved search workers and observed CV workers; coarse factor-of-two bands of measured CV fold work and dispatch allowance (floored at 1 ms) to avoid mixing cold/warm or materially different timing regimes; host, Python/framework versions and thread environment. This is a workload signature, not a dataset-content fingerprint: changed values in the same table, randomization, worker startup and contention can still affect duration. The history stores only hashed signatures and numeric timings, with no rows, labels, credentials or fitted models. Unsupported custom objects, missing context/telemetry, expired/corrupt history or file-access failures fall back to the CV-based estimate and cannot discard a successful model.
-
-The log states whether an estimate is uncalibrated or learned from matching completed searches, reports the sample count and observed factor range, and keeps the actual/estimate percentage comparison. The observed range describes historical variability; it is not a confidence interval. Completion logs additionally report candidate mean fit costs, scoring, actual refit time and the remaining CV/dispatch phase. Startup/dispatch/contention are not separately measured. Calibration adds no training fits and does not change search parameters, scores, worker policy or model selection. Failed searches and ordinary-fit fallback do not contribute history. Windows verification of calibrated repeat-run forecasts remains pending.
-
-### Numerical SMOTE scaling order (122)
-
-New training pipelines using SMOTE (`SME`), ADASYN (`ADA`), BorderlineSMOTE (`BRD`), KMeansSMOTE (`KMS`) or SVMSMOTE (`SVM`) run imputation, float conversion and the selected scaling before oversampling. Optional undersampling follows, then reduction and classification. For example: `IMP-FLT-STA-SME-NUG-NOR-LRN`. Each CV training fold fits its scaler on the original fold rows before generating synthetic samples; final fitting and fresh full-data retraining use the same sequence. Prediction/evaluation use the fitted scaler without resampling or refitting. No Scaling (`NOS`) remains an explicit no-op choice.
-
-This corrects neighbor geometry when numerical feature units differ and avoids estimating scaler statistics from synthetic rows. It does not guarantee better minority-class performance; inspect precision/recall/F1 and MCC on untouched, naturally imbalanced evaluation data. Sampling strategy, neighbor counts, model grids and scoring choices are unchanged. SMOTE-NC/SMOTE-N and random/no-oversampling paths retain their existing order pending a separate categorical-data review. Loaded artifacts are not rewritten: prediction and cloning/retraining of an old pipeline retain its stored order. Start a new training run to obtain the 122 order.
-
-### Empty feature selections (121)
-
-Stacked Linear SVC (`SLSV`) first selects features with an L1 LinearSVC. If that selector retains no columns in a training fold, the CV table/CSV shows `UNUSABLE: SelectFromModel(LinearSVC) selected 0 of ...` with threshold details and suggested actions. The downstream classifier is not fitted for that fold, and other model candidates continue. Consider another preprocessing/model combination and inspect the training data's usable signal or regularization; this result alone does not establish that the dataset is flawed. The check adds no fits and keeps selection inside the CV training folds. Valid selections and previously saved models retain their behavior.
-
-### Sampling comparison (123–125)
-
-The Model selection row places scaling, over-/undersampling, reduction and classifier controls together. Both sampler menus allow multiple selections (Ctrl/Cmd-click); no sampling remains the default and may be included as a reference. The search evaluates every selected sampling pair with every selected scaling/reduction/classifier choice on the same training partition and stratified CV folds. CV CSVs identify both samplers; ranking uses the selected CV metric. Only the selected pipeline proceeds to final GridSearch, holdout evaluation, persistence and full-data retraining. Candidate lists are preserved by Repeat Last and generated configs; older scalar settings remain readable.
-
-New numerical pipelines fit scaling before any sampling, so random sampling and neighbor undersampling also use original-fold scaler statistics. Categorical SMOTE-NC/SMOTE-N retain their prior order and still need the separate categorical-data review; unsupported combinations are reported individually. Synthetic sampler neighbors are capped by actual fold support and retained during final training. New pipelines seed samplers and unset estimator random states with 42; loaded pipelines are not rewritten. Random over + random under uses distinct RND/UNDER_RND step names. This makes candidates within one run comparable. Revision 127 also stabilizes row ordering across fetches of the same rows; SQL subset selection can still change. Sampling defaults remain unchanged; revision 128 adds explicit partial random-undersampling profiles.
-
-### Extra Trees final-search baseline and reporting (126)
-
-Extra Trees final tuning uses 24 profiles, retaining the default unrestricted-depth candidate that spot-checking evaluated. The grid fixes 100 trees/gini and varies depth (None/12/24), leaf size (1/3), feature fraction (sqrt/0.5) and class weighting (None/balanced). If custom Extra Trees pipeline settings are not covered by the supplied grid, one exact baseline candidate is added. Historical algorithm-grid Enum values and saved pipelines are not rewritten.
-
-After successful GridSearch/refit, the log shows best CV mean/std and the actual selected parameters, plus the Extra Trees baseline score measured within that same search. The original spot-check score is shown separately when its pipeline identity matches. Downloads beside the ordinary CV CSV contain all final-search results (_grid_search.csv, with baseline/selected flags) and a JSON summary (_grid_search_summary.json). All selection and baseline comparisons use training CV; the final holdout remains for later evaluation. Optional export failures retain the trained model. A higher training-CV score does not guarantee stronger performance on new data.
-
-### Partial random undersampling (128)
-
-The undersampling multiselect adds `R20`, `R10`, `R05` and `R02`, labelled with minority:majority ratios 1:20, 1:10, 1:5 and 1:2. Existing `RND` still means full balancing (1:1 for binary data); `NUG` remains the default/no-sampling reference. Saved settings and historical enum names keep their meanings.
-
-Profiles retain every minority-class row and randomly select at most 20/10/5/2 times the smallest class count from each larger class. Counts are computed separately inside each CV training fold, after any oversampling. A fold already less imbalanced than the requested cap keeps all rows (possibly reordered); the profile never upsamples. For multiclass data, every class is capped relative to the smallest class, irrespective of the configured diagnostic target. For binary data, the displayed target-to-majority ratio assumes the target is the minority class. Full fitting and fresh retraining recalculate counts on their own training inputs. Validation and prediction rows are never resampled.
-
-Recommended comparison: **MLPC / MAX / NOR / MCC**, oversampling **NOG**, undersampling **NUG, R20, R10, R05, R02, RND**, target **Inkorrekt**. Keep input columns, iterations and split settings fixed; disable Dark Numbers and feature importance. This creates six candidates. Compare CV MCC with target precision/recall/F1 and predicted-positive counts; only the winner receives final tuning and holdout evaluation. Full oversampling before a partial-under profile may leave no excess majority rows to remove, so keep oversampling disabled for this experiment. No improvement is assumed in advance.
-
-### Target-class CV diagnostics and repeatable partitions (127)
-
-Every spot-check candidate and final GridSearch candidate now reports `CV target precision`, `CV target recall`, `CV target F1`, `CV predicted positives`, `CV target support`, `CV validation rows` and a diagnostic status. These diagnostics use predictions on the original, unsampled validation rows of the existing training CV folds. Precision/recall/F1 are calculated from pooled fold counts, rather than averaged fold ratios. Predicted-positive/support/row counts are totals across all folds: with ordinary stratified K-fold CV each training row is evaluated once. The configured CV metric remains the sole ranking/refit metric. No extra training fits or holdout evaluations are introduced; diagnostic prediction calls add some scoring time. The GridSearch CSV also retains per-fold target counts; its selected target diagnostics appear in the log and JSON summary.
-
-The selected Dark Number target supplies the diagnostic label even when Dark Numbers are disabled. If no target is configured, the least frequent training label is used, with deterministic tie-breaking; `CV target` and the log identify it. This is one-vs-rest reporting for multiclass data. An explicitly configured absent/ambiguous target produces unavailable diagnostics rather than silently changing the target. Failed/skipped candidates and diagnostic-only failures retain unavailable values/status. No positive predictions yield precision/recall/F1 of zero with support still reported. Selection failures retain their existing error behavior. Old eight- and ten-column reports remain supported.
-
-Fetched rows are put into canonical order by the configured unique integer ID, keeping unknown labels last. This replaces the unseeded pre-split shuffle. For the same fetched IDs, labels and split settings, the existing seed-42 stratified holdout and seed-1 stratified CV produce the same memberships despite different SQL fetch order. Logs include SHA256 signatures of training/holdout ID-label membership; they do not fingerprint feature values. A row limit with SQL `NEWID()` may fetch a different subset, and source edits/ID changes can also change partitions. Group/time-aware splitting remains separate work.
-
-Revision 127 establishes a new reproducible split, so earlier logs are not paired comparisons with the first new run. Keep rows, labels, input columns and settings fixed for subsequent comparisons; repeated exploratory use of one holdout requires fresh evaluation evidence after selecting the final approach. Existing saved model pipelines and their prediction behavior are not rewritten.
-
-Suggested next monthly-data test: MLPC, MAX, NOR, MCC; oversampling NOG; undersampling NUG and RND; target Inkorrekt. Compare target precision, recall, F1 and predicted-positive counts alongside MCC. Threshold tuning, MLP regularization grids and average precision are deferred; partial random undersampling is available in revision 128.
-
-## How to use JBG
-To use the Jupyter GUI for JBG Python autoclassification script, do as follows:
-
-1. Get a hold of the JBGclassification GUI codes in exactly one of the two following ways:
-    a) Use GIT:
-        i) Install GIT, see https://github.com/git-guides/install-git 
-        ii) Clone the code from the repository in a terminal window: 
-                git clone https://github.com/slimebob1975/JBGautoclass-jupyter.git
-            into an appropriate directory
-    b) Ask a friend to get a copy of the code
-
-    There are two versions of this. The legacy (if wanted) is tagged v1.0, and the main branch is version 2.
-
-2. Copy the file example.env to a new file called .env and change
-       the variables such that they reflect your SQL Server environment
-       
-3. Download and install Anaconda from: https://www.anaconda.com/products/distribution
-
-4. Start Anaconda Navigator and launch Jupyter-lab from within
-
-5. In the file explorer window to the left in Jupyter-lab, browse your way to the file
-    JBG_SML_GUI.ipynb
-6. If you see the JBG logo and some webb-like widgets in the right hand side, then all is ok!
-    
-Notice:
-* The connection to SQL Server uses integrated security, so you will only be able to see the
-databases and datatables that also show up in e.g. Microsoft SQL Server Management Studio
-    
-Troubleshooting:
-* If you only see text in the right hand side window of Jupyter-lab, try to restart the kernel
-(push the double play symbol)
-
-== Terminal ==
-
-To run the script in the terminal you need to have a file in `src\config` with a functional config.
-Configs start with `autoclassconfig_` as the name, and will be saved when you create a new model using the GUI.
-Generated config files deliberately do **not** contain the SQL password. Supply it at runtime through the
-`JBG_SQL_PASSWORD` process environment variable (or enter it in the GUI). Saved `.sav` model files likewise omit
-the SQL password; when a model is loaded through the application, the current runtime credentials are injected.
-
-Revisions 084-088 provide a validation runner that reuses the most recent manual/Repeat Last configuration and compares the hard/direct baseline with `perturbed_same_model`; revision 088 adds robustness summaries and uses nine paired seeds by default. Revision 089 exposes that same shadow-clone method in the normal Dark Number path, revision 091 presents its correction-failure policy as a two-option radio choice, revisions 092-093 add/refine a live equation card, and revision 095 adds a dynamic `Target:` radio group. `All classes` preserves historical behavior; selecting one observed class restricts correction-factor estimation, fallback and Dark Number output to that target while the full confusion matrix remains available for model diagnosis. The compact failure labels are `No fallback` / `Experimental` with the experimental choice selected by default. The card is driven by `JBGDarkNumbers.py`, updates with Method + Alpha + Target + correction-failure policy, and dims when `Estimate` is off. Direct correction still wins whenever it is estimable; the experimental path is attempted only for recovery-level statistical failures and remains explicitly marked with `corr_source=perturbed_same_model`. Run the validation harness from the repository root after a model-training run:
-
-```text
-python .\src\JBGDarkNumberValidationRunner.py --sql-username <username> --runs 9
-```
-
-The runner reads `.jbg_last_run.json`, uses `JBG_SQL_PASSWORD` if set (otherwise it prompts without echo), reloads the
-saved model's fitted text/category converter, normalizes sparse text features to SciPy CSR, and writes paired
-baseline-vs-`perturbed_same_model` CSV/JSON evidence under `src\output\csvs`. Its log is
-written separately as `jbg-dark-number-validation_*.log`. The perturbation defaults are five shadow clones, at least three valid clone estimates, and maximum correction-factor CV 0.50; these can be adjusted with `--perturbation-clones`, `--perturbation-min-valid`, and `--perturbation-max-cv`. Normal production runs keep those validated 5/3/0.50 guardrails fixed for now and, whenever the experimental fallback is attempted, write aggregate provenance to `dark_number_experimental_fallback_*` without raw source rows.
-
-Revision 111 preflight-skips Gaussian Naive Bayes when sparse features reach the estimator unchanged (NOR/RFE); dense input and PCA/TSVD/Nystroem paths remain eligible. Normal estimator calls retain sparse input and retry with dense features only for a confirmed scikit-learn sparse-X rejection, including joblib worker traceback evidence. A retry logs the operation/pipeline, shape, dtype and estimated dense-buffer size before allocation. Unrelated TypeErrors and failed dense retries are surfaced without another fit or generic serial-CV retry; existing resource/pickling worker reductions remain intact. This improves error attribution and avoids known incompatible work. Expensive Nystroem candidate fits require separate runtime investigation.
-
-Revision 112 covers Dark Number scope predictions too. Once a model's sparse-X rejection is confirmed, its successful dense input is reused for probabilities and its dense requirement is retained for later scopes and correction fitting within that calculation. Direct corrections, regression and experimental perturbed clones receive the compatible representation, with conversion size logged before allocation. The requirement is tracked per model; sparse-capable models remain sparse and zero-FP targets still skip correction fitting and correction-input allocation. To verify the mixed-data failure fix efficiently, first select MAX preprocessing, NOR reduction and HIST only; confirm Dark Number tables and the four-point range finish before repeating the broad search.
-
-Revision 113 adds runtime measurements to existing spot-check CV folds for NYS with MLPC, MLP2, FUTV or FUTS. Each completed candidate logs mean Nystroem fit/transform time, remaining pipeline fit time, Nystroem scoring-transform time, retained MLP iteration counts/cap hits and observed native thread counts. Fold rows, dimensions after sampling, dense feature-buffer bytes, kernel settings, scores, workers and CV wall time are exported beside the normal cross-validation CSV as `<crossval stem>_nystroem_runtime.csv`, with a download link. The residual fit time includes sampling, preprocessing and the classifier; it must not be described as MLP-only. Stacking's discarded internal fit iterations are not available. Reaching `max_iter` is reported as a cap hit, not proof of failure to converge.
-
-Only disposable CV clones are instrumented. There are no extra fits or score calls; parameters, sampling, folds, score selection, search limits and saved model types stay unchanged. Optional metadata/export failures warn or report unavailable measurements while retaining successful CV scores. Custom Nystroem subclasses, non-default output containers and cached pipelines keep the original uninstrumented path. This revision measures the expensive paths before changing their behavior; it does not yet claim a speedup. For a targeted runtime investigation, select MAX and STA preprocessing, NYS reduction, and MLPC/FUTV (optionally FUTS), keeping dataset and iteration settings comparable; return the runtime CSV and log. Normal final training/GridSearch still follows spot-checking.
-
-Revision 114 bounds spot-check CV's worker pool by its number of fold tasks, in addition to available CPUs and a positive configured worker cap. Previously the default `-1` worker setting accidentally replaced the fold bound with an all-CPU request: the real ten-fold profile consequently requested 24 workers. Ten tasks can only use ten workers concurrently. Resource retries still reduce that bounded pool and successful timing/diagnostics record the resulting worker count. Final GridSearch keeps its separate all-CPU policy because it usually has many more tasks. Joblib may assign a different native-thread allowance to the smaller pool; the runtime CSV records observed thread counts for verification, without promising a speedup.
-
-The real 113 profile confirmed that Nystroem itself used only 0.04–0.44% of mean fold fit time. All four variants mapped about 20338 resampled rows into 321 dense features, and all observed native-thread counts were one. Retained MLPs used 162–605 iterations against a 20000 cap. In that run STA/NYS/FUTV took 4 min 59 s versus MAX's 27 min 40 s, and STA/NYS/MLPC took 2 min 49 s versus MAX's 32 min 44 s, with higher mean CV scores for STA. STA-only with NYS/MLPC/FUTV is therefore a practical narrower profile to try on this dataset; MAX remains selectable. Unset stochastic seeds and kernel differences prevent interpreting those observations as a general paired causal proof or forcing a new global preprocessing default.
-
-Revision 110 displays a mathematical four-point range directly below the Dark Number Calculations table: `[D_re_full, D_cv_full, D_comb, D_cv_test] = [values]`, separately for each target/formula. The short names refer to retrained-full, cross-trained-full, combined legacy full-data and cross-trained holdout estimates. Values use the table's proportion units, with readable logging alongside the notebook expression. The expected non-decreasing order permits ties; inversions are explicitly signalled without sorting them away. Missing or unestimable estimates produce an incomplete check, and valid zero-FP results identify their skipped correction. This is a heuristic range, not a statistical confidence interval. The calculations and CSVs remain unchanged.
-
-Revision 108 avoids correction fits that cannot change the reported Dark Number. Confusion-matrix **rows are actual labels and columns are predicted labels**: for target `Ja`, `Nej → Ja` is FP and `Ja → Nej` is FN. In every current formula, FP=0 with observed negative support makes the false-positive multiplier zero, so the reported Dark Number remains zero for any valid finite correction factor—even if there are false negatives. That is a property of the formula, not proof that no unobserved positives exist.
-
-The normal path caches its existing predictions once and skips correction estimation for a target/model only if every output using that correction has exactly zero FP and valid target/rest support (plus aligned complete labels and valid confidence values for alpha formulas). This includes the holdout, full-data and combined legacy reports under their existing correction ownership: a single FP in any dependent report retains correction estimation. Direct estimation, resource regression and experimental shadow clones are all omitted for unused corrections. Matrices, alphas and Dark Number rows are retained. Output labels the provenance `corr_source=not_needed_zero_fp`, with `corr=1.0` solely as a neutral calculation placeholder; it is not an estimated correction. The log reports skipped work and per-scope FP/FN counts, and warns when zero formula output coexists with false negatives. A zero-FP run consequently has no shadow-fit progress bar. Standalone correction-validation/sensitivity studies continue estimating corrections for their experimental purpose.
-
-Revision 107 adds **fit-level progress and bounded parallel execution** to the normal experimental Dark Number fallback. Its startup log reports `5 shadow clones x folds/repeats = total fits` and the actual initial worker count. Independent sklearn fits use up to eight process workers, bounded by the available CPUs and positive `DEFAULT_N_JOBS_DESIRED` cap; `-1` still means no additional global cap. Native numerical threads are limited to one per fit and explicit nested `n_jobs` settings are capped to one. The five clones are processed in order, with each clone’s fold/repeat fits running concurrently. Existing bootstrap/flip seeds, all five clones, hard predictions, minimum three usable corrections and maximum CV 0.50 remain intact; no early acceptance or reduced sampling is introduced. Framework/checkpoint estimators stay sequential and retain the progress meter. Older joblib without result streaming uses sequential progress; no dependency upgrade is required.
-
-The inline **Shadow fits** meter advances as fit results return in the parent kernel. It accounts for completed fits and explicitly skipped slots when a clone fails; 100% means the planned work is accounted for, not that the correction was accepted. It can pause while a slow fit is running and is not a time countdown. The log reports each clone’s returned fits, correction/status, worker count and duration, plus a final completed/skipped/elapsed summary. Process-resource retries reduce workers and retain already returned results; serialization failures retry unfinished fits sequentially. Large numeric arrays can use joblib memory mapping. The existing `dark_number_experimental_fallback_*` CSV adds planned/completed/skipped fits, initial/final workers and execution seconds. Wall-clock gains depend on fit cost, available memory and CPU contention; framework and very cheap fits may benefit little from parallelism. Stop Voilà and its training kernels before applying code patches, then restart.
-
-Revision 103 clarifies model-selection scoring. `F1 Micro` pools class counts and equals accuracy for single-label classification over all classes; `F1 Macro` gives every class equal weight, while `F1 Weighted` weights each class by support. Hover over `Score metric` for an explanation of the current selection. For rare operational classes, consider `F1 Macro` or `Matthews Corr. Coefficient` (MCC), and review the per-class report rather than relying on aggregate accuracy. Existing models/settings and selected scoring objectives are preserved.
-
-The evaluation information table now also reports **majority-class baseline accuracy (evaluation majority)**, **balanced accuracy** and **MCC**. The baseline is the largest class's share in that evaluation sample: the retrospective accuracy of always predicting that evaluation-majority class. It is a descriptive comparator, not a trained dummy model or a metric used to pick winners. Balanced accuracy averages recall over observed true classes; MCC uses the full confusion matrix and is 0 for constant predictions with no measured correlation. Candidate selection and GridSearch still use the scoring metric you select, using training CV rather than these held-out diagnostics.
-
-Revision 104 displays an **approximate final GridSearch wall-clock budget** before the search starts, both in the progress label and application log. For example, `Grid search estimated wall-clock time: ~2 h 35 min; 6 parameter combinations x 10 folds = 60 CV fits + 1 refit.` The estimate uses the selected pipeline's measured CV fit/scoring durations, concurrent fit batches, an observed startup/dispatch allowance and one sequential final refit. Search worker caps are resolved, but no speedup beyond the concurrency observed in CV is assumed. The log states the assumptions: comparable cost across parameter combinations and approximately linear refit scaling. Slow hyperparameter settings, internal ensemble/RFE work, contention and retries can change the actual duration substantially. Missing valid timing produces an explicit unavailable message and training continues. This is a forecast, not a countdown or a confirmation prompt; it adds no benchmark training and keeps model selection/holdout handling intact.
-
-Revision 106 adds a completion comparison for successful GridSearch: estimated and actual duration, `actual/estimate` percentage and signed deviation. Percentages use unrounded seconds, so rounding the displayed forecast to whole minutes does not affect the calculation. Negative deviation means faster than estimated; positive means slower. The measured interval covers CV fits and final refit. Missing forecasts produce an unavailable comparison, and failed searches/ordinary-fit fallback produce no successful GridSearch percentage.
-
-To inspect a trained model, enable **Feature importance** in the **Feature analysis** section before a fresh training run. It defaults off; **Repeats** defaults to five and can be set from two to thirty. After final evaluation and before full-data retraining, the application shuffles each original input column on the entire holdout and measures the decrease in the selected score (for example MCC). The fitted text/category converter and full pipeline stay fixed, so original source names remain meaningful through text expansion and PCA/TSVD. Text fields are shuffled as whole fields. This works across classifier families and does not require estimator coefficients, an auxiliary logistic model, `predict_proba` for ordinary classification scorers, or extra fitting. Scorers retain their normal response requirements, such as probabilities for multiclass ROC AUC.
-
-The output ranks the top twenty inputs by mean score decrease, reports standard deviation across shuffles and links two CSVs: `feature_importance_*` contains every feature, mean/std and raw repeat scores; `feature_importance_details_*` contains the model, scorer, baseline, row/class counts, repeat count, seed (42) and timing. A positive decrease means the fixed model relied on that input; negative values mean the shuffle improved its score and are retained. Standard deviation is repeat variation, not a confidence interval. Correlated inputs can hide each other's importance, and a weak model can assign low importance to useful data. Treat this as model inspection rather than causality or automatic feature selection. If you use the report to tune features, assess the revised model on new untouched test evidence.
-
-Analysis adds `1 + number_of_original_inputs * repeats` score evaluations and preserves all holdout rows to retain rare classes. Execution is sequential and sparse conversion stays sparse at prediction boundaries. Optional analysis failures warn and let the normal training/retraining lifecycle continue. The option/repeat count survive saved settings and Repeat Last; older settings default off/five repeats. Prediction-only runs and regression suites omit analysis. New generated configs also fix NgramRange quoting and accept omitted mail settings on reload; older generated files containing bare names such as `UNI_GRAM` need regeneration or manual quotation before import.
-
-Revision 099 adds a separate correction-noise sensitivity runner. It fetches the real dataset once, freezes one deterministic train/test split and one cross-trained model, then compares 5%, 10%, 15%, and 20% correction label flips across nine correction seeds by default. It records hard flipped/recovered counts, recovery/corr stability, fallback activation and configured-formula `D_cv_full`, plus dataset/split fingerprints. Run it after an ordinary training run with the operational Dark Number target selected:
-
-```text
-python .\src\JBGDarkNumberNoiseSensitivityRunner.py --sql-username <username>
-```
-
-Use repeated `--fraction` or `--target` arguments to override the default grid/target. If the configured Dark Number target is unset and no `--target` is supplied, all observed classes are studied, so the total cell count grows by the number of targets. Revision 100 logs the resolved targets, the loaded and fixed pipeline identities, and `[n/N]` progress for every completed fraction×seed cell; the metadata JSON also retains full source/fixed estimator identity. The command is validation-only and does not change the production 20% default. Current sensitivity evidence keeps 20% as the compatibility default while 15% is tracked as a lower-perturbation candidate pending another genuinely imbalanced real dataset.
-
-Revision 102 automatically checkpoints the sensitivity study after each completed target×fraction×seed cell. The default checkpoint is `src\output\csvs\dark_number_noise_sensitivity_<model>_checkpoint.json`; its `.model.joblib` companion preserves the **original fitted fixed pipeline and predictions**, while `.inputs.joblib` and `.inputs.json` preserve/checksum the original fetched feature/label/source-pipeline snapshot. Keep all checkpoint companions together. Resuming uses that snapshot without a new SQL fetch or application shuffle; this matters because both can randomize the row selection/order. Metadata/fingerprints are written before fixed-model training begins. Completed cells survive interruption, including a forced process close, and the interrupted cell is rerun when you issue the same command again. The log reports `Checkpoint progress: n/N completed cells`; resuming restores the fixed model without retraining it. A complete checkpoint regenerates the final CSV/summary/metadata outputs without repeating the experiment.
-
-Resume validates the ordered dataset (including feature names/types), deterministic split, full model hyperparameters, saved model artifact checksum and last-run settings fingerprint, targets/fractions/seeds, calculation/fallback options, perturbation guardrails, source code and dependency versions. A mismatch stops the run without overwriting the checkpoint. For a separate fresh experiment, use a new checkpoint filename:
+The main requirements include the scientific Python stack, scikit-learn, imbalanced-learn,
+TensorFlow/Keras, PyTorch/skorch, JAX/Flax, CatBoost, pyodbc and the Jupyter/Voilà UI dependencies.
+A GPU is not required for ordinary use.
+
+### Optional legacy model compatibility
+
+`dill` is no longer required for a normal installation. New JBG model artifacts prefer Python's
+standard-library `pickle`. If an older model, or a current model with non-pickle-compatible state,
+actually requires dill, install the compatibility dependency separately:
 
 ```powershell
-python .\src\JBGDarkNumberNoiseSensitivityRunner.py --target 1 --checkpoint .\creditcard_fraud_sensitivity_102.json
+python -m pip install -r .\requirements-legacy-models.txt
 ```
 
-Checkpoint resume also requires the original source code and dependency versions. Applying a later code revision such as 103 intentionally invalidates a 102 checkpoint for resume; its completed CSV/metadata exports remain usable. After interruption, repeat that exact command with the same saved source model and last-run settings. Avoid retraining/replacing the ordinary source model between attempts. Each checkpoint is locked against concurrent writers; the operating system releases the lock on process exit. A resumed study measures the original data snapshot, even if the live SQL table subsequently changes; use a new checkpoint path to study fresh data. Final CSVs still contain the full study only; the checkpoint holds partial results and preserves NaN/infinite diagnostics exactly. Earlier revision-100 log-only cells cannot be resumed, so the first revision-102 study starts from cell 1. Production Dark Number defaults remain unchanged.
+Only load `.sav` model files from trusted sources. Both pickle and dill can execute code while
+loading a serialized object.
 
-Go into `src` and run `python .\AutomaticClassifier.py -f .\config\<filename>.py`. For example:
+## Configuration
+
+Copy the environment template and edit the local copy:
+
+```powershell
+Copy-Item .\.env_template .\.env
+```
+
+The main settings are:
+
+| Setting | Purpose |
+| --- | --- |
+| `DEFAULT_HOST` | SQL Server host name or address. |
+| `DEFAULT_ODBC_DRIVER` | ODBC driver used for SQL Server connections. |
+| `DEFAULT_DATA_CATALOG` | Default source database/catalog. |
+| `DEFAULT_DATA_TABLE` | Default source schema/table. |
+| `DEFAULT_CLASSIFICATION_CATALOG` | Default destination database/catalog. |
+| `DEFAULT_CLASSIFICATION_TABLE` | Default classification-result schema/table. |
+| `DEFAULT_SMTP_SERVER` | Optional notification SMTP server. |
+| `DEFAULT_NOTIFICATION_EMAIL` | Optional notification recipient. |
+| `DEFAULT_N_JOBS_DESIRED` | Shared parallelism cap; `-1` allows JBG to use the available logical CPUs subject to workload and memory limits. |
+| `JBG_LOG_SENSITIVE_DATA` | `0` by default. Set to `1` only for trusted local diagnostics when full SQL and row-level previews are required in persistent logs. |
+
+SQL credentials are runtime credentials. Enter them in the GUI when using the notebook interface.
+Generated configuration/model metadata deliberately does not persist the SQL password. For
+supported command-line workflows that need a runtime password, JBG can use the
+`JBG_SQL_PASSWORD` environment variable.
+
+Do not commit a local `.env` file or credentials to source control.
+
+## Starting the GUI
+
+The repository contains `start_application_template.ps1`. Make a local copy and edit the paths in
+the configuration block at the top of the script:
+
+```powershell
+Copy-Item .\start_application_template.ps1 .\start_application.ps1
+```
+
+At minimum, set the project root, base Python interpreter, virtual-environment name and any desired
+Voilà port. Then run the local launcher:
+
+```powershell
+.\start_application.ps1
+```
+
+The template can create/update the virtual environment, install requirements, register the Jupyter
+kernel, run the source-layout migration helper when needed, start Voilà and write a separate server
+log. Its default Voilà port is `8866`.
+
+If the environment is already prepared, Voilà can also be started directly from the repository
+root:
+
+```powershell
+voila .\JBG_SML_GUI.ipynb --port 8866
+```
+
+## Core workflow
+
+### 1. Connect to the data source
+
+Enter the SQL username and password, select the source catalog/table, then select the target/class
+column and unique ID column. JBG uses the unique ID when it needs stable row identity for splits,
+diagnostics and database-backed follow-up actions.
+
+Training rows need a known target value. Rows with a missing target can be treated as prediction
+rows in workflows that support mixed labelled/unlabelled data.
+
+### 2. Configure the machine-learning pipeline
+
+Choose the preprocessing and model options in the GUI. Depending on the selected workflow, JBG can
+apply scaling, over/undersampling, dimensionality reduction and classifier search inside the
+training/CV lifecycle.
+
+For imbalanced classification, inspect class-specific metrics rather than relying only on overall
+accuracy. The selected scoring metric controls model comparison and several downstream diagnostics.
+
+### 3. Train and evaluate
+
+Start the classifier run. JBG separates the fetched labelled data into training and holdout
+partitions, performs model/CV work on the training side, evaluates the chosen fitted pipeline on the
+holdout and can then retrain as configured for final use.
+
+The output area reports the selected pipeline, metrics, diagnostics and generated artifacts. Long
+searches may also expose progress and runtime estimates.
+
+### 4. Save and reuse models
+
+Saved `.sav` files use a versioned JBG artifact envelope. New artifacts use pickle when possible and
+fall back to optional dill only when necessary. Keras and other framework-specific state may use
+additional sidecar/state handling managed by JBG.
+
+The supported persistence contract is save -> restart/fresh process -> load -> predict/retrain in a
+compatible JBG/Python/ML dependency environment. It is not a promise of portability across arbitrary
+Python or third-party-library versions.
+
+When reusing a newly saved model, JBG compares a privacy-safe fingerprint of the physical SQL source
+as provenance and verifies the required SQL column/type families, the saved feature-role definition and
+the fitted converter representation before prediction. Training and prediction may use different physical
+tables: a source change is reported as a warning, while missing required model columns or incompatible SQL
+type families block reuse. Extra source columns that the fitted model does not require are ignored. A
+same-family SQL type change or ODBC-driver change is also reported as an explicit warning because semantic
+equivalence cannot be proven automatically. The fitted converter checks predictor dtype families before
+transforming prediction rows.
+
+Older model artifacts that predate this compatibility metadata remain loadable, but JBG reports that
+the source/schema and converter equivalence cannot be fully verified. A separate prediction table may
+keep the same target column with every target value set to `NULL`; selecting the saved model restores
+that expected target without making unrelated empty columns valid training targets.
+
+## Feature selection modelling
+
+The **Feature selection modelling** panel investigates subsets of original source columns without
+silently applying them to the main classifier configuration. Search rows are sampled from training
+data, and candidate evaluation remains isolated from the ordinary holdout.
+
+The available investigative families are:
+
+- Linear
+- Non-linear
+- Tree
+- Combination
+- CatBoost
+
+Pipeline controls are shown in execution order: **Scaler -> Oversampling -> Reduction -> Model type**. Candidate-process parallelism is automatic. JBG bounds it by the logical CPU count, the
+shared `DEFAULT_N_JOBS_DESIRED` cap, the candidate/search budget and the memory guard; candidate
+estimators remain internally single-threaded to avoid nested oversubscription.
+
+The persistent log records the resolved worker decision in a line beginning with
+`Feature search parallelism:`. Pause/resume and checkpoint support are available for the supported
+investigation flow.
+
+Saved Feature modelling recommendations remain **candidate** evidence. Before a saved candidate can be
+explicitly applied, JBG checks the recorded source identity, predictor SQL schema and text/converter
+representation against the current selection. Applying a compatible saved candidate restores both its
+selected columns and the configurable text representation used by the investigation; it does not turn
+the recommendation into independently validated settings.
+
+The command-line diagnostic entry point is also available:
+
+```powershell
+python .\scripts\feature_search.py --help
+```
+
+## Feature importance
+
+Enable **Feature importance** before a fresh training run to compute holdout permutation importance
+for the fitted pipeline. JBG shuffles each original input column while keeping the fitted conversion
+and model pipeline fixed, then reports the score decrease across repeats.
+
+Use this as model inspection, not as proof of causality. Correlated inputs can hide each other's
+importance, and a weak fitted model can assign low importance to useful variables.
+
+## Dark Number diagnostics
+
+Dark Number functionality is optional diagnostic/research tooling for estimating unseen or
+misclassified cases under JBG's configured methodology. It has dedicated validation and sensitivity
+utilities in `src/` and should be treated separately from ordinary classifier accuracy.
+
+Use it only when its assumptions fit the problem being studied. The active backlog deliberately
+keeps broader Dark Number methodology research separate from routine release work.
+
+## Command-line classifier runs
+
+Generated classifier configurations can be executed from `src` with `AutomaticClassifier.py`:
 
 ```powershell
 Set-Location .\src
-python .\AutomaticClassifier.py -f .\config\autoclassconfig_example_abc0123.py
+python .\AutomaticClassifier.py -f .\config\<generated-config-file>
 ```
 
-Use the generated filename present in `src/config/`.
+Use an actual generated configuration file from your local `src\config\` directory. Runtime SQL
+credentials still need to be supplied separately when required.
 
+## Files and runtime output
 
-Serialized `.sav` model files use Python pickle/dill-compatible serialization. New model files are written with
-an explicit JBG artifact format marker and schema version; the loader also accepts the legacy six-item payload used
-by earlier releases. The supported persistence contract is save/reload/predict/retrain within a compatible JBG/Python/
-ML dependency environment, not portability across arbitrary Python or scikit-learn versions. Only load model files
-from a trusted source: loading an untrusted pickle/dill payload can execute arbitrary code.
+The main repository locations are:
 
-=== Troubleshooting ===
+| Path | Contents |
+| --- | --- |
+| `JBG_SML_GUI.ipynb` | Root notebook used by the Voilà GUI. |
+| `src/` | Application and ML modules. |
+| `src/config/` | Configuration templates and locally generated configs. |
+| `src/model/` | Saved models and framework sidecars. |
+| `src/output/` | CSV exports, checkpoints, timing history and other generated output. |
+| `logs/` | Application and server logs. |
+| `scripts/` | Maintenance, privacy, diagnostics and feature-search utilities. |
+| `tests/` | Automated regression tests. |
 
-1. You have to run the terminal command from the src directory, due to imports and such
-2. There are a lot of (unnecessary) warnings coming out of the 3rd-party libraries (in particular sklearn), which will clutter up
-the terminal. To ignore them, use the `W` flag in the command (see below for usage)
+Generated models, configs, logs and output can contain operational or data-derived information.
+Treat them according to the sensitivity of the source dataset and do not publish them by default.
 
-==== W-flag ====
+### Persistent log privacy
 
-Source: https://docs.python.org/3/using/cmdline.html#cmdoption-W
+Normal **application** logs keep the active GUI informative while omitting or summarizing fields that can
+identify the local environment or source data. By default this includes full SQL, row-level dataset previews,
+configuration values, schema/statistics matrices, class-labelled evaluation matrices, prediction and
+reclassification payloads, split labels/signatures, feature-importance column names, embedded download
+payloads and absolute local filesystem paths. Aggregate operational diagnostics such as row counts, timings,
+worker decisions and generic error types remain available where they can be logged without the omitted values.
 
-To ignore all warnings: `python -Wi AutomaticClassifier.py -f <path-to-file>`
+Only for trusted local diagnostics, enable sensitive persistent application logging before starting JBG:
 
-The full argument is `action:message:category:module:lineno`, and if you're targetting something "deeper" into the argument, leave any
-intermediate things empty, IE `ignore::Classname` to target all warnings of Classname, no matter their message.
+```powershell
+$env:JBG_LOG_SENSITIVE_DATA = "1"
+```
 
-You can also put in as many of these specific warning-suppressions as you want, where for ease of use I'll write down the fine-grained
-"most common" warnings below.
+The separate Voilà/server log has a different safety constraint: the guarded kernel-cleanup workflow currently
+uses its exact connection-directory path as evidence. That server log can therefore still contain local paths
+and should be treated as sensitive local diagnostic material rather than as publication-safe output.
 
-Specific warnings we know are irrelevant:
-* UserWarning (-Wi::UserWarning)
-* RuntimeWarning (-Wi::RuntimeWarning))
+Unset it, or return it to `0`, after troubleshooting. Generated artifacts, the separate server log and
+unexpected third-party exception text are not made publication-safe by this switch; continue treating runtime
+diagnostics as potentially sensitive and do not publish them by default.
+
+## Testing
+
+Run the test suite from the repository root in the same environment used by JBG:
+
+```powershell
+python -m pytest -q
+```
+
+For the documentation privacy check:
+
+```powershell
+python .\scripts\check_documentation_privacy.py
+```
+
+A local organization-specific `.jbg_doc_privacy_blocklist` can be used by the privacy tooling. Keep
+that file private and out of source control. See `tests/README.md` for additional test and validation
+commands.
+
+## Troubleshooting
+
+### SQL connection fails
+
+Check the host, ODBC driver, database/catalog permissions and runtime SQL credentials. The `.env`
+file supplies defaults, not a persisted SQL password.
+
+### Voilà starts but the GUI does not behave correctly
+
+Check the server log under `logs/` and the current application log. Ensure the notebook is using the
+same Python environment where `requirements.txt`, Jupyter and Voilà were installed. If a stale
+kernel/session is suspected, use the supplied diagnostic/cleanup scripts rather than terminating
+unknown Python processes blindly.
+
+### A saved model requires dill
+
+Install `requirements-legacy-models.txt` and retry. If the model still cannot load, verify that it
+was produced by a compatible JBG/Python/library environment and that all framework dependencies are
+installed.
+
+### Feature modelling uses fewer workers than expected
+
+Find the `Feature search parallelism:` line in the application log. It reports the selected worker
+count and the CPU, global-cap, candidate-budget and memory-guard constraints that produced it.
+
+### Third-party warnings clutter a command-line run
+
+Python warning filters can be used when you have confirmed a warning is irrelevant. For example:
+
+```powershell
+python -Wi .\AutomaticClassifier.py -f .\config\<generated-config-file>
+```
+
+Do not suppress warnings merely to hide a failing model or incompatible dependency.
+
+## Development records
+
+- `CHANGELOG.md` records completed numbered revisions and their verification status.
+- `BACKLOG.md` tracks active priorities, deferred integrations and validation work.
+- `tests/README.md` documents test-specific workflows.
 
 ## Acknowledgments
-This work was partly inspired by Jason Brownlee: https://machinelearningmastery.com/
 
-
-### Dark Number direct-correction diagnostics
-
-Revision 097 orders the controls as `Estimate -> Target -> Method -> Alpha -> Failure` and warns when a direct correction factor is based on mean recovery below 5% (`corr > 20`). Revision 115 keeps that existing limit and makes the message more actionable: it identifies the model/target, reports the rediscovery rate and correction factor, and recommends considering another pipeline combination and investigating the correctness and quality of the training dataset. This prompts investigation rather than declaring the dataset flawed. The value remains a direct estimate; the application does not clamp it or trigger fallback solely because of the warning. The sensitivity runner's warning policy is unchanged.
-
-
-Feature-selection Revision 138 adds the Combination (FUTV) family, optional fold-local PCA, and an Apply-before-Continue safety gate; see `docs/feature_search_138.md`.
-
-Revision 139 adds resumable feature-search investigations (Pause/Resume and crash checkpoints); see `docs/feature_search_139.md`.
+The project was partly inspired by Jason Brownlee's Machine Learning Mastery material.

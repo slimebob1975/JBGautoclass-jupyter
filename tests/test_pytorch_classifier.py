@@ -6,7 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-import dill
+try:
+    import dill
+except ModuleNotFoundError:
+    dill = None
 from joblib import Parallel, delayed, parallel_backend
 import numpy as np
 import pandas as pd
@@ -173,7 +176,7 @@ def test_parallel_cv_and_grid_search_produce_usable_classifiers():
                for est in result["estimator"])
 
 
-@pytest.mark.parametrize("serializer", [pickle, dill])
+@pytest.mark.parametrize("serializer", [pickle] + ([dill] if dill is not None else []))
 def test_fitted_classifier_roundtrip_uses_no_checkpoint_files(serializer):
     X, y = _data()
     model = NNClassifier3PL(max_epochs=2, verbose=False).fit(X, y)
@@ -250,7 +253,7 @@ def test_historical_enum_values_remain_loadable_by_value():
         assert algorithm.search_params is AlgorithmGridSearchParams[name]
 
 
-@pytest.mark.parametrize("serializer", [pickle, dill])
+@pytest.mark.parametrize("serializer", [pickle] + ([dill] if dill is not None else []))
 def test_revision_116_sigmoid_sgd_grid_value_remains_loadable(serializer):
     historical_value = {"parameters": {
         "activation": ("sigmoid",), "optimizer": ("sgd",),

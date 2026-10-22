@@ -58,9 +58,14 @@ from JBGModelPersistence import (
     attach_keras_model_to_pipeline,
     detach_keras_model_from_pipeline,
     get_keras_model_sidecar_path,
-    load_model_artifact,
+    load_model_artifact_with_compatibility,
     resolve_keras_model_sidecar_path,
     save_model_artifact,
+)
+from JBGModelCompatibility import (
+    ModelCompatibilityError,
+    build_model_compatibility_metadata,
+    review_artifact_semantics,
 )
 import Helpers
 from JBGTrainingTiming import (
@@ -70,7 +75,9 @@ from JBGTrainingTiming import (
 )
 from JBGNystroemRuntime import prepare_runtime_cv, build_runtime_rows, format_runtime_summary
 from JBGFinalSearch import include_extra_trees_baseline, final_search_summary
+from JBGLogPrivacy import sensitive_log_data_enabled
 from JBGResourceMonitor157 import safe_grid_workers, training_heartbeat
+from JBGSampling import categorical_feature_indices, validate_categorical_oversampling
 from sklearn.base import clone
 from joblib import cpu_count, Parallel, delayed, parallel_backend, parallel
 from pickle import PicklingError
@@ -132,6 +139,13 @@ class Logger(Protocol):
     def print_code(self, key: str, code: str) -> None:
         """ Prints out a text with a (in output) code-tagged end """
 
+    def print_query(self, type: str, query: str) -> None:
+        """Show an SQL query with persistent-log privacy handling."""
+
+    def print_privacy_safe(self, full_message: str, safe_message: str, level: str = "INFO",
+                           html_function=None, print_always: bool = False):
+        """Show full operator detail while persisting a privacy-safe summary."""
+
     def update_inline_progress(self, key: str, current_count: int, terminal_text: str) -> None:
         """ Updates progress bars within the script"""
 
@@ -157,6 +171,9 @@ class DataLayer(Protocol):
 
     def get_data_query(self, num_rows: int) -> str:
         """ Prepares the query for getting data from the database """
+
+    def get_table_columns(self, database: str, table: str) -> dict:
+        """Return source-column SQL datatypes for saved-model compatibility checks."""
 
 class Config(Protocol):
     # Methods to hide implementation of Config
@@ -537,10 +554,12 @@ class DatasetHandler:
         order = pd.DataFrame({"unknown": unknown.to_numpy(), "id": ids.to_numpy(),
                               "position": np.arange(len(dataset))})
         positions = order.sort_values(["unknown", "id"], kind="mergesort")["position"]
-        self.handler.logger.print_info(
+        self.handler.logger.print_privacy_safe(
             f"Dataset order: known labels first, then unique ID {id_column!r}; "
             "holdout split seed=42, stratified CV seed=1. Same fetched rows/IDs/labels "
-            "and split settings reproduce the partitions; row-limited SQL subsets may change."
+            "and split settings reproduce the partitions; row-limited SQL subsets may change.",
+            "Dataset order: known labels first, then configured unique ID; holdout split seed=42, "
+            "stratified CV seed=1. Source column name and row identifiers omitted from persistent log.",
         )
         return dataset.iloc[positions.to_numpy()].copy()
     
@@ -712,14 +731,21 @@ class DatasetHandler:
 
         if self.X_prediction is not None and self.X.empty:
             non_null_counts = self.X_prediction.notna().sum().to_dict()
-            self.handler.logger.print_info(
-                f"Prediction-only feature non-null counts: {non_null_counts}"
+            self.handler.logger.print_privacy_safe(
+                f"Prediction-only feature non-null counts: {non_null_counts}",
+                "Prediction-only feature non-null diagnostics: "
+                f"feature_count={len(non_null_counts)}, populated_features="
+                f"{sum(1 for count in non_null_counts.values() if count > 0)}; "
+                "column names and per-column counts omitted from persistent log.",
             )
 
         if len(all_nan_cols) > 0:
             drop_cols = list(all_nan_cols)
-            self.handler.logger.print_warning(
-                f"Dropping globally all-NaN columns before split: {drop_cols}"
+            self.handler.logger.print_privacy_safe(
+                f"Dropping globally all-NaN columns before split: {drop_cols}",
+                f"Dropping globally all-NaN columns before split: count={len(drop_cols)}; "
+                "column names omitted from persistent log.",
+                level="WARNING",
             )
 
             # Drop from training+validation base matrix
@@ -882,9 +908,12 @@ class DatasetHandler:
                     group_column=group_column)
                 self.X_train, self.X_validation = self.X.iloc[train_idx], self.X.iloc[holdout_idx]
                 self.Y_train, self.Y_validation = self.Y.iloc[train_idx], self.Y.iloc[holdout_idx]
-                self.handler.logger.print_info(
+                self.handler.logger.print_privacy_safe(
                     f"Group-disjoint holdout: {group_column} groups have zero overlap. "
-                    "CV uses its own configured split strategy; this is not nested validation.")
+                    "CV uses its own configured split strategy; this is not nested validation.",
+                    "Group-disjoint holdout: configured groups have zero overlap. Group-column name "
+                    "omitted from persistent log; CV uses its own configured split strategy.",
+                )
             elif split_mode == "stratified_rows":
                 self.X_train, self.X_validation, self.Y_train, self.Y_validation = train_test_split(
                     self.X, self.Y, test_size=self.handler.config.get_test_size(),
@@ -894,19 +923,24 @@ class DatasetHandler:
 
             for label, X_part, Y_part in (("training", self.X_train, self.Y_train),
                                           ("holdout", self.X_validation, self.Y_validation)):
-                self.handler.logger.print_info(
+                self.handler.logger.print_privacy_safe(
                     f"Split {label}: rows={len(Y_part)}, class counts={dict(Counter(Y_part))}, "
                     f"ID/label SHA256={partition_signature(X_part.index, Y_part)}. "
-                    "Signatures identify membership and labels, not feature values."
+                    "Signatures identify membership and labels, not feature values.",
+                    f"Split {label}: rows={len(Y_part)}, classes={len(Counter(Y_part))}; "
+                    "class labels/counts and partition signature omitted from persistent log.",
                 )
 
             overlap = identity_overlap(self.X_train, self.X_validation, group_column) if group_column else None
             if overlap is not None:
-                self.handler.logger.print_info(
+                self.handler.logger.print_privacy_safe(
                     f"Group split audit ({group_column}): {overlap[0]} groups appear in both "
                     f"training and holdout ({overlap[1]} distinct training, "
-                    f"{overlap[2]} distinct holdout). "
-                    f"Holdout method: {split_mode}.")
+                    f"{overlap[2]} distinct holdout). Holdout method: {split_mode}.",
+                    f"Group split audit: {overlap[0]} groups appear in both training and holdout "
+                    f"({overlap[1]} distinct training, {overlap[2]} distinct holdout). "
+                    f"Holdout method: {split_mode}; group-column name omitted from persistent log.",
+                )
 
             self._validation_group_train = (self.X_train[group_column].to_numpy(copy=True)
                                             if need_groups else None)
@@ -920,7 +954,10 @@ class DatasetHandler:
                 self.X_validation = self.X_validation.drop(columns=list(excluded))
                 if self.X_prediction is not None:
                     self.X_prediction = self.X_prediction.drop(columns=list(excluded), errors="ignore")
-                self.handler.logger.print_info(f"Excluded predictors (not removed from validation grouping): {excluded}")
+                self.handler.logger.print_privacy_safe(
+                    f"Excluded predictors (not removed from validation grouping): {excluded}",
+                    f"Excluded predictors: count={len(excluded)}; column names omitted from persistent log.",
+                )
             if getattr(self.handler.config, "should_calculate_feature_importance", lambda: False)():
                 # Snapshot the held-out original input columns before text/category conversion.
                 # The optional analysis later reuses only the fitted training converter.
@@ -1046,8 +1083,18 @@ class ModelHandler:
         # Load model from file, but handle Keras models differently since their algorithm was
         # replaced by a path to model training information
         try:
+            artifact, compatibility = load_model_artifact_with_compatibility(filename)
             config, text_converter, (oversampler, undersampler, preprocess, reduction, algorithm), pipeline, \
-                keras_name, n_features = load_model_artifact(filename)
+                keras_name, n_features = artifact
+
+            compatibility_review = review_artifact_semantics(config, text_converter, compatibility)
+            if compatibility_review.issues:
+                raise ModelInitializationException(
+                    "Saved model compatibility metadata is inconsistent: "
+                    + "; ".join(compatibility_review.issues)
+                )
+            for warning in compatibility_review.warnings:
+                self.handler.logger.print_warning(warning)
                         
             # Handle Keras models differently
             if (keras_name is not None):
@@ -2285,6 +2332,26 @@ class ModelHandler:
         capped_reducer.set_params(n_components=max_components)
         return capped_reducer
 
+    def _categorical_sampler_feature_indices(self, X: pd.DataFrame) -> tuple[int, ...]:
+        """Resolve fitted categorical converter outputs to converted feature positions.
+
+        The ordinary converter ordinal-encodes configured categorical text columns, so
+        their pandas dtype no longer carries categorical semantics. Categorical SMOTE
+        must therefore use the fitted converter roles explicitly rather than relying on
+        imbalanced-learn's dtype auto-detection.
+        """
+        if not isinstance(X, pd.DataFrame):
+            raise PipelineException(
+                "Categorical SMOTE requires converted training features with named columns."
+            )
+
+        converter = getattr(getattr(self, "model", None), "text_converter", None)
+        categorical_columns = tuple(getattr(converter, "category_columns_", ()) or ())
+        try:
+            return categorical_feature_indices(X.columns, categorical_columns)
+        except ValueError as ex:
+            raise PipelineException(str(ex)) from ex
+
     def _build_spot_check_pipeline(self, reduction: Reduction, algorithm: Algorithm, preprocessor: Preprocess,
                                    feature_reducer: Transform, estimator: Estimator, scaler: Transform,
                                    oversampler: Oversampling, undersampler: Undersampling,
@@ -2322,10 +2389,16 @@ class ModelHandler:
         neighbor_limit = class_count - ceil(class_count / (len(kfold) if isinstance(kfold, list) else kfold.get_n_splits())) - 1
         if oversampler not in (Oversampling.NOG, Oversampling.RND) and neighbor_limit < 1:
             raise PipelineException("Sampling needs at least two minority rows in every CV training fold.")
+        categorical_feature_indices = (
+            self._categorical_sampler_feature_indices(dh.X_train)
+            if oversampler in (Oversampling.SNC, Oversampling.SNN)
+            else None
+        )
         return self.get_pipeline(
             reduction, feature_reducer, algorithm, estimator, preprocessor, scaler,
             oversampler, undersampler, dh.X_train.shape[1], num_features,
-            min(5, neighbor_limit) if oversampler not in (Oversampling.NOG, Oversampling.RND) else None
+            min(5, neighbor_limit) if oversampler not in (Oversampling.NOG, Oversampling.RND) else None,
+            categorical_feature_indices=categorical_feature_indices,
         )
 
     # Build pipeline and perform cross validation
@@ -2361,7 +2434,8 @@ class ModelHandler:
     def get_pipeline(self, reduction: Reduction, feature_reducer: Transform, algorithm: Algorithm, \
                 estimator: Estimator, preprocessor: Preprocess, scaler: Transform, \
                 oversampler: Oversampling, undersampler: Undersampling, max_features: int, \
-                rfe_features: int = None, max_k_neighbors: int = None) -> Union[Pipeline, Estimator]:
+                rfe_features: int = None, max_k_neighbors: int = None,
+                categorical_feature_indices: tuple[int, ...] = None) -> Union[Pipeline, Estimator]:
        
         policy, threshold = validate_decision_policy(
             getattr(getattr(self.handler.config, "mode", None), "decision_policy", "default"),
@@ -2408,6 +2482,19 @@ class ModelHandler:
             # Keep over before under and disambiguate the shared RND enum name.
             over = oversampler.get_callable_oversampler()
             under = undersampler.get_callable_undersampler()
+
+            categorical_feature_indices = tuple(categorical_feature_indices or ())
+            if oversampler in (Oversampling.SNC, Oversampling.SNN):
+                try:
+                    categorical_feature_indices = validate_categorical_oversampling(
+                        oversampler.name, categorical_feature_indices, int(max_features)
+                    )
+                except ValueError as ex:
+                    raise PipelineException(str(ex)) from ex
+
+            if oversampler == Oversampling.SNC:
+                over.set_params(categorical_features=list(categorical_feature_indices))
+
             for sampler in (over, under):
                 if "random_state" in sampler.get_params(deep=False):
                     sampler.set_params(random_state=42)
@@ -2440,6 +2527,22 @@ class ModelHandler:
             if oversampler or undersampler:
                 imputer = SimpleImputer(strategy="constant", fill_value=0, keep_empty_features=True) 
                 steps.insert(0, ("IMP", imputer))
+
+            # Enforce the sampling-order contract at runtime. Numerical neighbor
+            # interpolation must see the selected fold-fitted scaler first; categorical
+            # samplers must see ordinal category codes before generic scaling.
+            step_names = [name for name, _ in steps]
+            scaler_index = step_names.index(preprocessor.name)
+            oversampler_index = step_names.index(oversampler.name)
+            if oversampler.uses_scaled_distances() and scaler_index > oversampler_index:
+                raise PipelineException(
+                    "Numerical neighbor oversampling must run after fold-local scaling."
+                )
+            if oversampler in (Oversampling.SNC, Oversampling.SNN) and oversampler_index > scaler_index:
+                raise PipelineException(
+                    "Categorical oversampling must run before generic scaling so category codes are not "
+                    "treated as continuous values during resampling."
+                )
             
             # Check that all steps in pipeline implements "fit"
             steps = [step for step in steps if hasattr(step[1] , "fit") and callable(getattr(step[1] , "fit"))] 
@@ -2576,6 +2679,28 @@ class ModelHandler:
 
         save_config = self.handler.config.get_clean_config()
 
+        # A new artifact is only reusable when the source identity/schema and the
+        # fitted representation can be verified later. Source names are hashed in
+        # the compatibility contract; configured column names already live in config.
+        try:
+            connection = self.handler.config.connection
+            source_schema = self.handler.datalayer.get_table_columns(
+                connection.data_catalog, connection.data_table
+            )
+            compatibility = build_model_compatibility_metadata(
+                self.handler.config, self.model.text_converter, source_schema
+            )
+        except ModelCompatibilityError as compatibility_error:
+            raise ModelInitializationException(
+                "Model was not saved because source/schema compatibility metadata could not be established. "
+                f"Reason: {compatibility_error}"
+            ) from compatibility_error
+        except Exception as compatibility_error:
+            raise ModelInitializationException(
+                "Model was not saved because source/schema compatibility metadata could not be established. "
+                "The SQL source schema could not be read safely."
+            ) from compatibility_error
+
         # Handle KERAS models differently because of problems with Access denied errors
         try:
             if self.model.algorithm.lib == Library.KERAS:
@@ -2597,7 +2722,7 @@ class ModelHandler:
                 ]   
                 
                 # Save the data minus the KERAS model using the versioned artifact contract.
-                save_model_artifact(filename, *data)
+                save_model_artifact(filename, *data, compatibility=compatibility)
 
                 # Save the KERAS model separately
                 keras_sidecar = get_keras_model_sidecar_path(filename, keras_name)
@@ -2616,7 +2741,7 @@ class ModelHandler:
                 ]   
                 
                 # Save the data using the versioned artifact contract.
-                save_model_artifact(filename, *data)
+                save_model_artifact(filename, *data, compatibility=compatibility)
 
         except Exception as e:
             self.handler.logger.print_warning(f"Something went wrong on saving {self.model.algorithm.lib.get_full_name()} model to file: {e}")
@@ -2733,7 +2858,7 @@ class PredictionsHandler:
         ids = ', '.join([str(id) for id in self.X_most_mispredicted.index.tolist()])
         most_mispredicted_query = f"{self._get_rid_of_TOP_stuffs(self.handler.read_data_query)} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
         
-        self.handler.logger.print_code("Get the most misplaced data by SQL query", most_mispredicted_query)
+        self.handler.logger.print_query("most mispredicted data", most_mispredicted_query)
         Helpers.save_matrix_as_csv(
             self.X_mispredicted,
             misplaced_filepath,
@@ -3698,13 +3823,23 @@ class PredictionsHandler:
 
     def evaluate_dark_numbers(self, dark_numbers_filepath: str, dark_numbers_conf_matr_filepath: str) -> None:
         
-        self.handler.logger.display_matrix(f"Dark numbers confusion matrices", self.dark_numb_conf_matrix)
-        self.handler.logger.display_matrix(f"Dark numbers calculations", self.dark_numbers, precision = 4)
+        self.handler.logger.display_matrix(
+            "Dark numbers confusion matrices", self.dark_numb_conf_matrix,
+            log_matrix=sensitive_log_data_enabled(),
+        )
+        self.handler.logger.display_matrix(
+            "Dark numbers calculations", self.dark_numbers, precision=4,
+            log_matrix=sensitive_log_data_enabled(),
+        )
 
         for interval in build_dark_number_intervals(self.dark_numbers):
             plain, rich = format_dark_number_interval(interval)
-            self.handler.logger.print_info(
-                plain, print_always=True, html_function=lambda text, markup=rich: markup,
+            self.handler.logger.print_privacy_safe(
+                plain,
+                f"Dark Number estimate range: status={interval['status']}; "
+                "target/formula/value details omitted from persistent log.",
+                html_function=lambda text, markup=rich: markup,
+                print_always=True,
             )
 
         Helpers.save_matrix_as_csv(

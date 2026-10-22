@@ -16,6 +16,13 @@
                 "value": "<h1>Supervised Machine Learning</h1>"
             }
         },
+        "build_identity": {
+            "type": "HTML",
+            "params": {
+                "value": "",
+                "description": ""
+            }
+        },
         "project": {
             "type": "Text",
             "params": {
@@ -574,6 +581,7 @@
     "display": [
         "logo",
         "welcome",
+        "build_identity",
         "project",
         "connection_form",
         "regression_suite_form",

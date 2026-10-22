@@ -15,7 +15,6 @@ scikit_learn
 scipy
 stop_words
 terminal
-dill
 torch
 skorch
 scikeras

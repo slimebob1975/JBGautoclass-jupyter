@@ -1,4 +1,4 @@
-"""Best-effort, file-only resource monitoring for ordinary GridSearchCV.
+"""Best-effort, file-only resource monitoring for JBG parallel searches.
 
 Never mutate ipywidgets from this thread; never abort fitting from monitor.
 """
@@ -10,7 +10,35 @@ import time
 import psutil
 
 
-def safe_grid_workers(requested, *, available=None, total=None, min_fraction=0.15, min_bytes=1024**3):
+def resolve_parallel_workers(requested=None, *, max_cores=None, configured_cap=None):
+    """Resolve JBG's shared CPU-cap semantics without starting any work.
+
+    ``requested`` follows the ordinary executor convention: ``None`` or a negative
+    value means all logical cores, while a positive value is bounded by both the
+    machine and the optional global ``DEFAULT_N_JOBS_DESIRED`` cap.
+    """
+    if max_cores is None:
+        max_cores = psutil.cpu_count(logical=True) or os.cpu_count() or 1
+    max_cores = max(1, int(max_cores or 1))
+
+    if configured_cap is None:
+        try:
+            configured_cap = int(os.environ.get("DEFAULT_N_JOBS_DESIRED", "-1"))
+        except (TypeError, ValueError):
+            configured_cap = -1
+
+    if requested is None or int(requested) < 0:
+        workers = max_cores
+    else:
+        workers = max(1, min(int(requested), max_cores))
+
+    if configured_cap is not None and int(configured_cap) > 0:
+        workers = min(workers, int(configured_cap))
+    return max(1, workers)
+
+
+def safe_grid_workers(requested, *, available=None, total=None, min_fraction=0.15, min_bytes=1024**3,
+                      operation="GridSearchCV"):
     """Conservatively cap new searches at one worker under strong memory pressure.
 
     Metrics failure is non-fatal and leaves the caller's concurrency unchanged.
@@ -23,7 +51,7 @@ def safe_grid_workers(requested, *, available=None, total=None, min_fraction=0.1
         if total <= 0 or available < 0:
             return requested, None
         if requested > 1 and (available / total < min_fraction or available < min_bytes):
-            return 1, (f"GridSearchCV memory guard: free RAM {available / 2**20:.0f} MiB "
+            return 1, (f"{operation} memory guard: free RAM {available / 2**20:.0f} MiB "
                        f"({available / total:.1%}); reducing workers {requested} -> 1 "
                        "before search starts")
     except (OSError, RuntimeError, ValueError, AttributeError):

@@ -6,7 +6,7 @@ from pathlib import Path
 import sys
 import json
 import logging
-from IPython.display import display
+from IPython.display import HTML as DisplayHTML, display
 
 from typing import Callable, Iterable, Protocol
 import ipywidgets as widgets
@@ -25,8 +25,11 @@ from JBGExceptions import GuiWidgetsException
 import Helpers
 from JBGModelSettings import REGISTRY, defaults, validate
 from JBGSampling import sampling_names
-from JBGFeatureSearch import SearchOptions
+from JBGFeatureSearch import SearchOptions, resolve_feature_search_workers
 from JBGFeatureProfiles import save_candidate, load_candidates, find_candidate, review_compatibility, profile_display_name, delete_candidate
+from JBGModelCompatibility import review_current_source_compatibility
+from JBGModelPersistence import load_model_compatibility
+from JBGVersion import application_version_line
 
 class WidgetConstant(Enum):
     DATA_NUMERICAL = 1
@@ -648,7 +651,7 @@ class Widgets:
             "feature_search_tree_class_weight": {"type": "Dropdown", "params": {"options": ["None", "balanced", "balanced_subsample"], "value": "None", "disabled": True, "description": "Class weight:"}},
             "feature_search_tree_positive_threshold": {"type": "BoundedFloatText", "params": {"value": 0.5, "min": 0.01, "max": 0.99, "step": 0.01, "disabled": True, "description": "Positive cutoff:"}},
             "feature_search_tree_min_samples_leaf": {"type": "BoundedIntText", "params": {"value": 1, "min": 1, "max": 100000, "disabled": True, "description": "Min leaf:"}},
-            "feature_search_fit_budget": {"type": "HTML", "params": {"value": "Expected fit ceiling: 66"}},
+            "feature_search_fit_budget": {"type": "HTML", "params": {"value": "Expected fit ceiling: 66 | Candidate workers: automatic"}},
             "feature_search_status": {"type": "HTML", "params": {"value": "Manual data settings; no investigation will run."}},
             "feature_search_preview": {"type": "HTML", "params": {"value": ""}},
             "feature_search_investigate_button": {"type": "Button", "params": {"description": "Investigate", "button_style": "primary", "disabled": True, "icon": "search"}},
@@ -662,7 +665,14 @@ class Widgets:
             self.default_widgets.setdefault(name, definition)
             if classifier_items is not None and name not in classifier_items:
                 classifier_items.append(name)
+        self.default_widgets.setdefault(
+            "build_identity",
+            {"type": "HTML", "params": {"value": "", "description": ""}},
+        )
         display_items = self.settings.get("display", [])
+        if "build_identity" not in display_items:
+            position = display_items.index("welcome") + 1 if "welcome" in display_items else 0
+            display_items.insert(position, "build_identity")
         if "feature_importance_form" not in display_items:
             position = display_items.index("algorithm_form") if "algorithm_form" in display_items else len(display_items)
             display_items.insert(position, "feature_importance_form")
@@ -841,11 +851,35 @@ class Widgets:
             return WidgetStatus.ERROR, str(e)
 
         columns = list(self.datatype_dict.keys())
-        if config.check_config_against_data_configuration(columns):
-            return WidgetStatus.OK, ""
+        if not config.check_config_against_data_configuration(columns):
+            note = f"Model <em>{self.model_name}</em> contains columns not in chosen table"
+            return WidgetStatus.ERROR, note
 
-        note = f"Model <em>{self.model_name}</em> contains columns not in chosen table"
-        return WidgetStatus.ERROR, note
+        try:
+            model_path = self.model_path / self.models_dropdown.value
+            compatibility = load_model_compatibility(model_path)
+        except Exception as exc:
+            return WidgetStatus.ERROR, "Could not read saved-model compatibility metadata: " + html.escape(str(exc))
+
+        if compatibility is None:
+            return WidgetStatus.OK, (
+                "Legacy model: source identity and SQL type compatibility are not fully verifiable; "
+                "required column presence was checked."
+            )
+
+        review = review_current_source_compatibility(
+            compatibility,
+            driver=os.environ.get("DEFAULT_ODBC_DRIVER", ""),
+            host=os.environ.get("DEFAULT_HOST", ""),
+            catalog=self.data_catalogs_dropdown.value,
+            table=self.data_tables_dropdown.value,
+            source_schema=self.datatype_dict,
+        )
+        if review.issues:
+            return WidgetStatus.ERROR, "Saved-model compatibility check failed: " + html.escape("; ".join(review.issues))
+        if review.warnings:
+            return WidgetStatus.OK, html.escape("; ".join(review.warnings))
+        return WidgetStatus.OK, "Saved-model source and SQL schema compatibility verified"
 
 
     def get_sibling_file_path(self, file: str) -> Path:
@@ -900,6 +934,7 @@ class Widgets:
     def update_from_model_config(self, model: str = None ) -> None:
         """ Sets values based on the config in the chosen model """
         config = self.load_model_config(model)
+        self.ensure_saved_model_class_option(config)
         self.restore_model_parameters(getattr(config.mode, "model_parameters", {}))
         self.restore_decision_policy(config.mode)
         self.categorize_columns.options = config.get_text_column_names()
@@ -976,6 +1011,27 @@ class Widgets:
         self.disable_button("start_button")
             
         
+    def ensure_saved_model_class_option(self, config: Config) -> None:
+        """Keep the persisted target selectable when reusing a saved model.
+
+        Generic class discovery deliberately requires at least two observed target
+        values, which is correct for training but excludes prediction-only tables
+        whose target column is entirely NULL.  A saved model already identifies
+        its target unambiguously, so retain that exact column when it exists in the
+        selected source table.  Unrelated zero-cardinality columns remain hidden.
+        """
+        saved_class = config.get_class_column_name()
+        if not saved_class or not self.datatype_dict or saved_class not in self.datatype_dict:
+            return
+
+        allowed_types = Config.TEXT_DATATYPES + Config.INT_DATATYPES
+        if self.datatype_dict[saved_class] not in allowed_types:
+            return
+
+        self.class_column.options = self._without_stale_na_placeholder(
+            self._with_saved_options(self.class_column.options, (saved_class,))
+        )
+
     @staticmethod
     def _with_saved_options(options, values) -> tuple:
         """Include persisted values in widget options without discarding current choices."""
@@ -1372,7 +1428,7 @@ class Widgets:
     # Each GridBox cell creates a comm-backed ipywidget. Limit the initial view to
     # keep large results from overwhelming the Voilà/Jupyter frontend.
     MISPREDICTED_RENDER_LIMIT = 40
-    MISPREDICTED_WIDGET_LIMIT = 240
+    MISPREDICTED_WIDGET_LIMIT = 640
 
     def clear_mispredicted_output(self) -> None:
         """Clear the preview and release comm-backed widgets from the previous run.
@@ -1422,11 +1478,11 @@ class Widgets:
         total_rows = len(mispredicted)
         total_columns = len(mispredicted.columns) + 2
         logger = logging.getLogger(__name__)
-        widget_budget = max(1, int(getattr(self, "MISPREDICTED_WIDGET_LIMIT", 240)))
+        widget_budget = max(1, int(getattr(self, "MISPREDICTED_WIDGET_LIMIT", 640)))
         row_limit = max(0, int(getattr(self, "MISPREDICTED_RENDER_LIMIT", 40)))
         grid = self.mispredicted_gridbox
         items = []
-        display_widgets = []
+        display_items = []
 
         # This also makes direct/programmatic calls safe; GUI button actions clear
         # earlier so stale widget models do not remain alive throughout training.
@@ -1473,24 +1529,29 @@ class Widgets:
             grid.layout.grid_template_columns = f"repeat({total_columns}, max-content)"
             grid.children = tuple(items)
 
-            display_widgets = [
+            # Static decoration does not need a widget model/comm. In Voilà a
+            # completed run can otherwise leave the frontend resolving several
+            # short-lived HTML widget models at the same time as the large grid,
+            # which may surface as "Error displaying widget: model not found".
+            display_items = [
                 self.create_inpage_styles("mispredicted"),
-                widgets.HTML("<h3>Reclassification table for most mispredicted</h3>"),
+                DisplayHTML("<h3>Reclassification table for most mispredicted</h3>"),
             ]
             if total_rows > displayed_rows:
-                display_widgets.append(widgets.HTML(
+                display_items.append(DisplayHTML(
                     f"<p>Displaying the first {displayed_rows} of {total_rows} rows "
                     "to limit frontend widget load. Full results are available "
                     "in the classifier output.</p>"
                 ))
-            self._mispredicted_display_widgets = tuple(
-                widget for widget in display_widgets if widget is not None
-            )
+            # Revision 163 may leave comm-backed decorations from an older live
+            # kernel, so clear_mispredicted_output still knows how to close them.
+            # New renders deliberately keep no comm-backed decoration widgets.
+            self._mispredicted_display_widgets = ()
 
             with self.mispredicted_output:
-                for widget in display_widgets:
-                    if widget is not None:
-                        display(widget)
+                for item in display_items:
+                    if item is not None:
+                        display(item)
                 display(grid)
             logger.info(
                 "Mispredicted widget rendered: rows=%d/%d columns=%d grid_widgets=%d budget=%d",
@@ -1504,9 +1565,7 @@ class Widgets:
                 grid.children = ()
             except Exception:
                 logger.debug("Could not detach failed mispredicted grid children", exc_info=True)
-            for widget in (*items, *display_widgets):
-                if widget is None:
-                    continue
+            for widget in items:
                 try:
                     widget.close()
                 except Exception:
@@ -1523,7 +1582,7 @@ class Widgets:
                 logger.exception("Could not display the mispredicted fallback message")
             return False
 
-    def create_inpage_styles(self, section: str) -> widgets.HTML:
+    def create_inpage_styles(self, section: str) -> DisplayHTML | None:
         """ 
             Defined in default_settings.json it uses the section to get a dict
             Section (as a class) scopes the selectorsss
@@ -1543,7 +1602,7 @@ class Widgets:
             styles.append(f"{scoped_selector} {{ {scoped_styles} }}")
 
         html_string = Helpers.html_wrapper("style", " ".join(styles))
-        return widgets.HTML(html_string)
+        return DisplayHTML(html_string)
 
 
     def reclassify_dropdown(self, unique_classes: list[str], row_name: str) -> widgets.Dropdown:
@@ -2106,6 +2165,7 @@ class Widgets:
         return result
 
     def feature_search_options(self) -> SearchOptions:
+        parallel_workers, _ = resolve_feature_search_workers(self.feature_search_max_evaluations.value)
         return SearchOptions(
             trials=self.feature_search_trials.value,
             sizes=tuple(self._parse_positive_int_list(self.feature_search_sizes.value, "Subset sizes")),
@@ -2133,7 +2193,7 @@ class Widgets:
             tree_min_samples_leaf=self.feature_search_tree_min_samples_leaf.value,
             tree_class_weight=self.feature_search_tree_class_weight.value,
             tree_positive_threshold=self.feature_search_tree_positive_threshold.value,
-            parallel_workers=self.feature_search_parallel_workers.value,
+            parallel_workers=parallel_workers,
             catboost_class_weight=self.feature_search_catboost_class_weight.value,
             catboost_iterations=self.feature_search_catboost_iterations.value,
         )
@@ -2159,7 +2219,10 @@ class Widgets:
         try:
             options = self.feature_search_options()
             options.validate()
-            self.feature_search_fit_budget.value = f"Expected fit ceiling: {options.planned_fit_upper_bound}"
+            self.feature_search_fit_budget.value = (
+                f"Expected fit ceiling: {options.planned_fit_upper_bound} | "
+                f"Candidate workers: automatic ({options.parallel_workers})"
+            )
         except Exception as ex:
             self.feature_search_fit_budget.value = f"Fit budget invalid: {html.escape(str(ex))}"
 
@@ -2307,16 +2370,6 @@ class Widgets:
             except (ValueError, OSError, TypeError, KeyError):
                 continue
         return choices
-
-    @property
-    def feature_search_parallel_workers(self):
-        if not hasattr(self, '_feature_search_parallel_workers_widget'):
-            self._feature_search_parallel_workers_widget = widgets.Dropdown(
-                options=[('Serial (1)', 1), ('2 workers', 2), ('4 workers', 4)],
-                value=1, description='Search workers:',
-                style={'description_width': 'initial'}, layout=widgets.Layout(width='190px'),
-            )
-        return self._feature_search_parallel_workers_widget
 
     @property
     def feature_search_recovery_selector(self):
@@ -2604,38 +2657,16 @@ class Widgets:
             record, project=params["name"],
             tables=[f"{connection.data_catalog}.{connection.data_table}"],
             class_column=connection.class_column, id_column=connection.id_column,
-            columns=list(self.data_columns.options),
+            columns=list(self.data_columns.options), sql_schema=getattr(self, "datatype_dict", None),
         )
-        # Database metadata describes SQL types, while stored dtypes describe
-        # pandas ingestion. They are not directly comparable; fail closed if
-        # current metadata is unavailable instead of claiming dtype equivalence.
-        schema = record.get("provenance", {}).get("original_column_schema") or []
         selected = record.get("recommendation", {}).get("selected_columns") or []
         if not isinstance(getattr(self, "datatype_dict", None), dict):
             problems.append("Current column types are unavailable")
         elif any(c not in self.datatype_dict for c in selected):
             problems.append("Current column type metadata is incomplete")
-        if not isinstance(record.get("text_options"), dict):
-            problems.append("Saved preprocessing settings are unavailable")
-        if not schema:
+        if not (record.get("provenance", {}).get("original_column_schema") or []):
             problems.append("Saved feature schema is missing")
-        else:
-            stored = {item.get("name"): str(item.get("dtype", "")).lower() for item in schema}
-            numeric_sql = set(Config.INT_DATATYPES) | {"float", "real", "decimal", "numeric", "money", "smallmoney", "bit"}
-            for name in selected:
-                if name not in stored:
-                    continue
-                sql_type = str((getattr(self, "datatype_dict", None) or {}).get(name, "")).lower()
-                dtype = stored[name]
-                numeric_pandas = dtype.startswith(("int", "uint", "float")) or dtype in ("bool", "boolean")
-                text_pandas = dtype in ("object", "string", "str") or dtype.startswith("string[")
-                if sql_type in numeric_sql and not numeric_pandas:
-                    problems.append("Column type family differs: " + name)
-                elif sql_type in Config.TEXT_DATATYPES and not text_pandas:
-                    problems.append("Column type family differs: " + name)
-                elif sql_type not in numeric_sql and sql_type not in Config.TEXT_DATATYPES:
-                    problems.append("Column SQL type needs manual verification: " + name)
-        return problems
+        return list(dict.fromkeys(problems))
 
     def review_feature_search_candidate(self) -> None:
         if self.feature_selection_mode.value != "reuse":
@@ -2660,7 +2691,7 @@ class Widgets:
         result = nested.get("selected") or {}
         score = result.get("mean_mcc")
         score_text = f"Nested MCC: {score:.4f}<br>" if isinstance(score, (int, float)) else ""
-        findings = "<br>".join(html.escape(x) for x in reasons) if reasons else "Source and columns match recorded identity; SQL/pandas type and semantic equivalence require user review."
+        findings = "<br>".join(html.escape(x) for x in reasons) if reasons else "Source identity, recorded SQL schema and converter representation match; feature meaning still requires domain review."
         baseline = nested.get("full_baseline") or {}
         original = record.get("original_columns") or []
         retained = list(selected) == list(original)
@@ -2731,6 +2762,8 @@ class Widgets:
             return
         old_text = tuple(self.text_columns.value)
         old_categories = tuple(self.categorize_columns.value)
+        saved_text = None
+        saved_ngram_name = None
         if record is not None:
             saved_text = record.get("text_options")
             if not isinstance(saved_text, dict):
@@ -2738,6 +2771,14 @@ class Widgets:
                 return
             old_text = tuple(saved_text.get("text_columns", ()))
             old_categories = tuple(saved_text.get("category_columns", ()))
+            saved_ngram = tuple(saved_text.get("ngram_range", ()))
+            saved_ngram_name = next(
+                (item.name for item in NgramRange if tuple(item.ngram_range) == saved_ngram),
+                None,
+            )
+            if saved_ngram_name is None:
+                self.feature_search_status.value = "Saved n-gram representation is unsupported; cannot apply."
+                return
         previous_lock = self.eventhandler.lock_observe_1
         self.eventhandler.lock_observe_1 = True
         try:
@@ -2746,11 +2787,22 @@ class Widgets:
             self.text_columns.value = tuple(column for column in old_text if column in selected)
             self.categorize_columns.options = self.text_columns.value
             self.categorize_columns.value = tuple(column for column in old_categories if column in self.text_columns.value)
+            if saved_text is not None:
+                # Reuse the exact configurable representation that produced the
+                # saved recommendation instead of silently keeping today's GUI values.
+                self.filter_checkbox.value = bool(saved_text["stop_words"])
+                self.ngram_range_dropdown.value = saved_ngram_name
+                self.encryption_checkbox.value = bool(saved_text["use_encryption"])
+                self.categorize_checkbox.value = bool(saved_text["use_categorization"])
         finally:
             self.eventhandler.lock_observe_1 = previous_lock
         self._feature_search_applied = True
         self.update_ready()
-        self.feature_search_status.value = f"Applied {'saved ' if record else ''}candidate recommendation: {len(selected)} original columns selected (not independently validated)."
+        representation_note = " with its recorded text representation" if record else ""
+        self.feature_search_status.value = (
+            f"Applied {'saved ' if record else ''}candidate recommendation{representation_note}: "
+            f"{len(selected)} original columns selected (not independently validated)."
+        )
         self.disable_button("feature_search_apply_button")
 
     def form_field_enabled_toggle(self, form_name: str, disabled: bool = False) -> None:
@@ -2829,9 +2881,12 @@ class Widgets:
             [self.feature_selection_profile, *profile_actions],
             layout=widgets.Layout(align_items="center", flex_flow="row wrap"),
         )
-        model_row = widgets.HBox([
-            self.feature_search_rows, self.feature_search_model_type,
-            self.feature_search_scaler, self.feature_search_oversampling, self.feature_search_reduction, self.feature_search_parallel_workers, self.feature_search_fit_budget,
+        search_rows_row = widgets.HBox([
+            self.feature_search_rows,
+        ], layout=widgets.Layout(flex_flow="row wrap", width="100%"))
+        pipeline_row = widgets.HBox([
+            self.feature_search_scaler, self.feature_search_oversampling,
+            self.feature_search_reduction, self.feature_search_model_type,
         ], layout=widgets.Layout(flex_flow="row wrap", width="100%"))
         recovery_row = widgets.HBox([
             self.feature_search_recovery_selector,
@@ -2847,7 +2902,7 @@ class Widgets:
         help_text = {
             "feature_selection_mode": "Choose manual settings, run an investigation, or apply a saved recommendation.",
             "feature_selection_profile": "Choose a saved recommendation; Review shows its evidence without applying it.",
-            "feature_search_fit_budget": "Upper bound on estimator fits for the selected nested search configuration; not a time estimate.",
+            "feature_search_fit_budget": "Upper bound on estimator fits for the selected nested search configuration; not a time estimate. Candidate workers are selected automatically from the shared JBG CPU/resource policy.",
             "feature_search_rows": "Maximum number of labelled records to retrieve for investigation (independent of normal training).",
             "feature_search_trials": "Number of random subset proposals; the maximum-subsets cap still applies.",
             "feature_search_sizes": "Comma-separated numbers of original columns sampled per proposal, e.g. 5,10,20.",
@@ -2924,7 +2979,8 @@ class Widgets:
             self.feature_search_catboost_class_weight, self.feature_search_catboost_iterations,
         ])
         body = widgets.VBox([
-            mode_row, profile_row, model_row, self.feature_search_investigation_mode, self.feature_search_subgroup_column, recovery_row, action_row,
+            mode_row, profile_row, search_rows_row, pipeline_row,
+            self.feature_search_investigation_mode, self.feature_search_subgroup_column, recovery_row, action_row,
             strategy_group, validation_group, family_group,
             self.feature_search_status, self.feature_search_result_tabs,
         ], layout=widgets.Layout(width="100%"))
@@ -3211,6 +3267,18 @@ class Widgets:
         
         return self._load_widget(name)
     
+    @property
+    def build_identity(self) -> widgets.HTML:
+        """Application version and repository provenance shown below the title."""
+        name = sys._getframe().f_code.co_name
+        widget = self._load_widget(name)
+        widget.value = (
+            '<div style="font-size: 0.9em; opacity: 0.75; margin-top: -6px; margin-bottom: 10px;">'
+            + html.escape(application_version_line())
+            + "</div>"
+        )
+        return widget
+
     @property
     def project(self) -> widgets.Text:
         """ The initial data is entirely from the json """

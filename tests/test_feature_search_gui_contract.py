@@ -33,7 +33,7 @@ class FeatureSearchGuiContractTests(unittest.TestCase):
         self.assertIn('"feature_selection_modelling_form"', WIDGETS)
 
     def test_required_investigative_families_exist(self):
-        self.assertIn('"options": ["Linear", "Non-linear", "Tree", "Combination"]', WIDGETS)
+        self.assertIn('"options": ["Linear", "Non-linear", "Tree", "Combination", "CatBoost"]', WIDGETS)
 
     def test_reuse_mode_has_explicit_empty_profile_state(self):
         self.assertIn("No saved recommendations", WIDGETS)
@@ -107,6 +107,11 @@ class FeatureSearchGuiContractTests(unittest.TestCase):
         self.assertIn("reserved_holdout_signature=partition_signature", SERVICE)
         self.assertIn("dataset.X_validation.index", SERVICE)
         self.assertIn("dataset.Y_validation", SERVICE)
+
+    def test_investigation_persists_only_predictor_sql_schema(self):
+        self.assertIn('source_sql_schema = datalayer.get_table_columns(', SERVICE)
+        self.assertIn('source_sql_schema = {column: source_sql_schema[column] for column in X.columns}', SERVICE)
+        self.assertIn('source_sql_schema=source_sql_schema', SERVICE)
 
     def test_investigation_service_does_not_run_classifier_or_repeat_last(self):
         self.assertNotIn("TaskRunner", SERVICE)

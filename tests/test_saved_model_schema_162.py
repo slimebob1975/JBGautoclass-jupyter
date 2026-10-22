@@ -4,6 +4,7 @@ from pathlib import Path
 import unittest
 
 import pandas as pd
+from JBGModelCompatibility import pandas_dtype_family
 
 SOURCE = Path(__file__).resolve().parents[1] / "src" / "JBGTransformers.py"
 
@@ -18,7 +19,7 @@ def load_converter_methods():
     # Run the actual method with lightweight stand-ins for the legacy transform.
     block = ast.Module(body=[method], type_ignores=[])
     ast.fix_missing_locations(block)
-    space = {"pd": pd, "check_is_fitted": lambda obj: None}
+    space = {"pd": pd, "check_is_fitted": lambda obj: None, "pandas_dtype_family": pandas_dtype_family}
     exec(compile(block, str(SOURCE), "exec"), space)
     return space["transform"]
 
@@ -61,6 +62,14 @@ class Schema162(unittest.TestCase):
         actual = self.transform_method(conv, df)
         self.assertEqual(list(actual.columns), ["b", "a"])
 
+    def test_dtype_family_mismatch_is_refused_for_new_models(self):
+        conv = self.make_converter(("a", "b"))
+        conv.input_feature_type_families_ = {"a": "numeric", "b": "numeric"}
+        with self.assertRaisesRegex(ValueError, "changed dtype family"):
+            self.transform_method(conv, pd.DataFrame({"a": [1], "b": ["two"]}))
+
     def test_schema_is_recorded_on_fit(self):
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn('self.input_feature_columns_ = tuple(X.columns)', source)
+        self.assertIn('self.input_feature_type_families_', source)
+        self.assertIn('self.configured_text_columns_', source)

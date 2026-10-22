@@ -40,3 +40,73 @@ def sampling_names(value, enum_type, fallback):
         if name not in names:
             names.append(name)
     return names
+
+
+def categorical_feature_indices(feature_names, categorical_names):
+    """Resolve fitted categorical feature names to stable converted-column indices.
+
+    Ordinary JBG conversion turns categorical text into ordinal numeric columns, so
+    dtype-based sampler auto-detection cannot recover their semantics later.
+    """
+    names = list(feature_names)
+    if len(names) != len(set(names)):
+        raise ValueError("Categorical SMOTE requires unique converted feature names.")
+
+    categories = tuple(categorical_names or ())
+    if len(categories) != len(set(categories)):
+        raise ValueError("Categorical SMOTE received duplicate fitted categorical feature names.")
+
+    missing = [name for name in categories if name not in names]
+    if missing:
+        raise ValueError(
+            "Categorical SMOTE contract is inconsistent: "
+            f"{len(missing)} fitted categorical column(s) are absent after conversion."
+        )
+
+    selected = set(categories)
+    return tuple(index for index, name in enumerate(names) if name in selected)
+
+
+def validate_categorical_oversampling(method_name, categorical_indices, n_features):
+    """Validate the converted-feature contract for SMOTE-NC or SMOTE-N.
+
+    Returns a normalized tuple of categorical indices. The caller can pass the SMOTE-NC
+    result directly to ``categorical_features``. SMOTE-N is accepted only when every
+    converted feature is explicitly known to be categorical.
+    """
+    if isinstance(n_features, bool) or not isinstance(n_features, int) or n_features < 1:
+        raise ValueError("Categorical SMOTE requires a positive converted feature count.")
+
+    indices = tuple(categorical_indices or ())
+    invalid = [
+        index for index in indices
+        if isinstance(index, bool) or not isinstance(index, int)
+        or index < 0 or index >= n_features
+    ]
+    if invalid or len(set(indices)) != len(indices):
+        raise ValueError("Categorical SMOTE received an invalid converted-feature index contract.")
+
+    method_name = str(method_name).upper()
+    if method_name == "SNC":
+        if not indices:
+            raise ValueError(
+                "SMOTE-NC requires fitted categorical feature roles; no categorical converted "
+                "features were identified. Configure categorical text columns or use a numerical "
+                "oversampler."
+            )
+        if len(indices) >= n_features:
+            raise ValueError(
+                "SMOTE-NC requires both categorical and non-categorical converted features; "
+                "use SMOTE-N only for an all-categorical representation."
+            )
+    elif method_name == "SNN":
+        if tuple(sorted(indices)) != tuple(range(n_features)):
+            raise ValueError(
+                "SMOTE-N requires every converted predictor to be categorical. The fitted "
+                "representation contains non-categorical features; use SMOTE-NC or another "
+                "oversampler."
+            )
+    else:
+        raise ValueError(f"Unsupported categorical oversampler contract: {method_name}")
+
+    return indices

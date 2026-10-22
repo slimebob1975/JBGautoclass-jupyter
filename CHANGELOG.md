@@ -1,3 +1,107 @@
+## Revision 175 — application and repository build identity
+
+- Added a controlled JBG AutoClassification application version (`0.17.5`) that is intentionally independent from transient Git state. The GUI now shows the application version plus repository provenance directly below the main title.
+- Development checkouts report an exact Git tag when present, otherwise the current branch, together with a short commit SHA and a `(modified)` marker when tracked files differ from HEAD. Packaged/non-Git deployments fall back safely to `Git: unavailable`; build systems may inject branch/tag/commit metadata through dedicated environment variables.
+- Added the same application/build identity to the first lines of every persistent application log so screenshots and diagnostics can be traced to the code revision that produced them. Older local `settings.json` files automatically receive the new display row without requiring a reset.
+- Added dependency-light regression coverage for stable semantic versioning, Git/tag/dirty resolution, packaged-build overrides, non-Git fallback, runtime-log identity and GUI placement. No ML, SQL, persistence or model-selection behavior changes.
+
+## Revision 174b — wider bounded reclassification preview
+
+- Raised the default misprediction/reclassification grid-widget budget from 240 to 640 after revision 174a was live-verified without the recurring Voilà `model not found` frontend error. The independent 40-row cap and total-widget bound remain in place.
+- Wide tables now receive substantially more useful preview depth while still preventing unbounded comm-model creation. A representative 58-data-column table fits nine editable rows plus its header within the new 640-widget ceiling.
+- Kept the longer-term BACKLOG direction unchanged: replace comm-backed read-only cells with a lighter HTML/table representation and reserve widgets for interactive controls. Added the requested application/build identity item for GUI and runtime logs. No ML, sampling, persistence or SQL behavior changes.
+
+## Revision 174a — static reclassification preview decorations
+
+- Fixed a live Windows/Voilà post-run rendering regression where a successfully completed model run could show repeated `Error displaying widget: model not found` messages while constructing the misprediction/reclassification preview. Backend diagnostics showed the classifier, misprediction calculation and post-run callback all completed normally.
+- Replaced the preview's three purely presentational comm-backed HTML widgets (scoped style, heading and truncation notice) with static `IPython.display.HTML`. The interactive grid and reclassification dropdowns remain ipywidgets; model results and database correction behavior are unchanged.
+- Preserved revision-163 stale-widget cleanup for older live kernels while new renders no longer retain decoration widget models. Added focused regression coverage for static decorations and the retained interactive grid.
+
+## Revision 174 — explicit categorical sampling semantics
+
+- Hardened ordinary-pipeline sampling semantics. Numerical SMOTE-family candidates keep the established fold-local scaler-before-sampler ordering and pipeline construction now validates that contract instead of relying only on step-insertion assumptions.
+- Replaced `SMOTE-NC(categorical_features="auto")` after ordinal conversion with an explicit categorical-feature index contract derived from the fitted text/category converter. This prevents ordinal category codes from being silently treated as continuous features merely because their pandas dtype is numeric after conversion.
+- Made SMOTE-N fail closed unless every converted predictor is explicitly known to be categorical. SMOTE-NC likewise requires at least one categorical and one non-categorical converted feature; ambiguous, duplicate or missing fitted category roles produce actionable candidate errors rather than guessed semantics.
+- Added regression coverage for categorical-index resolution/validation and real imbalanced-learn resampling, including checks that synthetic SMOTE-NC/SMOTE-N category values remain members of the observed discrete category sets. No scoring, source-data, persistence or prediction contract changes.
+
+## Revision 173b — allow schema-compatible prediction sources
+
+- Fixed a revision-173 compatibility regression that treated the exact physical SQL source identity (including table name) as a hard reuse requirement. Model artifacts may now be trained on one table and applied to a different prediction table when all fitted-model-required columns are present with compatible SQL type families.
+- Kept the privacy-safe source fingerprint as provenance. A changed host/catalog/table fingerprint now produces an explicit warning instead of blocking reuse; missing required columns, incompatible SQL type families, malformed metadata and converter/dtype incompatibility remain fail-closed.
+- Confirmed by regression coverage that extra columns in the prediction source are ignored when the fitted model does not require them, while changing source and simultaneously removing a required model column still blocks reuse. No model scoring, fitting, SQL write or feature-conversion behavior changes.
+- Clarified the README saved-model contract accordingly. Runtime log masking remains controlled by `JBG_LOG_SENSITIVE_DATA`: set it to `1` for trusted full application diagnostics and back to `0` to restore masking.
+
+## Revision 173a — tolerate globally empty predictors in saved-model compatibility
+
+- Fixed a revision-173 save regression when a configured predictor is globally all-NaN in the fetched training dataset and is therefore correctly dropped before converter fit. Compatibility metadata is now anchored to the converter's actual fitted predictor columns plus ID/target instead of requiring every configured predictor to survive preprocessing.
+- Record configured predictors omitted before fit as explicit artifact metadata. They remain part of the saved configuration, but are not falsely treated as required fitted-model inputs; unexpected fitted predictors still fail closed.
+- Kept source identity, SQL type-family verification, converter-setting verification and dtype-family prediction guards intact. Added a safe reason to fail-closed save errors when the contract itself rejects a representation, while unexpected SQL-schema read failures remain generic.
+- Added focused regression coverage for the globally-all-NaN predictor case and for rejection of unexpected fitted predictors. No scoring, model-selection or feature-conversion behavior changes.
+
+## Revision 173 — saved-model and data compatibility contracts
+
+- Added a versioned compatibility contract to newly saved model artifacts without changing the established six-field payload: source identity is stored only as a SHA-256 fingerprint, while the artifact records the required SQL type families, feature roles, configured converter settings, fitted input dtype families and fitted text/category roles. Model saving now fails closed if that contract cannot be established instead of silently leaving a stale artifact in place.
+- Prediction-only reuse now verifies the live source identity and SQL schema before saved settings replace the current runtime source. Missing columns or SQL type-family changes block reuse; exact SQL-type changes within the same family and ODBC-driver changes are allowed only with an explicit warning that semantic equivalence is not independently proven. The fitted converter also rejects predictor dtype-family drift before prediction.
+- Preserved legacy model readability. Artifacts without revision-173 metadata can still load, but the GUI/runtime explicitly state that source identity, SQL type compatibility and converter-setting equivalence cannot be fully verified.
+- Strengthened saved Feature modelling candidates: investigations record SQL schema only for predictors actually studied, saved-profile review requires the recorded source/schema and complete text-representation settings to match, and explicit Apply restores those representation settings together with the selected columns. Candidate recommendations remain exploratory and are never promoted to validated settings.
+- Added focused compatibility, persistence, converter-schema, feature-profile and GUI/service regression coverage. Updated stale Feature modelling fit-count/event assertions to the existing diagnostics-aware contract; this test maintenance does not change search execution.
+
+## Revision 172b — complete formatted-info HTML closing tag
+
+- Fixed the shared formatted-info helper in both logger implementations to emit a complete `</b>` closing tag. The long-standing malformed `</b` fragment could still be interpreted as a POSIX-like path after revision 172a, producing `<<local-path>` in otherwise privacy-safe persistent logs.
+- Kept the revision-172a path-redaction rule unchanged: valid HTML closing tags remain intact while real local paths are still redacted by default.
+- Added focused regression coverage for both logger implementations and the exact bold status-message shape. No ML, SQL, persistence, GUI state or parallelism behavior changes.
+
+## Revision 172a — preserve HTML while redacting local paths
+
+- Corrected the revision-172 POSIX-path redactor so HTML closing tags such as `</b>`, `</em>`, `</pre>` and `</span>` are not mistaken for absolute local paths in persistent application logs.
+- Real POSIX paths, Windows paths and traceback filenames remain redacted by default, while `JBG_LOG_SENSITIVE_DATA=1` continues to restore full trusted-local diagnostics.
+- Added focused regression coverage for HTML preservation together with simultaneous real-path redaction. No ML, SQL, persistence, GUI or parallelism behavior changes.
+
+## Revision 172 — broader application runtime-log privacy
+
+- Extended the revision-170 opt-in privacy boundary across the persistent application log. Full configuration matrices, dataset schema/statistics/class-distribution tables, class-labelled evaluation matrices, feature-importance names, Dark Number data tables, row-level prediction/reclassification payloads and split labels/signatures are now operator-visible but omitted or summarized in the persistent log unless `JBG_LOG_SENSITIVE_DATA=1` is explicitly enabled.
+- Added privacy-safe handling for absolute local paths and Python warning/traceback filenames, plus embedded base64/download-link payloads that previously could copy generated CSV contents into the log. Path redaction preserves ordinary support text and the explicit sensitive-logging opt-in restores full local diagnostics.
+- Kept useful non-identifying diagnostics such as row counts, class-count cardinality, worker decisions, timing and generic status in the default log. Generated output files themselves are unchanged and must still be treated according to source-data sensitivity.
+- Deliberately did not redact the separate Voilà launcher/server log yet: the guarded kernel-cleanup script currently relies on its exact connection-directory path. Added a BACKLOG follow-up to replace that dependency before server-log path redaction.
+- Added focused regression coverage for path, prediction, reclassification, download-payload and source-contract redaction. No ML scoring, model selection, SQL execution, persistence format or parallelism behavior changes.
+
+## Revision 171 — current-product README cleanup
+
+- Rewrote `README.md` as a current-product getting-started guide covering requirements, installation, environment configuration, Voilà startup, core train/predict workflows, model persistence, Feature selection modelling, feature importance, Dark Number diagnostics, runtime output, privacy-safe logging, testing and troubleshooting.
+- Removed revision-by-revision narrative, historical benchmark notes and stale links to documentation files that are not part of the current repository. Development history remains in `CHANGELOG.md`; active work remains in `BACKLOG.md`.
+- Kept examples generic and documented the existing pickle-first/optional-dill persistence contract plus revision-170 runtime-log privacy behavior without changing application runtime.
+- Corrected the missing newline between `DEFAULT_N_JOBS_DESIRED` and `JBG_LOG_SENSITIVE_DATA` in `.env_template`, so a newly copied environment template exposes the privacy setting as a separate variable.
+- Added focused regression coverage for README structure, absence of numbered revision history/stale `docs/` links, current persistence/privacy guidance and the environment-template separation.
+
+## Revision 170 — feature-search worker diagnostics and privacy-safe persistent logs
+
+- Added a file-level Feature modelling start diagnostic that records the actual selected candidate-worker count together with logical CPU count, the shared `DEFAULT_N_JOBS_DESIRED` cap, candidate budget, pre-memory worker ceiling and whether the revision-157 memory guard reduced concurrency. The diagnostic observes the already-selected policy and does not change executor behavior.
+- Persistent run logs now omit full SQL text by default while the active notebook/Voilà UI can still show the operator the complete query. Classification-data, prediction-retrieval, reclassification and generated misprediction SQL all use the same privacy-aware path. Set `JBG_LOG_SENSITIVE_DATA=1` only in a trusted local debugging environment to restore full SQL in persistent logs.
+- Dataset investigation still displays the first 20 rows interactively, but the streamed persistent log/email buffers record only a shape-based placeholder for that row-level preview unless sensitive logging is explicitly enabled. Statistical summaries, class distribution and schema diagnostics remain unchanged.
+- Added focused regression coverage for the opt-in policy, SQL/prediction redaction, row-preview suppression, misprediction-query routing and Feature modelling parallelism diagnostics. Added the privacy opt-in to `.env_template` and a follow-up BACKLOG audit for other potentially identifying runtime-log fields.
+
+## Revision 169 — Feature modelling panel and automatic candidate parallelism
+
+- Removed the user-facing `Search workers` selector. New feature-selection investigations derive candidate-process parallelism automatically from the machine's logical CPU count, the existing `DEFAULT_N_JOBS_DESIRED` global cap, the distinct-subset search budget and the revision-157 pre-search memory guard. Candidate estimators remain internally single-threaded to avoid nested oversubscription.
+- Reorganized the Feature selection modelling panel so `Search rows` has its own row and the pipeline controls follow execution order: `Scaler` → `Oversampling` → `Reduction` → `Model type`. The fit ceiling stays with validation/computational-budget controls and now reports the automatically selected candidate-worker count.
+- Kept the existing spawn-based `ProcessPoolExecutor`, bounded candidate batches, parent-only checkpoint commits and deterministic input-order result commits unchanged. Added focused regression coverage for the shared worker-cap semantics, memory fallback and GUI layout contract.
+- Updated the stale Feature modelling GUI contract test to recognize the already-existing CatBoost investigative family; this is test maintenance only and does not add or change a runtime model.
+
+## Revision 168 — saved-model target restoration for prediction-only tables
+
+- Saved-model reuse now restores the model's exact configured class column as a selectable target when that column exists in the selected source table, even if generic training discovery excludes it because the current table contains fewer than two observed target values (including an all-NULL prediction target).
+- The ordinary training candidate rule remains unchanged: manually discovered class columns still require at least two distinct non-NULL values and remain subject to the configured class-cardinality ceiling. Unrelated empty columns are not promoted merely because a saved model is selected.
+- Added focused regression coverage for restoration ordering, exact-target scoping and preservation of the training cardinality rule. Added a backlog item to reduce reclassification preview widget density rather than simply raising the revision-163 frontend widget budget.
+
+## Revision 167 — pickle-first model persistence with optional dill compatibility
+
+- Remove `dill` as an unconditional runtime/test dependency. New versioned model artifacts are written with the Python standard-library `pickle` serializer by default and record `serializer=pickle` in the existing artifact envelope.
+- Preserve compatibility in both directions: loading first tries standard pickle, then lazily imports optional `dill` only when pickle cannot read the artifact; saving similarly falls back to dill only when a model cannot be serialized by pickle. Missing optional dill produces an actionable compatibility error instead of preventing JBG/test import at startup. Legacy six-item payloads and the trusted-artifact security boundary remain unchanged.
+- Move dill to `requirements-legacy-models.txt`, remove unconditional dill imports from persistence/source-layout tests, and make explicit pickle/dill serializer regression branches conditional on dill being installed. Update persistence documentation and retain the existing PyTorch/skorch inner-pickle workaround without tying it to an outer dill envelope.
+- Record successful completion of the local/reachable-history privacy remediation and add a deferred fastai tabular integration investigation to BACKLOG. fastai is not added as a dependency or runtime model in this revision.
+- Validation in the dill-free container: 15 focused persistence tests pass and the two real-dill compatibility tests skip as intended; a real sklearn pipeline saves with `serializer=pickle`, reloads, predicts and retrains in a fresh process. `compileall`, `git diff --check` and the documentation privacy scan pass. Full pytest collection is no longer blocked by dill and now stops later on the separately missing `langdetect` dependency.
+
 ## Revision 166b — affected-history signature scoping
 
 - Scope signed-commit and merge-tag safety checks to the exact commit set whose tree or ancestry must change during the documentation privacy rewrite. Signed commits that are true ancestors of the affected range are now preserved byte-for-byte instead of blocking remediation merely because they are reachable.

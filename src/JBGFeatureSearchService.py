@@ -15,7 +15,8 @@ from pathlib import Path
 from threadpoolctl import threadpool_limits
 
 from JBGCVReporting import partition_signature
-from JBGFeatureSearch import SearchOptions, run_experiment
+from JBGFeatureSearch import (SearchOptions, describe_feature_search_parallelism,
+                              run_experiment)
 from JBGHandler import JBGHandler
 from SQLDataLayer import DataLayer
 
@@ -99,6 +100,7 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         record = pickle.loads(data)
         X, y, reserved_signature, context = (record[k] for k in
                                                ('X', 'y', 'holdout_signature', 'context'))
+        source_sql_schema = record.get('source_sql_schema')
         # The immutable saved snapshot, not a newly initialized GUI or SQL sample,
         # is authoritative when recovering an existing investigation.
         text_options = record['text_options']
@@ -114,6 +116,9 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         subgroup_column = summary.get('subgroup_column')
     else:
         datalayer = DataLayer(config=config, logger=investigation_logger)
+        source_sql_schema = datalayer.get_table_columns(
+            config.connection.data_catalog, config.connection.data_table
+        )
         rows = datalayer.get_dataset()
         if rows is None:
             raise ValueError("No data was fetched for feature-selection investigation")
@@ -128,6 +133,12 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         y = dataset.Y_train.copy(deep=True)
         if X.empty or y.empty:
             raise ValueError("Feature-selection investigation has no labelled training rows")
+        missing_sql_schema = [column for column in X.columns if column not in source_sql_schema]
+        if missing_sql_schema:
+            raise ValueError(
+                f"Feature-selection SQL schema is missing {len(missing_sql_schema)} investigated predictor column(s)"
+            )
+        source_sql_schema = {column: source_sql_schema[column] for column in X.columns}
         classes = sorted({str(value) for value in y})
         if len(classes) != 2:
             raise ValueError(
@@ -160,7 +171,7 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
     if not resume:
         output.mkdir(parents=True, exist_ok=False)
         record = dict(X=X, y=y, holdout_signature=reserved_signature, context=context,
-                      text_options=text_options, target=target)
+                      source_sql_schema=source_sql_schema, text_options=text_options, target=target)
         snapshot = output / 'development_snapshot.pkl'
         # Atomic creation avoids a partially written checkpoint after a crash.
         temp = snapshot.with_suffix('.tmp')
@@ -169,6 +180,12 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         os.replace(temp, snapshot)
         (output / 'development_snapshot.sha256').write_text(hashlib.sha256(data).hexdigest(),
                                                               encoding='ascii')
+    parallelism_message = describe_feature_search_parallelism(
+        options.max_evaluations, options.parallel_workers
+    )
+    if logger is not None and getattr(logger, "log_file", None) is not None:
+        logger.log_file.write_message(parallelism_message)
+
     with _exclusive_investigation(output):
         with threadpool_limits(limits=1):
             result = run_experiment(
@@ -185,6 +202,7 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
                 progress=None,
                 on_event=on_event,
                 study_context=context,
+                source_sql_schema=source_sql_schema,
                 resume=resume,
                 pause_event=pause_event,
                 investigation_mode=investigation_mode, subgroup_column=subgroup_column,
