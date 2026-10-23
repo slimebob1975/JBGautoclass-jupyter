@@ -314,7 +314,7 @@ def test_config_path_loads_absolute_file_and_sql_route_only_fetches(tmp_path, mo
     monkeypatch.setattr(JBGLogger, 'JBGLogger', lambda **kwargs: Mock())
     module = cli()
     _, config = snapshot_config(tmp_path)
-    config_path = tmp_path / 'config.py'
+    config_path = tmp_path / 'config.json'
     config.save_to_file(config_path)
     n = 90
     # get_column_names follows text, numeric, ID, class order.

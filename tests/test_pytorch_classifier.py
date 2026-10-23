@@ -221,7 +221,7 @@ def test_model_artifact_reload_in_fresh_process_after_checkpoint_cleanup(tmp_pat
     pipeline = Pipeline([("torch", model)]).fit(X, y)
     artifact = tmp_path / "model.sav"
     save_model_artifact(artifact, {}, None, ("NOG", "NUG", "NOS", "NOR", algorithm),
-                        pipeline, None, X.shape[1])
+                        pipeline, None, X.shape[1], compatibility={"schema_version": 1})
     assert load_model_artifact(artifact)[2][-1] is algorithm
     data = tmp_path / "X.npy"
     np.save(data, X)

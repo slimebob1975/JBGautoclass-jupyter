@@ -1,4 +1,4 @@
-"""Revision 162: source-schema safety and legacy compatibility."""
+"""Source-schema safety for current fitted converters."""
 import ast
 from pathlib import Path
 import unittest
@@ -16,7 +16,7 @@ def load_converter_methods():
                and node.name == "TextDataToNumbersConverter")
     method = next(node for node in cls.body if isinstance(node, ast.FunctionDef)
                   and node.name == "transform")
-    # Run the actual method with lightweight stand-ins for the legacy transform.
+    # Run the actual method with lightweight stand-ins for the converter transform.
     block = ast.Module(body=[method], type_ignores=[])
     ast.fix_missing_locations(block)
     space = {"pd": pd, "check_is_fitted": lambda obj: None, "pandas_dtype_family": pandas_dtype_family}
@@ -36,6 +36,7 @@ class Schema162(unittest.TestCase):
         converter = Converter()
         if names is not None:
             converter.input_feature_columns_ = names
+            converter.input_feature_type_families_ = {str(name): "numeric" for name in names}
         return converter
 
     def test_same_schema_and_different_order(self):
@@ -56,11 +57,11 @@ class Schema162(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate"):
             self.transform_method(conv, df)
 
-    def test_legacy_without_schema_still_works(self):
+    def test_converter_without_current_schema_is_refused(self):
         conv = self.make_converter()
         df = pd.DataFrame({"b": [2], "a": [1]})
-        actual = self.transform_method(conv, df)
-        self.assertEqual(list(actual.columns), ["b", "a"])
+        with self.assertRaisesRegex(ValueError, "lacks the current input feature schema"):
+            self.transform_method(conv, df)
 
     def test_dtype_family_mismatch_is_refused_for_new_models(self):
         conv = self.make_converter(("a", "b"))

@@ -225,28 +225,28 @@ def test_grid_search_and_full_data_retraining_keep_correct_order():
     assert retrained.predict_proba(X[:7]).shape == (7, 2)
 
 
-def test_new_and_legacy_saved_pipelines_reload_in_fresh_process_without_reordering(tmp_path):
+def test_current_artifacts_reload_without_reordering_persisted_pipeline_steps(tmp_path):
     X, y = data()
     current = pipeline()
-    old = pipeline()
-    steps = old.named_steps
-    old.steps = [(name, steps[name]) for name in ["IMP", "FLT", "SME", "NUG", "STA", "LRN"]]
+    nonstandard = pipeline()
+    steps = nonstandard.named_steps
+    nonstandard.steps = [(name, steps[name]) for name in ["IMP", "FLT", "SME", "NUG", "STA", "LRN"]]
     np.save(tmp_path / "X.npy", X)
-    for name, model in [("current", current), ("legacy", old)]:
+    for name, model in [("ordered", current), ("nonstandard", nonstandard)]:
         model.fit(X, y)
         np.save(tmp_path / f"{name}.npy", model.predict(X))
         payload = ({}, None, ("SME", "NUG", "STA", "NOR", "LRN"), model, None, 5)
-        save_model_artifact(tmp_path / f"{name}.sav", *payload)
+        save_model_artifact(tmp_path / f"{name}.sav", *payload, compatibility={"schema_version": 1})
     code = """
 import sys, numpy as np
 from pathlib import Path
 from JBGModelPersistence import load_model_artifact
 root = Path(sys.argv[1]); X = np.load(root/'X.npy')
-for name in ('current', 'legacy'):
+for name in ('ordered', 'nonstandard'):
     model = load_model_artifact(root/f'{name}.sav')[3]
     np.testing.assert_array_equal(model.predict(X), np.load(root/f'{name}.npy'))
     order = [step for step, _ in model.steps]
-    assert (order.index('STA') < order.index('SME')) == (name == 'current')
+    assert (order.index('STA') < order.index('SME')) == (name == 'ordered')
 """
     env = os.environ.copy()
     source = str(Path(__file__).resolve().parents[1] / "src")

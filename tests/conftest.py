@@ -1,7 +1,8 @@
 import os
 import pytest
 from Config import Config
-from JBGMeta import AlgorithmTuple, Algorithm, PreprocessTuple, Preprocess, ReductionTuple, Reduction, ScoreMetric, NgramRange
+from JBGMeta import (AlgorithmTuple, Algorithm, PreprocessTuple, Preprocess, ReductionTuple, Reduction,
+                     ScoreMetric, NgramRange, Oversampling, Undersampling)
 import SQLDataLayer
 import JBGHandler
 from typing import Callable, Union
@@ -271,13 +272,13 @@ def valid_iris_config() -> Config:
             mispredicted=False,
             use_metas= False,
             use_stop_words=False,
-            ngram_range=1.0,
+            ngram_range=NgramRange.UNI_GRAM,
             hex_encode=True,
             use_categorization=True,
             category_text_columns=[],
             test_size=0.2,
-            oversampler=False,
-            undersampler=False,
+            oversampler=Oversampling.NOG,
+            undersampler=Undersampling.NUG,
             algorithm=AlgorithmTuple([Algorithm.LDA]),
             preprocessor=PreprocessTuple([Preprocess.NOS]),
             feature_selection=ReductionTuple([Reduction.NOR]),
@@ -323,13 +324,13 @@ def bare_iris_config() -> Config:
             mispredicted=False,
             use_metas=False,
             use_stop_words=False,
-            ngram_range=1.0,
+            ngram_range=NgramRange.UNI_GRAM,
             hex_encode=True,
             use_categorization=True,
             category_text_columns=[],
             test_size=0.2,
-            oversampler=False,
-            undersampler=False,
+            oversampler=Oversampling.NOG,
+            undersampler=Undersampling.NUG,
             algorithm=AlgorithmTuple([Algorithm.LDA]),
             preprocessor=PreprocessTuple([Preprocess.NOS]),
             feature_selection=ReductionTuple([Reduction.NOR]),
@@ -384,13 +385,13 @@ def saved_with_valid_iris_config() -> Config:
             mispredicted=False,
             use_metas= False,
             use_stop_words=False,
-            ngram_range=1.0,
+            ngram_range=NgramRange.UNI_GRAM,
             hex_encode=True,
             use_categorization=True,
             category_text_columns=[],
             test_size=0.2,
-            oversampler=False,
-            undersampler=False,
+            oversampler=Oversampling.NOG,
+            undersampler=Undersampling.NUG,
             algorithm=AlgorithmTuple([Algorithm.LDA]),
             preprocessor=PreprocessTuple([Preprocess.NOS]),
             feature_selection=ReductionTuple([Reduction.NOR]),

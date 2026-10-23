@@ -2,7 +2,6 @@
 from collections import Counter
 import pickle
 from pathlib import Path
-from types import SimpleNamespace
 
 import ipywidgets
 import numpy as np
@@ -69,11 +68,9 @@ def test_invalid_cap_rejected(multiple):
 
 def test_config_snapshot_generated_file_and_real_widget_roundtrip(tmp_path):
     config = Config(mode=Config.Mode(undersamplers=CHOICES, undersampler=Undersampling.R05))
-    path = tmp_path / 'config.py'
+    path = tmp_path / 'config.json'
     config.save_to_file(path)
-    namespace = {}
-    exec(compile(path.read_text(), str(path), 'exec'), namespace)
-    loaded = Config.load_config(SimpleNamespace(**namespace))
+    loaded = Config.load_config_from_json(path)
     assert loaded.get_undersampler_abbreviations() == CHOICES
     assert loaded.mode.undersampler is Undersampling.R05
     params = {name: getattr(config, name) for name in ('connection', 'mode', 'io', 'debug', 'mail', 'name', 'save')}
@@ -141,7 +138,7 @@ def test_six_way_search_export_and_selected_profile_final_search(tmp_path, monke
     assert selected.pipeline.named_steps['R10'].sampling_strategy_[0] == 120
     saved = tmp_path / 'model.sav'
     metadata = (selected.oversampler, selected.undersampler, selected.preprocess, selected.reduction, selected.algorithm)
-    save_model_artifact(saved, mh.handler.config, None, metadata, selected.pipeline, None, 5)
+    save_model_artifact(saved, mh.handler.config, None, metadata, selected.pipeline, None, 5, compatibility={"schema_version": 1})
     config, _, stored_metadata, pipeline, _, _ = load_model_artifact(saved)
     assert config.mode.undersampler is Undersampling.R10
     assert stored_metadata[1] is Undersampling.R10

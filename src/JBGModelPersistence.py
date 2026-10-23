@@ -1,9 +1,8 @@
 """Versioned serialization contract for JBG model artifacts.
 
-New model artifacts prefer the Python standard-library pickle serializer.  Dill is
-optional and is used only as a compatibility fallback for legacy/current objects
-that standard pickle cannot deserialize/serialize.  Legacy six-item list/tuple
-artifacts remain readable so existing saved models continue to work.
+Current model artifacts prefer the Python standard-library pickle serializer. Dill is
+optional and is used only when a current artifact contains state that standard pickle
+cannot serialize or deserialize. Pre-revision-176 artifact formats are unsupported.
 
 Serialized model artifacts are trusted-input-only.  Loading pickle/dill data can
 execute code and must never be used for untrusted files.
@@ -21,7 +20,7 @@ from typing import Any, Mapping
 from JBGPaths import relocate_saved_config_paths
 
 MODEL_ARTIFACT_FORMAT = "JBGAutoClassification.model"
-MODEL_ARTIFACT_VERSION = 1
+MODEL_ARTIFACT_VERSION = 2
 MODEL_ARTIFACT_DEFAULT_SERIALIZER = "pickle"
 MODEL_ARTIFACT_SUPPORTED_SERIALIZERS = frozenset(("pickle", "dill"))
 KERAS_MODEL_FILE_EXTENSION = ".keras"
@@ -40,22 +39,9 @@ def get_keras_model_sidecar_path(filename: str | Path, keras_name: str) -> Path:
     return Path(f"{filename}.{keras_name}{KERAS_MODEL_FILE_EXTENSION}")
 
 
-def get_legacy_keras_model_sidecar_path(filename: str | Path, keras_name: str) -> Path:
-    """Return the pre-Keras-3 sidecar path used by historical JBG model artifacts."""
-    return Path(f"{filename}.{keras_name}")
-
-
 def resolve_keras_model_sidecar_path(filename: str | Path, keras_name: str) -> Path:
-    """Prefer the native `.keras` sidecar while retaining legacy path discovery."""
-    preferred = get_keras_model_sidecar_path(filename, keras_name)
-    if preferred.exists():
-        return preferred
-
-    legacy = get_legacy_keras_model_sidecar_path(filename, keras_name)
-    if legacy.exists():
-        return legacy
-
-    return preferred
+    """Return the native Keras sidecar path used by current model artifacts."""
+    return get_keras_model_sidecar_path(filename, keras_name)
 
 
 def detach_keras_model_from_pipeline(pipeline, keras_name: str):
@@ -109,11 +95,13 @@ def build_model_artifact(
     """Build the current versioned model artifact envelope."""
     if serializer not in MODEL_ARTIFACT_SUPPORTED_SERIALIZERS:
         raise ModelArtifactError(f"Unsupported model artifact serializer {serializer!r}.")
+    if not isinstance(compatibility, Mapping):
+        raise ModelArtifactError("Current model artifacts require compatibility metadata.")
     return {
         "format": MODEL_ARTIFACT_FORMAT,
         "version": MODEL_ARTIFACT_VERSION,
         "serializer": serializer,
-        "compatibility": dict(compatibility) if compatibility is not None else None,
+        "compatibility": dict(compatibility),
         "payload": {
             "config": config,
             "text_converter": text_converter,
@@ -126,57 +114,50 @@ def build_model_artifact(
 
 
 def unpack_model_artifact(serialized: Any) -> tuple:
-    """Normalize a current or legacy serialized artifact to the six-field contract."""
-    if isinstance(serialized, Mapping) and serialized.get("format") == MODEL_ARTIFACT_FORMAT:
-        version = serialized.get("version")
-        if version != MODEL_ARTIFACT_VERSION:
-            raise ModelArtifactError(
-                f"Unsupported model artifact version {version!r}; "
-                f"supported version is {MODEL_ARTIFACT_VERSION}."
-            )
+    """Validate a current versioned artifact and return its six-field payload."""
+    if not isinstance(serialized, Mapping) or serialized.get("format") != MODEL_ARTIFACT_FORMAT:
+        raise ModelArtifactError(
+            "Unsupported pre-revision-176 model artifact. Retrain and save a new model."
+        )
 
-        serializer = serialized.get("serializer")
-        if serializer is not None and serializer not in MODEL_ARTIFACT_SUPPORTED_SERIALIZERS:
-            raise ModelArtifactError(
-                f"Unsupported model artifact serializer metadata {serializer!r}."
-            )
+    version = serialized.get("version")
+    if version != MODEL_ARTIFACT_VERSION:
+        raise ModelArtifactError(
+            f"Unsupported model artifact version {version!r}; "
+            f"supported version is {MODEL_ARTIFACT_VERSION}. Retrain and save a new model."
+        )
 
-        payload = serialized.get("payload")
-        if not isinstance(payload, Mapping):
-            raise ModelArtifactError("Model artifact payload is missing or is not a mapping.")
+    serializer = serialized.get("serializer")
+    if serializer not in MODEL_ARTIFACT_SUPPORTED_SERIALIZERS:
+        raise ModelArtifactError(
+            f"Unsupported model artifact serializer metadata {serializer!r}."
+        )
 
-        missing = [field for field in MODEL_ARTIFACT_FIELDS if field not in payload]
-        if missing:
-            raise ModelArtifactError(
-                "Model artifact payload is missing required field(s): " + ", ".join(missing)
-            )
+    compatibility = serialized.get("compatibility")
+    if not isinstance(compatibility, Mapping):
+        raise ModelArtifactError("Current model artifact is missing compatibility metadata.")
 
-        model_components = payload["model_components"]
-        if not isinstance(model_components, (list, tuple)) or len(model_components) != 5:
-            raise ModelArtifactError(
-                "Model artifact field 'model_components' must contain exactly five entries: "
-                "oversampler, undersampler, preprocess, reduction, algorithm."
-            )
+    payload = serialized.get("payload")
+    if not isinstance(payload, Mapping):
+        raise ModelArtifactError("Model artifact payload is missing or is not a mapping.")
 
-        values = tuple(payload[field] for field in MODEL_ARTIFACT_FIELDS)
-        relocate_saved_config_paths(values[0])
-        return values
+    missing = [field for field in MODEL_ARTIFACT_FIELDS if field not in payload]
+    if missing:
+        raise ModelArtifactError(
+            "Model artifact payload is missing required field(s): " + ", ".join(missing)
+        )
 
-    # Backwards compatibility with the unversioned format used before patch 055.
-    if isinstance(serialized, (list, tuple)) and len(serialized) == len(MODEL_ARTIFACT_FIELDS):
-        model_components = serialized[2]
-        if not isinstance(model_components, (list, tuple)) or len(model_components) != 5:
-            raise ModelArtifactError(
-                "Legacy model artifact has an invalid model-component tuple; expected five entries."
-            )
-        values = tuple(serialized)
-        relocate_saved_config_paths(values[0])
-        return values
+    model_components = payload["model_components"]
+    if not isinstance(model_components, (list, tuple)) or len(model_components) != 5:
+        raise ModelArtifactError(
+            "Model artifact field 'model_components' must contain exactly five entries: "
+            "oversampler, undersampler, preprocess, reduction, algorithm."
+        )
 
-    raise ModelArtifactError(
-        "Unrecognized model artifact format. Expected a versioned JBG model artifact "
-        "or a legacy six-item model payload."
-    )
+    values = tuple(payload[field] for field in MODEL_ARTIFACT_FIELDS)
+    relocate_saved_config_paths(values[0])
+    return values
+
 
 
 def _import_optional_dill():
@@ -190,7 +171,7 @@ def _import_optional_dill():
 
 
 def _load_serialized(filename: str | Path):
-    """Load trusted serialized data, preferring stdlib pickle before legacy dill."""
+    """Load trusted current-artifact data, preferring stdlib pickle before dill."""
     with open(filename, "rb") as infile:
         try:
             return pickle.load(infile)
@@ -199,64 +180,49 @@ def _load_serialized(filename: str | Path):
             dill_module = _import_optional_dill()
             if dill_module is None:
                 raise ModelArtifactError(
-                    "Could not load the model artifact with standard pickle. If this is a "
-                    "legacy dill-based model, install the optional 'dill' package and retry. "
+                    "Could not load the model artifact with standard pickle. If the current "
+                    "artifact requires dill, install the optional 'dill' package and retry. "
                     f"Original pickle error: {type(pickle_error).__name__}: {pickle_error}"
                 ) from pickle_error
             try:
                 return dill_module.load(infile)
             except Exception as dill_error:
                 raise ModelArtifactError(
-                    "Could not load the model artifact with standard pickle or legacy dill. "
+                    "Could not load the model artifact with standard pickle or dill. "
                     f"Pickle error: {type(pickle_error).__name__}: {pickle_error}; "
                     f"dill error: {type(dill_error).__name__}: {dill_error}"
                 ) from dill_error
 
 
 def unpack_model_compatibility(serialized: Any):
-    """Return optional revision-173 compatibility metadata without changing payload arity."""
-    if isinstance(serialized, Mapping) and serialized.get("format") == MODEL_ARTIFACT_FORMAT:
-        compatibility = serialized.get("compatibility")
-        if compatibility is None:
-            return None
-        if not isinstance(compatibility, Mapping):
-            raise ModelArtifactError("Model artifact compatibility metadata is not a mapping.")
-        return dict(compatibility)
-    return None
+    """Return required compatibility metadata from a current model artifact."""
+    unpack_model_artifact(serialized)
+    compatibility = serialized.get("compatibility")
+    if not isinstance(compatibility, Mapping):
+        raise ModelArtifactError("Current model artifact is missing compatibility metadata.")
+    return dict(compatibility)
 
 
 def load_model_artifact(filename: str | Path) -> tuple:
-    """Load and validate a trusted model artifact from disk."""
+    """Load and validate a trusted current model artifact from disk."""
     return unpack_model_artifact(_load_serialized(filename))
 
 
 def load_model_compatibility(filename: str | Path):
-    """Load optional compatibility metadata from a trusted model artifact."""
+    """Load required compatibility metadata from a trusted current artifact."""
     return unpack_model_compatibility(_load_serialized(filename))
 
 
-def load_model_artifact_with_compatibility(filename: str | Path) -> tuple[tuple, Mapping | None]:
-    """Load the six-field payload and compatibility metadata in one file read."""
+def load_model_artifact_with_compatibility(filename: str | Path) -> tuple[tuple, Mapping]:
+    """Load the payload and required compatibility metadata in one file read."""
     serialized = _load_serialized(filename)
     return unpack_model_artifact(serialized), unpack_model_compatibility(serialized)
 
 
 def load_model_config(filename: str | Path):
-    """Load persisted configuration while preserving legacy config-only compatibility."""
-    serialized = _load_serialized(filename)
+    """Load persisted configuration from a current model artifact."""
+    return unpack_model_artifact(_load_serialized(filename))[0]
 
-    if isinstance(serialized, Mapping) and serialized.get("format") == MODEL_ARTIFACT_FORMAT:
-        return unpack_model_artifact(serialized)[0]
-
-    # Older config-loading code only required item zero and some locally generated
-    # config fixtures did not contain a complete six-field model payload. Keep that
-    # narrow compatibility here without weakening full model loading validation.
-    if isinstance(serialized, (list, tuple)) and serialized:
-        return relocate_saved_config_paths(serialized[0])
-
-    raise ModelArtifactError(
-        "Unrecognized model artifact format while loading persisted configuration."
-    )
 
 
 def save_model_artifact(
@@ -295,7 +261,7 @@ def save_model_artifact(
             if dill_module is None:
                 raise ModelArtifactError(
                     "This model contains state that standard pickle cannot serialize. "
-                    "Install the optional 'dill' package to allow the compatibility fallback, "
+                    "Install the optional 'dill' package to allow the serializer fallback, "
                     "or use a pickle-compatible model. "
                     f"Original pickle error: {type(pickle_error).__name__}: {pickle_error}"
                 ) from pickle_error

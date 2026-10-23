@@ -33,7 +33,7 @@ def test_readme_is_current_product_guide_not_numbered_revision_history():
 
 def test_readme_documents_current_persistence_and_log_privacy_contracts():
     text = readme_text()
-    assert "requirements-legacy-models.txt" in text
+    assert "requirements-optional-dill.txt" in text
     assert "standard-library `pickle`" in text
     assert "JBG_LOG_SENSITIVE_DATA" in text
     assert "Feature search parallelism:" in text

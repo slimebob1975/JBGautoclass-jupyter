@@ -1,28 +1,19 @@
-- [x] Revision 163 follow-up: repeated Train/Rerun/Repeat Last behavior was live-verified on
-  Windows/Voilà after the reclassification widget lifecycle hardening; no `Error displaying widget`
-  recurrence was reported. Reopen only if browser/server evidence shows a new rendering failure.
-- [ ] Revision 159 follow-up: identify the Voilà/frontend version responsible for missing XSRF headers on shutdown; compare upstream issue #1458; verify actual live-kernel counts separately before implementing cleanup. Never bypass CSRF or kill running training jobs.
-- [ ] Revision 158: review Voilà server runtime versions and shutdown 403 diagnostics; test repeated reload/disconnect and Script output widget lifecycle on Windows. Do not disable XSRF; source-level diagnostics alone do not fix the browser shutdown request.
-- [ ] After revision 157: validate memory guard and process-tree heartbeat on Windows/Voilà; assess GaussianProcessClassifier large-data cost; Feature modelling concurrency was separated/automated in revision 169; continue investigating missing Script output and Voilà kernel shutdown _xsrf failures.
-## Revision 155 — JSON export and Feature modelling button help
-
-Transitional versioned JSON export with legacy Python config compatibility; corrected action tooltips. See `docs/configuration_155.md`.
-
-# JBG AutoClassification — Active BACKLOG (Revision 152)
+# JBG AutoClassification — Active BACKLOG (Revision 176)
 
 This is the **active**, prioritized maintenance roadmap for the general-purpose JBG ML framework.
 The complete historical backlog (including completed revisions and research experiments)
 is preserved without deletion in [`docs/backlog_archive_pre_152.md`](docs/backlog_archive_pre_152.md).
-Revision 152 only reorganizes documentation. It does not implement, close, or re-validate
-runtime features. A checked box below is a **documentation disposition**, not new test evidence.
+This file contains only currently relevant product work plus concise completion status for recent
+revisions. Historical/superseded backlog material belongs in the archive/CHANGELOG rather than in the
+active priority queue. A checked box indicates implemented work; live verification is stated explicitly
+where it matters.
 
 ## Decisions and scope
 
 - [x] The prior private-dataset investigation is concluded at the user's request. No more dataset-specific experiments
   are planned in the main product backlog. Historical findings remain in the archive.
-- [x] Revision 151 policy: native CatBoost is retained for **Feature modelling**, and is not an
-  ordinary exhaustive-pipeline candidate. Legacy artifact loading is intended to remain supported;
-  native CatBoost integration into ordinary search is a separately scoped future refactor.
+- [x] Native CatBoost is retained for **Feature modelling** and is not an ordinary exhaustive-pipeline
+  candidate. Native CatBoost integration into ordinary search remains a separately scoped future refactor.
 - [x] Revisions 147–150 introduced generally applicable, opt-in diagnostics (threshold/OOF,
   group-aware validation, predictor exclusion and benchmarking). Keep them available but optional;
   assess independently whether their ongoing maintenance is warranted.
@@ -35,8 +26,8 @@ runtime features. A checked box below is a **documentation disposition**, not ne
   dtype families and configured/fitted text-representation roles. Prediction-only reuse verifies the
   selected source before loading saved settings; incompatible required-column/schema changes fail closed,
   while physical source-provenance changes, same-family SQL type changes and ODBC-driver changes remain
-  explicit unverified warnings. Legacy model artifacts
-  remain loadable with an explicit warning that these checks are unavailable. Saved Feature modelling
+  explicit unverified warnings. Revision 176 intentionally ends pre-176 model-artifact support; old models
+  must be retrained. Saved Feature modelling
   candidates now record only investigated predictor SQL types and must match source identity, selected
   schema and saved converter representation before explicit application; they remain candidate evidence,
   never silently promoted to independently validated settings. Revision 173a also allows configured predictors
@@ -75,12 +66,10 @@ runtime features. A checked box below is a **documentation disposition**, not ne
   column names and embedded download payloads by default. The active GUI keeps the operator-visible details,
   and `JBG_LOG_SENSITIVE_DATA=1` remains the explicit trusted-local opt-in for full persistent diagnostics.
   Revision 172a preserves valid HTML closing tags while the path redactor removes real local paths; revision 172b fixes the legacy formatted-info markup so bold status messages emit a complete `</b>` closing tag before redaction.
-- [ ] **Voilà server-log privacy without breaking cleanup:** the separate launcher/server log can still contain
-  local runtime paths, including the exact connection-directory path used by the guarded kernel-cleanup tooling.
-  Do not redact that path until cleanup has a replacement machine-readable source of the same evidence; treat
-  server logs as sensitive local diagnostics in the meantime.
-- [ ] **Server/kernel lifecycle:** investigate Voilà `_xsrf` 403 during reload/shutdown and verify
-  clean kernel/session termination without weakening CSRF protections.
+- [ ] **Legacy Voilà runtime containment:** verify whether reload/shutdown `_xsrf` 403 responses actually
+  leave orphan kernels/processes or create resource leakage. Keep the current runtime stable without weakening
+  CSRF protections, avoid further Voilà-specific architecture investment, and keep the separate launcher/server
+  log treated as sensitive local diagnostics until cleanup no longer depends on path evidence.
 - [ ] **Pause/Resume concurrency:** verify the revision-140 candidate-level checkpoint/resume flow
   with automatic parallelism on Windows (set the shared global cap to two workers for a reproducible test),
   including forced interruption, deterministic recovery and failure
@@ -91,8 +80,9 @@ runtime features. A checked box below is a **documentation disposition**, not ne
   explicit categorical feature indices from the fitted converter, while SMOTE-N is accepted only when
   every converted predictor is explicitly categorical. Ambiguous/missing categorical roles fail closed,
   and regression tests verify that synthetic categorical values remain discrete.
-- [ ] **Compatibility smoke tests:** verify ordinary train → save → fresh-process reload → predict,
-  as well as Repeat Last, after future persistence/configuration refactors.
+- [ ] **Revision-176 compatibility smoke tests:** with old configs/models removed, verify fresh JSON
+  config generation/load, GUI Repeat Last, and ordinary train → save → restart/fresh-process reload →
+  predict using a newly trained current artifact.
 
 ## P2 — Efficient, understandable pipeline and feature search
 
@@ -109,9 +99,10 @@ runtime features. A checked box below is a **documentation disposition**, not ne
   and safe preflight controls. Avoid inflating default budgets without evidence.
 - [ ] **High-dimensional feature search:** assess subset-size coverage, adaptive refinement limits,
   class imbalance, and reproducible nested-CV behavior for the original-column search.
-- [ ] **Resource handling:** investigate costly Nystroem/MLP combinations using the revision-113
+- [ ] **Resource handling:** investigate costly Nystroem/MLP combinations using the existing
   instrumentation; distinguish estimator time from transform time, monitor memory and parallel
-  oversubscription before changing global concurrency defaults.
+  oversubscription, and benchmark joblib threading versus process-based execution on representative
+  workloads before changing global concurrency defaults.
 - [ ] **Optional fold checkpoints:** evaluate cost/benefit of fold-level resume for especially
   expensive feature-search candidates; keep candidate-level atomic checkpointing intact.
 - [ ] **Native CatBoost ordinary-search integration (deferred):** consider only as a general
@@ -136,21 +127,21 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 
 ## P2 — Configuration, packaging and architecture
 
-- [ ] **Versioned JSON configuration migration:** replace generated executable
-  `autoclassconfig_*.py` output with schema-validated, versioned JSON, while preserving legacy
-  reading, saved settings, Repeat Last and runtime-only SQL credentials. Plan migration before
-  deleting the Python-config reader.
+- [x] **Versioned JSON configuration migration (revision 176):** generated runtime configuration is now
+  schema-validated JSON only. Python config generation/import has been removed; schema-v1 transitional JSON
+  and pre-176 model artifacts are intentionally unsupported. The schema serializes every current configuration
+  dataclass field, keeps SQL passwords runtime-only, supports CLI loading without executing code, and preserves
+  GUI Repeat Last through its separate JSON snapshot. Old Python configs/models should be deleted/retrained.
 - [ ] **Explicit dependency support matrix:** pin/test supported Python, scikit-learn, NumPy,
   TensorFlow, Keras and SciKeras versions; maintain a reproducible Windows setup.
 - [ ] **Module boundaries and paths:** reduce `sys.path` mutation and working-directory dependence;
-  incrementally split oversized `JBGMeta.py` behind backward-compatible import facades so existing
-  serialized models continue loading.
-- [ ] **Model serializer migration (revision 167 implementation):** new model artifacts now prefer
-  standard-library `pickle`; `dill` is optional and used only for legacy loading or as a compatibility fallback
-  when a current model is not pickle-compatible. The loader reports an actionable optional-dependency error when
-  dill is required but unavailable, and tests no longer import dill unconditionally. Complete Windows validation
-  with existing legacy `.sav` files plus representative sklearn, PyTorch/skorch, Keras and Flax models before
-  closing this item. Keep the trusted-artifact security boundary unchanged.
+  incrementally split oversized `JBGMeta.py` behind stable import facades. Revision 176 removes the old-model
+  compatibility constraint, so future refactors no longer need to preserve pre-176 serialized module paths.
+- [x] **Current model serializer contract (revisions 167/176):** current artifacts prefer standard-library
+  `pickle`; `dill` is an optional fallback only when a newly generated current artifact contains state that
+  pickle cannot serialize. Revision 176 increments the artifact envelope and rejects pre-176 payloads rather
+  than carrying legacy readers. Keep the trusted-artifact security boundary unchanged and smoke-test representative
+  sklearn, PyTorch/skorch, Keras and Flax models as those families are exercised.
 - [ ] **P2 — GUI framework architecture spike (Panel / NiceGUI):** evaluate whether moving away from
   JupyterLab/Voilà/ipywidgets is worth the migration cost. First separate configuration, job lifecycle,
   progress events, results and ML core behind stable application interfaces. Prototype only configuration,
@@ -194,65 +185,13 @@ runtime features. A checked box below is a **documentation disposition**, not ne
 ## Definition of done for future revisions
 
 1. Small, reviewable Git patch against the immediately preceding revision.
-2. Documented default behavior and backward-compatibility/migration impact.
+2. Documented default behavior and any migration/breaking-change impact.
 3. Focused automated checks plus a reported status for Windows/Voilà live verification.
 4. Any experimental methods are opt-in, generic, and separately reversible.
 5. Update this active backlog and append the revision to CHANGELOG.md; do not erase history.
 
-## Revision 152 inventory limitations
+## Recent live-verification notes
 
-This is a documentation-based prioritization, **not** a full code audit or a fresh end-to-end
-runtime test. Open items are drawn from the pre-152 backlog and reported prior issues. The
-historical backlog contains duplicates, superseded GUI proposals and mixed completion states;
-its unchecked entries should not all be read as currently actionable requirements. Future
-revisions must verify current code behavior before implementing any listed item.
-
-## Revision 153 implementation note
-
-- [x] Added a bounded interactive misprediction preview, guarded rendering and Python exception logging.
-- [ ] Confirm in live Windows/Voilà that `Error displaying widget` no longer occurs; investigate client-side failures that cannot be caught in Python.
-
-## Revision 154 status
-
-- [x] Parallel Feature modelling candidate batches now emit diagnostic lifecycle events and preserve worker error context.
-- [ ] Verify two-worker pause, resume and forced worker failure on Windows/Voilà; inspect any joblib worker-termination warning separately (the Feature modelling executor uses `concurrent.futures`, not joblib).
-- [ ] Measure time and memory of parallel searches before tuning default worker counts.
-
-## Revision 163 status
-
-- [x] Reclassification reruns now detach and close stale comm-backed preview widgets before a new render.
-- [x] The preview is bounded by both row count and a total grid-widget budget; over-wide results fail closed to a plain-text notice without invalidating the completed ML run.
-- [x] Post-run file diagnostics distinguish render, fallback and unexpected Python-side failure paths.
-- [x] Repeated Train/Rerun/Repeat Last behavior was live-verified on Windows/Voilà after revision 163 with no reported `Error displaying widget` recurrence.
-
-## Revision 164 status
-
-- [x] Reconstructed revisions 160–162d in CHANGELOG from the supplied original patch files without copying runtime-specific identifiers.
-- [x] Added a dependency-free Markdown privacy checker plus an optional local, git-ignored private blocklist.
-- [x] Removed the revision-161 test dependency on the absent `docs/` directory; the architecture-spike item now lives in this active BACKLOG.
-- [ ] The local private blocklist remains an operator responsibility because arbitrary person/table names cannot be recognized reliably by syntax alone.
-
-- [ ] Revision 156a: correlate file-based startup stage markers with GUI and SQL progress; investigate Voilà kernel lifecycle separately.
-
-- Revision 157a: Corrected negative global worker-cap handling in GridSearchCV and Dark Numbers; verify live Windows parallel execution and continue investigating resource pressure.
-- [ ] **Threads versus processes (investigation only):** benchmark joblib `threading` versus `loky` / process-based CV and pipeline search on representative CPU-bound and NumPy/scikit-learn workloads; measure GIL behavior, memory sharing, nested BLAS/OpenMP parallelism, estimator thread safety, isolation after native crashes, and reproducibility. Do not change the default backend without Windows/Voila evidence.
-
-## Revision 165 status
-
-- [x] Added a read-only reachable-history mode to the documentation privacy checker.
-- [x] History mode requires the local private blocklist and refuses shallow repositories.
-- [x] Historical Markdown blobs and commit messages are scanned without printing source lines or matched private values; sensitive paths are redacted.
-- [x] The audit was run on the authoritative local Git repository with the real private blocklist. After local-only untracked notes were removed, the tracked working tree passed and the remaining findings were confined to historical root `BACKLOG.md`/`CHANGELOG.md` content.
-
-## Revision 166 status
-
-- [x] Added a fail-closed, local-only remediation script for private blocklist matches in historical root `BACKLOG.md` and `CHANGELOG.md`; all other file paths, filenames, commit messages and built-in-pattern findings abort remediation.
-- [x] Default privacy scanning in a Git repository now checks tracked Markdown only; `--include-untracked` explicitly opts into local-note scanning.
-- [x] Remediation dry-run is read-only. Apply mode requires a clean, non-shallow, single-worktree repository with attached HEAD, refuses annotated tags/signed commit metadata, creates and verifies an external pre-rewrite bundle, rewrites local refs, and requires the history audit to pass afterward.
-- [ ] Run revision 166 dry-run/apply on the authoritative repository, verify the rewritten history, and coordinate remote history replacement if the affected commits were already pushed. No fetch/push/force-push or local object pruning is automated.
-
-## Revision 166b status
-
-- [x] Signed-commit/merge-tag preflight is limited to commits that must actually receive new object IDs; unaffected signed ancestors no longer block remediation.
-- [x] Untouched commits are mapped to their original object IDs without reconstruction.
-- [ ] Re-run dry-run/apply on the authoritative repository. If an affected signed or merge-tag-bearing commit remains, decide explicitly whether to preserve the signed history and abandon rewrite or perform a separately reviewed signature-dropping remediation.
+- [x] Reclassification rendering is live-verified through revisions 174a/174b: static decorations no longer create
+  unnecessary comm models, `model not found` did not recur, and the wider bounded preview budget is useful.
+- [x] Revision 175 application/build identity is live-verified in the GUI.

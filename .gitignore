@@ -1,8 +1,7 @@
 .ipynb_checkpoints/
 __pycache__
 .vscode
-autoclassconfig_*.py
-src/config/test_*.py
+autoclassconfig_*.json
 src/output/*.csv
 src/output/csvs/
 src/output/nn_checkpoints/*

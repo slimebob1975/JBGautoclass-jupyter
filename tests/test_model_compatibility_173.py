@@ -215,16 +215,16 @@ def test_artifact_semantics_detect_converter_setting_drift():
     assert any("source-schema metadata" in item for item in review.issues)
 
 
-def test_legacy_artifact_is_allowed_but_unverified_assumptions_are_explicit():
+def test_current_artifact_requires_compatibility_metadata():
     review = review_artifact_semantics(FakeConfig(), FakeConverter(), None)
-    assert review.ok
-    assert review.warnings
+    assert not review.ok
+    assert review.issues
     source = review_current_source_compatibility(
         None, driver="driver_x", host="host_x", catalog="catalog_x", table="schema_x.table_x",
         source_schema=source_schema(),
     )
-    assert source.ok
-    assert source.warnings
+    assert not source.ok
+    assert source.issues
 
 
 def test_pandas_dtype_families_are_stable_for_prediction_guard():

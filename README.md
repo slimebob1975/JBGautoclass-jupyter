@@ -18,8 +18,8 @@ final search, saved-model reuse and diagnostic tooling in one workflow.
 - Train and evaluate on a deterministic train/holdout split with cross-validation inside the
   training partition.
 - Save trained models and reuse them for later prediction or retraining.
-- Use a separate prediction table whose target column is present but entirely `NULL`; when a saved
-  model is selected, JBG can restore the model's expected target column.
+- Use a separate prediction table with every target value set to `NULL`; when a saved model is
+  selected, JBG can restore the model's expected target column.
 - Run Feature selection modelling to investigate original-column subsets with Linear, Non-linear,
   Tree, Combination or CatBoost investigative model families.
 - Run permutation-based feature importance on the final holdout for a freshly trained model.
@@ -54,18 +54,19 @@ The main requirements include the scientific Python stack, scikit-learn, imbalan
 TensorFlow/Keras, PyTorch/skorch, JAX/Flax, CatBoost, pyodbc and the Jupyter/Voilà UI dependencies.
 A GPU is not required for ordinary use.
 
-### Optional legacy model compatibility
+### Optional serializer fallback
 
-`dill` is no longer required for a normal installation. New JBG model artifacts prefer Python's
-standard-library `pickle`. If an older model, or a current model with non-pickle-compatible state,
-actually requires dill, install the compatibility dependency separately:
+`dill` is not required for a normal installation. Current JBG model artifacts prefer Python's
+standard-library `pickle`. If a newly generated model contains state that pickle cannot serialize,
+install the optional serializer fallback:
 
 ```powershell
-python -m pip install -r .\requirements-legacy-models.txt
+python -m pip install -r .\requirements-optional-dill.txt
 ```
 
-Only load `.sav` model files from trusted sources. Both pickle and dill can execute code while
-loading a serialized object.
+Pre-revision-176 model artifacts are intentionally unsupported and should be retrained. Only load
+`.sav` model files from trusted sources: both pickle and dill can execute code while loading a
+serialized object.
 
 ## Configuration
 
@@ -91,8 +92,9 @@ The main settings are:
 | `JBG_LOG_SENSITIVE_DATA` | `0` by default. Set to `1` only for trusted local diagnostics when full SQL and row-level previews are required in persistent logs. |
 
 SQL credentials are runtime credentials. Enter them in the GUI when using the notebook interface.
-Generated configuration/model metadata deliberately does not persist the SQL password. For
-supported command-line workflows that need a runtime password, JBG can use the
+Generated configuration/model metadata deliberately does not persist the SQL password. JBG writes
+schema-versioned JSON configuration files under `src/config/`; generated Python configuration files
+are no longer supported. For command-line workflows that need a runtime password, JBG can use the
 `JBG_SQL_PASSWORD` environment variable.
 
 Do not commit a local `.env` file or credentials to source control.
@@ -172,10 +174,8 @@ same-family SQL type change or ODBC-driver change is also reported as an explici
 equivalence cannot be proven automatically. The fitted converter checks predictor dtype families before
 transforming prediction rows.
 
-Older model artifacts that predate this compatibility metadata remain loadable, but JBG reports that
-the source/schema and converter equivalence cannot be fully verified. A separate prediction table may
-keep the same target column with every target value set to `NULL`; selecting the saved model restores
-that expected target without making unrelated empty columns valid training targets.
+Pre-revision-176 model artifacts are intentionally rejected. Retrain and save a new model with the current JBG version instead of relying on legacy deserialization paths.
+
 
 ## Feature selection modelling
 
@@ -231,15 +231,15 @@ keeps broader Dark Number methodology research separate from routine release wor
 
 ## Command-line classifier runs
 
-Generated classifier configurations can be executed from `src` with `AutomaticClassifier.py`:
+Generated JSON classifier configurations can be executed from `src` with `AutomaticClassifier.py`:
 
 ```powershell
 Set-Location .\src
-python .\AutomaticClassifier.py -f .\config\<generated-config-file>
+python .\AutomaticClassifier.py -f .\config\<generated-config-file>.json
 ```
 
-Use an actual generated configuration file from your local `src\config\` directory. Runtime SQL
-credentials still need to be supplied separately when required.
+Only schema-current JSON configuration files are accepted. Runtime SQL credentials still need to be
+supplied separately when required; configuration files never contain the SQL password.
 
 ## Files and runtime output
 
@@ -249,7 +249,7 @@ The main repository locations are:
 | --- | --- |
 | `JBG_SML_GUI.ipynb` | Root notebook used by the Voilà GUI. |
 | `src/` | Application and ML modules. |
-| `src/config/` | Configuration templates and locally generated configs. |
+| `src/config/` | Locally generated schema-versioned JSON configs. |
 | `src/model/` | Saved models and framework sidecars. |
 | `src/output/` | CSV exports, checkpoints, timing history and other generated output. |
 | `logs/` | Application and server logs. |
@@ -314,11 +314,11 @@ same Python environment where `requirements.txt`, Jupyter and Voilà were instal
 kernel/session is suspected, use the supplied diagnostic/cleanup scripts rather than terminating
 unknown Python processes blindly.
 
-### A saved model requires dill
+### A current saved model requires dill
 
-Install `requirements-legacy-models.txt` and retry. If the model still cannot load, verify that it
-was produced by a compatible JBG/Python/library environment and that all framework dependencies are
-installed.
+Install `requirements-optional-dill.txt` and retry. If the model still cannot load, verify that it
+was produced by the current JBG artifact format in a compatible Python/library environment. Old
+pre-revision-176 artifacts are not supported.
 
 ### Feature modelling uses fewer workers than expected
 
@@ -330,7 +330,7 @@ count and the CPU, global-cap, candidate-budget and memory-guard constraints tha
 Python warning filters can be used when you have confirmed a warning is irrelevant. For example:
 
 ```powershell
-python -Wi .\AutomaticClassifier.py -f .\config\<generated-config-file>
+python -Wi .\AutomaticClassifier.py -f .\config\<generated-config-file>.json
 ```
 
 Do not suppress warnings merely to hide a failing model or incompatible dependency.

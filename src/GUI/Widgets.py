@@ -861,12 +861,6 @@ class Widgets:
         except Exception as exc:
             return WidgetStatus.ERROR, "Could not read saved-model compatibility metadata: " + html.escape(str(exc))
 
-        if compatibility is None:
-            return WidgetStatus.OK, (
-                "Legacy model: source identity and SQL type compatibility are not fully verifiable; "
-                "required column presence was checked."
-            )
-
         review = review_current_source_compatibility(
             compatibility,
             driver=os.environ.get("DEFAULT_ODBC_DRIVER", ""),

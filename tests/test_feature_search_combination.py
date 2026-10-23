@@ -65,8 +65,9 @@ class CombinationTests(unittest.TestCase):
         self.assertIn('self._feature_search_applied = False', source)
         self.assertIn('self.widgets._feature_search_applied = False', source)
         self.assertIn('"feature_search_reduction"', source)
-        config = (ROOT / 'src/config/autoclassconfig_template.py.txt').read_text(encoding='utf-8')
-        self.assertIn('"feature_search_reduction"', config)
+        config_source = (ROOT / 'src/Config.py').read_text(encoding='utf-8')
+        self.assertIn('feature_search_reduction: str = "NOR"', config_source)
+        self.assertIn('JSON_CONFIG_SCHEMA_VERSION = 2', config_source)
 
 
 if __name__ == '__main__':

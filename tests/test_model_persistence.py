@@ -18,7 +18,6 @@ from JBGModelPersistence import (
     attach_keras_model_to_pipeline,
     detach_keras_model_from_pipeline,
     get_keras_model_sidecar_path,
-    get_legacy_keras_model_sidecar_path,
     resolve_keras_model_sidecar_path,
     build_model_artifact,
     load_model_artifact,
@@ -48,25 +47,16 @@ def _payload(pipeline=None):
     )
 
 
+def _compatibility():
+    return {"schema_version": 1, "source_identity_sha256": "abc", "source_columns": ()}
+
+
 def test_keras_sidecar_path_uses_native_keras_extension(tmp_path):
     artifact = tmp_path / "model.sav"
+    expected = tmp_path / "model.sav.KERA.keras"
 
-    assert get_keras_model_sidecar_path(artifact, "KERA") == tmp_path / "model.sav.KERA.keras"
-    assert get_legacy_keras_model_sidecar_path(artifact, "KERA") == tmp_path / "model.sav.KERA"
-
-
-def test_keras_sidecar_resolver_prefers_native_and_falls_back_to_legacy(tmp_path):
-    artifact = tmp_path / "model.sav"
-    preferred = get_keras_model_sidecar_path(artifact, "KERA")
-    legacy = get_legacy_keras_model_sidecar_path(artifact, "KERA")
-
-    assert resolve_keras_model_sidecar_path(artifact, "KERA") == preferred
-
-    legacy.touch()
-    assert resolve_keras_model_sidecar_path(artifact, "KERA") == legacy
-
-    preferred.touch()
-    assert resolve_keras_model_sidecar_path(artifact, "KERA") == preferred
+    assert get_keras_model_sidecar_path(artifact, "KERA") == expected
+    assert resolve_keras_model_sidecar_path(artifact, "KERA") == expected
 
 
 def test_keras_pipeline_metadata_survives_model_detach_and_reattach():
@@ -91,7 +81,7 @@ def test_keras_pipeline_metadata_survives_model_detach_and_reattach():
     assert persisted.named_steps["KERA"].model_ is loaded_model
 
 
-def test_keras_pipeline_attach_rejects_legacy_pipeline_without_wrapper_metadata():
+def test_keras_pipeline_attach_rejects_pipeline_without_wrapper_metadata():
     pipeline = Pipeline([("scale", StandardScaler())])
 
     assert attach_keras_model_to_pipeline(pipeline, "KERA", object()) is False
@@ -101,7 +91,7 @@ def test_model_artifact_round_trip_uses_versioned_envelope(tmp_path):
     path = tmp_path / "model.sav"
     payload = _payload()
 
-    save_model_artifact(path, *payload)
+    save_model_artifact(path, *payload, compatibility=_compatibility())
 
     with path.open("rb") as infile:
         raw = pickle.load(infile)
@@ -109,46 +99,46 @@ def test_model_artifact_round_trip_uses_versioned_envelope(tmp_path):
     assert raw["format"] == MODEL_ARTIFACT_FORMAT
     assert raw["version"] == MODEL_ARTIFACT_VERSION
     assert raw["serializer"] == "pickle"
-    assert raw["compatibility"] is None
+    assert raw["compatibility"] == _compatibility()
     assert load_model_artifact(path) == payload
-    assert load_model_compatibility(path) is None
+    assert load_model_compatibility(path) == _compatibility()
     assert not (tmp_path / "model.sav.tmp").exists()
 
 
 
-def test_model_artifact_round_trip_preserves_optional_compatibility_metadata(tmp_path):
+def test_model_artifact_round_trip_preserves_required_compatibility_metadata(tmp_path):
     path = tmp_path / "model-compatible.sav"
-    compatibility = {"schema_version": 1, "source_identity_sha256": "abc", "source_columns": ()}
+    compatibility = _compatibility()
     save_model_artifact(path, *_payload(), compatibility=compatibility)
     assert load_model_artifact(path) == _payload()
     assert load_model_compatibility(path) == compatibility
 
 
 def test_loader_uses_optional_dill_only_after_pickle_failure(tmp_path, monkeypatch):
-    path = tmp_path / "legacy-dill.sav"
-    path.write_bytes(b"legacy-dill-placeholder")
-    payload = list(_payload())
+    path = tmp_path / "current-dill.sav"
+    path.write_bytes(b"dill-placeholder")
+    artifact = build_model_artifact(*_payload(), compatibility=_compatibility(), serializer="dill")
 
     def fail_pickle_load(_stream):
-        raise pickle.UnpicklingError("requires legacy dill")
+        raise pickle.UnpicklingError("requires dill")
 
     class FakeDill:
         @staticmethod
         def load(_stream):
-            return payload
+            return artifact
 
     monkeypatch.setattr(persistence.pickle, "load", fail_pickle_load)
     monkeypatch.setattr(persistence, "_import_optional_dill", lambda: FakeDill)
 
-    assert load_model_artifact(path) == tuple(payload)
+    assert load_model_artifact(path) == _payload()
 
 
-def test_loader_without_dill_reports_actionable_legacy_dependency(tmp_path, monkeypatch):
-    path = tmp_path / "legacy-dill.sav"
-    path.write_bytes(b"legacy-dill-placeholder")
+def test_loader_without_dill_reports_actionable_current_dependency(tmp_path, monkeypatch):
+    path = tmp_path / "current-dill.sav"
+    path.write_bytes(b"dill-placeholder")
 
     def fail_pickle_load(_stream):
-        raise pickle.UnpicklingError("requires legacy dill")
+        raise pickle.UnpicklingError("requires dill")
 
     monkeypatch.setattr(persistence.pickle, "load", fail_pickle_load)
     monkeypatch.setattr(persistence, "_import_optional_dill", lambda: None)
@@ -173,7 +163,7 @@ def test_save_falls_back_to_optional_dill_when_pickle_cannot_serialize(tmp_path,
     monkeypatch.setattr(persistence.pickle, "dump", fail_pickle_dump)
     monkeypatch.setattr(persistence, "_import_optional_dill", lambda: FakeDill)
 
-    save_model_artifact(path, *_payload())
+    save_model_artifact(path, *_payload(), compatibility=_compatibility())
 
     assert path.read_bytes() == b"fake-dill"
     assert recorded["artifact"]["serializer"] == "dill"
@@ -190,62 +180,44 @@ def test_save_without_dill_reports_actionable_pickle_incompatibility(tmp_path, m
     monkeypatch.setattr(persistence, "_import_optional_dill", lambda: None)
 
     with pytest.raises(ModelArtifactError, match="Install the optional 'dill' package"):
-        save_model_artifact(path, *_payload())
+        save_model_artifact(path, *_payload(), compatibility=_compatibility())
     assert not path.exists()
     assert not (tmp_path / "fallback.sav.tmp").exists()
-
-
-def test_real_legacy_dill_artifact_loads_when_optional_dependency_is_installed(tmp_path):
-    dill = pytest.importorskip("dill")
-    path = tmp_path / "real-legacy-dill.sav"
-    legacy_callable = lambda value: value  # dill-only local callable forces the legacy path
-    payload = list(_payload(pipeline=legacy_callable))
-
-    with path.open("wb") as outfile:
-        dill.dump(payload, outfile)
-
-    restored = load_model_artifact(path)
-    assert restored[:3] == tuple(payload[:3])
-    assert restored[3]("ok") == "ok"
-    assert restored[4:] == tuple(payload[4:])
 
 
 def test_real_save_uses_dill_fallback_for_non_pickleable_state_when_installed(tmp_path):
     dill = pytest.importorskip("dill")
     path = tmp_path / "real-fallback.sav"
-    legacy_callable = lambda value: value
+    local_callable = lambda value: value
 
-    save_model_artifact(path, *_payload(pipeline=legacy_callable))
+    save_model_artifact(
+        path, *_payload(pipeline=local_callable), compatibility=_compatibility()
+    )
 
     with path.open("rb") as infile:
         raw = dill.load(infile)
     assert raw["serializer"] == "dill"
+    assert raw["version"] == MODEL_ARTIFACT_VERSION
     assert load_model_artifact(path)[3]("ok") == "ok"
 
-def test_model_artifact_loader_accepts_legacy_six_item_payload(tmp_path):
-    path = tmp_path / "legacy.sav"
-    payload = _payload()
 
+def test_model_artifact_rejects_pre_revision_176_payload(tmp_path):
+    path = tmp_path / "old.sav"
     with path.open("wb") as outfile:
-        pickle.dump(list(payload), outfile)
+        pickle.dump(list(_payload()), outfile)
 
-    assert load_model_artifact(path) == payload
+    with pytest.raises(ModelArtifactError, match="pre-revision-176"):
+        load_model_artifact(path)
 
 
-def test_config_loader_keeps_legacy_config_only_fixture_compatibility(tmp_path):
-    path = tmp_path / "legacy-config.sav"
-    legacy = [{"legacy_config": True}, None, None, None, 4]
-
-    with path.open("wb") as outfile:
-        pickle.dump(legacy, outfile)
-
-    assert load_model_config(path) == {"legacy_config": True}
-
+def test_model_artifact_requires_compatibility_metadata():
+    with pytest.raises(ModelArtifactError, match="require compatibility metadata"):
+        build_model_artifact(*_payload())
 
 
 def test_model_artifact_rejects_unknown_serializer_metadata(tmp_path):
     path = tmp_path / "future-serializer.sav"
-    artifact = build_model_artifact(*_payload())
+    artifact = build_model_artifact(*_payload(), compatibility=_compatibility())
     artifact["serializer"] = "unknown"
 
     with path.open("wb") as outfile:
@@ -255,19 +227,20 @@ def test_model_artifact_rejects_unknown_serializer_metadata(tmp_path):
         load_model_artifact(path)
 
 
-def test_versioned_artifact_without_serializer_metadata_remains_readable(tmp_path):
+def test_versioned_artifact_without_serializer_metadata_is_rejected(tmp_path):
     path = tmp_path / "early-envelope.sav"
-    artifact = build_model_artifact(*_payload())
+    artifact = build_model_artifact(*_payload(), compatibility=_compatibility())
     artifact.pop("serializer")
 
     with path.open("wb") as outfile:
         pickle.dump(artifact, outfile)
 
-    assert load_model_artifact(path) == _payload()
+    with pytest.raises(ModelArtifactError, match="Unsupported model artifact serializer metadata"):
+        load_model_artifact(path)
 
 def test_model_artifact_rejects_unknown_version(tmp_path):
     path = tmp_path / "future.sav"
-    artifact = build_model_artifact(*_payload())
+    artifact = build_model_artifact(*_payload(), compatibility=_compatibility())
     artifact["version"] = MODEL_ARTIFACT_VERSION + 1
 
     with path.open("wb") as outfile:
@@ -286,7 +259,7 @@ def test_model_artifact_pipeline_reloads_predicts_and_retrains_in_fresh_process(
         ("model", LogisticRegression(random_state=1)),
     ])
     pipeline.fit(X, y)
-    save_model_artifact(path, *_payload(pipeline=pipeline))
+    save_model_artifact(path, *_payload(pipeline=pipeline), compatibility=_compatibility())
 
     project_root = Path(__file__).resolve().parents[1]
     module_path = project_root / "src"

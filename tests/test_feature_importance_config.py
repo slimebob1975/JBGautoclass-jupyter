@@ -1,12 +1,13 @@
-"""Defaults, config validation, previous-run snapshots and old artifact normalization."""
+"""Defaults, config validation, previous-run snapshots and current JSON artifacts."""
 from types import SimpleNamespace
 from pathlib import Path
-import importlib.util
+import json
 
 import pytest
 
 import Config as config_module
 from Config import Config
+from JBGExceptions import ConfigException
 from GUIHandler import GUIHandler
 
 
@@ -67,19 +68,13 @@ def test_previous_run_roundtrip_and_missing_field_migration_keep_credentials_run
     assert restored['mode'].feature_importance_repeats == 5
 
 
-def test_old_model_mode_defaults_and_runtime_override(monkeypatch):
+def test_saved_model_missing_current_mode_fields_is_rejected(monkeypatch):
     saved = lightweight_config()
-    # Remove instance fields to emulate a pre-106 artifact; dataclass defaults may still exist on its class.
     del saved.mode.calculate_feature_importance
     del saved.mode.feature_importance_repeats
     monkeypatch.setattr(config_module, 'load_model_config', lambda filename: saved)
-    loaded = Config.load_config_from_model_file('unused.sav')
-    assert loaded.mode.calculate_feature_importance is False
-    assert loaded.mode.feature_importance_repeats == 5
-    runtime = lightweight_config(Config.Mode(calculate_feature_importance=True, feature_importance_repeats=3))
-    loaded = Config.load_config_from_model_file('unused.sav', runtime)
-    assert loaded.mode.calculate_feature_importance is True
-    assert loaded.mode.feature_importance_repeats == 3
+    with pytest.raises(ConfigException, match="missing current fields"):
+        Config.load_config_from_model_file('unused.sav')
 
 
 def test_importance_export_paths_are_csvs(tmp_path):
@@ -90,31 +85,19 @@ def test_importance_export_paths_are_csvs(tmp_path):
         assert path.suffix == '.csv'
 
 
-def test_generated_config_and_legacy_module_parsing(monkeypatch, tmp_path):
+def test_generated_json_config_preserves_feature_importance_settings(tmp_path, monkeypatch):
     config = lightweight_config(Config.Mode(calculate_feature_importance=True, feature_importance_repeats=7))
-    config.config_path = Path(config_module.__file__).parent / 'config'
-    filename = tmp_path / 'generated.py'
+    filename = tmp_path / 'generated.json'
     config.save_to_file(filepath=filename)
-    spec = importlib.util.spec_from_file_location('importance_config', filename)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    assert module.mode['calculate_feature_importance'] is True
-    assert module.mode['feature_importance_repeats'] == 7
-    assert module.mode['ngram_range'] == config.mode.ngram_range.name
-    assert module.connection['sql_password'] == ''
-    # Parsing is separate from whole-configuration validation, covered by Mode tests above.
+    payload = json.loads(filename.read_text(encoding='utf-8'))
+    assert payload['schema_version'] == Config.JSON_CONFIG_SCHEMA_VERSION
+    assert payload['mode']['calculate_feature_importance'] is True
+    assert payload['mode']['feature_importance_repeats'] == 7
+    assert payload['mode']['ngram_range'] == config.mode.ngram_range.name
+    assert payload['connection']['sql_password'] == ''
+
     monkeypatch.setattr(Config, '__post_init__', lambda self: None)
-    parsed = Config.load_config(module)
+    parsed = Config.load_config_from_json(filename)
     assert parsed.mode.calculate_feature_importance is True
     assert parsed.mode.feature_importance_repeats == 7
     assert parsed.mode.ngram_range is config.mode.ngram_range
-    assert parsed.mail.notification_email == ''
-    module.mail = {'smtp_server': 'configured-server', 'notification_email': 'configured@example.test'}
-    module.mode['ngram_range'] = config.mode.ngram_range
-    module.mode.pop('calculate_feature_importance')
-    module.mode.pop('feature_importance_repeats')
-    parsed = Config.load_config(module)
-    assert parsed.mode.calculate_feature_importance is False
-    assert parsed.mode.feature_importance_repeats == 5
-    assert parsed.mail.smtp_server == 'configured-server'
-    assert parsed.mail.notification_email == 'configured@example.test'

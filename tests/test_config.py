@@ -1,13 +1,11 @@
 from typing import Callable
-import importlib.util
-
 import pytest
-from conftest import get_fixture_path
 
 from Config import Config, DarkNumberAlpha, DarkNumberMethod
 from imblearn.over_sampling import oversampler
 from imblearn.under_sampling import RandomUnderSampler
 from JBGExceptions import ConfigException
+from JBGModelPersistence import save_model_artifact
 from path import Path
 
 
@@ -220,19 +218,6 @@ class TestConfig:
         assert config.get_dark_number_alpha() is DarkNumberAlpha.NONE
         assert config.get_dark_number_calculation_type() == "non_linear"
 
-    def test_legacy_dark_number_controls_follow_mispredicted_and_linear_method(self):
-        config = Config(mode=Config.Mode(mispredicted=False))
-        del config.mode.calculate_dark_numbers
-        del config.mode.dark_number_method
-        del config.mode.dark_number_alpha
-        del config.mode.dark_number_target
-
-        assert config.should_calculate_dark_numbers() is False
-        assert config.get_dark_number_method() is DarkNumberMethod.LINEAR
-        assert config.get_dark_number_alpha() is DarkNumberAlpha.NONE
-        assert config.get_dark_number_target() == ""
-
-
     @pytest.mark.parametrize(
         "method,alpha,calculation_type",
         [
@@ -358,7 +343,7 @@ class TestConfig:
         """Generated config files keep credentials runtime-only."""
         d = tmp_path / "config"
         d.mkdir()
-        p = d / "config.py"
+        p = d / "config.json"
         secret = "do-not-write-this-password"
         valid_iris_config.connection.sql_password = secret
 
@@ -367,21 +352,22 @@ class TestConfig:
 
         assert secret not in saved_text
         assert '"sql_password": ""' in saved_text
+        assert '"schema_version": 2' in saved_text
 
-    def test_load_config_from_model_file(self, valid_iris_config, bare_iris_config, saved_with_valid_iris_config):
-        """ Loads config from a .sav file """
+    def test_load_config_from_model_file(self, tmp_path, valid_iris_config, bare_iris_config, saved_with_valid_iris_config):
+        """Loads configuration only from a current model artifact."""
 
-        # 1. Exception if there's something wrong, ex missing file
         with pytest.raises(ConfigException):
             Config.load_config_from_model_file("does_not_exist")
 
-        filename = get_fixture_path() / "config-save.sav"
-        # 2. Without a config
+        filename = tmp_path / "current.sav"
+        save_model_artifact(
+            filename, bare_iris_config, None, ("NOG", "NUG", "NOS", "NOR", "LDA"),
+            None, None, 4, compatibility={"schema_version": 1},
+        )
         new_config = Config.load_config_from_model_file(filename)
-        
         assert new_config == bare_iris_config
-        
-        # 3. With a config: model metadata gets the current runtime credentials.
+
         runtime_secret = "runtime-only-password"
         valid_iris_config.connection.sql_password = runtime_secret
         saved_with_valid_iris_config.connection.sql_password = runtime_secret
@@ -393,10 +379,15 @@ class TestConfig:
         assert new_config == saved_with_valid_iris_config
 
     def test_load_config_from_model_file_preserves_runtime_mail(
-        self, valid_iris_config
+        self, tmp_path, valid_iris_config
     ):
         """Prediction-only model loading keeps live notification settings."""
-        filename = get_fixture_path() / "config-save.sav"
+        filename = tmp_path / "current.sav"
+        save_model_artifact(
+            filename, valid_iris_config.get_clean_config(), None,
+            ("NOG", "NUG", "NOS", "NOR", "LDA"), None, None, 4,
+            compatibility={"schema_version": 1},
+        )
         valid_iris_config.mail = Config.Mail(
             smtp_server="smtp.runtime.example",
             notification_email="runtime@example.test",
@@ -410,8 +401,9 @@ class TestConfig:
     def test_load_config_uses_runtime_password_for_sanitized_file(
         self, tmp_path, valid_iris_config, monkeypatch
     ):
-        """A generated config can be reused without writing the password to disk."""
-        p = tmp_path / "runtime_config.py"
+        """A generated JSON config can be reused without writing the password to disk."""
+        p = tmp_path / "runtime_config.json"
+        valid_iris_config.connection.trusted_connection = False
         valid_iris_config.connection.sql_password = "must-not-be-persisted"
         valid_iris_config.mode.calculate_dark_numbers = False
         valid_iris_config.mode.dark_number_method = DarkNumberMethod.NON_LINEAR
@@ -420,19 +412,9 @@ class TestConfig:
         valid_iris_config.mode.experimental_perturbed_dark_number_fallback = False
         valid_iris_config.save_to_file(p, "some_fake_name")
 
-        spec = importlib.util.spec_from_file_location("runtime_config", p)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-
         monkeypatch.setenv(Config.SQL_PASSWORD_ENV, "runtime-environment-password")
-        loaded_config = Config.load_config(module)
+        loaded_config = Config.load_config_from_json(p)
 
-        assert module.connection["sql_password"] == ""
-        assert module.mode["calculate_dark_numbers"] is False
-        assert module.mode["dark_number_method"] == "NON_LINEAR"
-        assert module.mode["dark_number_alpha"] == "SINGLE"
-        assert module.mode["dark_number_target"] == "positive"
-        assert module.mode["experimental_perturbed_dark_number_fallback"] is False
         assert loaded_config.connection.sql_password == "runtime-environment-password"
         assert loaded_config.should_calculate_dark_numbers() is False
         assert loaded_config.get_dark_number_method() is DarkNumberMethod.NON_LINEAR
@@ -440,15 +422,10 @@ class TestConfig:
         assert loaded_config.get_dark_number_target() == "positive"
         assert loaded_config.should_use_experimental_perturbed_dark_number_fallback() is False
 
-    def test_load_config_from_module(self, valid_iris_config):
-        """ While it uses the load_config_from_module, it mainly checks load_config_2 """
-        argv = [
-            "test_config.py",
-            "-f",
-            ".\\fixtures\\test-iris-saved.py"
-        ]
-
-        loaded_config = Config.load_config_from_module(argv)
+    def test_load_config_from_arguments(self, tmp_path, valid_iris_config):
+        path = tmp_path / "config.json"
+        valid_iris_config.save_to_file(path)
+        loaded_config = Config.load_config_from_arguments(["test_config.py", "-f", str(path)])
         assert loaded_config == valid_iris_config
 
     def test_scoring_mechanism(self):

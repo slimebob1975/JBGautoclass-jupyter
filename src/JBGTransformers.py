@@ -308,9 +308,8 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
         
     # Fit converter to data
     def fit(self, X: pd.DataFrame):
-        # Persist the raw input schema with the fitted converter. This is
-        # serialized together with the model and survives a fresh process.
-        # Legacy saved converters lack this attribute and stay readable.
+        # Persist the raw input schema with the fitted converter. Current model
+        # artifacts require this metadata and reject converters that predate it.
         if not isinstance(X, pd.DataFrame):
             raise TypeError("Text converter expects a pandas DataFrame during fit.")
         if not X.columns.is_unique:
@@ -361,31 +360,39 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
         # Fail before vectorization or prediction if an SQL query has changed
         # the input schema. Reorder compatible columns deterministically.
         expected = getattr(self, "input_feature_columns_", None)
-        if expected is not None:
-            if not isinstance(X, pd.DataFrame):
-                raise TypeError("Prediction features must be a pandas DataFrame.")
-            if not X.columns.is_unique:
-                raise ValueError("Prediction features contain duplicate column names.")
-            missing = [name for name in expected if name not in X.columns]
-            unexpected = [name for name in X.columns if name not in expected]
-            if missing or unexpected:
-                raise ValueError(
-                    "Saved-model feature schema mismatch: "
-                    f"missing={missing!r}; unexpected={unexpected!r}. "
-                    "Use the same input columns as during training."
-                )
-            X = X.loc[:, list(expected)]
-            expected_families = getattr(self, "input_feature_type_families_", None)
-            if expected_families is not None:
-                mismatched = [
-                    name for name in expected
-                    if expected_families.get(str(name)) != pandas_dtype_family(X[name].dtype)
-                ]
-                if mismatched:
-                    raise ValueError(
-                        "Saved-model feature type mismatch: "
-                        f"{len(mismatched)} input column(s) changed dtype family since training."
-                    )
+        if not expected:
+            raise ValueError(
+                "Fitted converter lacks the current input feature schema. "
+                "Retrain and save a new model with the current JBG version."
+            )
+        if not isinstance(X, pd.DataFrame):
+            raise TypeError("Prediction features must be a pandas DataFrame.")
+        if not X.columns.is_unique:
+            raise ValueError("Prediction features contain duplicate column names.")
+        missing = [name for name in expected if name not in X.columns]
+        unexpected = [name for name in X.columns if name not in expected]
+        if missing or unexpected:
+            raise ValueError(
+                "Saved-model feature schema mismatch: "
+                f"missing={missing!r}; unexpected={unexpected!r}. "
+                "Use the same input columns as during training."
+            )
+        X = X.loc[:, list(expected)]
+        expected_families = getattr(self, "input_feature_type_families_", None)
+        if not expected_families:
+            raise ValueError(
+                "Fitted converter lacks the current input feature type schema. "
+                "Retrain and save a new model with the current JBG version."
+            )
+        mismatched = [
+            name for name in expected
+            if expected_families.get(str(name)) != pandas_dtype_family(X[name].dtype)
+        ]
+        if mismatched:
+            raise ValueError(
+                "Saved-model feature type mismatch: "
+                f"{len(mismatched)} input column(s) changed dtype family since training."
+            )
 
         # Prepare placeholders for converted data (are dropped silently in concat below if None)
         X_document = None

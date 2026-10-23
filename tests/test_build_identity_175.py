@@ -15,25 +15,25 @@ DEFAULT_SETTINGS = (ROOT / "src" / "GUI" / "default_settings.json").read_text(en
 def test_product_version_is_stable_and_separate_from_repository_state():
     identity = BuildIdentity(branch="dev", commit="abc1234", dirty=True)
     assert APP_NAME == "JBG AutoClassification"
-    assert APP_VERSION == "0.17.5"
-    assert identity.compact_label == "v0.17.5 · Git: dev @ abc1234 (modified)"
+    assert APP_VERSION == "0.18.0"
+    assert identity.compact_label == "v0.18.0 · Git: dev @ abc1234 (modified)"
 
 
 def test_exact_tag_is_preferred_over_branch_in_repository_label():
-    identity = BuildIdentity(branch="dev", tag="v0.17.5", commit="abc1234")
-    assert identity.repository_label == "Git: v0.17.5 @ abc1234"
+    identity = BuildIdentity(branch="dev", tag="v0.18.0", commit="abc1234")
+    assert identity.repository_label == "Git: v0.18.0 @ abc1234"
 
 
 def test_packaged_build_can_supply_repository_identity_through_environment(monkeypatch):
     monkeypatch.setenv("JBG_GIT_COMMIT", "0123456789abcdef")
     monkeypatch.setenv("JBG_GIT_BRANCH", "release")
-    monkeypatch.setenv("JBG_GIT_TAG", "v0.17.5")
+    monkeypatch.setenv("JBG_GIT_TAG", "v0.18.0")
     monkeypatch.setenv("JBG_GIT_DIRTY", "0")
 
     identity = get_build_identity(repo_root=Path("ignored"))
 
     assert identity.commit == "0123456789ab"
-    assert identity.tag == "v0.17.5"
+    assert identity.tag == "v0.18.0"
     assert identity.branch == "release"
     assert identity.dirty is False
 
@@ -44,7 +44,7 @@ def test_non_git_installation_falls_back_without_error(monkeypatch, tmp_path):
     with patch("JBGVersion._git", return_value=None):
         identity = get_build_identity(repo_root=tmp_path)
     assert identity.repository_label == "Git: unavailable"
-    assert application_version_line(repo_root=tmp_path).startswith("v0.17.5 · Git:")
+    assert application_version_line(repo_root=tmp_path).startswith("v0.18.0 · Git:")
 
 
 def test_git_checkout_reports_branch_commit_and_modified_state(monkeypatch, tmp_path):
@@ -66,7 +66,7 @@ def test_runtime_log_records_application_and_repository_identity(tmp_path):
         log_file = TimestampedLogFile(log_dir=tmp_path, filename="identity.log")
     try:
         text = log_file.path.read_text(encoding="utf-8")
-        assert "[INFO] Application: JBG AutoClassification v0.17.5" in text
+        assert "[INFO] Application: JBG AutoClassification v0.18.0" in text
         assert "[INFO] Repository: Git: dev @ abcdef123456 (modified)" in text
     finally:
         log_file.close()

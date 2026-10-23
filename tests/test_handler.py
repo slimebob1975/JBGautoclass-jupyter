@@ -6,7 +6,6 @@ import numpy as np
 import pandas
 import pytest
 from sklearn.svm import SVC, LinearSVC
-from conftest import get_fixture_path
 
 import JBGHandler as handler_module
 from JBGExceptions import DatasetException, HandlerException
@@ -508,22 +507,54 @@ class TestModelHandler():
 
         assert default_model_handler.load_empty_model() == model
 
-    def test_load_model_from_file(self, default_model_handler, default_model):
-        """ Loads from model-save.sav """
-        # 1. Ensure that None is returned if the path is wrong
-        assert default_model_handler.load_model_from_file("does-not-exist") == None
+    def test_load_model_from_file(self, default_model_handler, default_model, monkeypatch):
+        """Load a current model artifact without relying on version-sensitive binary fixtures."""
+        assert default_model_handler.load_model_from_file("does-not-exist") is None
 
-        # 2. This exists, but is a bare .sav without the proper values, so still None
-        filename = get_fixture_path() / "config-save.sav"
-        assert default_model_handler.load_model_from_file(filename) == default_model
-        
-        path = get_fixture_path() / "model-save.sav"
-        assert default_model_handler.load_model_from_file(path) == default_model
+        artifact = (
+            object(),
+            None,
+            (None, None, Preprocess.NOS, Reduction.NOR, Algorithm.DUMY),
+            None,
+            None,
+            4,
+        )
+        monkeypatch.setattr(
+            handler_module,
+            "load_model_artifact_with_compatibility",
+            lambda _filename: (artifact, {"schema_version": 1}),
+        )
+        monkeypatch.setattr(
+            handler_module,
+            "review_artifact_semantics",
+            lambda *_args, **_kwargs: SimpleNamespace(issues=(), warnings=()),
+        )
 
-    def test_load_pipeline_from_file(self, default_model_handler):
-        """ This is almost identical to the one above, except only returning the Pipeline (here None)"""
-        path = get_fixture_path() / "model-save.sav"
-        assert default_model_handler.load_pipeline_from_file(path) == None
+        assert default_model_handler.load_model_from_file("current-model.sav") == default_model
+
+    def test_load_pipeline_from_file(self, default_model_handler, monkeypatch):
+        """Return the persisted pipeline after current-artifact validation."""
+        sentinel_pipeline = object()
+        artifact = (
+            object(),
+            None,
+            (None, None, Preprocess.NOS, Reduction.NOR, Algorithm.DUMY),
+            sentinel_pipeline,
+            None,
+            4,
+        )
+        monkeypatch.setattr(
+            handler_module,
+            "load_model_artifact_with_compatibility",
+            lambda _filename: (artifact, {"schema_version": 1}),
+        )
+        monkeypatch.setattr(
+            handler_module,
+            "review_artifact_semantics",
+            lambda *_args, **_kwargs: SimpleNamespace(issues=(), warnings=()),
+        )
+
+        assert default_model_handler.load_pipeline_from_file("current-model.sav") is sentinel_pipeline
 
     @pytest.mark.parametrize("algorithm", [Algorithm.MNB, Algorithm.BNB, Algorithm.CNB])
     def test_rfe_skips_naive_bayes_estimators_without_feature_importances(

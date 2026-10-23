@@ -850,8 +850,8 @@ class DataLayer(DataLayerBase):
 def main():
     from JBGStreamedLogger import JBGLogger
 
-    # python SQLDataLayer.py -f .\config\test_iris.py
-    config = Cf.load_config_from_module(sys.argv)
+    # python SQLDataLayer.py -f .\config\autoclassconfig_iris.json
+    config = Cf.load_config_from_arguments(sys.argv)
     logger = JBGLogger(False)
     dl = DataLayer(config, logger)
     table = 'aterkommande_automat.iris'

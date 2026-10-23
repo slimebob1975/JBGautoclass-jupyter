@@ -15,7 +15,7 @@ from typing import Optional
 
 
 APP_NAME = "JBG AutoClassification"
-APP_VERSION = "0.17.5"
+APP_VERSION = "0.18.0"
 
 
 @dataclass(frozen=True)

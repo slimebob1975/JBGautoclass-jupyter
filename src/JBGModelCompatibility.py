@@ -249,8 +249,8 @@ def build_model_compatibility_metadata(config, converter, source_schema: Mapping
 def review_artifact_semantics(config, converter, metadata) -> CompatibilityReview:
     """Verify the saved config, fitted converter and artifact metadata agree internally."""
     if metadata is None:
-        return CompatibilityReview(warnings=(
-            "Legacy model has no revision-173 compatibility metadata; source identity, SQL type compatibility and converter-setting equivalence cannot be fully verified.",
+        return CompatibilityReview(issues=(
+            "Current model artifacts require source/schema compatibility metadata. Retrain and save a new model.",
         ))
     if not isinstance(metadata, Mapping) or metadata.get("schema_version") != MODEL_COMPATIBILITY_SCHEMA:
         return CompatibilityReview(issues=("Saved model compatibility metadata is unsupported or malformed.",))
@@ -317,8 +317,8 @@ def review_current_source_compatibility(
 ) -> CompatibilityReview:
     """Verify a currently selected SQL source against a saved model contract."""
     if metadata is None:
-        return CompatibilityReview(warnings=(
-            "Legacy model has no source/schema compatibility metadata; current source identity and SQL types are unverified.",
+        return CompatibilityReview(issues=(
+            "Current model artifacts require source/schema compatibility metadata. Retrain and save a new model.",
         ))
     if not isinstance(metadata, Mapping) or metadata.get("schema_version") != MODEL_COMPATIBILITY_SCHEMA:
         return CompatibilityReview(issues=("Saved model compatibility metadata is unsupported or malformed.",))

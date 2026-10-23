@@ -7,8 +7,6 @@ from datetime import datetime
 import getpass
 import json
 import os
-import runpy
-from types import SimpleNamespace
 from pathlib import Path
 import sys
 
@@ -20,7 +18,7 @@ def parser():
     p = argparse.ArgumentParser(description=__doc__)
     source = p.add_mutually_exclusive_group()
     source.add_argument('--last-run', nargs='?', const='.jbg_last_run.json', help='JBG Repeat Last JSON; default source')
-    source.add_argument('--config', help='Existing JBG Python configuration file')
+    source.add_argument('--config', help='Existing JBG JSON configuration file')
     source.add_argument('--demo', action='store_true', help='Synthetic numeric smoke test; no SQL connection')
     p.add_argument('--csv', help='Raw CSV instead of SQL, using the selected JBG configuration schema')
     p.add_argument('--sep', default=';', help='CSV separator (default ;)')
@@ -63,10 +61,7 @@ def parser():
 def load_config(args):
     from Config import Config
     if args.config:
-        namespace = runpy.run_path(str(Path(args.config).resolve()))
-        if namespace.get('version', '1.0') == '1.0':
-            raise ValueError('V1.0 config is deprecated; use a current JBG configuration')
-        config = Config.load_config(SimpleNamespace(**namespace))
+        config = Config.load_config_from_json(Path(args.config).resolve())
     else:
         from GUIHandler import GUIHandler
         path = Path(args.last_run or '.jbg_last_run.json')

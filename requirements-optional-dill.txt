@@ -1,0 +1,4 @@
+# Optional serializer fallback for current JBG model artifacts whose state
+# cannot be serialized with Python's standard-library pickle implementation.
+# Normal JBG installation and pickle-compatible models do not require dill.
+dill

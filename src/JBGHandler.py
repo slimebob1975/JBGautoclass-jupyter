@@ -1105,27 +1105,10 @@ class ModelHandler:
                 # pipeline and only externalize its native Keras model_. Reattaching the
                 # sidecar is enough for prediction and does not require live training data.
                 if not attach_keras_model_to_pipeline(pipeline, keras_name, keras_model):
-                    # Backwards compatibility for older artifacts that saved only the
-                    # pre-Keras pipeline. Those can still be restored when labelled data
-                    # is available (for example during the in-process retraining path),
-                    # but prediction-only after a restart requires a model saved by 073+.
-                    if dh is None:
-                        raise ModelInitializationException(
-                            "Legacy Keras artifact lacks fitted SciKeras wrapper metadata; "
-                            "retrain and save the model with revision 073 or later."
-                        )
-
-                    try:
-                        # TODO: change explicit MLPKerasClassifier constructor to dynamic KERAS model constructor
-                        # Note: we need to apply the preceding transforms to data before initializing the Keras model
-                        try:
-                            keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_train), dh.Y_train)
-                        except Exception:
-                            keras_step = MLPKerasClassifier(keras_model).initialize(pipeline.transform(dh.X_prediction), dh.Y_prediction)
-                    except Exception as e:
-                        raise ModelInitializationException(str(e))
-
-                    pipeline = Pipeline(steps=pipeline.steps + [(keras_name, keras_step)])
+                    raise ModelInitializationException(
+                        "Current Keras artifact lacks fitted SciKeras wrapper metadata; "
+                        "retrain and save a new model with the current JBG version."
+                    )
             
             the_model = Model(
                 text_converter=text_converter,
@@ -3871,7 +3854,7 @@ def main():
     import JBGLogger, SQLDataLayer, Config, sys
 
     if len(sys.argv) > 1:
-        config = Config.Config.load_config_from_module(sys.argv)
+        config = Config.Config.load_config_from_arguments(sys.argv)
     else:
         config = Config.Config()
 

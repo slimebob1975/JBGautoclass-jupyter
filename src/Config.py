@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import copy
-import ast
+import getopt
 import json
-import logging
 from types import SimpleNamespace
 import enum
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dataclass_fields
 from pathlib import Path
 from typing import Callable, Type, TypeVar, Union
 
@@ -87,7 +86,7 @@ class Config:
     
     MAX_ITERATIONS = 20000
     CONFIG_FILENAME_START = "autoclassconfig_"
-    CONFIG_SAMPLE_FILE = CONFIG_FILENAME_START + "template.py.txt"
+    JSON_CONFIG_SCHEMA_VERSION = 2
 
     CLASS_TABLE_SCRIPT = "./sql/CreatePredictionTables.sql.txt"
 
@@ -98,83 +97,6 @@ class Config:
 
     TEXT_DATATYPES = ["nvarchar", "varchar", "char", "text", "enum", "set"]
     INT_DATATYPES = ["bigint", "int", "smallint", "tinyint"]
-
-    TEMPLATE_TAGS = {
-        "name": "<name>",
-        "connection.odbc_driver": "<odbc_driver>",
-        "connection.host": "<host>",
-        "connection.trusted_connection": "<trusted_connection>",
-        "connection.class_catalog": "<class_catalog>", 
-        "connection.class_table": "<class_table>",
-        "connection.sql_username": "<sql_username>",
-        "connection.sql_password": "<sql_password>",
-        "connection.data_catalog": "<data_catalog>",
-        "connection.data_table": "<data_table>",
-        "connection.class_column": "<class_column>",
-        "connection.data_text_columns": "<data_text_columns>",
-        "connection.data_numerical_columns": "<data_numerical_columns>",
-        "connection.id_column": "<id_column>",
-        "mode.train": "<train>",
-        "mode.predict": "<predict>",
-        "mode.mispredicted": "<mispredicted>",
-        "mode.use_metas": "<use_metas>",
-        "mode.use_stop_words": "<use_stop_words>",
-        "mode.ngram_range": "<ngram_range>",
-        "mode.hex_encode": "<hex_encode>",
-        "mode.use_categorization": "<use_categorization>",
-        "mode.category_text_columns": "<category_text_columns>",
-        "mode.test_size": "<test_size>",
-        "mode.calculate_dark_numbers": "<calculate_dark_numbers>",
-        "mode.dark_number_method": "<dark_number_method>",
-        "mode.dark_number_alpha": "<dark_number_alpha>",
-        "mode.dark_number_target": "<dark_number_target>",
-        "mode.dark_number_flip_fraction": "<dark_number_flip_fraction>",
-        "mode.experimental_perturbed_dark_number_fallback": "<experimental_perturbed_dark_number_fallback>",
-        "mode.oversampler": "<oversampler>",
-        "mode.undersampler": "<undersampler>",
-        "mode.oversamplers": "<oversamplers>",
-        "mode.undersamplers": "<undersamplers>",
-        "mode.algorithm": "<algorithm>",
-        "mode.preprocessor": "<preprocessor>",
-        "mode.feature_selection": "<feature_selection>",
-        "mode.num_selected_features": "<num_selected_features>",
-        "mode.scoring": "<scoring>",
-        "mode.max_iterations": "<max_iterations>",
-        "mode.calculate_feature_importance": "<calculate_feature_importance>",
-        "mode.feature_importance_repeats": "<feature_importance_repeats>",
-        "mode.feature_selection_mode": "<feature_selection_mode>",
-        "mode.feature_selection_profile_id": "<feature_selection_profile_id>",
-        "mode.feature_search_model_type": "<feature_search_model_type>",
-        "mode.feature_search_scaler": "<feature_search_scaler>",
-        "mode.feature_search_oversampling": "<feature_search_oversampling>",
-        "mode.feature_search_reduction": "<feature_search_reduction>",
-        "mode.feature_search_trials": "<feature_search_trials>",
-        "mode.feature_search_sizes": "<feature_search_sizes>",
-        "mode.feature_search_inner_folds": "<feature_search_inner_folds>",
-        "mode.feature_search_outer_folds": "<feature_search_outer_folds>",
-        "mode.feature_search_top_sets": "<feature_search_top_sets>",
-        "mode.feature_search_refine_rounds": "<feature_search_refine_rounds>",
-        "mode.feature_search_max_evaluations": "<feature_search_max_evaluations>",
-        "mode.feature_search_min_gain": "<feature_search_min_gain>",
-        "mode.feature_search_linear_c": "<feature_search_linear_c>",
-        "mode.feature_search_linear_max_iterations": "<feature_search_linear_max_iterations>",
-        "mode.feature_search_non_linear_max_iterations": "<feature_search_non_linear_max_iterations>",
-        "mode.feature_search_non_linear_alpha": "<feature_search_non_linear_alpha>",
-        "mode.feature_search_non_linear_hidden_layers": "<feature_search_non_linear_hidden_layers>",
-        "mode.feature_search_non_linear_learning_rate": "<feature_search_non_linear_learning_rate>",
-        "mode.feature_search_preset": "<feature_search_preset>",
-        "mode.feature_search_tree_estimator": "<feature_search_tree_estimator>",
-        "mode.feature_search_tree_class_weight": "<feature_search_tree_class_weight>",
-        "mode.feature_search_tree_positive_threshold": "<feature_search_tree_positive_threshold>",
-        "mode.feature_search_tree_n_estimators": "<feature_search_tree_n_estimators>",
-        "mode.feature_search_tree_max_depth": "<feature_search_tree_max_depth>",
-        "mode.feature_search_tree_min_samples_leaf": "<feature_search_tree_min_samples_leaf>",
-        "io.verbose": "<verbose>",
-        "io.model_path": "<model_path>",
-        "io.model_name": "<model_name>",
-        "debug.on": "<on>",
-        "debug.data_limit": "<data_limit>"
-    }
 
     @dataclass
     class Connection:
@@ -660,7 +582,7 @@ class Config:
             if not (isinstance(self.undersampler, Undersampling)):
                 raise TypeError(f"Argument undersampler is invalid: {str(self.undersampler)}")
 
-            # getattr keeps older pickled Mode instances compatible.
+            # Normalize configured candidate selections to canonical abbreviations.
             for field_name, enum_type, fallback in (
                 ("oversamplers", Oversampling, self.oversampler),
                 ("undersamplers", Undersampling, self.undersampler),
@@ -832,7 +754,7 @@ class Config:
             "feature_importance": {"suffix": "csv", "prefix": "feature_importance_"},
             "feature_importance_details": {"suffix": "csv", "prefix": "feature_importance_details_"},
             "config": {
-                "suffix": "py",
+                "suffix": "json",
                 "prefix": self.CONFIG_FILENAME_START
             }
         }
@@ -961,143 +883,182 @@ class Config:
 
     # Saves config to be read from the command line
     def save_to_file(self, filepath: Path = None, username: str = None) -> None:
-        template_path = self.config_path / self.CONFIG_SAMPLE_FILE
-        
-        with open(template_path, "r", encoding="utf-8") as fin:
-            lines = fin.readlines()
-        
-        for tag in self.TEMPLATE_TAGS:
-            #print(tag)
-            template = self.TEMPLATE_TAGS[tag]
-            location = tag.split(".")
-            
-            if (len(location) == 1):
-                replace = getattr(self, location[0])
-            else:
-                head = getattr(self, location[0])
-                replace = getattr(head, location[1], None)
-                if tag == "mode.oversamplers":
-                    replace = self.get_oversampler_abbreviations()
-                elif tag == "mode.undersamplers":
-                    replace = self.get_undersampler_abbreviations()
-                elif tag in ("mode.feature_search_sizes", "mode.feature_search_non_linear_hidden_layers"):
-                    replace = ",".join(str(value) for value in replace)
+        """Persist the complete configuration as schema-versioned JSON.
 
-                # SQL passwords are runtime-only credentials. Generated config files
-                # intentionally contain an empty password and may use JBG_SQL_PASSWORD
-                # from the process environment when loaded later.
-                if tag == "connection.sql_password":
-                    replace = ""
-
-                # Exception for class/data username, if given
-                if username is not None and "username" in location[1]:
-                    replace = username
-
-            # Check if it's one of the enum variables
-            if (isinstance(replace, enum.Enum)):
-                replace = replace.name
-
-            # Replace the lists with text representations
-            if (isinstance(replace, list)):
-                replace = ",".join(replace)
-
-            for i in range(len(lines)):
-                lines[i] = lines[i].replace(template, str(replace))
-
-        filepath = filepath if filepath else self.filepath
-        
-        with open(filepath, "w", encoding="utf-8") as fout:
-           fout.writelines(lines)
-
-        # Transitional dual-write: keep the legacy .py artifact for Repeat Last
-        # and existing entrypoints, while also providing an executable-code-free JSON.
-        if Path(filepath).suffix.lower() == ".py":
-            json_path = Path(filepath).with_suffix(".json")
-            # JSON is supplementary. Failure must not prevent constructing Config,
-            # running classification, or preserving the already-written .py file.
-            try:
-                payload = self._config_to_json()
-                with open(json_path, "w", encoding="utf-8") as fout:
-                    json.dump(payload, fout, ensure_ascii=False, indent=2, sort_keys=True)
-                    fout.write("\n")
-            except Exception as exc:
-                logging.getLogger(__name__).warning(
-                    "Optional JSON configuration export failed (%s): %s",
-                    type(exc).__name__, exc,
-                )
-
-    def _config_to_json(self) -> dict:
-        """Serialize actual settings, not the generated Python template.
-
-        The legacy template includes unquoted multi-word tokens (Extra Trees),
-        which cannot be parsed as Python. Keep this export data-only.
+        Revision 176 intentionally ends generated Python configuration support.
+        Configuration files are data and must never be imported or executed.
         """
-        sections = {"connection": {}, "mode": {}, "io": {}, "debug": {}}
-        for tag in self.TEMPLATE_TAGS:
-            if tag == "name":
-                continue
-            section, key = tag.split(".", 1)
-            value = getattr(getattr(self, section), key, None)
-            if tag == "connection.sql_password":
-                value = ""
-            elif tag == "mode.oversamplers":
-                value = self.get_oversampler_abbreviations()
-            elif tag == "mode.undersamplers":
-                value = self.get_undersampler_abbreviations()
-            elif tag in ("mode.feature_search_sizes", "mode.feature_search_non_linear_hidden_layers"):
-                value = ",".join(str(item) for item in value)
-            elif isinstance(value, enum.Enum):
-                value = value.name
-            elif isinstance(value, list):
-                # Existing .py template joins lists as CSV. Keep string values
-                # for compatibility with Config.load_config's normalization.
-                value = ",".join(str(item) for item in value)
-            elif not isinstance(value, (str, int, float, bool, type(None), dict)):
-                value = str(value)
-            sections[section][key] = value
-        return {"schema_version": 1, "name": self.name, **sections}
+        target = Path(filepath) if filepath is not None else self.filepath
+        if target.suffix.lower() != ".json":
+            raise ConfigException(
+                "Python configuration files are no longer supported. "
+                "Use a .json configuration generated by JBG revision 176 or newer."
+            )
+        target.parent.mkdir(parents=True, exist_ok=True)
+        self._write_json_config(target, username=username)
+
+    def _write_json_config(self, filepath: Path, username: str = None) -> None:
+        payload = self._config_to_json(username=username)
+        temporary_path = filepath.with_name(filepath.name + ".tmp")
+        try:
+            with temporary_path.open("w", encoding="utf-8") as fout:
+                json.dump(
+                    payload, fout, ensure_ascii=False, indent=2, sort_keys=True,
+                    allow_nan=False,
+                )
+                fout.write("\n")
+            temporary_path.replace(filepath)
+        finally:
+            if temporary_path.exists():
+                temporary_path.unlink()
 
     @staticmethod
-    def _legacy_config_to_json(source: str) -> dict:
-        """Parse generated Python configuration as data, without executing it."""
-        values = {}
-        for node in ast.parse(source).body:
-            if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-                name = node.targets[0].id
-                if name in ("name", "version", "connection", "mode", "io", "debug", "mail"):
-                    # Some legacy template fields are emitted as unquoted enum-like
-                    # tokens (e.g. Quick). Treat those tokens as plain strings.
-                    class BareNamesAsStrings(ast.NodeTransformer):
-                        def visit_Name(self, item):
-                            return ast.copy_location(ast.Constant(value=item.id), item)
-                    values[name] = ast.literal_eval(BareNamesAsStrings().visit(node.value))
-        required = ("name", "connection", "mode", "io", "debug")
-        if not all(key in values for key in required):
-            raise ConfigException("Generated configuration is missing required sections")
-        values["schema_version"] = 1
-        values.pop("version", None)
-        values["connection"]["sql_password"] = ""
-        return values
+    def _json_value(value):
+        if isinstance(value, enum.Enum):
+            return value.name
+        if hasattr(value, "get_abbreviations") and callable(value.get_abbreviations):
+            return list(value.get_abbreviations())
+        if isinstance(value, dict):
+            return {str(key): Config._json_value(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [Config._json_value(item) for item in value]
+        if isinstance(value, Path):
+            return str(value)
+        if isinstance(value, (str, int, float, bool, type(None))):
+            return value
+        raise TypeError(f"Configuration value of type {type(value).__name__} is not JSON serializable")
+
+    @classmethod
+    def _json_section(cls, section) -> dict:
+        return {
+            item.name: cls._json_value(getattr(section, item.name))
+            for item in dataclass_fields(section)
+        }
+
+    def _config_to_json(self, username: str = None) -> dict:
+        """Return the complete schema-v2 data-only configuration payload."""
+        connection = self._json_section(self.connection)
+        connection["sql_password"] = ""
+        if username is not None:
+            connection["sql_username"] = username
+
+        return {
+            "schema_version": self.JSON_CONFIG_SCHEMA_VERSION,
+            "name": self.name,
+            "connection": connection,
+            "mode": self._json_section(self.mode),
+            "io": self._json_section(self.io),
+            "debug": self._json_section(self.debug),
+            "mail": self._json_section(self.mail),
+        }
+
+    @classmethod
+    def _validate_json_payload(cls, payload: dict) -> None:
+        if not isinstance(payload, dict):
+            raise ConfigException("JSON configuration must contain an object at the top level")
+        if payload.get("schema_version") != cls.JSON_CONFIG_SCHEMA_VERSION:
+            raise ConfigException(
+                f"Unsupported JSON configuration schema_version; expected {cls.JSON_CONFIG_SCHEMA_VERSION}. "
+                "Regenerate the configuration with the current JBG version."
+            )
+        if not isinstance(payload.get("name"), str):
+            raise ConfigException("JSON configuration name must be a string")
+
+        section_types = {
+            "connection": cls.Connection,
+            "mode": cls.Mode,
+            "io": cls.IO,
+            "debug": cls.Debug,
+            "mail": cls.Mail,
+        }
+        expected_top = {"schema_version", "name", *section_types}
+        missing_top = expected_top - set(payload)
+        unknown_top = set(payload) - expected_top
+        if missing_top:
+            raise ConfigException(
+                "JSON schema v2 configuration is missing top-level keys: "
+                + ", ".join(sorted(missing_top))
+            )
+        if unknown_top:
+            raise ConfigException(
+                "JSON schema v2 configuration has unknown top-level keys: "
+                + ", ".join(sorted(unknown_top))
+            )
+
+        for section_name, section_type in section_types.items():
+            section = payload[section_name]
+            if not isinstance(section, dict):
+                raise ConfigException(f"JSON configuration section '{section_name}' must be an object")
+            expected = {item.name for item in dataclass_fields(section_type)}
+            actual = set(section)
+            missing = expected - actual
+            unknown = actual - expected
+            if missing:
+                raise ConfigException(
+                    f"JSON schema v2 section '{section_name}' is missing keys: "
+                    + ", ".join(sorted(missing))
+                )
+            if unknown:
+                raise ConfigException(
+                    f"JSON schema v2 section '{section_name}' has unknown keys: "
+                    + ", ".join(sorted(unknown))
+                )
 
     @classmethod
     def load_config_from_json(cls: Type[T], filepath: Path) -> T:
-        """Load a versioned JSON configuration, reusing established validation."""
+        """Load a schema-v2 JSON configuration without executing code."""
+        path = Path(filepath)
+        if path.suffix.lower() != ".json":
+            raise ConfigException(
+                "Python configuration files are no longer supported. "
+                "Use a .json configuration generated by JBG revision 176 or newer."
+            )
         try:
-            with open(filepath, encoding="utf-8") as stream:
+            with path.open(encoding="utf-8") as stream:
                 payload = json.load(stream)
         except (OSError, ValueError) as exc:
-            raise ConfigException(f"Unable to read JSON configuration {filepath}: {exc}") from exc
-        if not isinstance(payload, dict) or type(payload.get("schema_version")) is not int or payload["schema_version"] != 1:
-            raise ConfigException("Unsupported JSON configuration schema_version (expected 1)")
-        required = ("name", "connection", "mode", "io", "debug")
-        if any(key not in payload for key in required) or any(not isinstance(payload[key], dict) for key in required[1:]):
-            raise ConfigException("JSON configuration must include name, connection, mode, io and debug")
+            raise ConfigException(f"Unable to read JSON configuration {path}: {exc}") from exc
+
+        cls._validate_json_payload(payload)
         connection = dict(payload["connection"])
-        connection["sql_password"] = ""  # Only runtime credentials may supply this value.
-        module = SimpleNamespace(name=payload["name"], connection=connection,
-                                 mode=payload["mode"], io=payload["io"],
-                                 debug=payload["debug"], mail=payload.get("mail", {}))
-        return cls.load_config(module)
+        connection["sql_password"] = ""
+        module = SimpleNamespace(
+            name=payload["name"],
+            connection=connection,
+            mode=payload["mode"],
+            io=payload["io"],
+            debug=payload["debug"],
+            mail=payload["mail"],
+        )
+        try:
+            return cls.load_config(module)
+        except ConfigException:
+            raise
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ConfigException(f"Invalid JSON configuration values: {exc}") from exc
+
+    @classmethod
+    def load_config_from_arguments(cls: Type[T], argv) -> T:
+        """Load the JSON config selected by -f/--file on a command line."""
+        usage = f"Usage: {argv[0]} [-h/--help] [-f/--file <config.json>]"
+        try:
+            options, remaining = getopt.getopt(argv[1:], "hf:", ["help", "file="])
+        except getopt.GetoptError as exc:
+            raise ConfigException(f"{exc}. {usage}") from exc
+        if remaining:
+            raise ConfigException(f"Unexpected command-line arguments: {' '.join(remaining)}. {usage}")
+
+        filepath = None
+        for option, value in options:
+            if option in ("-h", "--help"):
+                print(usage)
+                raise SystemExit(0)
+            if option in ("-f", "--file"):
+                filepath = Path(value)
+
+        if filepath is None:
+            raise ConfigException(f"No configuration file specified. {usage}")
+        return cls.load_config_from_json(filepath)
 
     def check_config_against_data_configuration(self, columns: list) -> bool:
         """ Check that the columns in the given table matches the config """
@@ -1109,51 +1070,40 @@ class Config:
         
 
     @classmethod
+    def _validate_current_saved_config(cls, saved_config) -> None:
+        if not isinstance(saved_config, cls):
+            raise ConfigException(
+                "Saved model configuration is from an unsupported pre-revision-176 artifact. "
+                "Retrain and save a new model."
+            )
+        sections = {
+            "connection": cls.Connection,
+            "mode": cls.Mode,
+            "io": cls.IO,
+            "debug": cls.Debug,
+            "mail": cls.Mail,
+        }
+        for section_name, section_type in sections.items():
+            section = getattr(saved_config, section_name, None)
+            missing = [
+                item.name for item in dataclass_fields(section_type)
+                if section is None or not hasattr(section, item.name)
+            ]
+            if missing:
+                raise ConfigException(
+                    "Saved model configuration is missing current fields in "
+                    f"{section_name}: {', '.join(missing)}. Retrain and save a new model."
+                )
+
+    @classmethod
     def load_config_from_model_file(cls: Type[T], filename: str, config: T = None) -> T:
         try:
             saved_config = load_model_config(filename)
         except Exception as e:
             raise ConfigException(f"Something went wrong on loading model from file: {e}")
 
-        # Model artifacts created before 059 do not have dedicated Dark Number
-        # controls. Preserve their historical semantics when normalizing them.
-        if not hasattr(saved_config.mode, "calculate_dark_numbers"):
-            legacy_mispredicted = getattr(saved_config.mode, "mispredicted", None)
-            # Clean model metadata historically blanked the runtime misprediction flag,
-            # so None cannot tell us whether Dark Numbers were enabled. Use the new
-            # published-linear default there; an actual runtime config overrides it.
-            saved_config.mode.calculate_dark_numbers = (
-                True if legacy_mispredicted is None else bool(legacy_mispredicted)
-            )
-        if not hasattr(saved_config.mode, "dark_number_method"):
-            saved_config.mode.dark_number_method = DarkNumberMethod.LINEAR
-        if not hasattr(saved_config.mode, "dark_number_alpha"):
-            saved_config.mode.dark_number_alpha = DarkNumberAlpha.NONE
-        if not hasattr(saved_config.mode, "dark_number_target"):
-            saved_config.mode.dark_number_target = ""
-        if not hasattr(saved_config.mode, "experimental_perturbed_dark_number_fallback"):
-            saved_config.mode.experimental_perturbed_dark_number_fallback = True
-        if not hasattr(saved_config.mode, "calculate_feature_importance"):
-            saved_config.mode.calculate_feature_importance = False
-        if not hasattr(saved_config.mode, "feature_importance_repeats"):
-            saved_config.mode.feature_importance_repeats = 5
-        feature_search_defaults = Config.Mode()
-        for field_name in (
-            "feature_selection_mode", "feature_selection_profile_id", "feature_search_model_type",
-            "feature_search_scaler", "feature_search_oversampling", "feature_search_reduction", "feature_search_trials", "feature_search_sizes",
-            "feature_search_inner_folds", "feature_search_outer_folds", "feature_search_top_sets",
-            "feature_search_refine_rounds", "feature_search_max_evaluations", "feature_search_min_gain",
-            "feature_search_linear_c", "feature_search_linear_max_iterations",
-            "feature_search_non_linear_max_iterations", "feature_search_non_linear_alpha",
-            "feature_search_non_linear_hidden_layers", "feature_search_non_linear_learning_rate",
-            "feature_search_preset", "feature_search_tree_estimator", "feature_search_tree_class_weight", "feature_search_tree_positive_threshold",
-            "feature_search_preset", "feature_search_tree_estimator", "feature_search_tree_class_weight", "feature_search_tree_positive_threshold",
-            "feature_search_tree_n_estimators", "feature_search_tree_max_depth",
-            "feature_search_tree_min_samples_leaf", "feature_search_catboost_class_weight", "feature_search_catboost_iterations",
-        ):
-            if not hasattr(saved_config.mode, field_name):
-                setattr(saved_config.mode, field_name, copy.deepcopy(getattr(feature_search_defaults, field_name)))
-        
+        cls._validate_current_saved_config(saved_config)
+
         if config is not None:
             saved_config.mode.train = config.mode.train
             saved_config.mode.predict = config.mode.predict
@@ -1184,25 +1134,6 @@ class Config:
 
 
     @classmethod
-    def load_config_from_module(cls: Type[T], argv) -> T:
-        # JSON files are data, not importable Python modules. Keep legacy -f .py.
-        if "-f" in argv or "--file" in argv:
-            option = "-f" if "-f" in argv else "--file"
-            position = argv.index(option)
-            if position + 1 < len(argv) and Path(argv[position + 1]).suffix.lower() == ".json":
-                return cls.load_config_from_json(Path(argv[position + 1]))
-        module = Helpers.check_input_arguments(argv)
-        
-        version = '1.0'
-        if (hasattr(module, 'version')):
-            version = module.version
-
-        if (version == '1.0'):
-            raise ConfigException("V1.0 config is deprecated")
-        
-        return Config.load_config(module)
-
-    @classmethod
     def load_config(cls: Type[T], module) -> T:
         if "num_rows" in module.debug:
             data_limit = Helpers.set_none_or_int(module.debug["num_rows"])
@@ -1225,7 +1156,6 @@ class Config:
        
         configured_password = module.connection.get("sql_password", "")
         runtime_password = configured_password or os.environ.get(cls.SQL_PASSWORD_ENV, "")
-        # The generated template has no mail section; keep defaults unless one is supplied.
         mail_defaults = cls.Mail()
         mail_settings = getattr(module, "mail", {})
 
@@ -1267,7 +1197,9 @@ class Config:
                 undersampler=Undersampling[module.mode["undersampler"]],
                 oversamplers=module.mode.get("oversamplers") or None,
                 undersamplers=module.mode.get("undersamplers") or None,
-                algorithm=AlgorithmTuple.from_string(module.mode["algorithm"]),
+                algorithm=(AlgorithmTuple.from_string(module.mode["algorithm"])
+                           if isinstance(module.mode["algorithm"], str)
+                           else AlgorithmTuple(module.mode["algorithm"])),
                 model_parameters=module.mode.get("model_parameters", {}),
                 decision_policy=module.mode.get("decision_policy", "default"),
                 probability_threshold=float(module.mode.get("probability_threshold", 0.5)),
@@ -1277,8 +1209,12 @@ class Config:
                 validation_group_column=module.mode.get("validation_group_column", "iafId"),
                 grouped_cross_validation=bool(module.mode.get("grouped_cross_validation", False)),
                 excluded_predictor_columns=module.mode.get("excluded_predictor_columns", ""),
-                preprocessor=PreprocessTuple.from_string(module.mode["preprocessor"]),
-                feature_selection=ReductionTuple.from_string(module.mode["feature_selection"]),
+                preprocessor=(PreprocessTuple.from_string(module.mode["preprocessor"])
+                              if isinstance(module.mode["preprocessor"], str)
+                              else PreprocessTuple(module.mode["preprocessor"])),
+                feature_selection=(ReductionTuple.from_string(module.mode["feature_selection"])
+                                   if isinstance(module.mode["feature_selection"], str)
+                                   else ReductionTuple(module.mode["feature_selection"])),
                 num_selected_features=num_selected_features,
                 scoring=ScoreMetric[module.mode["scoring"]],
                 max_iterations=max_iterations,
@@ -1431,20 +1367,16 @@ class Config:
         return int(self.mode.test_size * 100.0)
 
     def should_calculate_dark_numbers(self) -> bool:
-        """Whether Dark Number estimation is enabled for this run.
-
-        Older serialized configs predate the dedicated switch; for those, retain
-        the historical behavior where Dark Numbers followed misprediction output.
-        """
-        return bool(getattr(self.mode, "calculate_dark_numbers", self.mode.mispredicted))
+        """Whether Dark Number estimation is enabled for this run."""
+        return bool(self.mode.calculate_dark_numbers)
 
     def get_dark_number_method(self) -> DarkNumberMethod:
         """Return the configured Dark Number formula family."""
-        return DarkNumberMethod.from_config_value(getattr(self.mode, "dark_number_method", "LINEAR"))
+        return DarkNumberMethod.from_config_value(self.mode.dark_number_method)
 
     def get_dark_number_alpha(self) -> DarkNumberAlpha:
         """Return the configured Dark Number alpha adjustment."""
-        return DarkNumberAlpha.from_config_value(getattr(self.mode, "dark_number_alpha", "NONE"))
+        return DarkNumberAlpha.from_config_value(self.mode.dark_number_alpha)
 
     def get_dark_number_calculation_type(self) -> str:
         """Return the calculator branch used by JBGDarkNumbers."""
@@ -1457,11 +1389,11 @@ class Config:
 
     def get_dark_number_target(self) -> str:
         """Return the selected Dark Number target class, or an empty string for all classes."""
-        return str(getattr(self.mode, "dark_number_target", "") or "")
+        return str(self.mode.dark_number_target or "")
 
     def should_use_experimental_perturbed_dark_number_fallback(self) -> bool:
         """Whether statistical Dark Number failures may use the experimental shadow-clone fallback."""
-        return bool(getattr(self.mode, "experimental_perturbed_dark_number_fallback", True))
+        return bool(self.mode.experimental_perturbed_dark_number_fallback)
 
     def get_dark_number_flip_fraction(self) -> float:
         """Fraction of positive labels hidden when estimating Dark Number correction factors."""
@@ -1602,8 +1534,7 @@ class Config:
 
         from JBGModelSettings import configure_estimator
         # Native CatBoost uses raw categorical columns and cannot share the ordinary
-        # global text converter. Keep legacy CBST metadata for loading older models,
-        # but do not advertise it as a candidate in the exhaustive pipeline search.
+        # global text converter, so do not advertise it as a candidate in exhaustive search.
         if "CBST" in self.get_algorithm_abbreviations():
             raise ValueError(
                 "CBST is not supported in ordinary exhaustive pipeline search. "
@@ -1763,9 +1694,9 @@ def period_to_brackets(string: str) -> str:
 
 
 def main():
-    # python Config.py -f .\config\test_iris.py
+    # python Config.py -f .\config\autoclassconfig_example.json
     if len(sys.argv) > 1:
-        config = Config.load_config_from_module(sys.argv)
+        config = Config.load_config_from_arguments(sys.argv)
     else:
        config = Config()
 

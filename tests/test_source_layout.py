@@ -3,18 +3,11 @@
 import importlib
 import importlib.util
 import json
-import os
 from pathlib import Path
-import subprocess
-import sys
 from types import SimpleNamespace
 
 import pickle
-import numpy as np
 import pytest
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer
 
 import Helpers
 from JBGImportCompatibility import install_legacy_import_aliases
@@ -48,7 +41,7 @@ def test_migration_preserves_local_artifacts_and_routes_only_logs_to_root(tmp_pa
     files = {
         "model/default.sav": b"saved model",
         "model/default.sav.KERA.keras": b"keras sidecar",
-        "config/autoclassconfig_local.py": b"local config",
+        "config/autoclassconfig_local.json": b"local config",
         "output/csvs/result.csv": b"local results",
         "output/csvs/study_checkpoint.json": b"checkpoint",
         "output/csvs/study_checkpoint.model.joblib": b"checkpoint model",
@@ -134,12 +127,9 @@ def test_default_config_and_generated_config_use_the_moved_resources(tmp_path):
     assert config.get_model_filename().parent == SOURCE_DIR / "model"
     assert config.get_output_filepath("cross_validation").parent == SOURCE_DIR / "output/csvs"
     assert config.get_classification_script_path().is_file()
-    generated = tmp_path / "autoclassconfig_layout.py"
+    generated = tmp_path / "autoclassconfig_layout.json"
     config.save_to_file(filepath=generated)
-    spec = importlib.util.spec_from_file_location("generated_layout_config", generated)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    loaded = Config.load_config(module)
+    loaded = Config.load_config_from_json(generated)
     assert loaded.script_path == SOURCE_DIR
     assert loaded.config_path == SOURCE_DIR / "config"
 
@@ -164,7 +154,9 @@ def test_notebook_source_assets_and_launcher_use_the_flat_layout():
     assert (SOURCE_DIR / "GUI/assets/logo.png").is_file()
     assert (SOURCE_DIR / "GUI/assets/base.css").is_file()
     assert (SOURCE_DIR / "GUI/default_settings.json").is_file()
-    assert (SOURCE_DIR / "config/autoclassconfig_template.py.txt").is_file()
+    assert (SOURCE_DIR / "config").is_dir()
+    assert not (SOURCE_DIR / "config/__init__.py").exists()
+    assert not (SOURCE_DIR / "config/autoclassconfig_template.py.txt").exists()
     assert (SOURCE_DIR / "sql/CreatePredictionTables.sql.txt").is_file()
     launcher = (REPOSITORY_ROOT / "start_application_template.ps1").read_text()
     assert "Join-Path $DevRoot 'logs'" in launcher
@@ -198,45 +190,16 @@ def test_saved_config_paths_rebase_only_the_old_application_directory():
     assert custom.io.model_path == "./model/"
 
 
-@pytest.mark.parametrize("format", ["legacy", "envelope", "config-only"])
-def test_config_path_relocation_through_actual_model_readers(tmp_path, format):
+def test_config_path_relocation_through_current_model_reader(tmp_path):
     from JBGModelPersistence import build_model_artifact
-    config = SimpleNamespace(script_path=Path("/old/src/JBGclassification"), config_path=Path("/old/src/JBGclassification/config"))
+    config = SimpleNamespace(
+        script_path=Path("/old/src/JBGclassification"),
+        config_path=Path("/old/src/JBGclassification/config"),
+    )
     values = (config, None, ("NOG", "NUG", "STA", "NOR", "LRN"), None, None, 2)
-    artifact = build_model_artifact(*values) if format == "envelope" else list(values) if format == "legacy" else [config]
+    artifact = build_model_artifact(*values, compatibility={"schema_version": 1})
     path = tmp_path / "saved.sav"
     with path.open("wb") as stream:
         pickle.dump(artifact, stream)
     assert load_model_config(path).script_path == SOURCE_DIR
-    if format != "config-only":
-        assert load_model_artifact(path)[0].config_path == SOURCE_DIR / "config"
-
-
-def test_old_qualified_pipeline_global_reloads_in_a_fresh_process(tmp_path):
-    # A real fitted pipeline contains the old qualified helper function in its
-    # serialized GLOBAL. The reader must resolve it after a process restart.
-    import pickle
-    from JBGModelPersistence import build_model_artifact
-    X = np.array([[0, 0], [0, 1], [1, 0], [1, 1]])
-    y = np.array([0, 0, 1, 1])
-    pipeline = Pipeline([("FLT", FunctionTransformer(Helpers.ensure_float64)), ("LRN", LogisticRegression(random_state=1))]).fit(X, y)
-    artifact = build_model_artifact({}, None, ("NOG", "NUG", "STA", "NOR", "LRN"), pipeline, None, 2)
-    data = pickle.dumps(artifact, protocol=0)
-    assert b"cHelpers\nensure_float64\n" in data
-    data = data.replace(b"cHelpers\nensure_float64\n", b"csrc.JBGclassification.Helpers\nensure_float64\n")
-    path = _write(tmp_path / "old.sav", data)
-    code = """
-import sys
-from JBGModelPersistence import load_model_artifact
-import Helpers
-_, _, _, pipeline, _, _ = load_model_artifact(sys.argv[1])
-assert pipeline.named_steps['FLT'].func is Helpers.ensure_float64
-assert pipeline.predict([[0, 0], [0, 1], [1, 0], [1, 1]]).tolist() == [0, 0, 1, 1]
-pipeline.fit([[0, 0], [0, 1], [1, 0], [1, 1]], [0, 0, 1, 1])
-assert pipeline.predict([[0, 0], [1, 1]]).tolist() == [0, 1]
-print('loaded, predicted and retrained')
-"""
-    env = os.environ.copy()
-    env["PYTHONPATH"] = os.pathsep.join([str(SOURCE_DIR), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
-    result = subprocess.run([sys.executable, "-c", code, str(path)], cwd=tmp_path, capture_output=True, text=True, check=True, env=env)
-    assert result.stdout.strip() == "loaded, predicted and retrained"
+    assert load_model_artifact(path)[0].config_path == SOURCE_DIR / "config"

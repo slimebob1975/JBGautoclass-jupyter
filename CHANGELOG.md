@@ -1,3 +1,15 @@
+## Revision 176a — semantic version marker for the JSON/current-artifact baseline
+
+- Mark the intentionally breaking revision-176 configuration and model-artifact reset as JBG AutoClassification `0.18.0` rather than a patch-level `0.17.x` increment. The application version remains independent from Git branch/tag/commit provenance.
+- Update build-identity regression expectations accordingly. No configuration, persistence, ML, SQL, GUI behavior or artifact schema changes beyond the displayed/logged product version.
+
+## Revision 176 — JSON-only configuration and current-artifact reset
+
+- Make schema-versioned JSON the only persisted classifier configuration format. Generated/imported Python config files are removed; schema-v2 serializes every current Connection/Mode/IO/Debug/Mail dataclass field, stores enum/tuple selections as data, writes atomically, and never persists the SQL password. CLI/feature-search entrypoints load JSON directly without executing configuration code.
+- Intentionally end backward compatibility for configuration/model artifacts at the user's request. Transitional schema-v1 JSON, generated Python configs and pre-176 model envelopes are rejected with retrain/regenerate guidance. Current model artifacts require compatibility metadata and use envelope version 2; standard-library pickle remains preferred with optional dill fallback only for newly generated state that pickle cannot serialize. Legacy binary fixture generation and Python-config import helpers/tests are removed.
+- Keep GUI Repeat Last independent through its existing JSON run snapshot, rename the optional dill requirements file accordingly, and update source-layout/docs/backlog contracts for the clean future baseline.
+- Validation: 70 focused current-config/persistence/schema/build/readme checks pass in an isolated dependency shim (1 optional-dill test skipped). A broader affected-suite run passes 149 checks with 1 optional-dill skip and two intentional feature-search progress-callback warnings; its remaining three failures are collection/runtime environment gaps (`terminal`/`ipywidgets` unavailable), not 176 assertions. `compileall`, `git diff --check` and the documentation privacy check pass. Windows live verification should cover fresh JSON config generation, Repeat Last, and a newly trained model save/restart/predict cycle.
+
 ## Revision 175 — application and repository build identity
 
 - Added a controlled JBG AutoClassification application version (`0.17.5`) that is intentionally independent from transient Git state. The GUI now shows the application version plus repository provenance directly below the main title.

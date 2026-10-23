@@ -51,7 +51,9 @@ def test_positive_int_or_none():
     
 def test_set_none_or_int():
     """ Help function for loading input params from file """
-    # 1: "None"
+    # 1: JSON null / Python None
+    assert Helpers.set_none_or_int(None) is None
+    # 2: legacy textual None remains harmless for internal callers
     assert Helpers.set_none_or_int("None") is None
     # 2. "5"
     value = Helpers.set_none_or_int("5")

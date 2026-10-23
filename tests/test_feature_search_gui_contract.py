@@ -11,7 +11,6 @@ WIDGETS = (ROOT / "src/GUI/Widgets.py").read_text(encoding="utf-8")
 CONFIG = (ROOT / "src/Config.py").read_text(encoding="utf-8")
 HANDLER = (ROOT / "src/GUIHandler.py").read_text(encoding="utf-8")
 SERVICE = (ROOT / "src/JBGFeatureSearchService.py").read_text(encoding="utf-8")
-TEMPLATE = (ROOT / "src/config/autoclassconfig_template.py.txt").read_text(encoding="utf-8")
 
 
 class FeatureSearchGuiContractTests(unittest.TestCase):
@@ -76,7 +75,7 @@ class FeatureSearchGuiContractTests(unittest.TestCase):
                      'feature_search_tree_max_depth'):
             self.assertIn('"' + name + '": "', WIDGETS)
 
-    def test_generated_config_contains_mode_model_and_budget_fields(self):
+    def test_json_config_contains_mode_model_and_budget_fields(self):
         required = (
             "feature_selection_mode", "feature_selection_profile_id", "feature_search_model_type",
             "feature_search_trials", "feature_search_sizes", "feature_search_inner_folds",
@@ -85,8 +84,9 @@ class FeatureSearchGuiContractTests(unittest.TestCase):
             "feature_search_tree_n_estimators",
         )
         for field in required:
-            self.assertIn(f'"{field}"', TEMPLATE)
-            self.assertIn(f'"mode.{field}"', CONFIG)
+            self.assertRegex(CONFIG, rf"\b{field}: ")
+        self.assertIn("JSON_CONFIG_SCHEMA_VERSION = 2", CONFIG)
+        self.assertIn('"mode": self._json_section(self.mode)', CONFIG)
 
     def test_repeat_last_serializes_feature_search_contract(self):
         for field in (

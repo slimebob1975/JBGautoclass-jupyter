@@ -174,7 +174,7 @@ def test_saved_artifact_keeps_winning_pair_and_requested_candidates(tmp_path):
     path = tmp_path / 'selected.sav'
     metadata = (selected.oversampler, selected.undersampler, selected.preprocess,
                 selected.reduction, selected.algorithm)
-    save_model_artifact(path, mh.handler.config, None, metadata, selected.pipeline, None, 5)
+    save_model_artifact(path, mh.handler.config, None, metadata, selected.pipeline, None, 5, compatibility={"schema_version": 1})
     saved_config, _, saved_metadata, saved_pipeline, _, _ = load_model_artifact(path)
     assert saved_metadata[:2] == metadata[:2]
     assert saved_config.mode.oversampler is selected.oversampler

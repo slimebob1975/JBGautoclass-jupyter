@@ -55,35 +55,29 @@ class AutomaticClassifier:
             model_filename = self.config.get_model_filename()
             compatibility = load_model_compatibility(model_filename)
             connection = self.config.connection
-            if compatibility is None:
-                self.logger.print_warning(
-                    "Legacy saved model has no revision-173 source/schema compatibility metadata; "
-                    "current source identity and SQL types cannot be fully verified."
+            try:
+                source_schema = self.datalayer.get_table_columns(
+                    connection.data_catalog, connection.data_table
                 )
-            else:
-                try:
-                    source_schema = self.datalayer.get_table_columns(
-                        connection.data_catalog, connection.data_table
-                    )
-                except Exception as exc:
-                    raise ConfigException(
-                        "Saved-model compatibility check could not read the current SQL source schema."
-                    ) from exc
-                review = review_current_source_compatibility(
-                    compatibility,
-                    driver=connection.odbc_driver,
-                    host=connection.host,
-                    catalog=connection.data_catalog,
-                    table=connection.data_table,
-                    source_schema=source_schema,
+            except Exception as exc:
+                raise ConfigException(
+                    "Saved-model compatibility check could not read the current SQL source schema."
+                ) from exc
+            review = review_current_source_compatibility(
+                compatibility,
+                driver=connection.odbc_driver,
+                host=connection.host,
+                catalog=connection.data_catalog,
+                table=connection.data_table,
+                source_schema=source_schema,
+            )
+            if review.issues:
+                raise ConfigException(
+                    "Saved model is not compatible with the selected data source: "
+                    + "; ".join(review.issues)
                 )
-                if review.issues:
-                    raise ConfigException(
-                        "Saved model is not compatible with the selected data source: "
-                        + "; ".join(review.issues)
-                    )
-                for warning in review.warnings:
-                    self.logger.print_warning(warning)
+            for warning in review.warnings:
+                self.logger.print_warning(warning)
             self.config = Config.Config.load_config_from_model_file(model_filename, config=self.config)
 
         self.dh, self.mh, self.ph = self.create_handlers()
@@ -148,10 +142,10 @@ class AutomaticClassifier:
 
 # Main program
 def main(argv):
-    # python AutomaticClassifier.py -f .\config\test_iris.py
-    # python AutomaticClassifier.py -f .\config\test_hpl.py
+    # python AutomaticClassifier.py -f .\config\autoclassconfig_iris.json
+    # python AutomaticClassifier.py -f .\config\autoclassconfig_hpl.json
     if len(argv) > 1:
-        config = Config.Config.load_config_from_module(argv)
+        config = Config.Config.load_config_from_arguments(argv)
     else:
         config = Config.Config()
         #pwd = os.path.dirname(os.path.realpath(__file__))
