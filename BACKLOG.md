@@ -136,6 +136,13 @@ where it matters.
   and pre-176 model artifacts are intentionally unsupported. The schema serializes every current configuration
   dataclass field, keeps SQL passwords runtime-only, supports CLI loading without executing code, and preserves
   GUI Repeat Last through its separate JSON snapshot. Old Python configs/models should be deleted/retrained.
+- [ ] **CSV data source and result export (development-friendly I/O):** add a file-based execution mode
+  that can load input data from CSV instead of SQL Server and export prediction/result datasets back to CSV.
+  Keep the ML/configuration pipeline independent of the physical source/sink behind the existing data-layer
+  boundary so SQL Server remains the production path while CSV can support local development, demos and
+  reproducible tests without database access. Define schema/type inference, class/ID column selection,
+  encoding/delimiter handling, output naming/overwrite behavior and compatibility metadata for file-backed
+  runs; do not persist secrets or silently mix SQL and CSV source identities.
 - [ ] **Explicit dependency support matrix:** pin/test supported Python, scikit-learn, NumPy,
   TensorFlow, Keras and SciKeras versions; maintain a reproducible Windows setup.
 - [ ] **Module boundaries and paths:** reduce `sys.path` mutation and working-directory dependence;
