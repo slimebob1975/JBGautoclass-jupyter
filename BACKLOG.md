@@ -1,4 +1,4 @@
-# JBG AutoClassification — Active BACKLOG (Revision 176)
+# JBG AutoClassification — Active BACKLOG (Revision 176b)
 
 This is the **active**, prioritized maintenance roadmap for the general-purpose JBG ML framework.
 The complete historical backlog (including completed revisions and research experiments)
@@ -83,6 +83,10 @@ where it matters.
 - [ ] **Revision-176 compatibility smoke tests:** with old configs/models removed, verify fresh JSON
   config generation/load, GUI Repeat Last, and ordinary train → save → restart/fresh-process reload →
   predict using a newly trained current artifact.
+- [x] **Development-only SQL credential prefill (revision 176b):** production/default GUI startup keeps SQL
+  username/password fields empty. Trusted local development may explicitly opt in with
+  `JBG_GUI_PREFILL_SQL_CREDENTIALS=1` and developer-supplied `JBG_SQL_USERNAME`/`JBG_SQL_PASSWORD`
+  values in the untracked environment. JBG must never generate, persist or log the credential values.
 
 ## P2 — Efficient, understandable pipeline and feature search
 

@@ -90,14 +90,19 @@ The main settings are:
 | `DEFAULT_NOTIFICATION_EMAIL` | Optional notification recipient. |
 | `DEFAULT_N_JOBS_DESIRED` | Shared parallelism cap; `-1` allows JBG to use the available logical CPUs subject to workload and memory limits. |
 | `JBG_LOG_SENSITIVE_DATA` | `0` by default. Set to `1` only for trusted local diagnostics when full SQL and row-level previews are required in persistent logs. |
+| `JBG_GUI_PREFILL_SQL_CREDENTIALS` | `0` by default. Set to `1` only on a trusted local development machine to prefill the GUI from `JBG_SQL_USERNAME` and `JBG_SQL_PASSWORD`. |
+| `JBG_SQL_USERNAME` | Optional runtime SQL username. Used for GUI prefill only when `JBG_GUI_PREFILL_SQL_CREDENTIALS=1`; also available to CLI helpers that support it. |
+| `JBG_SQL_PASSWORD` | Optional runtime-only SQL password. Used for GUI prefill only when the opt-in flag is enabled and never written back by JBG. |
 
-SQL credentials are runtime credentials. Enter them in the GUI when using the notebook interface.
-Generated configuration/model metadata deliberately does not persist the SQL password. JBG writes
-schema-versioned JSON configuration files under `src/config/`; generated Python configuration files
-are no longer supported. For command-line workflows that need a runtime password, JBG can use the
-`JBG_SQL_PASSWORD` environment variable.
+SQL credentials are runtime credentials. Production/default behavior leaves the GUI credential fields
+empty on every start. On a trusted local development machine, set
+`JBG_GUI_PREFILL_SQL_CREDENTIALS=1` together with local `JBG_SQL_USERNAME` and
+`JBG_SQL_PASSWORD` values in the untracked `.env` file to avoid retyping them on each Voilà restart.
+JBG only reads those values; it never writes credentials back to `.env`, generated configuration or
+model metadata. Schema-versioned JSON configuration files remain password-free.
 
-Do not commit a local `.env` file or credentials to source control.
+Do not commit a local `.env` file or credentials to source control. Keep GUI credential prefill disabled
+in production.
 
 ## Starting the GUI
 

@@ -1,3 +1,10 @@
+## Revision 176b — opt-in local GUI SQL credential prefill
+
+- Add an explicit `JBG_GUI_PREFILL_SQL_CREDENTIALS` runtime policy, disabled by default, so production starts with empty SQL credential fields while trusted local development can prefill the GUI from `JBG_SQL_USERNAME` and `JBG_SQL_PASSWORD`.
+- Keep credentials runtime-only: JBG reads developer-supplied values from the local environment but never writes them back to `.env`, generated JSON configuration or model metadata. The existing SQL password non-persistence contract remains unchanged.
+- Apply prefill only after the GUI data layer exists so the normal credential observer follows the same connection/catalog path as manual entry. Persistent diagnostics record only whether username/password values were supplied, never their contents.
+- Add dependency-light policy/template/source-wiring tests and document the development/production split. No ML, model-artifact, JSON-schema or scoring behavior changes.
+
 ## Revision 176a — semantic version marker for the JSON/current-artifact baseline
 
 - Mark the intentionally breaking revision-176 configuration and model-artifact reset as JBG AutoClassification `0.18.0` rather than a patch-level `0.17.x` increment. The application version remains independent from Git branch/tag/commit provenance.

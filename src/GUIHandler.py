@@ -32,6 +32,7 @@ from JBGMeta import (
     ScoreMetric, Undersampling,
 )
 from JBGSampling import sampling_names
+from JBGCredentialPolicy import gui_sql_credential_defaults, gui_sql_credential_prefill_enabled
 from SQLDataLayer import DataLayer
 from GUI.Widgets import Widgets
 
@@ -149,6 +150,7 @@ class GUIHandler:
             # This datalayer object only works with the GUI
             self.gui_datalayer = None
 
+            sql_username, sql_password = gui_sql_credential_defaults()
             config = Config(
                 connection=Config.Connection(
                 odbc_driver=os.environ.get("DEFAULT_ODBC_DRIVER"),
@@ -157,12 +159,25 @@ class GUIHandler:
                 class_table=os.environ.get("DEFAULT_CLASSIFICATION_TABLE"),
                 data_catalog=os.environ.get("DEFAULT_DATA_CATALOG"),
                 data_table=os.environ.get("DEFAULT_DATA_TABLE"),
-                sql_username="",
-                sql_password="",
+                sql_username=sql_username,
+                sql_password=sql_password,
                 trusted_connection=False
                 )
             )
             self.gui_datalayer = DataLayer(config=config, logger=self.logger)
+
+            if gui_sql_credential_prefill_enabled():
+                self.logger.info(
+                    "GUI SQL credential prefill enabled: username=%s password=%s",
+                    bool(sql_username), bool(sql_password),
+                )
+                # Set the widgets only after the GUI data layer exists.  The existing
+                # observer then follows the same connection/catalog path as manual input
+                # when both values are present.
+                if sql_username:
+                    self.widgets.sql_username.value = sql_username
+                if sql_password:
+                    self.widgets.sql_password.value = sql_password
 
             self.widgets.load_contents()
 
