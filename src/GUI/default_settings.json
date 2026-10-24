@@ -350,7 +350,7 @@
         "scoremetric_dropdown": {
             "type": "Dropdown",
             "params": {
-                "value": "accuracy",
+                "value": "mcc",
                 "description": "Score metric:",
                 "disabled": true,
                 "tooltip": "Pick by which method algorithm performances are measured and compared"

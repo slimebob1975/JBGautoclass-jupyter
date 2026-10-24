@@ -510,6 +510,7 @@ class Widgets:
         
         self.default_widgets = self.settings.get("widgets")
         self._migrate_legacy_widget_labels()
+        self._migrate_default_scoring_metric()
         self._migrate_sampling_widgets()
         self.sections = self.settings.get("sections")
         self.logo_image =  self.get_sibling_file_path(self.settings.get("logo"))
@@ -564,6 +565,18 @@ class Widgets:
         self.datatype_dict = None
         self.unique_id_columns = []
         self._class_cardinalities = {}
+
+    def _migrate_default_scoring_metric(self) -> None:
+        """Move local pre-176c GUI defaults from Accuracy to MCC.
+
+        Saved run/config values are restored later and remain authoritative. This
+        migration only updates the legacy GUI-default value in locally persisted
+        ``settings.json`` files so a normal fresh run receives the new MCC default.
+        """
+        definition = self.default_widgets.get("scoremetric_dropdown", {})
+        params = definition.get("params", {})
+        if params.get("value") == "accuracy":
+            params["value"] = "mcc"
 
     def _migrate_sampling_widgets(self) -> None:
         """Upgrade old local settings without changing the selected methods."""

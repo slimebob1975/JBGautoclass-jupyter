@@ -1261,7 +1261,7 @@ class ScoreMetric(MetaEnum):
         
     @classmethod
     def defaultScoreMetric(cls):
-        return cls.accuracy
+        return cls.mcc
 
 class AlgorithmTuple(MetaTuple):
 

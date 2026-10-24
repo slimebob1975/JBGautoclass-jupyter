@@ -1,3 +1,9 @@
+## Revision 176c — MCC as the default model-selection metric
+
+- Change the default spot-check/model-selection metric from Accuracy to Matthews Correlation Coefficient (MCC) in both the backend `Config.Mode` default and the GUI default settings. Accuracy and the existing scoring choices remain available explicitly.
+- Migrate locally persisted GUI-default `settings.json` values that still contain the former `accuracy` default to `mcc`; explicit metrics restored from a saved JSON configuration or Repeat Last remain authoritative.
+- Document MCC as the imbalance-safer general default and add a P2 follow-up for optional multi-metric candidate selection based on rank aggregation rather than averaging raw metric values.
+
 ## Revision 176b — opt-in local GUI SQL credential prefill
 
 - Add an explicit `JBG_GUI_PREFILL_SQL_CREDENTIALS` runtime policy, disabled by default, so production starts with empty SQL credential fields while trusted local development can prefill the GUI from `JBG_SQL_USERNAME` and `JBG_SQL_PASSWORD`.

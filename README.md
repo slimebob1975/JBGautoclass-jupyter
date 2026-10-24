@@ -148,8 +148,10 @@ Choose the preprocessing and model options in the GUI. Depending on the selected
 apply scaling, over/undersampling, dimensionality reduction and classifier search inside the
 training/CV lifecycle.
 
-For imbalanced classification, inspect class-specific metrics rather than relying only on overall
-accuracy. The selected scoring metric controls model comparison and several downstream diagnostics.
+JBG defaults model comparison to Matthews Correlation Coefficient (MCC), which is more robust than
+plain accuracy when class frequencies are imbalanced. Accuracy remains available as an explicit choice;
+inspect class-specific metrics as well because no single score captures every operational trade-off.
+The selected scoring metric controls model comparison and several downstream diagnostics.
 
 ### 3. Train and evaluate
 

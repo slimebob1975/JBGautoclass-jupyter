@@ -213,7 +213,7 @@ def widget_parameters() -> dict:
         },
         "scoremetric_dropdown": {
             "pre__load": {
-                "value": "accuracy",
+                "value": "mcc",
                 "description": "Score metric:",
                 "disabled": True,
                 "tooltip": "Pick by which method algorithm performances are measured and compared"

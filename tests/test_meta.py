@@ -329,7 +329,7 @@ class TestScoreMetric:
         assert pickle.loads(pickle.dumps(member)) is member
         assert (label, metric) in ScoreMetric.get_sorted_list()
         assert member.callable is f1_score
-        assert ScoreMetric.defaultScoreMetric() is ScoreMetric.accuracy
+        assert ScoreMetric.defaultScoreMetric() is ScoreMetric.mcc
 
     def test_legacy_value_based_pickle_loads_as_current_f1_enum(self):
         from sklearn.metrics import f1_score

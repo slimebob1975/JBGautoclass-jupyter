@@ -1,4 +1,4 @@
-# JBG AutoClassification — Active BACKLOG (Revision 176b)
+# JBG AutoClassification — Active BACKLOG (Revision 176c)
 
 This is the **active**, prioritized maintenance roadmap for the general-purpose JBG ML framework.
 The complete historical backlog (including completed revisions and research experiments)
@@ -101,6 +101,15 @@ where it matters.
 - [ ] **Search budget and cost:** measure fit counts, elapsed times, memory and candidate-family
   costs on representative general-purpose datasets; improve Quick/Standard/Extended/Custom estimates
   and safe preflight controls. Avoid inflating default budgets without evidence.
+- [x] **Imbalance-safe default scoring (revision 176c):** use Matthews Correlation Coefficient
+  (MCC) as the default spot-check/model-selection metric in both backend configuration and the
+  GUI. Keep Accuracy and all existing metrics available as explicit user choices, and migrate
+  legacy local GUI-default settings from Accuracy to MCC without overriding restored run/config values.
+- [ ] **Robust multi-metric model-selection objective:** add an optional composite selection mode
+  alongside single-metric scoring. Rank candidates independently per selected metric and aggregate
+  ranks rather than averaging raw metric values with incompatible scales/baselines. Start with MCC,
+  Balanced Accuracy and ROC-AUC where estimator/target semantics support them; gate probability-based
+  metrics explicitly, define multiclass averaging semantics, and retain single-metric selection.
 - [ ] **High-dimensional feature search:** assess subset-size coverage, adaptive refinement limits,
   class imbalance, and reproducible nested-CV behavior for the original-column search.
 - [ ] **Resource handling:** investigate costly Nystroem/MLP combinations using the existing
@@ -131,6 +140,12 @@ where it matters.
 
 ## P2 — Configuration, packaging and architecture
 
+**Architecture execution order:** after direct P1 defects and stability issues, prefer the sequence
+**CSV/file I/O abstraction → source/package and `JBGMeta.py` refactor → Azure FastAPI GUI spike**.
+Treat this as the default dependency order unless a blocking production issue requires otherwise: the CSV layer
+should first remove SQL Server as a hard runtime assumption, then the backend should be modularized behind stable
+application/data/job interfaces, and only then should the new web GUI prototype be coupled to those interfaces.
+
 - [x] **Versioned JSON configuration migration (revision 176):** generated runtime configuration is now
   schema-validated JSON only. Python config generation/import has been removed; schema-v1 transitional JSON
   and pre-176 model artifacts are intentionally unsupported. The schema serializes every current configuration
@@ -142,22 +157,41 @@ where it matters.
   boundary so SQL Server remains the production path while CSV can support local development, demos and
   reproducible tests without database access. Define schema/type inference, class/ID column selection,
   encoding/delimiter handling, output naming/overwrite behavior and compatibility metadata for file-backed
-  runs; do not persist secrets or silently mix SQL and CSV source identities.
+  runs; do not persist secrets or silently mix SQL and CSV source identities. Treat this as the first enabling
+  architecture step before the larger source/package refactor and FastAPI GUI spike.
 - [ ] **Explicit dependency support matrix:** pin/test supported Python, scikit-learn, NumPy,
   TensorFlow, Keras and SciKeras versions; maintain a reproducible Windows setup.
-- [ ] **Module boundaries and paths:** reduce `sys.path` mutation and working-directory dependence;
-  incrementally split oversized `JBGMeta.py` behind stable import facades. Revision 176 removes the old-model
+- [ ] **Source/package structure, module boundaries and paths:** reorganize the flat `src/` layout into
+  cohesive subpackages by responsibility (for example configuration, data I/O, modelling/search, persistence,
+  GUI/application orchestration and shared utilities) so ownership and dependency direction are easier to follow.
+  Split oversized modules where they mix unrelated responsibilities, with `JBGMeta.py` as the primary target:
+  first identify and extract stable domain/configuration/runtime interfaces, then move implementations behind
+  those interfaces rather than merely relocating the existing monolith. Reduce `sys.path` mutation and
+  working-directory dependence at the same time, preserve stable public import facades during the migration,
+  and add focused tests for import direction/cycles and package layout. Revision 176 removes the old-model
   compatibility constraint, so future refactors no longer need to preserve pre-176 serialized module paths.
+  Complete the main boundary cleanup before the FastAPI GUI spike so the new frontend targets stable application
+  interfaces instead of today's internal module coupling.
 - [x] **Current model serializer contract (revisions 167/176):** current artifacts prefer standard-library
   `pickle`; `dill` is an optional fallback only when a newly generated current artifact contains state that
   pickle cannot serialize. Revision 176 increments the artifact envelope and rejects pre-176 payloads rather
   than carrying legacy readers. Keep the trusted-artifact security boundary unchanged and smoke-test representative
   sklearn, PyTorch/skorch, Keras and Flax models as those families are exercised.
-- [ ] **P2 — GUI framework architecture spike (Panel / NiceGUI):** evaluate whether moving away from
-  JupyterLab/Voilà/ipywidgets is worth the migration cost. First separate configuration, job lifecycle,
-  progress events, results and ML core behind stable application interfaces. Prototype only configuration,
-  Script output and progress; compare lifecycle/reconnection, resources, UX, maintenance and packaging.
-  No full rewrite without a demonstrable benefit over stabilized Voilà.
+- [ ] **High-priority GUI replacement architecture track — Azure FastAPI first:** after direct defects/stability,
+  the CSV/file I/O abstraction and the main source/`JBGMeta.py` boundary refactor, prioritize evaluating a move
+  away from JupyterLab/Voilà/ipywidgets. The first technology candidate must be the organisation's already
+  established Azure web-service stack: FastAPI/Python
+  backend with HTML/JavaScript frontend, following the existing organisational visual/design standard and, where
+  applicable, established deployment, authentication, observability and operational conventions. Treat reuse of
+  an already accepted platform and support model as a major decision criterion, not just raw GUI capability.
+  First separate configuration, data-source access, job lifecycle, progress events, results and ML core behind
+  stable application interfaces. Then build a deliberately narrow FastAPI prototype covering configuration,
+  Script output, progress, long-running job control/reconnection and representative result presentation. Evaluate
+  multi-user/session isolation, asynchronous/background job handling, streaming progress (for example SSE/WebSocket),
+  file/CSV workflows, model/config persistence, security, deployment/packaging and maintainability before deciding
+  on a full migration. Panel/NiceGUI may be retained as secondary comparison candidates only if useful; do not
+  undertake a full rewrite until the FastAPI-based prototype demonstrates a clear migration path and operational
+  benefit over the stabilized Voilà application.
 
 ## P3 — Usability and diagnostics
 

@@ -431,7 +431,8 @@ class TestConfig:
     def test_scoring_mechanism(self):
         """ This returns a Callable """
 
-        config = Config() # By default as Scorertype.accuracy
+        config = Config() # MCC is the imbalance-safe default scoring metric.
+        assert config.mode.scoring.name == "mcc"
         assert isinstance(config.get_scoring_mechanism(), Callable)
 
     def test_update_configuration(self, valid_iris_config):
