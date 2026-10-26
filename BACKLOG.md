@@ -141,24 +141,29 @@ where it matters.
 ## P2 — Configuration, packaging and architecture
 
 **Architecture execution order:** after direct P1 defects and stability issues, prefer the sequence
-**CSV/file I/O abstraction → source/package and `JBGMeta.py` refactor → Azure FastAPI GUI spike**.
-Treat this as the default dependency order unless a blocking production issue requires otherwise: the CSV layer
-should first remove SQL Server as a hard runtime assumption, then the backend should be modularized behind stable
-application/data/job interfaces, and only then should the new web GUI prototype be coupled to those interfaces.
+**dual SQL Server/CSV I/O abstraction → source/package and `JBGMeta.py` refactor → Azure FastAPI GUI spike**.
+Treat this as the default dependency order unless a blocking production issue requires otherwise: first make SQL
+Server and CSV explicit peer data-source modes behind the same application/data interfaces, then modularize the
+backend behind stable application/data/job boundaries, and only then couple the new web GUI prototype to those
+interfaces. SQL Server remains a fully supported first-class source; CSV removes the current hard dependency on
+database access for every workflow rather than replacing SQL Server.
 
 - [x] **Versioned JSON configuration migration (revision 176):** generated runtime configuration is now
   schema-validated JSON only. Python config generation/import has been removed; schema-v1 transitional JSON
   and pre-176 model artifacts are intentionally unsupported. The schema serializes every current configuration
   dataclass field, keeps SQL passwords runtime-only, supports CLI loading without executing code, and preserves
   GUI Repeat Last through its separate JSON snapshot. Old Python configs/models should be deleted/retrained.
-- [ ] **CSV data source and result export (development-friendly I/O):** add a file-based execution mode
-  that can load input data from CSV instead of SQL Server and export prediction/result datasets back to CSV.
-  Keep the ML/configuration pipeline independent of the physical source/sink behind the existing data-layer
-  boundary so SQL Server remains the production path while CSV can support local development, demos and
-  reproducible tests without database access. Define schema/type inference, class/ID column selection,
-  encoding/delimiter handling, output naming/overwrite behavior and compatibility metadata for file-backed
-  runs; do not persist secrets or silently mix SQL and CSV source identities. Treat this as the first enabling
-  architecture step before the larger source/package refactor and FastAPI GUI spike.
+- [ ] **Dual SQL Server/CSV data source and result export:** make the physical source/sink an explicit runtime
+  choice (`SQL Server` or `CSV`) behind a common data-layer/application interface. Keep SQL Server as a fully
+  supported first-class mode while adding CSV input plus CSV prediction/result export for local development,
+  demos, reproducible tests and future web-service file-upload workflows. Define schema/type inference, class/ID
+  column selection, encoding/delimiter handling, output naming/overwrite behavior and compatibility metadata for
+  file-backed runs; keep SQL and CSV source identities explicit and never silently cross them. For SQL Server,
+  separate shared deployment configuration from user/session-specific connection choices and credentials so the
+  future web service does not depend on per-user `.env` files. Local `.env` may remain a development convenience;
+  the web architecture must instead expose explicit request/session/application configuration and an appropriate
+  secret/credential mechanism without persisting plaintext credentials in JSON, model artifacts or logs. Treat
+  this as the first enabling architecture step before the larger source/package refactor and FastAPI GUI spike.
 - [ ] **Explicit dependency support matrix:** pin/test supported Python, scikit-learn, NumPy,
   TensorFlow, Keras and SciKeras versions; maintain a reproducible Windows setup.
 - [ ] **Source/package structure, module boundaries and paths:** reorganize the flat `src/` layout into
@@ -185,11 +190,13 @@ application/data/job interfaces, and only then should the new web GUI prototype 
   applicable, established deployment, authentication, observability and operational conventions. Treat reuse of
   an already accepted platform and support model as a major decision criterion, not just raw GUI capability.
   First separate configuration, data-source access, job lifecycle, progress events, results and ML core behind
-  stable application interfaces. Then build a deliberately narrow FastAPI prototype covering configuration,
-  Script output, progress, long-running job control/reconnection and representative result presentation. Evaluate
-  multi-user/session isolation, asynchronous/background job handling, streaming progress (for example SSE/WebSocket),
-  file/CSV workflows, model/config persistence, security, deployment/packaging and maintainability before deciding
-  on a full migration. Panel/NiceGUI may be retained as secondary comparison candidates only if useful; do not
+  stable application interfaces. The web layer must model data-source selection and user/session-specific settings
+  explicitly rather than assuming each user can provide a private `.env`; `.env` remains only a local-development
+  or shared deployment mechanism. Then build a deliberately narrow FastAPI prototype covering configuration,
+  SQL Server/CSV source selection, CSV upload/download, Script output, progress, long-running job control/reconnection
+  and representative result presentation. Evaluate multi-user/session isolation, credential/secret handling,
+  asynchronous/background job handling, streaming progress (for example SSE/WebSocket), model/config persistence,
+  security, deployment/packaging and maintainability before deciding on a full migration. Panel/NiceGUI may be retained as secondary comparison candidates only if useful; do not
   undertake a full rewrite until the FastAPI-based prototype demonstrates a clear migration path and operational
   benefit over the stabilized Voilà application.
 
