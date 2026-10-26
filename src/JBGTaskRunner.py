@@ -177,6 +177,34 @@ class TaskRunner:
                 - "progress": string, updates progress with this message
                 - Other keys as used by the following task
         """
+        source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
+        if source_kind == "csv":
+            # CSV prediction must enter through the scoped, prevalidated facade.
+            # Training and regression workflows are not yet CSV-ready.
+            from Storage.CSVPredictionDataLayer import CSVPredictionDataLayer
+            if (self.regression_suite or self.config.should_train()
+                    or not isinstance(self.datalayer, CSVPredictionDataLayer)):
+                raise ValueError("CSV execution requires a prepared prediction data layer")
+            # The caller may supply task names directly. Do not rely solely on
+            # should_train(): block training, diagnostics and unknown tasks
+            # before any data is read or any result artifact is published.
+            allowed = (
+                "load_model", "fetch_data", "load_dataset", "separate_dataset",
+                "convert_to_numbers", "make_predictions", "send_completetion_email",
+            )
+            if (not isinstance(tasks, (list, tuple)) or not tasks
+                    or len(tasks) != len(set(tasks))
+                    or any(not isinstance(task, str) or task not in allowed for task in tasks)
+                    or tuple(tasks) != tuple(task for task in allowed if task in tasks)
+                    or not all(task in tasks for task in (
+                        "load_model", "fetch_data", "load_dataset",
+                        "separate_dataset", "make_predictions"))):
+                raise ValueError("Unsupported CSV prediction task sequence")
+            if ("convert_to_numbers" in tasks) != bool(self.config.get_text_column_names()):
+                raise ValueError("CSV prediction conversion task mismatch")
+        elif source_kind != "sql":
+            raise ValueError("Unsupported task runner data source")
+
         number_of_tasks = len(tasks)
         self.logger.initiate_progress(number_of_tasks=number_of_tasks)
         

@@ -1,3 +1,38 @@
+## Revision 216 - CSV prediction integration smoke (inactive)
+
+- Add a SQL-independent integration test spanning locally serialized sklearn estimator reload, registered CSV rows, scoped read facade and private prediction output/public manifest.
+- The shared JBG model artifact loader, PredictionsHandler, TaskRunner and GUI are not exercised end-to-end. Production behavior is unchanged.
+
+## Revision 215 - CSV NumPy scalar prediction compatibility (inactive GUI)
+
+- Unbox sklearn NumPy scalar predictions, model class labels and confidence rates before private JSON publication. Preserve numeric class identities, label order and textual CSV IDs.
+- Keep SQL prediction persistence and classifier behavior unchanged. CSV GUI execution remains disabled; end-to-end verification pending.
+
+## Revision 214 - fail-closed CSV prediction task dispatch (inactive GUI)
+
+- Validate the supplied CSV task sequence against the existing prediction-only order before executing any task; reject direct calls into training, analysis or unrecognized task names.
+- Require the text conversion task exactly when configured, retaining optional completion notification and unchanged SQL task dispatch. No new CSV GUI access or model formats.
+
+## Revision 213 - shared runner CSV entry gate (inactive GUI)
+
+- Guard the existing task runner against unprepared CSV data layers and prevent unsupported CSV training/regression execution.
+- Preserve SQL run behavior; do not activate CSV in the GUI or change model/result formats. Windows integration verification pending.
+
+## Revision 212 - source-aware saved-model reload (CSV inactive)
+
+- Keep SQL schema compatibility checks for SQL model reuse. CSV reuse requires a prepared CSV prediction data layer and does not request SQL metadata.
+- Keep shared model serialization and CSV GUI execution restrictions unchanged; live end-to-end verification remains pending.
+
+## Revision 211 - CSV prediction data-layer facade (inactive)
+
+- Add a minimal opt-in facade delegating shared data-layer read/write calls to the validated CSV reader and scoped prediction sink.
+- Keep model serialization, task runner, SQL behavior and CSV GUI execution gate unchanged; end-to-end Windows/Voilà verification pending.
+
+## Revision 210 - CSV prediction I/O composition (inactive)
+
+- Compose the existing saved-model CSV reader and file-backed prediction sink behind one opt-in entrypoint, with dataset/scope/role checks before either is used for prediction.
+- Do not modify SQL writes, shared ML logic, model formats, GUI execution gates or task-runner behavior. Windows/Voilà end-to-end verification remains pending.
+
 ## Revision 209 - CSV prediction payload validation (inactive)
 
 - Validate optional CSV probability vectors against the saved model's ordered class labels before artifact publication; reject unknown class values, duplicate model labels, non-finite or out-of-range probabilities and mismatched vector length.

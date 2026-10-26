@@ -1,3 +1,33 @@
+## Revision 216 - CSV prediction integration smoke
+
+- [x] Test a trusted serialized sklearn estimator with registered CSV input and scoped prediction result publication through the existing CSV composition facade.
+- [ ] Full JBG model artifact reload, common PredictionsHandler and TaskRunner execution, plus Windows/Voilà remain unverified; keep CSV GUI disabled.
+
+## Revision 215 - CSV sklearn prediction scalars
+
+- [x] Normalize NumPy scalar labels and confidence rates at CSV artifact publication without modifying the shared prediction handler or SQL persistence.
+- [ ] Verify actual saved-estimator probabilities and end-to-end CSV execution before enabling the GUI.
+
+## Revision 214 - CSV task sequence allowlist
+
+- [x] Reject manual CSV task sequences that omit required prediction steps, reorder tasks, duplicate steps or invoke training/diagnostics, before executing anything.
+- [ ] Validate complete saved-model prediction and class/probability mapping end to end before GUI activation; SQL task dispatch remains unchanged.
+
+## Revision 213 - guarded shared task runner entry
+
+- [x] Allow only prevalidated CSV prediction data-layer instances to enter the common task runner; SQL keeps its existing path.
+- [ ] CSV training, regression and GUI execution remain disabled until end-to-end lifecycle and model compatibility checks are complete.
+
+## Revision 211 - opt-in CSV prediction data-layer facade
+
+- [x] Adapt the existing CSV prediction reader and result sink to the shared get_dataset/save_prediction_data calls without changing SQL or GUI execution.
+- [ ] Wire the facade to the shared classifier only after the remaining SQL-dependent task/lifecycle paths are audited and tested end-to-end.
+
+## Revision 210 - CSV prediction I/O composition
+
+- [x] Add an opt-in boundary that pairs a saved CSV model reader with a scoped file prediction writer after identity and column-role checks.
+- [ ] Connect the shared task runner only after removing SQL-only assumptions; keep CSV GUI execution disabled until end-to-end tests pass.
+
 ## Revision 207 – scoped CSV prediction result sink
 
 - [x] Implement SQL-independent CSV prediction persistence matching the existing data-layer save method; use private scoped row artifacts and a manifest published last.
@@ -358,3 +388,8 @@ database access for every workflow rather than replacing SQL Server.
 - [x] Validate model label membership, unique class labels and optional probability-vector length/range before publishing CSV prediction artifacts.
 - [ ] Wire shared classifier and CSV sink only after run lifecycle and result retrieval have been integrated and tested end to end.
 - [ ] Verify real estimator probability serialization and class order during first gated CSV training/prediction smoke tests.
+
+## Revision 212 - model reload source boundary
+
+- [x] Preserve SQL schema compatibility checks on SQL reload; CSV reload requires the prepared scoped CSV data-layer facade and avoids SQL metadata calls.
+- [ ] Verify end-to-end CSV task execution and artifact publication before enabling GUI execution.

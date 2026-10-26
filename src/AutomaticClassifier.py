@@ -53,32 +53,45 @@ class AutomaticClassifier:
         # source identity and SQL schema available for compatibility verification.
         if not self.config.should_train():
             model_filename = self.config.get_model_filename()
-            compatibility = load_model_compatibility(model_filename)
-            connection = self.config.connection
-            try:
-                source_schema = self.datalayer.get_table_columns(
-                    connection.data_catalog, connection.data_table
+            source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
+            if source_kind == "csv":
+                # CSV scope, dataset identity and roles were validated by the
+                # opt-in preparation boundary. Never probe SQL for CSV models.
+                from Storage.CSVPredictionDataLayer import CSVPredictionDataLayer
+                if not isinstance(self.datalayer, CSVPredictionDataLayer):
+                    raise ConfigException("CSV prediction requires a prepared CSV data layer")
+                self.config = Config.Config.load_config_from_model_file(
+                    model_filename, config=self.config)
+            elif source_kind == "sql":
+                compatibility = load_model_compatibility(model_filename)
+                connection = self.config.connection
+                try:
+                    source_schema = self.datalayer.get_table_columns(
+                        connection.data_catalog, connection.data_table
+                    )
+                except Exception as exc:
+                    raise ConfigException(
+                        "Saved-model compatibility check could not read the current SQL source schema."
+                    ) from exc
+                review = review_current_source_compatibility(
+                    compatibility,
+                    driver=connection.odbc_driver,
+                    host=connection.host,
+                    catalog=connection.data_catalog,
+                    table=connection.data_table,
+                    source_schema=source_schema,
                 )
-            except Exception as exc:
-                raise ConfigException(
-                    "Saved-model compatibility check could not read the current SQL source schema."
-                ) from exc
-            review = review_current_source_compatibility(
-                compatibility,
-                driver=connection.odbc_driver,
-                host=connection.host,
-                catalog=connection.data_catalog,
-                table=connection.data_table,
-                source_schema=source_schema,
-            )
-            if review.issues:
-                raise ConfigException(
-                    "Saved model is not compatible with the selected data source: "
-                    + "; ".join(review.issues)
-                )
-            for warning in review.warnings:
-                self.logger.print_warning(warning)
-            self.config = Config.Config.load_config_from_model_file(model_filename, config=self.config)
+                if review.issues:
+                    raise ConfigException(
+                        "Saved model is not compatible with the selected data source: "
+                        + "; ".join(review.issues)
+                    )
+                for warning in review.warnings:
+                    self.logger.print_warning(warning)
+                self.config = Config.Config.load_config_from_model_file(
+                    model_filename, config=self.config)
+            else:
+                raise ConfigException("Unsupported prediction data source")
 
         self.dh, self.mh, self.ph = self.create_handlers()
         

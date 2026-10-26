@@ -14,6 +14,15 @@ from Storage.ArtifactContract import ArtifactKind, ArtifactReference, StorageKin
 from Storage.CSVRunContext import CSVRunContext
 
 
+def _python_scalar(value):
+    """Unbox NumPy scalar outputs without changing their label values."""
+    if not isinstance(value, (str, bytes, int, float, bool, type(None))):
+        item = getattr(value, "item", None)
+        if callable(item):
+            value = item()
+    return value
+
+
 class CSVPredictionResultSink:
     """Persist prediction rows privately; publish a discoverable manifest last."""
 
@@ -43,7 +52,12 @@ class CSVPredictionResultSink:
             raise ValueError("Invalid CSV prediction test run")
         # class labels and algorithm metadata are deliberately excluded from the
         # public manifest; the model's JSON configuration already stores them.
-        if not isinstance(class_labels, (list, tuple)) or not all(isinstance(c, str) for c in class_labels):
+        if not isinstance(class_labels, (list, tuple)) and not hasattr(class_labels, "tolist"):
+            raise ValueError("Invalid CSV prediction class labels")
+        class_labels = [_python_scalar(label) for label in class_labels]
+        if not all(isinstance(label, (str, int, float)) and not isinstance(label, bool)
+                   and (not isinstance(label, float) or math.isfinite(label))
+                   for label in class_labels):
             raise ValueError("Invalid CSV prediction class labels")
         try:
             rate_type = class_rate_type.name
@@ -68,9 +82,9 @@ class CSVPredictionResultSink:
             if key in seen:
                 raise ValueError("Duplicate CSV prediction ID")
             seen.add(key)
-            prediction = item["prediction"]
-            rate = item["rate"]
-            probabilities = item["probabilities"]
+            prediction = _python_scalar(item["prediction"])
+            rate = _python_scalar(item["rate"])
+            probabilities = _python_scalar(item["probabilities"])
             if (not isinstance(prediction, (str, int, float)) or isinstance(prediction, bool)
                     or not isinstance(rate, (int, float)) or isinstance(rate, bool)
                     or not math.isfinite(rate) or
