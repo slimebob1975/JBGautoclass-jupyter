@@ -1532,7 +1532,10 @@ class ModelHandler:
             else:
                 self.handler.logger.print_info(
                     "Grid search estimate calibration: uncalibrated; no usable matching "
-                    "completed-search history. Using the selected pipeline's CV-based estimate."
+                    "completed-search history. Using the selected pipeline's CV-based estimate "
+                    "as a planning reference, NOT a reliable finish time. Parallel worker startup, "
+                    "scheduling, contention and parameter-dependent fit costs can make the actual "
+                    "search several times slower; compare against measured time after completion."
                 )
         return estimate
 
@@ -2135,6 +2138,7 @@ class ModelHandler:
         self._last_cv_timing = None
         self._selected_cv_timing = None
         self._selected_cv_score = None
+        self._last_spot_check_summary = None
         self._last_grid_search_summary = None
         self._nystroem_runtime_rows = []
         self._benchmark_150_rows = []
@@ -2260,6 +2264,18 @@ class ModelHandler:
             )
 
         best_model = self._apply_spot_check_state(state)
+        selected = " | ".join((
+            state.best_algorithm.name,
+            " + ".join(item.name for item in (
+                state.best_oversampler, state.best_undersampler,
+                state.best_preprocessor, state.best_reduction
+            )),
+        ))
+        metric = self.handler.config.mode.scoring.name.upper()
+        self._last_spot_check_summary = Helpers.format_spot_check_summary(
+            list_of_results, metric, selected, state.best_cv_score, cross_validation_filepath
+        )
+        self.handler.logger.print_info(self._last_spot_check_summary)
         return best_model
 
     def calculate_current_features(self, current_score: float, best_score: float, num_features: int, max_features: int, min_features: int):

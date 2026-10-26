@@ -228,6 +228,16 @@ def test_real_grid_search_logs_estimate_before_fit_without_verbose(monkeypatch, 
     assert handler.handler.logger.print_progress.call_count == int(has_timing)
 
 
+def test_uncalibrated_grid_search_estimate_warns_against_optimistic_eta():
+    handler = make_handler()
+    handler._selected_cv_timing = CVTiming(10, 10, 0.2, 0.02, 0.3)
+    handler._report_grid_search_estimate(24, 10, 24)
+    messages = [call.args[0] for call in handler.handler.logger.print_info.call_args_list]
+    assert any("uncalibrated" in message and "NOT a reliable finish time" in message
+               and "worker startup" in message for message in messages)
+    assert any("estimated wall-clock time" in message for message in messages)
+
+
 def test_missing_timing_logs_reason_and_fit_count():
     handler = make_handler()
     handler._report_grid_search_estimate(6, 10, 2)

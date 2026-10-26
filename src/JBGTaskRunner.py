@@ -299,6 +299,12 @@ class TaskRunner:
             self.logger.print_code("Cross validation results filepath", \
                                    Helpers.create_download_link(output_filename, title = ""))
             self.mh.save_model_to_file(self.mh.handler.config.get_model_filename())
+            summary = getattr(self.mh, "_last_spot_check_summary", None)
+            if summary:
+                # Repeat after final training/save; the original table may have been lost
+                # to an earlier transient Voilà output event.
+                self.logger.print_info("Final model-selection recap:\nSelected pipeline:" +
+                                       summary.split("\nSelected pipeline:", 1)[-1])
         except Exception as e:
             raise Exception(f"Training or saving model failed: {e}")
 

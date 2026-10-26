@@ -1,3 +1,19 @@
+## Revision 179 — deterministic parallel worker-failure regression
+
+- Add a dependency-light regression for a failed second future in a two-worker feature-search batch: the first candidate remains committed, the failed candidate is not committed, and a structured failure event is emitted.
+- Production multiprocessing code is unchanged. Existing two-worker pause/resume regression passed in the local Linux environment; forced Windows worker termination remains a live verification task.
+
+## Revision 178 — uncalibrated GridSearch ETA caveat
+
+- Label CV-derived, uncalibrated GridSearch estimates as planning references rather than reliable finish times; explicitly warn about worker startup, scheduling, contention and parameter-dependent fit cost.
+- Keep duration arithmetic, calibration history, parallelism, model selection and training unchanged. Add regression coverage for the warning text. Windows timing/calibration validation remains pending.
+
+## Revision 177 — redundant plain-text spot-check model-selection reporting
+
+- Keep existing rich candidate table and full crossval CSV untouched, while printing a metric-labelled top-ten ranking and exact selected pipeline/score into Script output.
+- Repeat the selected-pipeline recap after the model has been fitted and saved, independently of earlier rich-widget rendering; ranking ignores non-finite candidate scores.
+- Add focused formatter regression tests. No changes to training, ranking rules, CSV schema or Voilà reconnect behavior.
+
 ## Revision 176c — MCC as the default model-selection metric
 
 - Change the default spot-check/model-selection metric from Accuracy to Matthews Correlation Coefficient (MCC) in both the backend `Config.Mode` default and the GUI default settings. Accuracy and the existing scoring choices remain available explicitly.

@@ -1,4 +1,4 @@
-# JBG AutoClassification — Active BACKLOG (Revision 176c)
+# JBG AutoClassification — Active BACKLOG (Revision 179)
 
 This is the **active**, prioritized maintenance roadmap for the general-purpose JBG ML framework.
 The complete historical backlog (including completed revisions and research experiments)
@@ -20,6 +20,8 @@ where it matters.
 - [ ] Avoid dataset-specific logic in core training, GUI defaults, persistence and validation.
 
 ## P1 — Correctness, reliability and compatibility
+
+- [x] **Spot-check output resilience (revision 177):** retain rich output/complete CSV; add a compact plain-text top-ten and repeat the selected-pipeline metric/score after model save. No general Voilà/WebSocket reconnect work. Live Windows/Voilà validation pending.
 
 - [x] **Saved-model/data compatibility (revisions 173/173a/173b):** new model artifacts carry a privacy-safe
   source fingerprint, required SQL type-family contract, feature-role signature, fitted converter-input
@@ -70,6 +72,7 @@ where it matters.
   leave orphan kernels/processes or create resource leakage. Keep the current runtime stable without weakening
   CSRF protections, avoid further Voilà-specific architecture investment, and keep the separate launcher/server
   log treated as sensitive local diagnostics until cleanup no longer depends on path evidence.
+- [x] **Revision 179 worker-failure regression:** test that a failed parallel candidate future reports failure and does not commit the failed candidate. This is a deterministic unit test, not a Windows process-crash simulation.
 - [ ] **Pause/Resume concurrency:** verify the revision-140 candidate-level checkpoint/resume flow
   with automatic parallelism on Windows (set the shared global cap to two workers for a reproducible test),
   including forced interruption, deterministic recovery and failure
@@ -98,7 +101,7 @@ where it matters.
   The revised layout was live-confirmed on Windows/Voilà. Revision 170 adds a persistent start diagnostic that
   records the selected worker count and its CPU/global-cap/search-budget/memory-guard constraints; pause/resume
   and forced worker-failure behavior remain to be smoke-tested with the shared global cap set to two workers.
-- [ ] **Search budget and cost:** measure fit counts, elapsed times, memory and candidate-family
+- [ ] **Search budget and cost:** revision 178 labels uncalibrated GridSearch timing estimates as uncertain planning references after a cold-start underestimate in the revision-177 smoke test; measure fit counts, elapsed times, memory and candidate-family
   costs on representative general-purpose datasets; improve Quick/Standard/Extended/Custom estimates
   and safe preflight controls. Avoid inflating default budgets without evidence.
 - [x] **Imbalance-safe default scoring (revision 176c):** use Matthews Correlation Coefficient

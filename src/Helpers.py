@@ -55,6 +55,26 @@ def build_model_performance_matrix(results: list) -> pandas.DataFrame:
         ignore_index=True,
     )
 
+def format_spot_check_summary(results: list, metric: str, selected: str,
+                              selected_score: float, csv_path: str, limit: int = 10) -> str:
+    """Format a plain-text CV ranking without changing candidate selection or CSV export."""
+    matrix = build_model_performance_matrix(results)
+    lines = [f"Spot-check summary — ranked by {metric}"]
+    valid = matrix[pandas.to_numeric(matrix["Mean cv"], errors="coerce").map(np.isfinite)]
+    for rank, (_, row) in enumerate(valid.head(limit).iterrows(), start=1):
+        algorithm = str(row["Algorithm (Library)"]).split(" - ", 1)[0]
+        stages = [str(row[col]) for col in (
+            "Oversampling", "Undersampling", "Preprocessor", "Feature Reduction"
+        ) if col in matrix.columns]
+        lines.append(f"{rank}. {algorithm} | {' + '.join(stages)} | {metric} {float(row['Mean cv']):.4f}")
+    if valid.empty:
+        lines.append("No candidates with a finite CV score.")
+    lines.extend(["", "Selected pipeline:", selected,
+                  f"Spot-check {metric}: {float(selected_score):.4f}",
+                  f"Full results: {Path(csv_path).name}"])
+    return "\n".join(lines)
+
+
 def dataframe_has_sparse_columns(data) -> bool:
     """Return True when a pandas DataFrame contains one or more SparseDtype columns."""
     return isinstance(data, pandas.DataFrame) and any(

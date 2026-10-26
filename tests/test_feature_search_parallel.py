@@ -57,3 +57,40 @@ class ParallelSearchTests(unittest.TestCase):
             actual = run_experiment(self.X, self.y, 'yes', root / 'parallel',
                                     options=options, groups=groups, progress=None)
             self.assertEqual(expected['nested_validation'], actual['nested_validation'])
+
+class ParallelWorkerFailureRegressionTests(unittest.TestCase):
+    """Rev179: worker failure must not silently complete an uncommitted batch."""
+
+    def test_failed_second_future_keeps_only_first_durable_commit(self):
+        from concurrent.futures import Future
+        from unittest.mock import Mock
+        from JBGFeatureSearch import Search
+
+        rng = np.random.default_rng(179)
+        X = pd.DataFrame(rng.normal(size=(32, 3)), columns=['a', 'b', 'c'])
+        y = pd.Series(['yes', 'no'] * 16)
+        events, commits = [], []
+        options = replace(SearchOptions(inner_folds=2, outer_folds=2,
+                                        max_evaluations=3, parallel_workers=2),
+                          max_iterations=100)
+        search = Search(X, y, 'yes', options, {}, 'outer_1', commits.append,
+                        on_event=events.append)
+        good = Future()
+        good.set_result((dict(columns=('a',), error='', mean_mcc=0.5), 2))
+        failed = Future()
+        failed.set_exception(RuntimeError('synthetic worker interruption'))
+        executor = Mock()
+        executor.submit.side_effect = [good, failed]
+        search.executor = executor
+
+        with self.assertRaisesRegex(RuntimeError, 'synthetic worker interruption'):
+            search.evaluate_batch([(('a',), 'random'), (('b',), 'random')])
+        self.assertEqual(len(commits), 1)
+        self.assertEqual(commits[0]['columns'], ('a',))
+        self.assertEqual(set(search.cache), {('a',)})
+        self.assertEqual(search.fit_count, 2)
+        failed_events = [event for event in events if event['event'] == 'parallel_batch_failed']
+        self.assertEqual(len(failed_events), 1)
+        self.assertEqual(failed_events[0]['error_type'], 'RuntimeError')
+        self.assertFalse(any(event['event'] == 'parallel_batch_completed' for event in events))
+        self.assertEqual(executor.submit.call_count, 2)

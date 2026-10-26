@@ -8,7 +8,6 @@ import JBGHandler
 from typing import Callable, Union
 from path import Path
 import pytest
-from imblearn.over_sampling import oversampler
 from imblearn.under_sampling import RandomUnderSampler
 
 from JBGHandler import JBGHandler, DatasetHandler, Model, ModelHandler, PredictionsHandler
@@ -178,7 +177,7 @@ class MockConfig():
         """ Returns if categorization should be used """
         return True
 
-    def get_callable_oversamplers(self) -> Union[oversampler, None]:
+    def get_callable_oversamplers(self) -> object | None:
         """ Gets the oversampler for the model, or None if it shouldn't be """
         
     def get_undersampler(self) -> Union[RandomUnderSampler, None]:
