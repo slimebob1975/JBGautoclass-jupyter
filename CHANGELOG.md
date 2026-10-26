@@ -1,3 +1,79 @@
+- Revision 188f: Gate CSV Dataset columns behind explicit New model selection after CSV validation. Preserve SQL model options on source switches and avoid SQL model observers.
+- Revision 188e: Reset selected model when switching between SQL Server and CSV views; suppress model-selection observers during reset.
+
+### Revision 188d — CSV filename display and editable inspection roles
+
+- Display only the uploaded CSV filename in the GUI, not the temporary server path. Keep internal path for inspection.
+- Allow class, ID, data and text roles to be changed after CSV validation while restoring SQL widget disabled state when switching back. CSV execution remains disabled.
+
+## Revision 188c — conservative CSV dialect detection
+
+- Detect common CSV field separators and quoted-text qualifiers from a bounded upload sample; retain editable manual overrides and fail closed when ambiguous.
+- Validate parsed records using the selected qualifier, including embedded separators. No source rows or paths enter status messages. SQL and modelling remain unchanged.
+
+## Revision 188b — matching CSV source frame
+
+- Wrap CSV upload and validation controls in the same titled section/frame component used by SQL Server settings. Source selection, data loading and ML execution are unchanged.
+- Add structural regression coverage for the CSV container and its selector wiring.
+
+## Revision 188a — browser CSV picker for Voilà
+
+- Replace manually entered CSV path with a browser file upload selector limited to `.csv` and show the temporary server-side inspection path beside the selector. Client local paths are not available to the browser.
+- Stage uploads in per-panel temporary storage for inspection only; reject non-CSV names, multiple files, empty and oversized uploads, and preserve the existing validation and Dataset columns callback. CSV ML execution remains disabled.
+- Add isolated picker tests with synthetic filenames and file contents.
+
+## Revision 188 — CSV Dataset columns preview and guarded execution
+
+- Populate existing Dataset columns role options from validated CSV metadata, preserving SQL selections while switching source views.
+- Guard classification, repeat, regression and feature investigations against executing SQL while CSV is selected. CSV remains inspection only.
+- Add synthetic-data regression tests for callback wiring, identifier candidates and guarded entrypoints.
+
+## Revision 187 — initial file artifact repository (no GUI or SQL changes)
+
+- Add a local file-backed repository using opaque tenant/project/artifact IDs, immutable content blobs and metadata commit markers.
+- Provide scoped artifact list/get/open/save operations, no-overwrite publication, and isolated filesystem tests using synthetic data.
+- The repository is not an authentication boundary; retention, operational recovery and web authorization remain open. No dataset-specific names or paths are documented.
+
+## Revision 186 — web-addressable dataset and result storage contract (no runtime changes)
+
+- Define opaque tenant, project, dataset, run and artifact identifiers for backend-independent catalog and retrieval, keeping host paths private.
+- Define repository protocols for listing, metadata retrieval, content access and writes. Access must be authorized at the future service boundary and rechecked by implementations; an identifier is never an access token.
+- Add isolated privacy/identifier regression tests. No SQL, GUI, modelling, filesystem persistence or API behavior changes.
+
+## Revision 185 — CSV column-role contract (no execution change)
+
+- Add SQL-independent CSV header, unique ID and class candidate discovery, retaining textual IDs.
+- Validate distinct ID/class/feature assignments without exposing local data in errors.
+- Add focused regression tests. GUI bindings, SQL execution and model persistence remain unchanged.
+
+## Revision 184d — fix Data source container in Voilà
+
+- Use the supported Box type in the Data source section; the common form builder rejects VBox.
+- Add a structural regression test for the section constructor. No changes to source selection or ML execution.
+
+## Revision 184c — Data source display and CSV inspection role separation
+
+- Add a Data source section with mutually exclusive SQL Server/CSV settings views; SQL remains the only classifier execution source.
+- Keep class and ID roles in Dataset columns; CSV inspection validates only structure, not column-role compatibility or model readiness.
+- Add GUI tests for source switching and malformed CSV input. No dataset names, paths or rows are recorded.
+
+## Revision 184a — portable CSV dtype for pandas
+
+- Use `dtype=object` rather than `dtype=str` for CSV parsing compatibility, retaining textual identifiers and empty strings.
+- Add a regression test for the parser argument and text preservation. SQL and model paths remain unchanged.
+
+## Revision 184 — opt-in CSV inspection controls in GUI
+
+- Add a CSV inspection panel with explicit local path, delimiter, encoding, ID and class role inputs and a validate action. Only row/column counts are displayed on success; no file paths, feature names or row values enter diagnostics.
+- Keep SQL Server as the only active GUI training/prediction source. CSV validation does not change runtime configuration, model settings, persistence or SQL widgets. Executable CSV integration remains pending.
+- Add isolated GUI inspection tests.
+
+## Revision 183 — typed source construction boundary
+
+- Add an opt-in, explicit SQL Server/CSV source choice with SQL Server as the default and lazy SQL imports in CSV mode. SQL construction delegates unchanged to the existing data layer.
+- Add isolated tests for default selection, CSV without ODBC, SQL constructor delegation, and invalid combinations. Errors omit local paths.
+- Existing GUI, model training, prediction and SQL persistence remain unchanged. Common dataset operations and CSV GUI wiring are deferred.
+
 ## Revision 182 — opt-in CSV input foundation
 
 - Add an isolated CSV input reader with explicit path, delimiter, encoding and ID/class roles, retaining text values (including leading zeros and empty labels).

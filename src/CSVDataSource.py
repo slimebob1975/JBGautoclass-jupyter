@@ -50,7 +50,8 @@ class CSVDataSource:
                 self.settings.path,
                 sep=self.settings.delimiter,
                 encoding=self.settings.encoding,
-                dtype=str,
+                # Use a pandas-supported dtype across versions; keep raw text.
+                dtype=object,
                 keep_default_na=False,
                 index_col=False,
                 on_bad_lines="error",

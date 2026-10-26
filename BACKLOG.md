@@ -1,4 +1,6 @@
-# JBG AutoClassification — Active BACKLOG (Revision 182)
+- Revision 188f: CSV now follows Data source -> Models (New model) -> Dataset columns; SQL model choices are restored separately, CSV execution remains disabled.
+- Revision 188e: Clear Models selection when switching data sources; SQL/CSV execution separation remains in place.
+# JBG AutoClassification — Active BACKLOG (Revision 188c)
 
 This is the **active**, prioritized maintenance roadmap for the general-purpose JBG ML framework.
 The complete historical backlog (including completed revisions and research experiments)
@@ -9,6 +11,41 @@ active priority queue. A checked box indicates implemented work; live verificati
 where it matters.
 
 ## Decisions and scope
+
+- [x] **Revision 188d:** Show original CSV filename instead of temporary server path; enable CSV Dataset columns roles only after validation, keep SQL role editability on source switch and CSV execution disabled. Live Windows/Voilà verification pending.
+
+
+- [x] **Revision 188c:** Conservative CSV delimiter and text-qualifier detection on upload, with manual override and private status messages. Windows/Voilà verification pending.
+
+
+- [x] **Revision 188b:** Frame the CSV settings panel consistently with the SQL Server settings panel; presentation-only change.
+
+- [x] **Revision 188a:** Browser CSV picker with temporary server-side inspection path displayed alongside; CSV-only filename filter and validation. Full upload lifecycle/retention and service-backed dataset storage remain future work.
+
+
+- [x] **Revision 188:** Populate shared Dataset columns from validated CSV schema while preserving SQL role selections and preventing CSV-view SQL execution. CSV modelling remains unavailable; live Voilà testing pending.
+
+
+- [x] **Revision 186:** Define opaque tenant/project/run/dataset/artifact identifiers and backend-neutral read/write interfaces for future web access; no storage implementation or authentication yet.
+- [x] **Revision 187:** Implement a scoped, immutable local file artifact repository with atomic no-overwrite publication, logical lookup and tests.
+- [ ] Add retention/cleanup policy, crash recovery, full run/dataset repositories, and an authenticated per-request authorization layer before web exposure; identifiers alone are not authorization.
+- [ ] Expose user-authorized dataset and run catalogs, preview and downloads through future API without exposing host paths.
+
+- [x] **Revision 185:** SQL-independent CSV column-role discovery and fail-closed role contract; not yet bound to Dataset columns GUI or model execution.
+- [ ] Bind the CSV schema to shared Dataset columns widgets, with source-aware observers and SQL execution guards; test in Voilà before enabling CSV modelling.
+
+
+- [x] **Revision 184d:** Fix Data source section construction with supported Box type; Windows/Voilà verification pending.
+
+- [x] **Revision 184c:** Exclusive SQL/CSV settings display under Data source; class and ID roles stay in Dataset columns. CSV remains inspection only. Windows/Voilà verification pending.
+- [ ] Bind CSV headers to shared Dataset columns roles before allowing CSV training; do not reuse SQL selections silently.
+
+
+- [x] **Revision 184a:** Address CSV pandas parser dtype compatibility; Windows verification pending.
+
+- [x] **Revision 184:** CSV inspection controls in GUI (path, delimiter, encoding, ID/class roles, private validation counts); SQL-only execution remains unchanged. Live Windows/Voilà verification pending.
+- [ ] Connect CSV to the shared read contract and classifier execution, including source identity, persistence checks and prediction output, before enabling CSV training.
+
 
 - [x] The prior private-dataset investigation is concluded at the user's request. No more dataset-specific experiments
   are planned in the main product backlog. Historical findings remain in the archive.
@@ -158,6 +195,7 @@ database access for every workflow rather than replacing SQL Server.
   and pre-176 model artifacts are intentionally unsupported. The schema serializes every current configuration
   dataclass field, keeps SQL passwords runtime-only, supports CLI loading without executing code, and preserves
   GUI Repeat Last through its separate JSON snapshot. Old Python configs/models should be deleted/retrained.
+- [x] **Source selection foundation (revision 183):** explicit typed SQL/CSV construction boundary, SQL default, lazy SQL imports, isolated regression tests. GUI routing and common read/write contracts are still pending.
 - [x] **CSV input foundation (revision 182):** add a standalone, explicit CSV reader with validated ID/class roles, configurable delimiter/encoding and string-preserving import; SQL runtime untouched. GUI selection, schema/type inference, source identity/persistence, and output export remain open.
 - [ ] **Dual SQL Server/CSV data source and result export:** make the physical source/sink an explicit runtime
   choice (`SQL Server` or `CSV`) behind a common data-layer/application interface. Keep SQL Server as a fully

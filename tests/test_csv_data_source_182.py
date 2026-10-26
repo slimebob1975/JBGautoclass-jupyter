@@ -3,6 +3,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from CSVDataSource import CSVDataSource, CSVSourceSettings
 
@@ -22,6 +23,22 @@ class CSVDataSourceTests(unittest.TestCase):
         self.assertEqual(data["row_id"].tolist(), ["001", "002"])
         self.assertEqual(data["feature"].tolist(), ["0007", ""])
         self.assertEqual(data["target"].tolist(), ["yes", ""])
+
+    def test_reader_uses_portable_dtype_and_retains_text(self):
+        self.path.write_text("row_id,target,feature\n001,yes,0007\n", encoding="utf-8")
+        from CSVDataSource import pd
+        original_read_csv = pd.read_csv
+        seen = []
+
+        def checked_read_csv(*args, **kwargs):
+            seen.append(kwargs.get("dtype"))
+            return original_read_csv(*args, **kwargs)
+
+        with patch.object(pd, "read_csv", side_effect=checked_read_csv):
+            frame = self.source().read_frame()
+        self.assertEqual(seen, [object])
+        self.assertEqual(frame.loc[0, "row_id"], "001")
+        self.assertEqual(frame.loc[0, "feature"], "0007")
 
     def test_rejects_duplicate_ids(self):
         self.path.write_text("row_id,target,x\n1,a,foo\n1,b,bar\n", encoding="utf-8")

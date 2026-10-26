@@ -117,6 +117,11 @@ class EventHandler:
         # the persisted run state that is being made visible.
         if self.lock_observe_1 or change.name != "index":
             return
+        if self.widgets._csv_view_active():
+            # CSV inspection has no SQL model metadata: only the explicit
+            # new-model choice can unlock column roles.
+            self.widgets._csv_model_selected()
+            return
         
         if change.new == 0: # Moves to the empty value
             return
@@ -152,6 +157,9 @@ class EventHandler:
         # until the persisted dataset/class state has been restored completely.
         if self.lock_observe_1 or getattr(self.widgets, "_updating_column_options", False):
             return
+        if self.widgets._csv_view_active():
+            self.widgets._csv_column_role_changed()
+            return
 
         if change.name not in ["index", "disabled"]:
             return
@@ -179,7 +187,10 @@ class EventHandler:
             Events:
                 value_change: Updates the data column option when id is set
         """
-        if self.lock_observe_1: 
+        if self.lock_observe_1:
+            return
+        if self.widgets._csv_view_active():
+            self.widgets._csv_column_role_changed()
             return
         
         if change.name not in ["index", "options"]:
@@ -195,6 +206,10 @@ class EventHandler:
         if self.lock_observe_1: 
             return
         
+        if self.widgets._csv_view_active():
+            self.widgets._csv_column_role_changed()
+            return
+
         if change.name not in ["index", "options"]:
             return
 
@@ -349,7 +364,7 @@ class EventHandler:
 
     def continuation_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
-        if getattr(self.widgets, "_feature_search_running", False):
+        if self.widgets._csv_view_active() or getattr(self.widgets, "_feature_search_running", False):
             return
         if self.widgets.feature_selection_mode.value in ("assisted", "reuse") and not getattr(self.widgets, "_feature_search_applied", False):
             self.widgets.update_ready()
@@ -367,6 +382,9 @@ class EventHandler:
 
     def regression_suite_button_was_clicked(self, button: widgets.Button) -> None:
         """Enter regression-suite mode without requiring a manually selected dataset."""
+        if self.widgets._csv_view_active():
+            return
+
         self.lock_observe_1 = True
         self.widgets.deactivate_section("data")
         self.widgets.deactivate_section("feature_selection")
@@ -375,6 +393,9 @@ class EventHandler:
 
     def repeat_last_run_button_was_clicked(self, button: widgets.Button) -> None:
         """Rerun the last persisted manual classifier configuration immediately."""
+        if self.widgets._csv_view_active():
+            return
+
         button.disabled = True
         self.lock_observe_1 = True
         self.widgets.deactivate_section("data")
@@ -385,6 +406,9 @@ class EventHandler:
 
     def start_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Changes the state to be read-only, starts the classifier (or the class summary) """
+        if self.widgets._csv_view_active():
+            return
+
 
         self.widgets.deactivate_section("classifier")
         self.widgets.start_button_actions()
@@ -1389,6 +1413,8 @@ class Widgets:
 
     def repeat_last_run_button_actions(self) -> None:
         """Run the persisted previous configuration without rebuilding it from current widgets."""
+        if self._csv_view_active():
+            return
         self.regression_suite_state = False
         self.output.clear_output(wait=True)
         self.clear_mispredicted_output()
@@ -1400,6 +1426,8 @@ class Widgets:
 
     def start_button_actions(self) -> None:
         """ Complex actions when button is clicked """
+        if self._csv_view_active():
+            return
         self.guihandler._classifier_diagnostic("start button action entered")
         if self.rerun_state:
             if not self.regression_suite_state:
@@ -1884,6 +1912,8 @@ class Widgets:
 
     def refresh_class_column_options(self) -> None:
         """Filter precomputed cardinalities without additional SQL on slider changes."""
+        if self._csv_view_active():
+            return
         if not self.datatype_dict:
             return
         old = self.class_column.value
@@ -1924,6 +1954,8 @@ class Widgets:
         self.feature_search_subgroup_column.value = current if current in allowed else ''
 
     def update_class_id_data_columns(self) -> None:
+        if self._csv_view_active():
+            return
         if self.data_catalogs_dropdown.value == "" or self.data_tables_dropdown.value == "":
             return
         
@@ -2021,7 +2053,7 @@ class Widgets:
 
     def update_class_summary(self):
         """ Sets the class summary """
-        if not self.summarise_state:
+        if not self.summarise_state or self._csv_view_active():
             return
         
         current_class = self.class_column.value
@@ -2063,6 +2095,8 @@ class Widgets:
 
     def update_id_column(self) -> None:
         """ Removes class_column from the id_column options """
+        if self._csv_view_active():
+            return
 
         self.id_column.options = [
             var for var in self.unique_id_columns if var != self.class_column.value
@@ -2071,6 +2105,8 @@ class Widgets:
     
     def update_data_columns(self) -> None:
         """ Removes id column from data columns """
+        if self._csv_view_active():
+            return
 
         self.data_columns.options = \
             [var for var in list(self.datatype_dict.keys()) if var not in (self.class_column.value, self.id_column.value)]
@@ -2094,7 +2130,7 @@ class Widgets:
         """ Sets whether it can continue into Classifier Settings  """
         num_vars = len(self.data_columns.value)
         self.num_variables.value = num_vars
-        if getattr(self, "_feature_search_running", False):
+        if self._csv_view_active() or getattr(self, "_feature_search_running", False):
             self.disable_button("continuation_button")
             return
 
@@ -2117,7 +2153,8 @@ class Widgets:
     def update_regression_suite_ready(self) -> None:
         """Enable connection-level actions as soon as SQL login/catalog discovery is ready."""
         connection_ready = (
-            bool(self.sql_username.value)
+            not self._csv_view_active()
+            and bool(self.sql_username.value)
             and bool(self.sql_password.value)
             and not self.data_catalogs_dropdown.disabled
             and any(option not in ("", "N/A") for option in self.data_catalogs_dropdown.options)
@@ -2133,7 +2170,7 @@ class Widgets:
         if connection_ready is None:
             connection_ready = bool(self.sql_username.value) and bool(self.sql_password.value)
 
-        if connection_ready and self.guihandler.has_saved_classifier_run():
+        if not self._csv_view_active() and connection_ready and self.guihandler.has_saved_classifier_run():
             self.enable_button("repeat_last_run_button")
         else:
             self.disable_button("repeat_last_run_button")
@@ -2516,9 +2553,13 @@ class Widgets:
             '; output: ' + html.escape(result.get('output_directory', '')))
 
     def run_feature_selection_investigation(self) -> None:
+        if self._csv_view_active():
+            return
         self._launch_feature_selection_investigation()
 
     def _launch_feature_selection_investigation(self, resume_directory=None):
+        if self._csv_view_active():
+            return
         import threading
         if getattr(self, '_feature_search_running', False):
             return
@@ -2869,8 +2910,158 @@ class Widgets:
 
         return True
 
+    def _csv_view_active(self) -> bool:
+        """CSV is currently inspection-only, never an execution source."""
+        selector = getattr(self, "_data_source_selector", None)
+        return selector is not None and selector.choice.value == "csv"
+
+    _SOURCE_ROLE_FIELDS = ("class_column", "id_column", "data_columns", "text_columns")
+
+    def _source_role_snapshot(self):
+        return {
+            name: (tuple(getattr(self, name).options), getattr(self, name).value)
+            for name in self._SOURCE_ROLE_FIELDS
+        }
+
+    def _restore_source_roles(self, snapshot):
+        """Restore widgets without invoking SQL observers on intermediate values."""
+        handler = self.eventhandler
+        previous_lock = handler.lock_observe_1
+        handler.lock_observe_1 = True
+        self._updating_column_options = True
+        try:
+            for name in self._SOURCE_ROLE_FIELDS:
+                widget = getattr(self, name)
+                options, value = snapshot[name]
+                widget.options = options
+                widget.value = value
+        finally:
+            self._updating_column_options = False
+            handler.lock_observe_1 = previous_lock
+
+    def _csv_set_role_editability(self, enabled):
+        """CSV roles are editable after validation; SQL disabled state stays separate."""
+        for name in self._SOURCE_ROLE_FIELDS:
+            getattr(self, name).disabled = not enabled
+
+    def _reset_model_on_source_change(self):
+        """Discard the selected model when the data-source context changes."""
+        model = self.models_dropdown
+        previous_lock = self.eventhandler.lock_observe_1
+        self.eventhandler.lock_observe_1 = True
+        try:
+            # Preserve the available SQL options, but never carry a selected
+            # saved model (or New model) across a source boundary.
+            model.value = "" if "" in model.options else None
+        finally:
+            self.eventhandler.lock_observe_1 = previous_lock
+        self.reset_field_status("models")
+
+    def _csv_model_selected(self):
+        """Unlock inspected CSV roles only after the New model step."""
+        ready = (getattr(self, "_csv_roles_loaded_188", False)
+                 and self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION)
+        self._csv_set_role_editability(ready)
+        self.id_column_diagnostic.value = (
+            "CSV columns are ready for inspection. Execution remains disabled."
+            if ready else "Select New model to configure CSV Dataset columns. CSV execution is disabled."
+        )
+        self.update_ready()
+        self.disable_button("start_button")
+        self.disable_button("feature_search_investigate_button")
+
+    def _csv_source_selected(self, choice):
+        """Switch role choices without leaking CSV columns into SQL state."""
+        self._reset_model_on_source_change()
+        if choice == "csv":
+            self._sql_model_options_188f = tuple(self.models_dropdown.options)
+            self._sql_model_disabled_188f = self.models_dropdown.disabled
+            self.models_dropdown.options = ("", Config.DEFAULT_TRAIN_OPTION)
+            self.models_dropdown.disabled = True
+            self._sql_action_state_188 = {name: getattr(self, name).disabled for name in ("start_button", "feature_search_investigate_button")}
+            self._sql_role_snapshot_188 = self._source_role_snapshot()
+            self._sql_role_disabled_188d = {name: getattr(self, name).disabled for name in self._SOURCE_ROLE_FIELDS}
+            self._csv_roles_loaded_188 = False
+            self._csv_schema_188 = None
+            self._restore_source_roles({name: ((), () if name in ("data_columns", "text_columns") else None)
+                                        for name in self._SOURCE_ROLE_FIELDS})
+            self._csv_set_role_editability(False)
+            self.id_column_diagnostic.value = "Validate a CSV file to load Dataset columns. CSV execution is disabled."
+        else:
+            if hasattr(self, "_sql_model_options_188f"):
+                self.models_dropdown.options = self._sql_model_options_188f
+                self.models_dropdown.disabled = self._sql_model_disabled_188f
+            if hasattr(self, "_sql_role_snapshot_188"):
+                self._restore_source_roles(self._sql_role_snapshot_188)
+            for name, disabled in getattr(self, "_sql_role_disabled_188d", {}).items():
+                getattr(self, name).disabled = disabled
+            self.id_column_diagnostic.value = ""
+            for name, disabled in getattr(self, "_sql_action_state_188", {}).items():
+                getattr(self, name).disabled = disabled
+        self.update_ready()
+        self.update_regression_suite_ready()
+        if choice == "csv":
+            self.disable_button("start_button")
+            self.disable_button("feature_search_investigate_button")
+
+    def _csv_column_role_changed(self):
+        """Keep CSV role choices consistent without touching SQL metadata."""
+        schema = getattr(self, "_csv_schema_188", None)
+        if schema is None or not self._csv_view_active():
+            return
+        class_name = self.class_column.value
+        ids = tuple(name for name in schema.unique_id_candidates if name != class_name)
+        selected_id = self.id_column.value if self.id_column.value in ids else (ids[0] if ids else None)
+        features = tuple(name for name in schema.columns if name not in (class_name, selected_id))
+        selected_features = tuple(name for name in self.data_columns.value if name in features)
+        selected_text = tuple(name for name in self.text_columns.value if name in selected_features)
+        self._restore_source_roles({
+            "class_column": (schema.class_candidates, class_name),
+            "id_column": (ids, selected_id),
+            "data_columns": (features, selected_features),
+            "text_columns": (selected_features, selected_text),
+        })
+        self.update_ready()
+
+    def _csv_validated_columns(self, panel):
+        """Populate common role controls after CSV validation; no SQL calls."""
+        if not self._csv_view_active():
+            return
+        from CSVColumnSchema import inspect_csv_columns
+        try:
+            schema = inspect_csv_columns(panel.path.value, delimiter=panel.delimiter.value,
+                                         encoding=panel.encoding.value)
+        except (ValueError, TypeError):
+            panel.status.value = "CSV column inspection failed. Check file and format settings."
+            return
+        self._csv_schema_188 = schema
+        self._csv_roles_loaded_188 = True
+        columns = schema.columns
+        selected_class = schema.class_candidates[0] if schema.class_candidates else None
+        ids = tuple(name for name in schema.unique_id_candidates if name != selected_class)
+        selected_id = ids[0] if ids else None
+        self._restore_source_roles({
+            "class_column": (schema.class_candidates, selected_class),
+            "id_column": (ids, selected_id),
+            "data_columns": (tuple(n for n in columns if n not in (selected_class, selected_id)), ()),
+            "text_columns": ((), ()),
+        })
+        # Validation populates options, but does not bypass the Models step.
+        self.models_dropdown.disabled = False
+        self._csv_model_selected()
+
     def connection_form(self) -> widgets.Box:
-        return self.create_section_form("Database connection", self.forms["connection"], widgets.Box)
+        # Presentation-only source choice. The classifier remains SQL-backed
+        # until CSV role binding and execution are implemented explicitly.
+        if not hasattr(self, "_data_source_selector"):
+            from GUI.CSVSourcePanel import CSVSourcePanel, DataSourceSelector
+            self._csv_source_panel = CSVSourcePanel()
+            sql_form = self.create_section_form("Database connection", self.forms["connection"], widgets.Box)
+            csv_form = self.create_section_form("CSV file", [self._csv_source_panel.widget], widgets.Box)
+            self._data_source_selector = DataSourceSelector(sql_form, csv_form)
+            self._data_source_selector.on_source_change = self._csv_source_selected
+            self._csv_source_panel.on_validated = self._csv_validated_columns
+        return self.create_section_form("Data source", [self._data_source_selector.widget], widgets.Box)
 
     @property
     def id_column_diagnostic(self) -> widgets.HTML:
