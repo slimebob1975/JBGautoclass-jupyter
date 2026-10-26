@@ -1,4 +1,4 @@
-# JBG AutoClassification — Active BACKLOG (Revision 181)
+# JBG AutoClassification — Active BACKLOG (Revision 182)
 
 This is the **active**, prioritized maintenance roadmap for the general-purpose JBG ML framework.
 The complete historical backlog (including completed revisions and research experiments)
@@ -158,6 +158,7 @@ database access for every workflow rather than replacing SQL Server.
   and pre-176 model artifacts are intentionally unsupported. The schema serializes every current configuration
   dataclass field, keeps SQL passwords runtime-only, supports CLI loading without executing code, and preserves
   GUI Repeat Last through its separate JSON snapshot. Old Python configs/models should be deleted/retrained.
+- [x] **CSV input foundation (revision 182):** add a standalone, explicit CSV reader with validated ID/class roles, configurable delimiter/encoding and string-preserving import; SQL runtime untouched. GUI selection, schema/type inference, source identity/persistence, and output export remain open.
 - [ ] **Dual SQL Server/CSV data source and result export:** make the physical source/sink an explicit runtime
   choice (`SQL Server` or `CSV`) behind a common data-layer/application interface. Keep SQL Server as a fully
   supported first-class mode while adding CSV input plus CSV prediction/result export for local development,

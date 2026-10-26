@@ -1,3 +1,9 @@
+## Revision 182 — opt-in CSV input foundation
+
+- Add an isolated CSV input reader with explicit path, delimiter, encoding and ID/class roles, retaining text values (including leading zeros and empty labels).
+- Reject missing files, missing role columns, duplicate IDs and potentially duplicate headers with privacy-minimal exceptions. Add focused unit tests.
+- Do not activate CSV in the GUI or modify SQL Server workflows. Source identity, model metadata, prediction export and full data-source abstraction remain future work.
+
 ## Revision 181 — truthful lifecycle counters for GUI-only events
 
 - Omit candidate/fit counters for GUI-only lifecycle transitions when no counts were supplied; preserve explicit numeric counters from backend study events. Previously the GUI result receipt misleadingly reported zero candidates after a completed search.
