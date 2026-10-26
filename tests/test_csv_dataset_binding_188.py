@@ -24,7 +24,7 @@ except ImportError:
         def observe(self, callback, names=None):
             self._observers.append(callback)
     widget_library = types.ModuleType("ipywidgets")
-    for name in ("Text", "HTML", "Button", "VBox", "HBox", "ToggleButtons", "FileUpload", "Layout"):
+    for name in ("Text", "HTML", "Button", "VBox", "HBox", "ToggleButtons", "FileUpload", "Layout", "Dropdown"):
         setattr(widget_library, name, StubWidget)
     with patch.dict(sys.modules, {"ipywidgets": widget_library}):
         from GUI.CSVSourcePanel import CSVSourcePanel, DataSourceSelector

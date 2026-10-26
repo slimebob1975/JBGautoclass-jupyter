@@ -34,6 +34,7 @@ fake_widgets.Button = FakeWidget
 fake_widgets.VBox = FakeBox
 fake_widgets.HBox = FakeBox
 fake_widgets.ToggleButtons = FakeWidget
+fake_widgets.Dropdown = FakeWidget
 # Exercise real ipywidgets when installed (Windows/Voila). Only stub the
 # dependency in minimal CI environments that do not provide it.
 try:

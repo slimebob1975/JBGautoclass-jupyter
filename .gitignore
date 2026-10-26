@@ -27,3 +27,6 @@ src/output/logs/
 tests/fixtures/*.sav
 # Local documentation privacy blocklist; may contain private identifiers and must never be committed.
 .jbg_doc_privacy_blocklist
+
+# Local registered CSV artifacts and installation identity (private, non-versioned)
+output/csv_artifacts/

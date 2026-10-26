@@ -1,3 +1,50 @@
+## Revision 194b — saved CSV identity reuse
+
+- Preserve the original CSV basename and existing artifact identity when loading a registered dataset.
+- Register dataset does not create duplicate artifacts for an already loaded saved CSV. New uploads clear the saved identity.
+- Keep project scope checks and CSV execution restrictions unchanged.
+
+## Revision 194a — scoped saved CSV erasure
+
+- Added an explicit confirmation control for deleting registered CSV datasets and related display metadata in the local file backend.
+- Refuse deletion when a dataset has attached run results. No SQL execution changes.
+
+## Revision 194 — CSV run artifact publication boundary
+
+- Add a non-executing, SQL-independent publication path for per-run manifest and optional numeric aggregate metrics in the scoped file repository.
+- Validate the persisted dataset reference and run scope before publication; keep row data, column names and paths out of manifests.
+- CSV ML execution, user authentication, model persistence, predictions and GUI activation remain future work.
+
+## Revision 193 — CSV catalog display labels and run planning
+
+- Registered CSV datasets optionally receive a bounded filename-and-UTC-time manifest. Saved CSV shows the basename and upload time rather than requiring memorization of an opaque ID; IDs remain selection values. Legacy registrations retain an ID fallback.
+- Add a source-specific, non-executing CSV run context contract. No SQL changes, authentication, CSV ML execution, or exposure of server paths.
+
+## Revision 192 — scoped retrieval of registered CSV datasets
+
+- Add a project-scoped, SQL-independent catalog and bounded restore of persisted CSV datasets by opaque artifact ID.
+- Add GUI actions to refresh and load saved datasets without browser re-upload, requiring an explicit Validate CSV and New model selection before editing roles. CSV execution remains disabled.
+- Keep storage paths and raw values out of catalog/status messages; the local project identity is not authorization for web access.
+- Add synthetic regression tests for catalog persistence, scope isolation and no-overwrite behavior.
+
+## Revision 191 — data source and run history layout
+
+- Remove the redundant source selector label while keeping SQL Server and CSV choices.
+- Display Run history & regression immediately after Dataset columns and remove the retired regression-suite button from that panel. Repeat Last remains available.
+- Leave regression-suite implementation and SQL/CSV execution behavior unchanged; no dataset-specific details added.
+
+## Revision 190 — explicit local CSV dataset registration
+
+- Add a Register dataset action after CSV validation and explicit column-role selection. Store validated bytes in the persistent local scoped artifact repository and report an opaque dataset ID only.
+- Persist an opaque local installation identity and derive stable project storage scopes without writing project names. This is NOT user authentication, web access or ML execution.
+- Add synthetic regression tests for scope stability, persistence across repository reopening and GUI callback separation.
+
+## Revision 189 — persistent CSV dataset registration (not yet GUI-executable)
+
+- Add an opt-in SQL-independent operation to validate CSV column roles and register original bytes in the scoped immutable artifact repository, returning opaque dataset and artifact IDs.
+- Reject invalid roles and oversized input before publication. Authentication, GUI binding, ML execution, and run result export remain future work.
+- Add generic synthetic regression tests.
+
 - Revision 188f: Gate CSV Dataset columns behind explicit New model selection after CSV validation. Preserve SQL model options on source switches and avoid SQL model observers.
 - Revision 188e: Reset selected model when switching between SQL Server and CSV views; suppress model-selection observers during reset.
 

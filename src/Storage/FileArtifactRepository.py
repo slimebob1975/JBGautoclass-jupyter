@@ -141,6 +141,21 @@ class FileArtifactRepository:
         fd = os.open(blob, flags)
         return os.fdopen(fd, "rb")
 
+    def delete_artifact(self, scope: StorageScope, artifact_id: str) -> None:
+        """Erase one scoped artifact; unpublish metadata before deleting bytes.
+
+        Caller must authorize destructive operations. This method does not
+        authenticate the caller and must not be exposed directly over HTTP.
+        """
+        self.get_reference(scope, artifact_id)
+        directory = self._scope_dir(scope)
+        blob, meta = self._paths(directory, artifact_id)
+        if blob.is_symlink() or meta.is_symlink():
+            raise ValueError("Unsafe artifact path")
+        meta.unlink()  # Readers can no longer discover the artifact.
+        blob.unlink(missing_ok=True)
+        self._sync_dir(directory)
+
     def list_artifacts(self, scope: StorageScope, *, run_id: str | None = None) -> tuple[ArtifactReference, ...]:
         directory = self._scope_dir(scope)
         if run_id is not None:

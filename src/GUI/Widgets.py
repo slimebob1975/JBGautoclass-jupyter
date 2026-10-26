@@ -2962,6 +2962,8 @@ class Widgets:
         ready = (getattr(self, "_csv_roles_loaded_188", False)
                  and self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION)
         self._csv_set_role_editability(ready)
+        if hasattr(self, "_csv_source_panel"):
+            self._csv_source_panel.register_button.disabled = not ready
         self.id_column_diagnostic.value = (
             "CSV columns are ready for inspection. Execution remains disabled."
             if ready else "Select New model to configure CSV Dataset columns. CSV execution is disabled."
@@ -2973,6 +2975,8 @@ class Widgets:
     def _csv_source_selected(self, choice):
         """Switch role choices without leaking CSV columns into SQL state."""
         self._reset_model_on_source_change()
+        if hasattr(self, "_csv_source_panel"):
+            self._csv_source_panel.register_button.disabled = True
         if choice == "csv":
             self._sql_model_options_188f = tuple(self.models_dropdown.options)
             self._sql_model_disabled_188f = self.models_dropdown.disabled
@@ -2983,6 +2987,7 @@ class Widgets:
             self._sql_role_disabled_188d = {name: getattr(self, name).disabled for name in self._SOURCE_ROLE_FIELDS}
             self._csv_roles_loaded_188 = False
             self._csv_schema_188 = None
+            self._csv_registered_dataset_190 = None
             self._restore_source_roles({name: ((), () if name in ("data_columns", "text_columns") else None)
                                         for name in self._SOURCE_ROLE_FIELDS})
             self._csv_set_role_editability(False)
@@ -3021,6 +3026,8 @@ class Widgets:
             "data_columns": (features, selected_features),
             "text_columns": (selected_features, selected_text),
         })
+        if hasattr(self, "_csv_source_panel"):
+            self._csv_source_panel.register_button.disabled = False
         self.update_ready()
 
     def _csv_validated_columns(self, panel):
@@ -3050,6 +3057,129 @@ class Widgets:
         self.models_dropdown.disabled = False
         self._csv_model_selected()
 
+    def _csv_file_changed(self):
+        """New uploads invalidate previous CSV roles and registration state."""
+        self._csv_roles_loaded_188 = False
+        self._csv_schema_188 = None
+        self._csv_registered_dataset_190 = None
+        self._csv_source_panel.loaded_saved_artifact_id = None
+        self._csv_set_role_editability(False)
+        self._csv_source_panel.register_button.disabled = True
+        self.models_dropdown.disabled = True
+
+    def _csv_register_dataset(self, _button=None):
+        """Explicit local-only persistence of selected CSV; never starts SQL/ML."""
+        panel = self._csv_source_panel
+        panel.register_button.disabled = True
+        panel.status.value = "Dataset registration failed. Verify CSV roles and local storage."
+        if not self._csv_view_active() or not getattr(self, "_csv_roles_loaded_188", False):
+            return False
+        if self.models_dropdown.value != Config.DEFAULT_TRAIN_OPTION:
+            return False
+        # A restored dataset is already registered. Reuse its identity rather
+        # than publishing duplicate content or a misleading new catalog label.
+        loaded_id = getattr(panel, "loaded_saved_artifact_id", None)
+        if loaded_id:
+            try:
+                repository, scope = self._csv_catalog_storage()
+                ref = repository.get_reference(scope, loaded_id)
+                from Storage.ArtifactContract import ArtifactKind
+                if ref.kind != ArtifactKind.DATASET or ref.content_type != "text/csv" or not ref.dataset_id:
+                    raise ValueError("Invalid saved dataset")
+            except (OSError, ValueError, TypeError):
+                panel.status.value = "Saved CSV is no longer available. Refresh saved datasets."
+                return False
+            panel.status.value = "CSV dataset already registered (dataset ID: " + ref.dataset_id + "). No duplicate created."
+            panel.register_button.disabled = False
+            return True
+        try:
+            from pathlib import Path
+            from Storage.CSVDatasetRegistration import register_csv_dataset
+            from Storage.FileArtifactRepository import FileArtifactRepository
+            from Storage.LocalCSVScope import local_csv_scope
+            root = Path.cwd() / "output" / "csv_artifacts"
+            scope = local_csv_scope(root, self.project.value)
+            repository = FileArtifactRepository(root / "objects")
+            result = register_csv_dataset(
+                repository, scope, panel.path.value,
+                id_column=self.id_column.value, class_column=self.class_column.value,
+                feature_columns=tuple(self.data_columns.value),
+                delimiter=panel.delimiter.value, encoding=panel.encoding.value,
+                original_name=panel.selected_file.value)
+        except (OSError, ValueError, TypeError):
+            panel.register_button.disabled = False
+            return False
+        self._csv_registered_dataset_190 = result
+        panel.status.value = "CSV dataset registered for this local project (dataset ID: " + result.dataset_id + ")."
+        return True
+
+    def _csv_catalog_storage(self):
+        from pathlib import Path
+        from Storage.FileArtifactRepository import FileArtifactRepository
+        from Storage.LocalCSVScope import local_csv_scope
+        root = Path.cwd() / "output" / "csv_artifacts"
+        return FileArtifactRepository(root / "objects"), local_csv_scope(root, self.project.value)
+
+    def _csv_refresh_saved(self, _button=None):
+        """List only registered CSV artifacts within this local project scope."""
+        panel = self._csv_source_panel
+        panel.load_saved_button.disabled = True
+        panel.saved_datasets.options = (("No saved datasets", ""),)
+        try:
+            from Storage.CSVDatasetCatalog import list_csv_dataset_labels
+            repository, scope = self._csv_catalog_storage()
+            entries = list_csv_dataset_labels(repository, scope)
+            panel.saved_datasets.options = (("Select saved CSV", ""),) + entries
+            panel.status.value = f"Found {len(entries)} registered CSV datasets for this local project."
+        except (OSError, ValueError, TypeError):
+            panel.status.value = "Unable to list saved CSV datasets."
+
+    def _csv_erase_saved(self, _button=None):
+        """Two-click confirmation for deleting only the selected scoped CSV."""
+        panel = self._csv_source_panel
+        artifact_id = panel.saved_datasets.value
+        if not artifact_id or not self._csv_view_active():
+            return False
+        if panel._erase_confirmation != artifact_id:
+            panel._erase_confirmation = artifact_id
+            panel.erase_saved_button.description = "Confirm erase"
+            panel.status.value = "Click Confirm erase to permanently delete the selected saved dataset."
+            return False
+        panel._erase_confirmation = ""
+        panel.erase_saved_button.description = "Erase saved"
+        try:
+            from Storage.CSVDatasetCatalog import erase_csv_dataset
+            repository, scope = self._csv_catalog_storage()
+            erase_csv_dataset(repository, scope, artifact_id)
+        except (OSError, ValueError, TypeError):
+            panel.status.value = "Unable to erase dataset; it may be used by a saved run."
+            return False
+        self._csv_refresh_saved()
+        panel.status.value = "Saved CSV dataset erased."
+        return True
+
+    def _csv_load_saved(self, _button=None):
+        """Load an authorized artifact to preview staging, not the ML pipeline."""
+        panel = self._csv_source_panel
+        artifact_id = panel.saved_datasets.value
+        if not artifact_id or not self._csv_view_active():
+            return False
+        try:
+            from pathlib import Path
+            from Storage.CSVDatasetCatalog import restore_csv_dataset, csv_dataset_display_name
+            repository, scope = self._csv_catalog_storage()
+            target = Path(panel._upload_directory.name) / "restored.csv"
+            target.unlink(missing_ok=True)
+            ref = restore_csv_dataset(repository, scope, artifact_id, target)
+            content = target.read_bytes()
+            target.unlink(missing_ok=True)
+            panel.stage_saved_csv(content, csv_dataset_display_name(repository, scope, ref.dataset_id),
+                                  artifact_id=ref.artifact_id)
+        except (OSError, ValueError, TypeError):
+            panel.status.value = "Unable to load selected CSV dataset."
+            return False
+        return True
+
     def connection_form(self) -> widgets.Box:
         # Presentation-only source choice. The classifier remains SQL-backed
         # until CSV role binding and execution are implemented explicitly.
@@ -3060,7 +3190,12 @@ class Widgets:
             csv_form = self.create_section_form("CSV file", [self._csv_source_panel.widget], widgets.Box)
             self._data_source_selector = DataSourceSelector(sql_form, csv_form)
             self._data_source_selector.on_source_change = self._csv_source_selected
+            self._csv_source_panel.on_file_changed = self._csv_file_changed
             self._csv_source_panel.on_validated = self._csv_validated_columns
+            self._csv_source_panel.register_button.on_click(self._csv_register_dataset)
+            self._csv_source_panel.refresh_saved_button.on_click(self._csv_refresh_saved)
+            self._csv_source_panel.load_saved_button.on_click(self._csv_load_saved)
+            self._csv_source_panel.erase_saved_button.on_click(self._csv_erase_saved)
         return self.create_section_form("Data source", [self._data_source_selector.widget], widgets.Box)
 
     @property
@@ -3082,12 +3217,11 @@ class Widgets:
         )
 
     def regression_suite_form(self) -> widgets.Box:
-        """Keep Repeat Last left-aligned and the regression suite right-aligned."""
+        """Display run history without the retired regression-suite action."""
         return self.create_section_form(
             "Run history & regression",
-            [self.repeat_last_run_button, self.regression_suite_button],
+            [self.repeat_last_run_button],
             widgets.HBox,
-            justify_content="space-between",
         )
 
     def feature_selection_modelling_form(self) -> widgets.Box:

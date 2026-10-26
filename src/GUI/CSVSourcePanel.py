@@ -23,16 +23,54 @@ class CSVSourcePanel:
         self.quotechar = widgets.Text(value='"', description="Text qualifier:")
         self.encoding = widgets.Text(value="utf-8-sig", description="Encoding:")
         self.validate_button = widgets.Button(description="Validate CSV", button_style="")
+        self.register_button = widgets.Button(description="Register dataset", disabled=True)
+        self.saved_datasets = widgets.Dropdown(description="Saved CSV:", options=(("No saved datasets", ""),), value="")
+        self.refresh_saved_button = widgets.Button(description="Refresh saved")
+        self.load_saved_button = widgets.Button(description="Load saved", disabled=True)
+        self.erase_saved_button = widgets.Button(description="Erase saved", disabled=True, button_style="danger")
+        self._erase_confirmation = ""
+        self.loaded_saved_artifact_id = None
+        self.saved_datasets.observe(self._saved_selection_changed, names="value")
         self.status = widgets.HTML(value="CSV inspection only. SQL Server remains the active execution source.")
         self.validate_button.on_click(self.validate)
         self.widget = widgets.VBox([
             widgets.HBox([self.file_picker, self.selected_file]), widgets.HBox([self.delimiter, self.quotechar, self.encoding]),
-            self.validate_button, self.status,
+            widgets.HBox([self.validate_button, self.register_button]),
+            widgets.HBox([self.saved_datasets, self.refresh_saved_button, self.load_saved_button, self.erase_saved_button]), self.status,
         ])
+
+    def _saved_selection_changed(self, change):
+        self.load_saved_button.disabled = not bool(change.get("new"))
+        self.erase_saved_button.disabled = not bool(change.get("new"))
+        self._erase_confirmation = ""
+        self.erase_saved_button.description = "Erase saved"
+
+    def stage_saved_csv(self, content: bytes, display_name="Registered CSV", artifact_id=None):
+        """Stage already-authorized data without exposing its server path."""
+        callback = getattr(self, "on_file_changed", None)
+        if callback is not None:
+            callback()
+        self.path.value = ""
+        self.selected_file.value = ""
+        self.register_button.disabled = True
+        target = Path(self._upload_directory.name) / "saved_dataset.csv"
+        target.write_bytes(content)
+        self.path.value = str(target)
+        self.selected_file.value = display_name
+        self.loaded_saved_artifact_id = artifact_id
+        detected = self._detect_dialect(target)
+        if detected:
+            self.delimiter.value, self.quotechar.value = detected
+        self.status.value = "Saved CSV loaded. Click Validate CSV before selecting model and column roles."
 
     def _file_selected(self, change):
         """Stage a browser-selected CSV; never trust its client-side filename as a path."""
+        callback = getattr(self, "on_file_changed", None)
+        if callback is not None:
+            callback()
         self.path.value = ""
+        self.loaded_saved_artifact_id = None
+        self.register_button.disabled = True
         self.selected_file.value = ""
         self.status.value = "CSV selection failed. Choose a .csv file."
         try:
@@ -96,6 +134,7 @@ class CSVSourcePanel:
 
     def validate(self, _button=None):
         """Validate row shape without assigning dataset column roles or leaking data."""
+        self.register_button.disabled = True
         self.status.value = "CSV validation failed. Check file and format settings."
         try:
             path = Path(self.path.value)
@@ -142,7 +181,7 @@ class DataSourceSelector:
     def __init__(self, sql_widget, csv_widget):
         self.choice = widgets.ToggleButtons(
             options=[("SQL Server", "sql"), ("CSV", "csv")],
-            value="sql", description="Source:",
+            value="sql",
             style={"description_width": "initial"},
         )
         self.sql_widget = sql_widget

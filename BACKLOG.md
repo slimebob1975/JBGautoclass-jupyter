@@ -1,3 +1,16 @@
+- [x] **Revision 194b:** Preserve the saved dataset identity and filename on reload; avoid accidental duplicate registration. Explicit dataset version creation remains future work.
+## Revision 194a — erase saved CSV
+
+- [x] Explicit two-click deletion of a scoped registered CSV and its display metadata; unrelated datasets preserved.
+- [ ] Web authorization, retention and concurrent multi-user deletion policies remain prerequisites for HTTP exposure.
+
+- [x] **Revision 194:** Prepare SQL-independent CSV run artifact publication using opaque run IDs, scoped immutable manifest and optional aggregate metrics; no ML execution or GUI activation.
+
+- [x] **Revision 193:** Human-readable scoped saved-CSV labels (uploaded filename + UTC registration time) and SQL-independent CSV run context; CSV ML execution remains disabled. Older entries retain opaque-ID fallback.
+- [x] **Revision 192:** List and stage previously registered CSV datasets in the local project without re-upload; require explicit revalidation. No web authentication or CSV execution.
+- [x] Revision 190: Explicit local CSV registration from the GUI after selecting model and roles; stable local project scope, no SQL/ML activation. Web authorization and retrieval remain open.
+- [x] **Revision 189:** Opt-in validated CSV dataset registration into scoped file artifacts; no GUI or training activation. Windows tests pending.
+- [ ] Bind a trusted scope and persisted CSV dataset references to the GUI; implement source-aware training and file-based run result publication before enabling CSV execution.
 - Revision 188f: CSV now follows Data source -> Models (New model) -> Dataset columns; SQL model choices are restored separately, CSV execution remains disabled.
 - Revision 188e: Clear Models selection when switching data sources; SQL/CSV execution separation remains in place.
 # JBG AutoClassification — Active BACKLOG (Revision 188c)
@@ -9,6 +22,8 @@ This file contains only currently relevant product work plus concise completion 
 revisions. Historical/superseded backlog material belongs in the archive/CHANGELOG rather than in the
 active priority queue. A checked box indicates implemented work; live verification is stated explicitly
 where it matters.
+
+- [x] **Revision 191:** Remove redundant Source label, position run history after Dataset columns, and retire Regr. Suite from visible actions; regression internals remain unchanged.
 
 ## Decisions and scope
 
