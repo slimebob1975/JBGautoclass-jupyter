@@ -2317,14 +2317,17 @@ class Widgets:
                 self.feature_search_status.value = "Ready for an exploratory training-only investigation. The JBG holdout remains reserved."
         self.update_feature_search_fit_budget()
 
-    def _feature_search_lifecycle_log(self, event, completed_candidates=0, attempted_fits=0):
+    def _feature_search_lifecycle_log(self, event, completed_candidates=None, attempted_fits=None):
         """Write privacy-minimal transitions to the application log, not stdlib logging."""
         def count(value):
             return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
-        message = (f"Feature search lifecycle: event={event} "
-                   f"completed_candidates={count(completed_candidates)} "
-                   f"attempted_fits={count(attempted_fits)}")
+        # GUI-only transitions have no counters; never misreport them as zero.
+        message = f"Feature search lifecycle: event={event}"
+        if completed_candidates is not None:
+            message += f" completed_candidates={count(completed_candidates)}"
+        if attempted_fits is not None:
+            message += f" attempted_fits={count(attempted_fits)}"
         try:
             self.guihandler.logger.log_file.write_message(message)
         except Exception:
@@ -2338,7 +2341,7 @@ class Widgets:
         if lifecycle in ("study_started", "study_resumed", "study_paused",
                          "study_interrupted", "study_failed", "study_completed"):
             self._feature_search_lifecycle_log(
-                lifecycle, event.get("completed_candidates", 0), event.get("attempted_fits", 0)
+                lifecycle, event.get("completed_candidates"), event.get("attempted_fits")
             )
         if event.get("event") == "fit_started":
             self.feature_search_status.value = (

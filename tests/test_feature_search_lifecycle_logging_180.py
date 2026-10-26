@@ -50,3 +50,16 @@ def test_pause_request_log_and_event_are_idempotent(caplog):
     event.set.assert_called_once_with()
     assert fake.feature_search_pause_button.disabled
     assert 'event=pause_requested' in messages[0]
+
+
+def test_gui_only_lifecycle_event_does_not_invent_zero_counters():
+    handler = _method('_feature_search_lifecycle_log')
+    messages = []
+    fake = SimpleNamespace(guihandler=SimpleNamespace(logger=SimpleNamespace(
+        log_file=SimpleNamespace(write_message=messages.append))))
+    handler(fake, 'gui_result_received')
+    handler(fake, 'study_completed', 40, 132)
+    assert messages == [
+        'Feature search lifecycle: event=gui_result_received',
+        'Feature search lifecycle: event=study_completed completed_candidates=40 attempted_fits=132',
+    ]

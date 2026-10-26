@@ -1,4 +1,4 @@
-# JBG AutoClassification — Active BACKLOG (Revision 180a)
+# JBG AutoClassification — Active BACKLOG (Revision 181)
 
 This is the **active**, prioritized maintenance roadmap for the general-purpose JBG ML framework.
 The complete historical backlog (including completed revisions and research experiments)
@@ -73,6 +73,7 @@ where it matters.
   CSRF protections, avoid further Voilà-specific architecture investment, and keep the separate launcher/server
   log treated as sensitive local diagnostics until cleanup no longer depends on path evidence.
 - [x] **Revision 179 worker-failure regression:** test that a failed parallel candidate future reports failure and does not commit the failed candidate. This is a deterministic unit test, not a Windows process-crash simulation.
+- [x] **Lifecycle-counter accuracy (revision 181):** GUI-only transitions omit unavailable candidate/fit counts instead of displaying misleading zeros; backend-provided counters remain unchanged. Windows/Voilà verification pending.
 - [ ] **Pause/Resume concurrency:** Revisions 180/180a add privacy-minimal GUI lifecycle logging to the actual JBG application log (pause request, checkpoint pause, resume, completion/failure); the operator manually confirmed a pause/refresh/resume-to-result flow, but the specific two-worker Windows process lifecycle and forced-crash recovery remain unverified.
    verify the revision-140 candidate-level checkpoint/resume flow
   with automatic parallelism on Windows (set the shared global cap to two workers for a reproducible test),

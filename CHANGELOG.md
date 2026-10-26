@@ -1,3 +1,8 @@
+## Revision 181 — truthful lifecycle counters for GUI-only events
+
+- Omit candidate/fit counters for GUI-only lifecycle transitions when no counts were supplied; preserve explicit numeric counters from backend study events. Previously the GUI result receipt misleadingly reported zero candidates after a completed search.
+- Change only diagnostic formatting and add a dependency-light regression test. No changes to modelling, checkpoints or worker scheduling.
+
 ## Revision 180a — route Feature modelling lifecycle events to JBG application log
 
 - Route only event names and nonnegative numeric counters to `guihandler.logger.log_file`, since ordinary Python `logging.INFO` from Voilà GUI callbacks was missing from the application logs.
