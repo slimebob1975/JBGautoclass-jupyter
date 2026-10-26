@@ -1,3 +1,27 @@
+## Revision 207 – scoped CSV prediction result sink
+
+- [x] Implement SQL-independent CSV prediction persistence matching the existing data-layer save method; use private scoped row artifacts and a manifest published last.
+- [ ] Connect CSV runtime and results sink to task runner only after removing remaining SQL assumptions and adapting prediction ID coercion.
+- [ ] Review safe output logging: avoid row contents, base64 download links and SQL-identifying fields in shared logs.
+- [ ] Add run history/retrieval contract and authentication before multi-user deployment.
+
+## Revision 205a
+
+- Fixed the welcome logger handling of the internal data-source identity. Continue validating the complete SQL training/reload workflow in the Windows environment.
+
+## Revision 199 – shared JSON configuration (migration phase 1)
+- [x] Add optional backend identity to the established JBG JSON configuration; legacy SQL JSON files remain valid.
+- [x] Keep dataset identity separate from model column roles; retain source identity when making model-safe configurations.
+- [ ] Integrate shared JBG JSON into CSV model save/load; retain historical CSV configuration artifacts and a legacy reader until safely migrated.
+- [x] Remove duplicate CSV GUI configuration controls (201), retaining historic configuration artifacts and readers.
+- [ ] Retire the CSV-only serializer only after safe migration, model-artifact integration and equivalence tests.
+- [ ] Preserve SQL training and existing saved-model compatibility; CSV training remains gated.
+
+- [x] **Revision 198:** GUI save/list/load for scoped CSV model role and dialect configurations; execution remains disabled. Training and preprocessing settings remain a future requirement.
+- [x] **Revision 197:** Persist a validated CSV delimiter, quote character and encoding per private model configuration, and use them when preparing a run. Older configurations remain supported. Preprocessing/training options and GUI wiring remain open.
+- [x] **Revision 196:** Validate stored CSV bytes against private model roles and link configuration ID to prepared run manifest; CSV ML execution remains disabled.
+- [x] **Revision 195:** Scoped immutable CSV model-role configuration artifacts with independent configuration IDs; reuse one registered dataset across different column-role assignments. This is planning-only: validate column existence/preprocessing and attach configuration to run manifests before enabling CSV training.
+- [ ] Connect configuration identity to run publication and enforce actual CSV schema checks, model compatibility, and secure file result persistence before CSV ML activation.
 - [x] **Revision 194b:** Preserve the saved dataset identity and filename on reload; avoid accidental duplicate registration. Explicit dataset version creation remains future work.
 ## Revision 194a — erase saved CSV
 
@@ -306,3 +330,31 @@ database access for every workflow rather than replacing SQL Server.
 - [x] Reclassification rendering is live-verified through revisions 174a/174b: static decorations no longer create
   unnecessary comm models, `model not found` did not recur, and the wider bounded preview budget is useful.
 - [x] Revision 175 application/build identity is live-verified in the GUI.
+
+### Follow-up after revision 200
+- Restore all training and preprocessing options in the CSV GUI using source-safe widget updates.
+- Migrate old role-only artifacts and remove redundant fields/adapters only after verified migration.
+- Verify CSV ML execution and separate result persistence end to end.
+
+- After 202: Route CSV run execution through the shared ML pipeline only after model persistence and file-backed result output are ready.
+
+- [x] **203:** Opt-in shared DataFrame conversion for SQL/CSV row providers, no changes to training or SQL query behavior.
+- [ ] **204:** Compare SQL/CSV type/null semantics and benchmark memory before any coercion or chunking.
+
+- [x] **204:** Added opt-in aggregate SQL/CSV DataFrame diagnostics for null versus empty-string counts, dtype distributions and pandas deep memory estimates; no type coercion, ML, SQL or CSV retrieval changes.
+- [ ] **205+:** Compare representative SQL/CSV source samples under the same roles and row-selection conditions before defining any explicit type/null normalization. Benchmark peak RSS and throughput in a controlled environment if performance work is justified; pandas `memory_usage(deep=True)` does not measure process peak memory.
+
+- [x] **205:** Verify existing file-based model persistence and protect CSV model reloading using dataset/artifact identity, without changing legacy SQL loading.
+- [ ] **206+:** Integrate source-aware model selection into CSV GUI and shared training pipeline; preserve scoped authorization and verify sidecar handling and output persistence.
+
+## Revision 208 - prediction identifiers
+
+- [x] Preserve CSV string IDs (including leading zeros) in shared result construction; keep legacy SQL integer keys.
+- [ ] Before enabling CSV execution, integration-test prediction payloads, class label serialization and SQL result-table compatibility.
+- [ ] Review SQL result-table key types separately with backwards compatibility.
+
+## Revision 209 - CSV prediction payload preflight
+
+- [x] Validate model label membership, unique class labels and optional probability-vector length/range before publishing CSV prediction artifacts.
+- [ ] Wire shared classifier and CSV sink only after run lifecycle and result retrieval have been integrated and tested end to end.
+- [ ] Verify real estimator probability serialization and class order during first gated CSV training/prediction smoke tests.

@@ -162,6 +162,9 @@ class JBGLogger(terminal.Logger):
 
         h2 = partial(html_wrapper, "h2")
         config_title = config_dict.pop("title")
+        # The source identity is metadata, not a user-facing settings section.
+        # It has no "title" key and may contain private dataset identifiers.
+        config_dict.pop("data_source", None)
         self.print_unformatted(config_title, html_function=h2)
         self.print_unformatted("Headers marked with (*) are optional in the config")
 

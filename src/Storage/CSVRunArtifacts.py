@@ -22,7 +22,7 @@ class PublishedCSVRun:
 
 
 def publish_csv_run(repository, scope: StorageScope, context: CSVRunContext, *,
-                    metrics: dict | None = None) -> PublishedCSVRun:
+                    metrics: dict | None = None, configuration_id: str | None = None) -> PublishedCSVRun:
     """Publish a new run manifest and optional numeric metrics, never raw data.
 
     The final manifest is written last; it is the discovery marker. A failed
@@ -36,6 +36,16 @@ def publish_csv_run(repository, scope: StorageScope, context: CSVRunContext, *,
     if (dataset.kind != ArtifactKind.DATASET or dataset.content_type != "text/csv"
             or dataset.dataset_id != context.dataset_id):
         raise ValueError("Invalid CSV run dataset")
+    if configuration_id is not None:
+        # Resolve and verify the private configuration against the prepared run.
+        from Storage.CSVModelConfiguration import load_csv_model_configuration
+        config = load_csv_model_configuration(repository, scope, configuration_id)
+        if (config.dataset_id != context.dataset_id or
+                config.artifact_id != context.artifact_id or
+                config.id_column != context.id_column or
+                config.class_column != context.class_column or
+                config.data_columns + config.text_columns != context.feature_columns):
+            raise ValueError("CSV run configuration mismatch")
     # Store only non-sensitive finite numeric aggregate metrics. Never serialize
     # feature names, row IDs, local paths, arbitrary objects or free-form strings.
     if metrics is not None:
@@ -63,6 +73,7 @@ def publish_csv_run(repository, scope: StorageScope, context: CSVRunContext, *,
         "run_id": run_id,
         "dataset_id": context.dataset_id,
         "dataset_artifact_id": context.artifact_id,
+        "configuration_id": configuration_id,
         "storage_kind": StorageKind.FILES.value,
         "status": "prepared",
         "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

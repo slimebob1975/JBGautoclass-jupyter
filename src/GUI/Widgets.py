@@ -3110,8 +3110,19 @@ class Widgets:
             panel.register_button.disabled = False
             return False
         self._csv_registered_dataset_190 = result
+        panel.loaded_saved_artifact_id = result.reference.artifact_id
         panel.status.value = "CSV dataset registered for this local project (dataset ID: " + result.dataset_id + ")."
         return True
+
+    def _csv_current_dataset_artifact(self):
+        panel = getattr(self, "_csv_source_panel", None)
+        if panel is None:
+            return None
+        loaded = getattr(panel, "loaded_saved_artifact_id", None)
+        if loaded:
+            return loaded
+        registered = getattr(self, "_csv_registered_dataset_190", None)
+        return registered.reference.artifact_id if registered is not None else None
 
     def _csv_catalog_storage(self):
         from pathlib import Path

@@ -1,3 +1,48 @@
+## Revision 209 - CSV prediction payload validation (inactive)
+
+- Validate optional CSV probability vectors against the saved model's ordered class labels before artifact publication; reject unknown class values, duplicate model labels, non-finite or out-of-range probabilities and mismatched vector length.
+- Preserve the existing SQL prediction writer and shared ML handler without enabling CSV execution. No data-specific identifiers or raw rows added to documentation.
+
+## Revision 208 – shared prediction ID conversion
+
+- Preserve opaque string identifiers for CSV predictions while retaining historical integer conversion for SQL.
+- Keep the shared prediction handler and SQL result writer intact; CSV execution remains disabled.
+- Add focused regression tests without dataset-specific data or personal identifiers.
+
+## Revision 207 – scoped CSV prediction results (inactive adapter)
+
+- Added a file-backed prediction result sink with the existing data-layer `save_prediction_data` call signature. Private predictions and a public opaque manifest are separate artifacts.
+- SQL prediction persistence and ML task runner remain unchanged; CSV execution is still disabled.
+- No private column names, dataset-specific information or row contents added to committed documentation.
+
+## Revision 205a - welcome logger config display compatibility
+
+- Exclude internal `data_source` identity metadata from the human-readable configuration display. This section has no display title and may contain private identifiers.
+- Preserve the existing SQL configuration sections and model execution behavior.
+
+## Revision 199 – shared JBG JSON source identity (phase 1)
+The existing schema-v2 JSON configuration now carries an optional, validated data-source section. SQL remains the default when older JSON files omit the section. CSV can reference an opaque dataset/artifact identity with dialect metadata, without server paths. Clean model configurations retain that source identity. CSV-only configuration persistence is retained temporarily for backward compatibility until its GUI migration is tested. No ML execution or SQL query paths changed.
+
+## Revision 198 – CSV model configuration GUI
+
+Added scoped save, list and load controls for CSV model column roles and CSV dialect. Does not run training or change the SQL execution path.
+
+## Revision 197 — Persist CSV parsing format in model configurations
+
+- Optional private CSV dialect (`delimiter`, `quotechar`, `encoding`) is stored with a scoped model configuration and reused for SQL-independent run preparation.
+- Reject incompatible explicit overrides and unsupported format settings; legacy configurations without dialect remain loadable.
+- No change to SQL execution, GUI activation, training algorithms or result export.
+
+## Revision 196 — CSV configured run validation
+
+- Validate archived CSV data and selected roles before preparing a run. Optionally link a scoped configuration ID to the prepared run manifest, without revealing private column names or enabling training.
+
+## Revision 195 - CSV model configurations
+
+- Added isolated, SQL-free, scoped model-role configuration persistence. A single registered CSV dataset can be referenced by multiple configurations without re-registering bytes.
+- Role selections are held in private scoped manifest artifacts; public artifact references contain opaque identifiers only.
+- Training remains disabled; the next step must validate roles against actual CSV content and bind configuration IDs to execution/run records.
+
 ## Revision 194b — saved CSV identity reuse
 
 - Preserve the original CSV basename and existing artifact identity when loading a registered dataset.
@@ -1277,3 +1322,27 @@ rather than reconstructed from guesswork.
 - Annotate unexpected worker failures with scope, candidate columns, batch offset and worker count while preserving the original exception.
 - Cancel pending futures after an interrupted batch; never silently retry a potentially executed candidate.
 - Add targeted regression tests. Windows two-worker forced-interruption and joblib warning reproduction remain field verification tasks.
+
+### Revision 200 – shared JSON-v2 CSV configurations
+- CSV GUI saves complete shared JSON-v2 settings with scoped CSV source identity, without SQL credentials or email identity.
+- Legacy role-only CSV manifests remain readable; saved full settings retained but source-safe GUI restoration deferred.
+- Configuration identity and column roles checked against the dataset on save/load.
+
+### Revision 201 – unify configuration lifecycle
+- Remove the redundant CSV GUI controls for independently saving/listing/loading model configurations. CSV dataset registration and saved-dataset handling remain available.
+- Reuse the existing JBG model artifact configuration lifecycle in the future CSV execution adapter; CSV training remains disabled.
+- Leave historical private CSV configuration artifacts and compatibility readers intact; no migration or deletion of user data.
+
+- Revision 202: Opt-in SQL-free CSV row adapter for the existing dataset-loading interface; no GUI training activation.
+
+## Revision 203 — opt-in shared DataFrame contract
+
+Added a common conversion boundary on top of existing row providers. Both SQL and CSV can opt into `load_dataframe()`; current training still uses `get_dataset()`. No type inference policy or result storage changes.
+
+## Revision 204 — observational DataFrame parity diagnostics
+
+Introduced opt-in, aggregate-only profiling of DataFrame shape, missing-value counts, empty-string counts, dtype distributions and pandas deep memory estimates. A source-neutral comparison reports differences without exposing column names, identifiers or cell values. No SQL query changes, CSV parsing changes, automatic type conversion or ML behavior changes. This does not prove cross-source equivalence; SQL may represent NULL as None and typed numerics while CSV retains empty strings and text numerics.
+
+## Revision 205 — shared model source identity guard
+
+Reused existing file-based model artifact and embedded JBG Config. Model reload now rejects mismatched CSV dataset references or cross-source reuse when a runtime config is supplied. Historical SQL model reload stays unchanged. No new model store, CSV training activation, or artifact migration.

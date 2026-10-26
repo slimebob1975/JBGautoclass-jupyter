@@ -14,6 +14,7 @@ from typing import Callable, Type, TypeVar, Union
 import Helpers
 from JBGSampling import sampling_names
 from JBGModelPersistence import load_model_config
+from JBGModelSourceIdentity import check_model_source_identity
 from JBGPaths import relocate_saved_config_paths
 from JBGExceptions import ConfigException, ODBCDriverException
 from JBGMeta import (Algorithm, AlgorithmTuple, Preprocess, PreprocessTuple,
@@ -698,7 +699,46 @@ class Config:
         smtp_server: str = "localhost"
         notification_email: str = ""
     
+    @dataclass
+    class DataSource:
+        """Backend identity shared by SQL and CSV in the existing JSON config.
+
+        A CSV file name is display metadata, never a storage locator. Dataset
+        and artifact IDs resolve through the scoped artifact repository.
+        """
+        kind: str = "sql"
+        dataset_id: str = ""
+        artifact_id: str = ""
+        display_name: str = ""
+        delimiter: str = ","
+        quotechar: str = '"'
+        encoding: str = "utf-8-sig"
+
+        def validate(self) -> None:
+            from uuid import UUID
+            if self.kind not in ("sql", "csv"):
+                raise ConfigException("Invalid data source type")
+            if self.kind == "sql":
+                if self.dataset_id or self.artifact_id:
+                    raise ConfigException("SQL data source cannot reference CSV artifacts")
+                return
+            try:
+                if (str(UUID(self.dataset_id)) != self.dataset_id
+                        or str(UUID(self.artifact_id)) != self.artifact_id):
+                    raise ValueError
+            except (ValueError, TypeError, AttributeError):
+                raise ConfigException("Invalid CSV dataset reference") from None
+            if (not isinstance(self.display_name, str)
+                    or '/' in self.display_name or "\\" in self.display_name
+                    or not isinstance(self.delimiter, str) or len(self.delimiter) != 1
+                    or self.delimiter in "\r\n\x00"
+                    or not isinstance(self.quotechar, str) or len(self.quotechar) != 1
+                    or self.quotechar in "\r\n\x00" or self.quotechar == self.delimiter
+                    or self.encoding not in ("utf-8", "utf-8-sig", "latin-1", "cp1252")):
+                raise ConfigException("Invalid CSV format or display metadata")
+
     connection: Connection = field(default_factory=Connection)
+    data_source: DataSource = field(default_factory=DataSource)
     mode: Mode  = field(default_factory=Mode)
     io: IO = field(default_factory=IO)
     debug: Debug = field(default_factory=Debug)
@@ -798,6 +838,7 @@ class Config:
 
         # 2: Connection params
         self.connection.validate()
+        self.data_source.validate()
 
         # 3: Mode/training
         self.mode.validate()
@@ -827,6 +868,7 @@ class Config:
         str_dict = {
             "title": "Configuration settings",
             "connection": self.connection.to_dict(),
+            "data_source": self._json_section(self.data_source),
             "mode": self.mode.to_dict(),
             "io": self.io.to_dict(),
             "debug": self.debug.to_dict()
@@ -861,6 +903,7 @@ class Config:
         try:
             configuration = Config()
             configuration.connection = copy.deepcopy(self.connection)
+            configuration.data_source = copy.deepcopy(self.data_source)
             # Database passwords are runtime credentials and must never be embedded
             # in serialized model artifacts. Keep the username/connection metadata,
             # but require the password to be supplied again when the model is used.
@@ -946,6 +989,7 @@ class Config:
             "schema_version": self.JSON_CONFIG_SCHEMA_VERSION,
             "name": self.name,
             "connection": connection,
+            "data_source": self._json_section(self.data_source),
             "mode": self._json_section(self.mode),
             "io": self._json_section(self.io),
             "debug": self._json_section(self.debug),
@@ -972,8 +1016,9 @@ class Config:
             "mail": cls.Mail,
         }
         expected_top = {"schema_version", "name", *section_types}
+        optional_top = {"data_source"}
         missing_top = expected_top - set(payload)
-        unknown_top = set(payload) - expected_top
+        unknown_top = set(payload) - expected_top - optional_top
         if missing_top:
             raise ConfigException(
                 "JSON schema v2 configuration is missing top-level keys: "
@@ -984,6 +1029,16 @@ class Config:
                 "JSON schema v2 configuration has unknown top-level keys: "
                 + ", ".join(sorted(unknown_top))
             )
+
+        if "data_source" in payload:
+            section = payload["data_source"]
+            expected = {item.name for item in dataclass_fields(cls.DataSource)}
+            if not isinstance(section, dict) or set(section) != expected:
+                raise ConfigException("Invalid data source configuration section")
+            try:
+                cls.DataSource(**section).validate()
+            except (TypeError, ValueError) as exc:
+                raise ConfigException("Invalid data source configuration") from exc
 
         for section_name, section_type in section_types.items():
             section = payload[section_name]
@@ -1029,6 +1084,7 @@ class Config:
             io=payload["io"],
             debug=payload["debug"],
             mail=payload["mail"],
+            data_source=payload.get("data_source"),
         )
         try:
             return cls.load_config(module)
@@ -1105,6 +1161,13 @@ class Config:
         cls._validate_current_saved_config(saved_config)
 
         if config is not None:
+            # Same model artifact and embedded JSON config for both sources.
+            # SQL compatibility remains unchanged; CSV requires exact dataset
+            # identity to prevent accidental cross-upload model reuse.
+            try:
+                check_model_source_identity(saved_config, config)
+            except ValueError as exc:
+                raise ConfigException(str(exc)) from exc
             saved_config.mode.train = config.mode.train
             saved_config.mode.predict = config.mode.predict
             saved_config.mode.mispredicted = config.mode.mispredicted
@@ -1266,6 +1329,10 @@ class Config:
             name=module.name
         )
 
+        source = getattr(module, "data_source", None)
+        if source is not None:
+            config.data_source = cls.DataSource(**source)
+            config.data_source.validate()
         return config
         
     

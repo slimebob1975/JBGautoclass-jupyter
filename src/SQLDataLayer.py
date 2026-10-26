@@ -443,6 +443,11 @@ class DataLayer(DataLayerBase):
             return unknown_rows
         return total_rows
 
+    def load_dataframe(self, num_rows=None):
+        """Opt-in common DataFrame view; existing get_dataset remains canonical."""
+        from DataLayer.FrameContract import load_dataframe
+        return load_dataframe(self, self.config, num_rows)
+
     def get_dataset(self, num_rows: int = None) -> list:
         """ Gets the needed data from the database """
         

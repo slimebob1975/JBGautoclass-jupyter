@@ -54,6 +54,7 @@ from JBGDarkNumberCorrectionFactor import (
     estimate_perturbed_same_model_correction,
 )
 from JBGDarkNumberCorrectionRegressor import DarkNumberCorrectionFactorRegressor
+from JBGPredictionKeys import prediction_key
 from JBGModelPersistence import (
     attach_keras_model_to_pipeline,
     detach_keras_model_from_pipeline,
@@ -2772,11 +2773,12 @@ class PredictionsHandler:
             using a given key. It is used to simplify saving the data
         """
         return_list = []
-        
+        source_kind = getattr(getattr(self.handler.config, "data_source", None), "kind", "sql")
+
         try:
             for k,y,r,p in zip(keys.values, self.predictions, self.rates, self.probabilites):
                 item = {
-                    "key": int(k),
+                    "key": prediction_key(k, source_kind),
                     "prediction": y,
                     "rate": float(r),
                     "probabilities": self.get_probablities_as_string(p)
