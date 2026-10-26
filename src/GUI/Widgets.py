@@ -2317,7 +2317,29 @@ class Widgets:
                 self.feature_search_status.value = "Ready for an exploratory training-only investigation. The JBG holdout remains reserved."
         self.update_feature_search_fit_budget()
 
+    def _feature_search_lifecycle_log(self, event, completed_candidates=0, attempted_fits=0):
+        """Write privacy-minimal transitions to the application log, not stdlib logging."""
+        def count(value):
+            return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+        message = (f"Feature search lifecycle: event={event} "
+                   f"completed_candidates={count(completed_candidates)} "
+                   f"attempted_fits={count(attempted_fits)}")
+        try:
+            self.guihandler.logger.log_file.write_message(message)
+        except Exception:
+            # Logging is diagnostic and must not affect the investigation.
+            logging.getLogger(__name__).warning("Feature search lifecycle log unavailable")
+
     def _feature_search_event(self, event: dict) -> None:
+        # Revision 180a: use JBG's application log file. Python logging.INFO
+        # is not forwarded to that file in Voilà's GUI event context.
+        lifecycle = event.get("event")
+        if lifecycle in ("study_started", "study_resumed", "study_paused",
+                         "study_interrupted", "study_failed", "study_completed"):
+            self._feature_search_lifecycle_log(
+                lifecycle, event.get("completed_candidates", 0), event.get("attempted_fits", 0)
+            )
         if event.get("event") == "fit_started":
             self.feature_search_status.value = (
                 f"Investigating {html.escape(str(event.get('model_type', 'model')))}: attempted fits "
@@ -2349,6 +2371,7 @@ class Widgets:
     def pause_feature_selection_investigation(self):
         if getattr(self, '_feature_search_running', False) and hasattr(self, '_feature_search_pause_event'):
             self._feature_search_pause_event.set()
+            self._feature_search_lifecycle_log("pause_requested")
             self.feature_search_pause_button.disabled = True
             self.feature_search_status.value = 'Pause requested; finishing the current evaluation before checkpointing.'
 
@@ -2512,6 +2535,7 @@ class Widgets:
         investigation_mode = self.feature_search_investigation_mode.value if resume_directory is None else None
         subgroup_column = (self.feature_search_subgroup_column.value or None) if resume_directory is None else None
         self._feature_search_running = True
+        self._feature_search_lifecycle_log("resume_requested" if resume_directory is not None else "start_requested")
         self._feature_search_pause_event = threading.Event()
         self.feature_search_pause_button.disabled = False
         self.feature_search_resume_button.disabled = True
@@ -2540,6 +2564,9 @@ class Widgets:
                     investigation_mode=investigation_mode, subgroup_column=subgroup_column,
                 )
             self.feature_search_result = result
+            # Completion is also logged at the GUI boundary, including the
+            # diagnostics-only path that returns before backend study_completed.
+            self._feature_search_lifecycle_log("gui_result_received")
             self._display_feature_search_diagnostics(result)
             if result.get('investigation_mode') == 'diagnostics_only':
                 self.feature_search_preview.value = ('<b>Diagnostics only: no feature selection or '
@@ -2583,8 +2610,10 @@ class Widgets:
             if not isinstance(ex, InvestigationPaused):
                 logging.getLogger(__name__).exception("Feature-selection investigation failed")
             if isinstance(ex, InvestigationPaused):
+                self._feature_search_lifecycle_log("gui_paused")
                 self.feature_search_status.value = 'Investigation paused. Use Resume to continue.'
             else:
+                self._feature_search_lifecycle_log("gui_failed")
                 self.feature_search_status.value = f"Investigation failed: {html.escape(type(ex).__name__ + ': ' + str(ex))}"
         finally:
             # update_ready() also synchronizes controls and otherwise replaces the

@@ -1,3 +1,15 @@
+## Revision 180a — route Feature modelling lifecycle events to JBG application log
+
+- Route only event names and nonnegative numeric counters to `guihandler.logger.log_file`, since ordinary Python `logging.INFO` from Voilà GUI callbacks was missing from the application logs.
+- Emit start/resume request at the GUI launch boundary, plus a GUI result/paused/failed event for paths without backend completion callbacks. Backend callbacks remain unchanged; no study identifiers, SQL metadata, feature names or error messages are logged by these additions.
+- Preserve existing training and checkpoint behavior. Windows/Voilà log visibility remains to be verified.
+
+## Revision 180 — privacy-minimal Feature modelling lifecycle diagnostics
+
+- Log lifecycle transitions for GUI feature investigations: study start/resume, checkpoint pause, interrupt/failure and completion, plus an explicit pause-request event. Include numeric completed-candidate and attempted-fit counters when provided.
+- Never include study IDs, SQL/table or feature names, target labels, filesystem locations or exception messages in these new diagnostics. Existing execution, pause/resume and checkpoint semantics are unchanged.
+- A user-observed pause/refresh/resume-to-result flow succeeded; deterministic Windows worker-crash and two-worker process cleanup verification remain open.
+
 ## Revision 179 — deterministic parallel worker-failure regression
 
 - Add a dependency-light regression for a failed second future in a two-worker feature-search batch: the first candidate remains committed, the failed candidate is not committed, and a structured failure event is emitted.
