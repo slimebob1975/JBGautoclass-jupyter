@@ -67,6 +67,7 @@ from JBGModelCompatibility import (
     ModelCompatibilityError,
     build_model_compatibility_metadata,
     review_artifact_semantics,
+    review_model_source_boundary,
 )
 import Helpers
 from JBGTrainingTiming import (
@@ -488,7 +489,13 @@ class DatasetHandler:
     
     # Vectorized column validaton
     def validate_column(self, key: str, column: pd.Series) -> pd.Series:
-        
+        # CSV identifiers are opaque keys, not numerical predictors. Preserve
+        # their exact spelling before the generic numeric/date heuristics run.
+        source_kind = getattr(getattr(self.handler.config, "data_source", None), "kind", "sql")
+        if (source_kind == "csv"
+                and key == self.handler.config.get_id_column_name()):
+            return column.copy(deep=True)
+
         is_text = self.handler.config.column_is_text(key)
         if is_text:
             # Vectorized string conversion for text columns
@@ -1105,6 +1112,9 @@ class ModelHandler:
             config, text_converter, (oversampler, undersampler, preprocess, reduction, algorithm), pipeline, \
                 keras_name, n_features = artifact
 
+            source_review = review_model_source_boundary(self.handler.config, config, compatibility)
+            if source_review.issues:
+                raise ModelInitializationException("; ".join(source_review.issues))
             compatibility_review = review_artifact_semantics(config, text_converter, compatibility)
             if compatibility_review.issues:
                 raise ModelInitializationException(

@@ -1,3 +1,54 @@
+## Revision 236 - SQL/CSV model source isolation
+
+- Reject cross-source model reload before model construction; preserve legacy SQL v1 as SQL-only and require explicit CSV v2 identity. Added synthetic regression tests.
+
+## Revision 235 - CSV-native saved-model compatibility contract
+
+- Add opt-in CSV-native model compatibility metadata (schema v2) based on registered column roles and fitted converter type families, without storing SQL driver/type attributes. Preserve SQL schema v1 unchanged.
+- Add explicit current CSV semantic-family review and model artifact semantic validation, with synthetic negative cases. Not yet wired into model saving or runtime source selection; GUI stays disabled.
+
+## Revision 234 - real model semantic compatibility review
+
+- Four synthetic tests exercise JBG model serialization and the real `review_artifact_semantics` through production `ModelHandler` loader and `TaskRunner` method bodies. Check accepted metadata and reject changed feature roles, missing fitted converter schema and unsupported version before publication.
+- CSV-native metadata generation, full application bootstrap and SQL-isolated execution remain open; the synthetic source-type mapping in tests is not a CSV compatibility contract. No production or GUI changes.
+
+## Revision 233 - versioned model reload through TaskRunner
+
+- Add three synthetic checks that serialize a fitted estimator using the current JBG model artifact contract, reload it through the production ModelHandler loader, and publish CSV predictions through TaskRunner.
+- Verify rejection of corrupted model files before result publication. Heavy bootstrap and full compatibility semantics remain isolated; no production code changes or GUI activation.
+
+## Revision 232 - TaskRunner to CSV handler bridge (test only)
+
+- Add four integration checks combining TaskRunner task methods, real DatasetHandler and PredictionsHandler methods, synthetic persisted sklearn estimator, and scoped CSV output.
+- Assert SQL layer mismatch and training task rejection before input reads, and rejection of invalid class outputs before artifact publication.
+- No production code change; isolated model reload and optional bootstrap dependencies remain outside test scope.
+
+## Revision 231 - CSV dataset/prediction handler bridge (test only)
+
+- Add a synthetic integration check combining real DatasetHandler and PredictionsHandler method bodies with registered CSV input and scoped file persistence, including original text keys and fail-closed result validation.
+- No production behavior changes. Full app bootstrap and TaskRunner end-to-end SQL isolation remain open; CSV GUI execution stays disabled.
+
+## Revision 230 - CSV identifier safety during DatasetHandler ingestion
+
+- Prevent the shared column validator from coercing CSV ID strings to numbers before source-aware key/index handling. Preserve exact leading zeros and opaque identifiers through real dataset load and separation.
+- Add dependency-light integration tests for production DatasetHandler methods, CSV ID uniqueness and unchanged SQL/numeric-feature conversion. Full handler initialization and SQL-isolated TaskRunner execution remain unverified; no GUI activation.
+
+## Revision 229 - fail-closed CSV reclassification context binding (GUI inactive)
+
+- Add explicit GUIHandler bind/clear and confirmed correction actions with project/dataset/role checks, plus source-switch and CSV-file lifecycle invalidation.
+- Preserve legacy SQL correction and disable CSV widget execution until the real CSV classifier supplies trusted run context.
+
+## Revision 228 - validated CSV GUI correction boundary (inactive widget)
+
+- Added a validated, immutable CSV correction context that checks scoped dataset identity and column roles, plus an explicit confirmed GUIHandler entrypoint. The legacy SQL writer rejects CSV source selection rather than writing to SQL.
+- The interactive CSV dropdown remains unavailable until a trusted active run supplies the context; no SQL training, CSV execution, or download UI changes. Five synthetic regression tests cover guards and SQL continuity.
+
+## Revision 227 - scoped CSV edit confirmation and download payload (GUI inactive)
+
+- Add an explicit confirmation boundary for class corrections and a side-effect-free corrected CSV payload API; historical revisions are available by opaque ID.
+- Keep the original registered CSV immutable, existing SQL reclassification unchanged, and CSV execution gated in the GUI. The actual widget callback and download control are not yet activated without a validated CSV run context.
+- Include synthetic success, historical view, rejection and scope-isolation tests.
+
 ## Revision 226 - scoped CSV reads with frozen correction revisions
 
 - CSVTrainingAdapter now pins the correction head during construction and uses the existing corrected-CSV view for all row and DataFrame reads. A reader with no prior edits continues reading the immutable original after later edits.

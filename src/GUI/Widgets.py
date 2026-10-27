@@ -2974,6 +2974,7 @@ class Widgets:
 
     def _csv_source_selected(self, choice):
         """Switch role choices without leaking CSV columns into SQL state."""
+        self.guihandler.clear_csv_reclassification_context()
         self._reset_model_on_source_change()
         if hasattr(self, "_csv_source_panel"):
             self._csv_source_panel.register_button.disabled = True
@@ -3059,6 +3060,7 @@ class Widgets:
 
     def _csv_file_changed(self):
         """New uploads invalidate previous CSV roles and registration state."""
+        self.guihandler.clear_csv_reclassification_context()
         self._csv_roles_loaded_188 = False
         self._csv_schema_188 = None
         self._csv_registered_dataset_190 = None
@@ -3069,6 +3071,7 @@ class Widgets:
 
     def _csv_register_dataset(self, _button=None):
         """Explicit local-only persistence of selected CSV; never starts SQL/ML."""
+        self.guihandler.clear_csv_reclassification_context()
         panel = self._csv_source_panel
         panel.register_button.disabled = True
         panel.status.value = "Dataset registration failed. Verify CSV roles and local storage."
@@ -3147,6 +3150,7 @@ class Widgets:
 
     def _csv_erase_saved(self, _button=None):
         """Two-click confirmation for deleting only the selected scoped CSV."""
+        self.guihandler.clear_csv_reclassification_context()
         panel = self._csv_source_panel
         artifact_id = panel.saved_datasets.value
         if not artifact_id or not self._csv_view_active():
@@ -3171,6 +3175,7 @@ class Widgets:
 
     def _csv_load_saved(self, _button=None):
         """Load an authorized artifact to preview staging, not the ML pipeline."""
+        self.guihandler.clear_csv_reclassification_context()
         panel = self._csv_source_panel
         artifact_id = panel.saved_datasets.value
         if not artifact_id or not self._csv_view_active():

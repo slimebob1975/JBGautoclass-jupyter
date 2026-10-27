@@ -1,3 +1,55 @@
+## Revision 236 - hard SQL/CSV model source boundary
+
+- [x] Enforce SQL/CSV isolation on model reload using selected source, saved configuration, and metadata schema. Legacy SQL v1 is SQL-only.
+- [ ] Filter saved-model dropdown by verified source identity before enabling CSV model selection; CSV execution remains disabled.
+- [ ] Integrate CSV-native compatibility metadata into real model saving and validate full SQL-blocked runtime.
+
+## Revision 235 - CSV-native compatibility groundwork
+
+- [x] Define a CSV-native schema contract and fail-closed semantic review without altering SQL v1 model metadata.
+- [ ] Wire validated CSV metadata generation into actual model saving and source selection. Derive and verify source semantic families from validated data and preprocessing; do not assume CSV strings imply numeric columns.
+- [ ] Test complete model/handler bootstrap and SQL-blocked end-to-end CSV workflow before enabling GUI.
+
+## Revision 234 - compatibility review checkpoint
+
+- [x] Use production model semantic compatibility checker for synthetic model reload and TaskRunner prediction tests; reject tampered roles, missing converter schema and unsupported metadata versions.
+- [ ] Define CSV-native source type and model compatibility contract (current metadata builder is SQL-shaped), verify genuine Config/handler bootstrap with all SQL access blocked, and only then activate CSV prediction GUI.
+
+## Revision 233 - CSV model reload integration checkpoint
+
+- Completed synthetic versioned JBG artifact reload and TaskRunner CSV prediction coverage (model-compatibility semantics stubbed); retain full live ModelHandler bootstrap, source compatibility and SQL-blocked application smoke test as open requirements.
+
+## Revision 232 - combined CSV TaskRunner and handler execution
+
+- [x] Exercise production TaskRunner dispatch, DatasetHandler ingestion, PredictionsHandler inference and scoped result writer in one synthetic CSV execution.
+- [ ] Full ModelHandler model-artifact reload and complete application bootstrap with SQL blocked remain unverified; CSV GUI execution stays disabled.
+
+## Revision 231 - CSV dataset to prediction handler bridge
+
+- [x] Test production DatasetHandler ingestion and separation together with the existing prediction-result builder and scoped CSV writer, using synthetic CSV rows.
+- [ ] Full JBG class initialization, saved model reload through ModelHandler, TaskRunner and SQL-blocked end-to-end execution remain unverified.
+
+## Revision 230 - CSV identifier preservation during full dataset validation
+
+- [x] Preserve opaque CSV row identifiers before generic numeric/date column validation; numeric feature conversion and SQL identifier behavior remain unchanged.
+- [ ] Full live TaskRunner, ModelHandler and PredictionsHandler initialization with SQL blocked remains unverified; GUI CSV execution stays disabled.
+
+## Revision 229 - staged CSV correction context lifecycle
+
+- [x] Bind only an explicitly validated CSV correction context to the current project scope and registered dataset; invalidate it on source/file/catalog changes.
+- [ ] Real CSV TaskRunner must supply the trusted run context; GUI dropdown and CSV execution remain disabled until a full run is verified.
+
+## Revision 228 - explicit CSV GUI reclassification context
+
+- [x] Validate project, dataset, source artifact, column roles and allowed classes before CSV corrections; block legacy SQL reclassification callback when CSV is selected.
+- [ ] Bind a trusted active CSV run to the interactive widget and add explicit confirmation/download controls after the execution lifecycle is verified; no CSV GUI ML activation.
+
+## Revision 227 - explicit CSV correction and download boundary
+
+- [x] Provide a confirmed, scoped CSV correction call and a corrected-CSV download payload using the immutable original plus correction overlay. No SQL fallback.
+- [ ] Connect the widget only after a verified active CSV run provides repository, scope, configuration and allowed classes; preserve the existing SQL correction route.
+- [ ] Add user-visible download controls, run-level correction provenance, and multi-writer consistency checks before CSV GUI activation.
+
 ## Revision 226 - pin CSV correction head for each adapter
 
 - [x] Capture the latest correction revision when preparing a scoped CSV reader, then apply only that revision to every subsequent read. Readers prepared before the first edit remain on original bytes.

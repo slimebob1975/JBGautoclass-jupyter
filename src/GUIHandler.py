@@ -208,8 +208,63 @@ class GUIHandler:
         return distribution
 
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
-        """ Changes the original dataset """
+        """Legacy SQL correction only; CSV must use an explicit confirmed context."""
+        if self.widgets._csv_view_active():
+            raise ValueError('CSV reclassification requires an explicit confirmed CSV context')
         self.classifier_datalayer.correct_mispredicted_data(new_class, index)
+
+    def bind_csv_reclassification_context(self, context):
+        """Bind an explicitly prepared run context to the staged CSV source.
+
+        Do not derive a trusted run context from editable GUI controls.
+        This binding is inactive until the real CSV execution lifecycle supplies it.
+        """
+        from Storage.CSVReclassificationWorkflow import CSVReclassificationContext
+        self._active_csv_reclassification_context = None
+        if not isinstance(context, CSVReclassificationContext):
+            raise ValueError('A validated CSV run context is required')
+        if not self.widgets._csv_view_active():
+            raise ValueError('CSV data source must be selected')
+        repository, scope = self.widgets._csv_catalog_storage()
+        if (context.scope != scope or
+                context.dataset_artifact_id != self.widgets._csv_current_dataset_artifact()):
+            raise ValueError('CSV run context does not match staged dataset')
+        # Verify that the supplied context still resolves within this scope.
+        from Storage.CSVModelConfiguration import load_csv_model_configuration
+        roles = load_csv_model_configuration(repository, scope, context.configuration_id)
+        if (roles.dataset_id != context.dataset_id or
+                roles.artifact_id != context.dataset_artifact_id or
+                roles.id_column != context.id_column or
+                roles.class_column != context.class_column):
+            raise ValueError('CSV run context column roles do not match')
+        self._active_csv_reclassification_context = context
+
+    def clear_csv_reclassification_context(self):
+        """Invalidate any bound correction target on source/dataset changes."""
+        self._active_csv_reclassification_context = None
+
+    def correct_bound_csv_mispredicted_data(self, new_class: str, row_id: str, *, confirmed=False):
+        """Future CSV widget action: require a still-current bound run context."""
+        context = getattr(self, '_active_csv_reclassification_context', None)
+        if context is None:
+            raise ValueError('No active CSV reclassification run context')
+        repository, scope = self.widgets._csv_catalog_storage()
+        if (not self.widgets._csv_view_active() or context.scope != scope or
+                context.dataset_artifact_id != self.widgets._csv_current_dataset_artifact()):
+            self.clear_csv_reclassification_context()
+            raise ValueError('CSV reclassification run context is stale')
+        return self.correct_csv_mispredicted_data(context, new_class, row_id,
+                                                  confirmed=confirmed)
+
+    def correct_csv_mispredicted_data(self, context, new_class: str, row_id: str,
+                                     *, confirmed=False):
+        """Explicit CSV edit service; never dispatches to SQL or infers dataset."""
+        from Storage.CSVReclassificationWorkflow import CSVReclassificationContext
+        if not isinstance(context, CSVReclassificationContext):
+            raise ValueError('CSV reclassification requires a validated context')
+        if not self.widgets._csv_view_active():
+            raise ValueError('CSV reclassification requires CSV source selection')
+        return context.correct(row_id, new_class, confirmed=confirmed)
 
     def get_classifier_datalayer(self, data_settings: dict = None, config_params: dict = None) -> DataLayer:
         """ This will create or update the layer, and should probably also include the start_classifier() stuff

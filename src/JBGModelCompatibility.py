@@ -246,12 +246,185 @@ def build_model_compatibility_metadata(config, converter, source_schema: Mapping
     }
 
 
+
+# CSV uses a separate, explicit contract. Existing SQL v1 artifacts are unchanged.
+CSV_MODEL_COMPATIBILITY_SCHEMA = 2
+_CSV_FAMILIES = frozenset(("text", "numeric", "temporal", "binary"))
+
+
+def _csv_column_families(config, converter, csv_configuration) -> dict:
+    """Derive configured semantic roles; CSV raw text is not an SQL schema.
+
+    A fitted converter is authoritative for numerical/text feature semantics.
+    The ID and target are opaque strings regardless of their lexical contents.
+    """
+    if (config.get_id_column_name() != csv_configuration.id_column
+            or config.get_class_column_name() != csv_configuration.class_column):
+        raise ModelCompatibilityError("CSV identity roles differ from the model configuration.")
+    if (set(csv_configuration.data_columns) & set(csv_configuration.text_columns)
+            or not csv_configuration.data_columns and not csv_configuration.text_columns):
+        raise ModelCompatibilityError("CSV feature roles are invalid.")
+    predicted = tuple(_expected_predictor_columns(config))
+    selected = set(csv_configuration.data_columns) | set(csv_configuration.text_columns)
+    if set(predicted) != selected:
+        raise ModelCompatibilityError("CSV feature roles differ from the model configuration.")
+    result = {csv_configuration.id_column: "text", csv_configuration.class_column: "text"}
+    result.update({name: "numeric" for name in csv_configuration.data_columns})
+    result.update({name: "text" for name in csv_configuration.text_columns})
+    fitted = getattr(converter, "input_feature_type_families_", None)
+    if not isinstance(fitted, Mapping):
+        raise ModelCompatibilityError("Fitted converter CSV type families are unavailable.")
+    for column in getattr(converter, "input_feature_columns_", ()):
+        if fitted.get(column) != result.get(column):
+            raise ModelCompatibilityError("Fitted converter and CSV feature type families disagree.")
+    return result
+
+
+def build_csv_model_compatibility_metadata(config, converter, csv_configuration) -> dict:
+    """Create CSV-native metadata without SQL fields or row/column values."""
+    issues = _converter_setting_issues(config, converter)
+    if issues:
+        raise ModelCompatibilityError(issues[0])
+    families = _csv_column_families(config, converter, csv_configuration)
+    required = _required_columns(config, converter)
+    if any(col not in families for col in required):
+        raise ModelCompatibilityError("CSV model requires unavailable columns.")
+    roles = _feature_roles(config)
+    settings = _converter_config(config)
+    fitted_roles = {
+        "text_columns": tuple(getattr(converter, "text_columns_", ())),
+        "category_columns": tuple(getattr(converter, "category_columns_", ())),
+    }
+    return {
+        "schema_version": CSV_MODEL_COMPATIBILITY_SCHEMA,
+        "source_kind": "csv",
+        "source_identity_sha256": _stable_digest({
+            "dataset_id": csv_configuration.dataset_id,
+            "artifact_id": csv_configuration.artifact_id,
+        }),
+        "source_columns": tuple({"name": name, "family": families[name]} for name in required),
+        "feature_roles": roles,
+        "feature_semantics_sha256": _stable_digest(roles),
+        "converter_config": settings,
+        "converter_config_sha256": _stable_digest(settings),
+        "converter_input_columns": tuple(converter.input_feature_columns_),
+        "converter_input_type_families": dict(converter.input_feature_type_families_),
+        "ignored_configured_predictors": tuple(
+            name for name in _expected_predictor_columns(config)
+            if name not in set(converter.input_feature_columns_)
+        ),
+        "fitted_converter_roles": fitted_roles,
+        "fitted_converter_roles_sha256": _stable_digest(fitted_roles),
+    }
+
+
+def review_csv_source_compatibility(metadata, csv_configuration, *, column_families=None) -> CompatibilityReview:
+    """Fail closed against an explicitly supplied CSV semantic schema.
+
+    An untyped CSV file alone cannot prove feature families; callers must
+    validate their source data and supply the semantic family per column.
+    """
+    if (not isinstance(metadata, Mapping)
+            or metadata.get("schema_version") != CSV_MODEL_COMPATIBILITY_SCHEMA
+            or metadata.get("source_kind") != "csv"):
+        return CompatibilityReview(issues=("Saved model does not have CSV compatibility metadata.",))
+    if not isinstance(column_families, Mapping) or not column_families:
+        return CompatibilityReview(issues=("Current CSV semantic column schema is unavailable.",))
+    stored = metadata.get("source_columns")
+    if not isinstance(stored, (tuple, list)) or not stored:
+        return CompatibilityReview(issues=("Saved CSV model column schema is missing.",))
+    issues = []
+    seen = set()
+    for entry in stored:
+        if not isinstance(entry, Mapping):
+            issues.append("Saved CSV model column schema is malformed.")
+            continue
+        name, family = entry.get("name"), entry.get("family")
+        if not isinstance(name, str) or not name or name in seen or family not in _CSV_FAMILIES:
+            issues.append("Saved CSV model column schema is malformed.")
+            continue
+        seen.add(name)
+        if name not in column_families:
+            issues.append("Current CSV is missing required model columns.")
+        elif column_families[name] != family:
+            issues.append("Current CSV has incompatible semantic column families.")
+    if (csv_configuration.id_column not in seen
+            or csv_configuration.class_column not in seen):
+        issues.append("CSV identity or class column is missing from the model schema.")
+    return CompatibilityReview(tuple(dict.fromkeys(issues)))
+
+
+def _review_csv_artifact_semantics(config, converter, metadata):
+    issues = []
+    if metadata.get("source_kind") != "csv":
+        issues.append("Saved CSV source type is invalid.")
+    digest = metadata.get("source_identity_sha256")
+    if not isinstance(digest, str) or len(digest) != 64:
+        issues.append("Saved CSV source identity is incomplete.")
+    roles, settings = _feature_roles(config), _converter_config(config)
+    if metadata.get("feature_roles") != roles or metadata.get("feature_semantics_sha256") != _stable_digest(roles):
+        issues.append("Saved CSV feature roles differ from model configuration.")
+    if metadata.get("converter_config") != settings or metadata.get("converter_config_sha256") != _stable_digest(settings):
+        issues.append("Saved CSV converter settings differ from model configuration.")
+    issues.extend(_converter_setting_issues(config, converter))
+    required = set(_required_columns(config, converter))
+    source = metadata.get("source_columns")
+    if (not isinstance(source, (tuple, list)) or not source
+            or any(not isinstance(e, Mapping) or not isinstance(e.get("name"), str)
+                   or e.get("family") not in _CSV_FAMILIES for e in source)
+            or len({e["name"] for e in source}) != len(source)
+            or {e["name"] for e in source} != required):
+        issues.append("Saved CSV column schema is malformed or incomplete.")
+    if converter is not None:
+        columns = tuple(getattr(converter, "input_feature_columns_", ()))
+        if tuple(metadata.get("converter_input_columns") or ()) != columns:
+            issues.append("Saved CSV converter input columns differ from fitted converter.")
+        if dict(metadata.get("converter_input_type_families") or {}) != dict(getattr(converter, "input_feature_type_families_", {}) or {}):
+            issues.append("Saved CSV converter type families differ from fitted converter.")
+        ignored = tuple(c for c in _expected_predictor_columns(config) if c not in set(columns))
+        if tuple(metadata.get("ignored_configured_predictors") or ()) != ignored:
+            issues.append("Saved CSV ignored predictors differ from fitted converter.")
+        fitted_roles = {
+            "text_columns": tuple(getattr(converter, "text_columns_", ())),
+            "category_columns": tuple(getattr(converter, "category_columns_", ())),
+        }
+        if (metadata.get("fitted_converter_roles") != fitted_roles
+                or metadata.get("fitted_converter_roles_sha256") != _stable_digest(fitted_roles)):
+            issues.append("Saved CSV fitted roles differ from fitted converter.")
+    return CompatibilityReview(tuple(dict.fromkeys(issues)))
+
+def review_model_source_boundary(active_config, saved_config, metadata) -> CompatibilityReview:
+    """Enforce SQL/CSV model isolation independently of feature compatibility.
+
+    SQL v1 is an established legacy contract, not a source-neutral model.
+    Missing or malformed source identity fails closed; no cross-source reuse.
+    """
+    active = getattr(getattr(active_config, "data_source", None), "kind", "sql")
+    saved = getattr(getattr(saved_config, "data_source", None), "kind", "sql")
+    if active not in ("sql", "csv") or saved not in ("sql", "csv"):
+        return CompatibilityReview(issues=("Unknown model data source type.",))
+    if not isinstance(metadata, Mapping):
+        return CompatibilityReview(issues=("Saved model source compatibility metadata is missing.",))
+    version = metadata.get("schema_version")
+    if version == MODEL_COMPATIBILITY_SCHEMA and metadata.get("source_kind") in (None, "sql"):
+        artifact_kind = "sql"
+    elif version == CSV_MODEL_COMPATIBILITY_SCHEMA and metadata.get("source_kind") == "csv":
+        artifact_kind = "csv"
+    else:
+        return CompatibilityReview(issues=("Saved model source compatibility metadata is unsupported.",))
+    if active != saved or saved != artifact_kind:
+        return CompatibilityReview(issues=("Saved model source type does not match the selected data source.",))
+    return CompatibilityReview()
+
+
 def review_artifact_semantics(config, converter, metadata) -> CompatibilityReview:
     """Verify the saved config, fitted converter and artifact metadata agree internally."""
     if metadata is None:
         return CompatibilityReview(issues=(
             "Current model artifacts require source/schema compatibility metadata. Retrain and save a new model.",
         ))
+    if isinstance(metadata, Mapping) and metadata.get("schema_version") == CSV_MODEL_COMPATIBILITY_SCHEMA:
+        return _review_csv_artifact_semantics(config, converter, metadata)
     if not isinstance(metadata, Mapping) or metadata.get("schema_version") != MODEL_COMPATIBILITY_SCHEMA:
         return CompatibilityReview(issues=("Saved model compatibility metadata is unsupported or malformed.",))
 
