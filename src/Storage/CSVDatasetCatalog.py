@@ -3,7 +3,7 @@
 StorageScope must be supplied by a trusted caller; it is not authentication.
 """
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import re
 
@@ -86,8 +86,25 @@ def csv_dataset_display_name(repository, scope: StorageScope, dataset_id: str):
     return "Registered CSV"
 
 
-def list_csv_dataset_labels(repository, scope: StorageScope):
-    """List (label, artifact_id), with legacy registrations handled safely."""
+def format_csv_catalog_time(stamp: datetime, display_timezone=None):
+    """Format a stored UTC instant in the viewer's timezone, without changing storage.
+
+    None uses the operating system's local timezone at the instant being displayed.
+    A supplied tzinfo permits browser-selected zones in a future web frontend.
+    """
+    if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None:
+        raise ValueError("Catalog timestamp must include timezone")
+    instant = stamp.astimezone(timezone.utc)
+    if display_timezone is None:
+        # fromtimestamp resolves historical DST for the machine's local zone.
+        local = datetime.fromtimestamp(instant.timestamp()).astimezone()
+    else:
+        local = instant.astimezone(display_timezone)
+    return local.strftime("%Y-%m-%d %H:%M %Z%z").strip()
+
+
+def list_csv_dataset_labels(repository, scope: StorageScope, *, display_timezone=None):
+    """List (label, artifact_id), displaying instants in local time by default."""
     entries = list_csv_datasets(repository, scope)
     metadata = {}
     for ref in repository.list_artifacts(scope):
@@ -103,7 +120,7 @@ def list_csv_dataset_labels(repository, scope: StorageScope):
             stamp = datetime.fromisoformat(record.get("uploaded_at"))
             if stamp.tzinfo is None:
                 continue
-            metadata[ref.dataset_id] = (filename, stamp.strftime("%Y-%m-%d %H:%M UTC"))
+            metadata[ref.dataset_id] = (filename, format_csv_catalog_time(stamp, display_timezone))
         except (ValueError, TypeError, OSError, UnicodeError, KeyError):
             continue
     return tuple((f"{metadata[id][0]} · {metadata[id][1]}" if id in metadata else "Dataset " + id, artifact)

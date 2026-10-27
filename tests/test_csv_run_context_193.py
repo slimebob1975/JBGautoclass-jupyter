@@ -1,6 +1,7 @@
 """Synthetic CSV label and run-planning tests; no SQL or ML execution."""
 import tempfile
 import unittest
+from datetime import timezone
 from pathlib import Path
 from uuid import uuid4
 from Storage.ArtifactContract import StorageScope, StorageKind
@@ -27,10 +28,10 @@ class Revision193Tests(unittest.TestCase):
 
     def test_filename_timestamp_and_reopen(self):
         registered = self.register()
-        rows = list_csv_dataset_labels(FileArtifactRepository(self.root / 'archive'), self.scope)
+        rows = list_csv_dataset_labels(FileArtifactRepository(self.root / 'archive'), self.scope, display_timezone=timezone.utc)
         self.assertEqual(len(rows), 1)
         self.assertIn('sample.csv', rows[0][0])
-        self.assertIn('UTC', rows[0][0])
+        self.assertIn('UTC+0000', rows[0][0])
         self.assertEqual(rows[0][1], registered.reference.artifact_id)
         self.assertNotIn(str(self.root), str(rows))
 

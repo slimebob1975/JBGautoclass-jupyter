@@ -1,3 +1,19 @@
+## Revision 256 - CSV retraining checkpoint reload guard
+
+- Require a successfully reloaded saved-model checkpoint before CSV retraining continues; do not silently use the in-memory model after a CSV reload failure. Preserve SQL fallback behavior.
+- Add focused tests for failed/successful CSV reload, CSV save failure propagation and SQL fallback. All four tests passed in the Windows environment.
+- Full native CSV training with real ML handlers, persisted artifact roundtrip and SQL access blocked remains an acceptance requirement. CSV GUI execution stays disabled.
+
+## Revision 255 - CSV fitted-model artifact roundtrip and save guard
+
+- Train a real sklearn model on synthetic Iris-like data, save and reload using the existing JBG model-artifact contract, and compare predictions. Guard CSV model-save failures without changing legacy SQL behavior.
+- Four focused tests passed in the Windows environment. This coverage does not prove full AutomaticClassifier/TaskRunner training with real handlers.
+
+- 254: Add native AutomaticClassifier/TaskRunner CSV training orchestration regression with intercepted SQL and simulated model save steps; fail closed on zero labelled CSV rows. Full ML fit and artifact reload remain unverified; GUI stays blocked.
+- Revision 253: Add opt-in registered CSV training application composition through the production AutomaticClassifier constructor, with source/role/snapshot guards and synthetic regression tests. GUI remains disabled; full model training and persistence are not yet verified.
+- Revision 252: Guard CSV-only training dispatch behind an authenticated, pinned CSV reader facade; keep SQL execution and legacy GUI unchanged. Add synthetic dispatch and rejection tests. No live CSV training activation.
+- 251: Display registered CSV artifact timestamps in the viewer environment local timezone (including DST), without rewriting UTC storage. Add deterministic timezone regression tests. Live CSV execution remains disabled.
+- 250: Exclude numeric measurements from automatic CSV class candidates, with synthetic Iris tests. Introduce shared semantic GUI button states (ready/green, waiting/yellow, blocked/red, warning/orange). CSV execution remains disabled.
 - 249: Repair saved SQL model GUI continuation and consistent Dark Numbers radio options; report empty SQL prediction as no work and avoid false Rerun indication. Add synthetic tests. SQL output persistence still requires Windows/live acceptance.
 - 248: Add a privacy-safe, operator-run SQL regression acceptance protocol; documentation only, no SQL/CSV production behavior changed.
 - 247: Add registered CSV prediction composition boundary with persisted source/role verification and synthetic scoped tests. No GUI activation or live CSV run.
@@ -1522,3 +1538,7 @@ Introduced opt-in, aggregate-only profiling of DataFrame shape, missing-value co
 ## Revision 205 — shared model source identity guard
 
 Reused existing file-based model artifact and embedded JBG Config. Model reload now rejects mismatched CSV dataset references or cross-source reuse when a runtime config is supplied. Historical SQL model reload stays unchanged. No new model store, CSV training activation, or artifact migration.
+
+### Revision 255 – synthetic fitted CSV model persistence smoke test
+- Added a synthetic, 135-labelled/15-unlabelled Iris-like sklearn training round-trip using JBG's real versioned artifact writer/reader, plus model metadata and failed-write checks. This is not yet a full native AutomaticClassifier fitting run.
+- Fail closed on CSV model save failures in ModelHandler; preserve existing SQL behavior. CSV GUI remains disabled.

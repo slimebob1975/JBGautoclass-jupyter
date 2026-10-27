@@ -1,3 +1,11 @@
+- [x] Revision 256: Fail closed on CSV retraining when the saved-model checkpoint cannot be reloaded; preserve the SQL in-memory fallback. Four focused Windows tests passed.
+- [x] Revision 255: Verify fitted synthetic CSV-model save/reload/predict equivalence and guard CSV save failures. Four focused Windows tests passed; this is not full native handler training.
+- [ ] Revision 257+: Exercise full native CSV fitting through AutomaticClassifier/TaskRunner with real handlers, scoped model save/reload, and SQL access interception. Keep CSV GUI execution blocked until verified.
+- [ ] Post-254: Run actual Iris-like native CSV ML fit with artifact save/reload in a scoped temporary directory, verify SQL interception and no partial ready model on failure before unlocking GUI.
+- [ ] CSV: run full native AutomaticClassifier training with a scoped synthetic Iris fixture, verify model artifact persistence/reload and intercept SQL access before enabling GUI (post-253).
+- 252: Introduce an opt-in, read-only registered CSV training data layer and a strict CSV-training TaskRunner dispatch gate. Still required before live CSV: native AutomaticClassifier bootstrap, full real model training/saving, SQL-blocked end-to-end checks and GUI source/model controls.
+- 251: Keep CSV artifact timestamps in UTC; show saved CSV catalog labels in local time by default, with an explicit timezone hook for future browser-based UI. CSV training activation still requires full production bootstrap and tests.
+- 250: CSV numeric-coded class labels need an explicit, validated class-role override; automatic candidates exclude numeric measurements. Preserve semantic action states during HTML/FastAPI migration. Live CSV execution remains blocked.
 - 249 SQL REGRESSION: Verify successful persisted SQL prediction against eligible unlabeled rows, including database write counts and failure reporting. Fix GUI saved-model Continue/Target state. Keep CSV live gate closed.
 - 248 SQL REGRESSION GATE: Execute the privacy-safe SQL regression protocol in tests/SQL_REGRESSION_PROTOCOL_248.md after the 247 commit. Block live CSV and CSV GUI until SQL baseline, saved-model reload, prediction and result checks pass; fix any regression first.
 - 247: Add opt-in repository-backed CSV registration check before prediction composition; source identity and roles must match persisted configuration. Full classifier bootstrap and SQL regression gate still pending.
@@ -531,3 +539,5 @@ database access for every workflow rather than replacing SQL Server.
 
 - [x] Preserve SQL schema compatibility checks on SQL reload; CSV reload requires the prepared scoped CSV data-layer facade and avoids SQL metadata calls.
 - [ ] Verify end-to-end CSV task execution and artifact publication before enabling GUI execution.
+
+- [ ] After revision 255, verify full native CSV fitting through AutomaticClassifier/TaskRunner with saved model and reload in Windows ML environment; release CSV GUI only after the full flow and source/identity checks pass.

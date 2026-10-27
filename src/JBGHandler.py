@@ -2765,6 +2765,11 @@ class ModelHandler:
                 save_model_artifact(filename, *data, compatibility=compatibility)
 
         except Exception as e:
+            source_kind = getattr(getattr(self.handler.config, "data_source", None), "kind", "sql")
+            if source_kind == "csv":
+                raise ModelInitializationException(
+                    "CSV model persistence failed; training cannot be reported as completed."
+                ) from e
             self.handler.logger.print_warning(f"Something went wrong on saving {self.model.algorithm.lib.get_full_name()} model to file: {e}")
 
 @dataclass

@@ -1834,14 +1834,14 @@ class Widgets:
     def disable_button(self, name: str) -> None:
         """ Disables and sets to warning style """
         item = self.get_item_or_error(name)
-        setattr(item, "disabled", True)
-        setattr(item, "button_style", "primary")
+        from GUI.ButtonStates import set_action_state
+        set_action_state(item, "blocked")
 
     def enable_button(self, name: str) -> None:
         """ Enables and sets to success style """
         item = self.get_item_or_error(name)
-        setattr(item, "disabled", False)
-        setattr(item, "button_style", "success")
+        from GUI.ButtonStates import set_action_state
+        set_action_state(item, "ready")
 
     def disable_items(self, items: list) -> None:
         """ Disable all items in the list """
@@ -2347,10 +2347,8 @@ class Widgets:
         self.feature_search_investigate_button.disabled = running or not ready
         if dataset_editable and (running or (mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False))):
             self.disable_button("continuation_button")
-        if not ready:
-            self.feature_search_investigate_button.button_style = "primary"
-        else:
-            self.feature_search_investigate_button.button_style = "success"
+        from GUI.ButtonStates import set_action_state
+        set_action_state(self.feature_search_investigate_button, "blocked" if running or not ready else "ready")
         self.feature_search_apply_button.disabled = not (
             (assisted and self.feature_search_result and self.feature_search_result.get("status") == "completed" and self.feature_search_result.get("recommendation") is not None)
             or (reuse and self._saved_recommendation_issues() == [])
@@ -2693,7 +2691,8 @@ class Widgets:
         self._pending_feature_profile_delete = None
         if "feature_search_delete_button" in self.widgets:
             self.feature_search_delete_button.description = "Delete"
-            self.feature_search_delete_button.button_style = "danger"
+            from GUI.ButtonStates import set_action_state
+            set_action_state(self.feature_search_delete_button, "warning" if not self.feature_search_delete_button.disabled else "blocked")
 
     def delete_feature_search_candidate(self) -> None:
         if self.feature_selection_mode.value != "reuse" or getattr(self, "_feature_search_running", False):

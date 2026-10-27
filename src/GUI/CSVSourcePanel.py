@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 import ipywidgets as widgets
+from GUI.ButtonStates import set_action_state
 
 
 class CSVSourcePanel:
@@ -29,6 +30,9 @@ class CSVSourcePanel:
         self.load_saved_button = widgets.Button(description="Load saved", disabled=True)
         self.erase_saved_button = widgets.Button(description="Erase saved", disabled=True, button_style="danger")
         self._erase_confirmation = ""
+        set_action_state(self.register_button, "blocked")
+        set_action_state(self.load_saved_button, "blocked")
+        set_action_state(self.erase_saved_button, "blocked")
         self.loaded_saved_artifact_id = None
         self.saved_datasets.observe(self._saved_selection_changed, names="value")
         self.status = widgets.HTML(value="CSV inspection only. SQL Server remains the active execution source.")
@@ -40,8 +44,8 @@ class CSVSourcePanel:
         ])
 
     def _saved_selection_changed(self, change):
-        self.load_saved_button.disabled = not bool(change.get("new"))
-        self.erase_saved_button.disabled = not bool(change.get("new"))
+        set_action_state(self.load_saved_button, "ready" if change.get("new") else "blocked")
+        set_action_state(self.erase_saved_button, "warning" if change.get("new") else "blocked")
         self._erase_confirmation = ""
         self.erase_saved_button.description = "Erase saved"
 

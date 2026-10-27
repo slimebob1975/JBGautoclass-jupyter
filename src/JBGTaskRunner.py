@@ -178,9 +178,20 @@ class TaskRunner:
                 - Other keys as used by the following task
         """
         source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
-        if source_kind == "csv":
+        if source_kind == "csv" and self.config.should_train():
+            # Training never uses the prediction sink. Only the registered,
+            # pinned CSV reader is allowed to enter the common ML task chain.
+            from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer
+            if (self.regression_suite or self.config.should_predict()
+                    or not isinstance(self.datalayer, CSVTrainingDataLayer)
+                    or getattr(self.handler, "datalayer", None) is not self.datalayer):
+                raise ValueError("CSV training requires a prepared training data layer")
+            expected = get_tasks(self.config, regression_suite=False)
+            if not isinstance(tasks, (list, tuple)) or list(tasks) != expected:
+                raise ValueError("Unsupported CSV training task sequence")
+        elif source_kind == "csv":
             # CSV prediction must enter through the scoped, prevalidated facade.
-            # Training and regression workflows are not yet CSV-ready.
+            # Prediction must use its dedicated validated facade.
             from Storage.CSVPredictionDataLayer import CSVPredictionDataLayer
             if (self.regression_suite or self.config.should_train()
                     or not isinstance(self.datalayer, CSVPredictionDataLayer)):
@@ -273,7 +284,21 @@ class TaskRunner:
         self.logger.print_task_header(title="Fetching data")
         data =  self.datalayer.get_dataset()
 
-        if data is None:
+        source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
+        if source_kind == "csv" and self.config.should_train():
+            if not data:
+                raise DatasetException("CSV training has no labelled rows; model not saved")
+            # The training reader returns rows in text/data/ID/class order.
+            # Reject insufficient support before the expensive native ML handlers.
+            from collections import Counter
+            labels = [str(row[-1]).strip() for row in data]
+            counts = Counter(labels)
+            if (any(not label for label in labels) or len(counts) < 2
+                    or min(counts.values()) < 2):
+                raise DatasetException(
+                    "CSV training needs at least two labelled classes with two rows each"
+                )
+        if data is None or (not data and source_kind == "csv"):
             return {"early_exit": True}
 
         return {"data": data}
@@ -371,6 +396,11 @@ class TaskRunner:
         filename = self.config.get_model_filename()
         cross_trained_model = self.mh.load_pipeline_from_file(filename, init_dh=self.dh)
         if cross_trained_model is None:
+            source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
+            if source_kind == "csv":
+                # A saved CSV checkpoint must be readable before full-data retraining.
+                # Never silently turn a broken persistence roundtrip into success.
+                raise ModelException("CSV training checkpoint could not be reloaded; retraining aborted")
             self.handler.logger.print_warning(f"Could not load model for retraining from file: {filename}. Using previoulsy trained model as fallback.")
             cross_trained_model = self.mh.model.pipeline
         trained_model = self.mh.retrain_picked_model(self.mh.model.pipeline, self.dh.X, self.dh.Y)

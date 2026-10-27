@@ -4,6 +4,7 @@ This is a structural contract only; it does not activate CSV model execution.
 """
 
 import csv
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,8 +57,19 @@ def inspect_csv_columns(path, *, delimiter=",", encoding="utf-8-sig", class_card
     except (OSError, UnicodeError, LookupError, csv.Error, StopIteration):
         raise ValueError("Unable to inspect CSV columns") from None
     id_columns = tuple(h for i, h in enumerate(headers) if complete[i])
+    def numeric_values(values):
+        # CSV does not declare column types. Infer a numeric measurement only
+        # when every non-empty value parses as a finite number. Numeric class
+        # codes remain selectable through an explicit future role override.
+        try:
+            return bool(values) and all(math.isfinite(float(value.strip().replace(",", ".")))
+                                        for value in values)
+        except (ValueError, TypeError, OverflowError):
+            return False
+
     class_columns = tuple(h for i, h in enumerate(headers)
-                          if 2 <= len(categories[i]) <= class_cardinality_limit)
+                          if 2 <= len(categories[i]) <= class_cardinality_limit
+                          and not numeric_values(categories[i]))
     return CSVColumnSchema(tuple(headers), id_columns, class_columns, tuple(headers), count)
 
 
