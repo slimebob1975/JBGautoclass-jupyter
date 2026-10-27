@@ -14,6 +14,7 @@ from unittest.mock import Mock
 import numpy as np
 
 from JBGModelPersistence import save_model_artifact, load_model_artifact_with_compatibility
+from JBGModelCompatibility import review_model_source_boundary
 from Storage.ArtifactContract import ArtifactKind
 import test_csv_taskrunner_handler_bridge_232 as bridge
 
@@ -36,8 +37,9 @@ def production_model_loader():
         def get_name(self):
             return 'synthetic-model'
     ns = {'load_model_artifact_with_compatibility': load_model_artifact_with_compatibility,
+          'review_model_source_boundary': review_model_source_boundary,
           'review_artifact_semantics': lambda config, converter, metadata:
-              SimpleNamespace(issues=() if metadata.get('schema_version') == 'test.v1' else ('invalid metadata',), warnings=()),
+              SimpleNamespace(issues=() if metadata.get('schema_version') == 2 and metadata.get('source_kind') == 'csv' else ('invalid metadata',), warnings=()),
           'Model': RestoredModel, 'ModelInitializationException': ValueError,
           'keras': SimpleNamespace(models=SimpleNamespace(load_model=Mock(side_effect=AssertionError('keras forbidden')))),
           'resolve_keras_model_sidecar_path': Mock(side_effect=AssertionError('keras forbidden')),
@@ -59,7 +61,7 @@ class CSVModelReload233(bridge.CSVTaskRunnerHandlerBridge232):
         self.jbg_model_path = self.model_path.with_name('trusted-current-jbg-model.pkl')
         save_model_artifact(self.jbg_model_path, bridge.bridge.handlers.fixture216.SavedConfig(self.ref), None,
                             (None, None, None, None, None), self.estimator,
-                            None, 1, compatibility={'schema_version': 'test.v1'})
+                            None, 1, compatibility={'schema_version': 2, 'source_kind': 'csv'})
         self.config.get_model_filename = lambda: str(self.jbg_model_path)
         self.config.set_num_selected_features = Mock()
         loader = production_model_loader()
@@ -93,7 +95,8 @@ class CSVModelReload233(bridge.CSVTaskRunnerHandlerBridge232):
     def test_versioned_artifact_contains_six_payload_fields(self):
         payload, metadata = load_model_artifact_with_compatibility(self.jbg_model_path)
         self.assertEqual(len(payload), 6)
-        self.assertEqual(metadata['schema_version'], 'test.v1')
+        self.assertEqual(metadata['schema_version'], 2)
+        self.assertEqual(metadata['source_kind'], 'csv')
         self.assertIsNone(payload[4])
         self.assertEqual(payload[5], 1)
 

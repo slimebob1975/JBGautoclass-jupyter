@@ -1,14 +1,14 @@
-"""Revision 234: real saved-model semantic review (no review stub).
+"""Revision 234 regression updated for source-specific CSV v2 contract.
 
-This verifies the existing SQL-shaped model compatibility contract against
-synthetic schema tokens; it does NOT establish a CSV-native schema contract.
+Exercises production semantic/source review with synthetic CSV configuration.
+Application bootstrap remains isolated; this is not a live deployment test.
 """
 import json
 import unittest
 from types import SimpleNamespace
 
-from JBGModelCompatibility import (build_model_compatibility_metadata,
-                                   review_artifact_semantics)
+from JBGModelCompatibility import (build_csv_model_compatibility_metadata,
+                                   review_artifact_semantics, review_model_source_boundary)
 from JBGModelPersistence import save_model_artifact
 from Storage.ArtifactContract import ArtifactKind
 import test_csv_model_reload_233 as predecessor
@@ -51,17 +51,20 @@ class CSVModelCompatibility234(predecessor.CSVModelReload233):
         super().setUp()
         self.saved_config = SyntheticCompatibilityConfig(self.ref)
         self.converter = fitted_converter()
-        # Synthetic semantic-family fixture only; CSV source type discovery is
-        # not yet wired into the production metadata-building path.
-        self.compatibility = build_model_compatibility_metadata(
-            self.saved_config, self.converter,
-            {'value': 'float', 'uid': 'varchar', 'label': 'varchar'})
+        self.csv_source = SimpleNamespace(
+            dataset_id=self.ref.dataset_id, artifact_id=self.ref.artifact_id,
+            id_column='uid', class_column='label', data_columns=('value',),
+            text_columns=(),
+        )
+        self.compatibility = build_csv_model_compatibility_metadata(
+            self.saved_config, self.converter, self.csv_source)
         self._save_current(self.compatibility)
         loader = predecessor.production_model_loader()
         # Replace the 233 stub with the real model semantic checker.
         for method_name in ('load_model_from_file', 'load_model'):
             method = loader[method_name]
             method.__globals__['review_artifact_semantics'] = review_artifact_semantics
+            method.__globals__['review_model_source_boundary'] = review_model_source_boundary
             setattr(self.model, method_name, method.__get__(self.model))
 
     def _save_current(self, metadata):
@@ -72,6 +75,13 @@ class CSVModelCompatibility234(predecessor.CSVModelReload233):
     def _published(self):
         return [ref for ref in self.repo.list_artifacts(self.scope)
                 if ref.kind == ArtifactKind.PREDICTIONS]
+
+    def test_source_boundary_accepts_csv_v2_but_rejects_legacy_sql(self):
+        self.assertTrue(review_model_source_boundary(
+            self.config, self.saved_config, self.compatibility).ok)
+        self.assertFalse(review_model_source_boundary(
+            self.config, self.saved_config,
+            {'schema_version': 1}).ok)
 
     def test_real_semantic_metadata_passes_model_reload_and_csv_runner(self):
         self.assertTrue(review_artifact_semantics(self.saved_config, self.converter,

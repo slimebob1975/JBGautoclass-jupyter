@@ -233,6 +233,10 @@ class TaskRunner:
 
             except Exception as e:
                 self.logger.abort_cleanly(str(e))
+                # For CSV, abort_cleanly may only report the error.  Never
+                # dispatch later tasks (or publish results) after a failure.
+                if source_kind == "csv":
+                    raise
 
             progress_message = params.pop("progress", None)
 
@@ -514,6 +518,8 @@ class TaskRunner:
             saved_results = self.handler.save_predictions()
             if (saved_results["error"] is not None):
                 self.logger.print_error(f"Saving predictions failed: {saved_results['error']}")
+                if getattr(getattr(self.config, "data_source", None), "kind", "sql") == "csv":
+                    raise PredictionsException("CSV prediction publication failed")
 
             else:
                 self.logger.print_prediction_results(saved_results["results"])

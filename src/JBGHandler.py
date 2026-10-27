@@ -65,7 +65,7 @@ from JBGModelPersistence import (
 )
 from JBGModelCompatibility import (
     ModelCompatibilityError,
-    build_model_compatibility_metadata,
+    build_model_save_compatibility,
     review_artifact_semantics,
     review_model_source_boundary,
 )
@@ -2706,16 +2706,11 @@ class ModelHandler:
 
         save_config = self.handler.config.get_clean_config()
 
-        # A new artifact is only reusable when the source identity/schema and the
-        # fitted representation can be verified later. Source names are hashed in
-        # the compatibility contract; configured column names already live in config.
+        # Resolve model metadata using the actual prepared source, never SQL
+        # fallback for CSV. The existing SQL v1 artifact contract is unchanged.
         try:
-            connection = self.handler.config.connection
-            source_schema = self.handler.datalayer.get_table_columns(
-                connection.data_catalog, connection.data_table
-            )
-            compatibility = build_model_compatibility_metadata(
-                self.handler.config, self.model.text_converter, source_schema
+            compatibility = build_model_save_compatibility(
+                self.handler.config, self.model.text_converter, self.handler.datalayer
             )
         except ModelCompatibilityError as compatibility_error:
             raise ModelInitializationException(
@@ -2724,8 +2719,7 @@ class ModelHandler:
             ) from compatibility_error
         except Exception as compatibility_error:
             raise ModelInitializationException(
-                "Model was not saved because source/schema compatibility metadata could not be established. "
-                "The SQL source schema could not be read safely."
+                "Model was not saved because source/schema compatibility metadata could not be established."
             ) from compatibility_error
 
         # Handle KERAS models differently because of problems with Access denied errors

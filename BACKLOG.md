@@ -1,3 +1,24 @@
+- 245: CSV composition-to-application run integration tested with native prepared handlers and SQL blockers; replace fixture-provided I/O builder/config restore/handler state with genuine bootstrap and check correction snapshot before GUI activation.
+- 244: AutomaticClassifier.run() SQL-blocked integration uses prepared native-handler fixtures; unassisted runtime bootstrap, production configuration restoration, correction-revision provenance and full SQL interception remain acceptance gates.
+- 243: CSV prediction now has an explicit application-composition entry point using the validated CSV facade and AutomaticClassifier. Full live classifier.run() with production Config/Logger and SQL interception is still pending; GUI remains disabled.
+- 242: Native CSV model reload and prediction must remain SQL-free at ODBC, helper and SQL DataLayer boundaries. Test still uses synthetic handler state; full application bootstrap, run configuration restoration, source-scoped overlays and SQL-blocked CSV training remain open.
+- 241: Native handler + versioned model-reload integration probe added; full SQL-intercepted application bootstrap remains open.
+- 240: Full application bootstrap, real model/configuration restoration, and SQL connection interception remain required after native constructor probe.
+## Revision 239 - fail-closed CSV task execution
+
+- [x] Ensure CSV TaskRunner stops when abort_cleanly returns after task failure; treat CSV prediction publication errors as failed execution.
+- [ ] Exercise full initialized handler/bootstrap path with SQL connection attempts explicitly blocked; current tests still isolate initialization.
+
+## Revision 238 - source-aware integration fixture maintenance
+
+- [x] Update historical versioned-model and semantic-review integration fixtures to CSV v2, keeping the real SQL/CSV source boundary active.
+- [ ] Run fully bootstrapped SQL-blocked CSV TaskRunner integration and complete source-aware GUI model selection.
+
+## Revision 237 - source-specific model persistence
+
+- [x] Select CSV v2 or SQL v1 compatibility metadata at the real model-save boundary, without CSV-to-SQL fallback.
+- [ ] Complete fully initialized CSV training, SQL-blocked TaskRunner prediction and source-aware model dropdown before GUI activation.
+
 ## Revision 236 - hard SQL/CSV model source boundary
 
 - [x] Enforce SQL/CSV isolation on model reload using selected source, saved configuration, and metadata schema. Legacy SQL v1 is SQL-only.

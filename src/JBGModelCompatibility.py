@@ -318,6 +318,33 @@ def build_csv_model_compatibility_metadata(config, converter, csv_configuration)
     }
 
 
+def build_model_save_compatibility(config, converter, datalayer) -> dict:
+    """Select the source-specific contract at the real model-save boundary.
+
+    A CSV model must have an explicitly prepared, scoped CSV reader. Do not
+    query SQL or infer a CSV schema from a SQL connection as a fallback.
+    """
+    kind = getattr(getattr(config, "data_source", None), "kind", "sql")
+    if kind == "csv":
+        from Storage.CSVTrainingAdapter import CSVTrainingAdapter
+        from Storage.CSVPredictionDataLayer import CSVPredictionDataLayer
+
+        reader = datalayer._reader if isinstance(datalayer, CSVPredictionDataLayer) else datalayer
+        if not isinstance(reader, CSVTrainingAdapter):
+            raise ModelCompatibilityError("CSV model saving requires a registered CSV reader.")
+        if (getattr(reader, "config", None) is not config
+                or getattr(reader, "configuration", None) is None):
+            raise ModelCompatibilityError("CSV model source context is not validated.")
+        return build_csv_model_compatibility_metadata(config, converter, reader.configuration)
+    if kind == "sql":
+        if datalayer is None or not callable(getattr(datalayer, "get_table_columns", None)):
+            raise ModelCompatibilityError("SQL model saving requires an SQL schema provider.")
+        connection = config.connection
+        schema = datalayer.get_table_columns(connection.data_catalog, connection.data_table)
+        return build_model_compatibility_metadata(config, converter, schema)
+    raise ModelCompatibilityError("Unknown model data source type.")
+
+
 def review_csv_source_compatibility(metadata, csv_configuration, *, column_families=None) -> CompatibilityReview:
     """Fail closed against an explicitly supplied CSV semantic schema.
 

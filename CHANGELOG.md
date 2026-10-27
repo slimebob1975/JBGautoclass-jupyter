@@ -1,3 +1,30 @@
+- 245: Add CSV application entry-point to native AutomaticClassifier.run integration regression (synthetic model, SQL guards, corrupted model and wrong-source rejection); no production code changes.
+- 244: Add application-level CSV prediction regression tests covering AutomaticClassifier.run(), SQL guards, versioned model reload, result publication and corrupted-model fail-closed behavior; no production behavior changed.
+## Revision 243 - guarded CSV application composition
+
+- Add an opt-in prediction-only CSV entry point that prepares the registered CSV data layer and initializes AutomaticClassifier without SQL DataLayer construction. Reject cross-source and invalid scope before application creation. Add synthetic boundary tests; full application execution remains pending.
+
+## Revision 242 - native CSV prediction with SQL entry points blocked
+
+- Add a native-handler prediction integration probe that blocks ODBC connections, SQL helper connections and SQL DataLayer read/write calls; verify versioned model reload, opaque row IDs and no prediction artifact after invalid model load. No production code changes. The fixture is synthetic and is not a complete application bootstrap.
+
+## Revision 241 - native CSV model artifact reload probe
+
+- Added synthetic native-constructor prediction integration tests using the production model artifact loader and source compatibility review. Full application bootstrap and SQL access interception remain pending.
+
+- 240: Add optional-dependency-aware native constructor and TaskRunner CSV prediction integration probe (synthetic input/model loader); no production changes.
+## Revision 239 - fail-closed CSV prediction dispatch
+
+- Stop CSV task dispatch after a task exception even when the logger returns normally, and propagate CSV publication errors. SQL behavior remains unchanged. Add synthetic integration regression tests; full bootstrapped SQL-blocked run remains open.
+
+## Revision 238 - align historical CSV integration tests with source-specific model metadata
+
+- Refresh synthetic tests 233 and 234 to use CSV v2 metadata and the production source-boundary guard. Preserve semantic tampering rejection; production code unchanged.
+
+## Revision 237 - source-specific compatibility metadata during model save
+
+- Route model-save metadata generation through the prepared source: SQL retains v1 and CSV requires a validated CSVTrainingAdapter and produces v2. Reject unsupported sources rather than falling back to SQL. Synthetic tests only; CSV GUI remains disabled.
+
 ## Revision 236 - SQL/CSV model source isolation
 
 - Reject cross-source model reload before model construction; preserve legacy SQL v1 as SQL-only and require explicit CSV v2 identity. Added synthetic regression tests.
