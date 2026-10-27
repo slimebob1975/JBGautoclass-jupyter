@@ -9,6 +9,7 @@ import pandas as pd
 
 from Storage.CSVModelConfiguration import load_csv_model_configuration
 from Storage.ArtifactContract import ArtifactKind
+from Storage.CSVReclassification import list_csv_corrections, read_corrected_csv
 
 
 class CSVTrainingAdapter:
@@ -19,6 +20,10 @@ class CSVTrainingAdapter:
         self.scope = scope
         self.configuration = load_csv_model_configuration(repository, scope, configuration_id)
         self.config = config
+        # Freeze the correction head at preparation, before reading any rows.
+        # None means the original CSV, even if a new correction is appended later.
+        revisions = list_csv_corrections(repository, scope, configuration_id)
+        self.correction_revision = revisions[-1] if revisions else None
         c = self.configuration
         # The pipeline's column order is text + numerical + ID + class.
         self.column_names = list(config.get_column_names())
@@ -52,8 +57,13 @@ class CSVTrainingAdapter:
                 or ref.dataset_id != c.dataset_id):
             raise ValueError('CSV dataset identity mismatch')
         try:
-            with self.repository.open_artifact(self.scope, c.artifact_id) as stream:
-                raw = stream.read()
+            if self.correction_revision is None:
+                with self.repository.open_artifact(self.scope, c.artifact_id) as stream:
+                    raw = stream.read()
+            else:
+                raw = read_corrected_csv(self.repository, self.scope,
+                                         c.configuration_id,
+                                         revision=self.correction_revision)
             frame = pd.read_csv(BytesIO(raw), sep=fmt['delimiter'],
                                 quotechar=fmt['quotechar'], encoding=fmt['encoding'],
                                 dtype=object, keep_default_na=False, index_col=False,

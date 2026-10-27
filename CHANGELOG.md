@@ -1,3 +1,31 @@
+## Revision 226 - scoped CSV reads with frozen correction revisions
+
+- CSVTrainingAdapter now pins the correction head during construction and uses the existing corrected-CSV view for all row and DataFrame reads. A reader with no prior edits continues reading the immutable original after later edits.
+- Apply corrected class labels before train-only/predict-only filtering; preserve text IDs, SQL execution, original dataset bytes and existing model format.
+- Add synthetic tests for multi-edit reads, both snapshot boundaries, mode filtering and revision-based export. GUI CSV execution and run-level revision provenance remain pending.
+
+## Revision 225 - CSV correction overlay replaces dataset cloning
+
+- Replace the revision 224 corrected-dataset output with a compact immutable correction manifest per edit, linked to the unchanged registered CSV dataset and previous edit.
+- Provide scoped latest and historical in-memory CSV views and correction revision listing without changing the original dataset bytes, source identity, SQL behavior, or GUI activation.
+- Update revision 224 contract tests for the new semantics and cover repeated edits, invalid inputs, historical reads and scope isolation; single-writer behavior is assumed until explicit concurrency control is implemented.
+
+## Revision 224 - versioned CSV correction backend (GUI inactive)
+
+- Add a SQL-independent reclassification operation for registered CSV artifacts using exact string row IDs, validated class values and retained CSV dialect.
+- Publish corrections as new immutable dataset references; never overwrite the registered source or silently update a saved model/configuration identity. The editable GUI is not yet connected.
+- Add synthetic success and fail-closed tests; SQL correction behavior is unchanged.
+
+## Revision 223 - source-aware misprediction reporting (CSV GUI inactive)
+
+- Skip SQL-only inspection query generation in PredictionsHandler.evaluate_mispredictions for CSV; preserve existing SQL query reporting and shared positional misprediction calculations.
+- Add synthetic tests for opaque leading-zero/alphanumeric IDs, CSV SQL isolation, existing SQL numeric reporting and empty-result handling. Existing local CSV export is not yet a scoped artifact; GUI reclassification editing remains unverified.
+
+## Revision 222a - stable DatasetHandler CSV row ordering
+
+- Replace inferred boolean missing-label sort keys with explicit integer rank (known first, unknown second), preserving lexicographic CSV ID order and existing SQL numeric ID normalization.
+- Add a regression with shuffled opaque IDs, None, empty and NaN labels. No CSV GUI activation or model/artifact format changes.
+
 ## Revision 222 - CSV row identifiers in DatasetHandler
 
 - Make DatasetHandler source-aware for CSV row ordering and index construction; keep SQL numeric indexing unchanged.

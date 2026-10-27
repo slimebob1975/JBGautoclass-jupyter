@@ -1,3 +1,32 @@
+## Revision 226 - pin CSV correction head for each adapter
+
+- [x] Capture the latest correction revision when preparing a scoped CSV reader, then apply only that revision to every subsequent read. Readers prepared before the first edit remain on original bytes.
+- [ ] Propagate the pinned correction revision into run/model provenance and export/download metadata; complete real-handler execution and SQL-free runtime tests before GUI activation.
+- [ ] Keep concurrent correction writers and reclassification GUI binding gated until explicit consistency and authorization contracts are tested.
+
+## Revision 225 - linked class-correction overlay for registered CSV
+
+- [x] Replace revision 224 full-CSV rewrite with small immutable correction events beside the original dataset. Replay is deterministic and historical correction revisions remain addressable.
+- [ ] Wire correction-overlay reads into training, prediction and export; do not activate GUI CSV ML yet.
+- [ ] Add cross-process single-writer/concurrency controls, retention/compaction and edit audit/authorization before multi-user service exposure.
+
+## Revision 224 - immutable CSV reclassification foundation
+
+- [x] Add a scoped, SQL-free single-row class correction that produces a new registered CSV dataset version and preserves the source artifact and opaque IDs.
+- [ ] Wire the reclassification dropdown to an explicitly selected CSV version, with user confirmation and safe model/configuration rebinding. The original local upload is not overwritten.
+- [ ] Define a deliberate export/replace workflow if users need to update a physical CSV file; keep GUI CSV execution disabled until full handler integration.
+
+## Revision 223 - CSV misprediction SQL separation
+
+- [x] Keep shared positional misprediction ranking and suppress SQL inspection-query generation for CSV sources; retain SQL reporting.
+- [ ] CSV misprediction export remains a local file and its editable reclassification widget is SQL-oriented; verify scoped publication and GUI behavior before CSV training activation.
+- [ ] Complete real-handler CSV TaskRunner and SQL-blocked end-to-end testing before GUI execution.
+
+## Revision 222a - deterministic CSV labelled-first ordering
+
+- [x] Rank labelled and unlabelled rows explicitly before sorting CSV IDs; cover null and empty labels across pandas versions.
+- [ ] Windows-verification and full SQL-isolated TaskRunner lifecycle remain pending; CSV GUI execution stays disabled.
+
 ## Revision 222 - source-aware DatasetHandler row IDs
 
 - [x] Preserve opaque CSV row IDs through DatasetHandler ordering and indexing while retaining SQL integer IDs.

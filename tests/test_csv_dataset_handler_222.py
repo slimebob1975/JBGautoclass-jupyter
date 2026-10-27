@@ -63,6 +63,14 @@ class SourceAwareDataset222(unittest.TestCase):
         sorted_data = obj.shuffle_dataset(self.data())
         self.assertEqual(sorted_data.row_id.tolist(), ["010", "002", "A-1"])
 
+    def test_csv_sort_rank_is_stable_with_missing_label_variants(self):
+        obj = self.handler("csv")
+        data = pd.DataFrame({"row_id": ["Z-2", "B-1", "A-1", "010", "002"],
+                             "label": [None, "yes", "", "no", np.nan]})
+        ordered = obj.shuffle_dataset(data)
+        self.assertEqual(ordered.row_id.tolist(), ["010", "B-1", "002", "A-1", "Z-2"])
+        self.assertEqual(ordered.label.iloc[:2].tolist(), ["no", "yes"])
+
     def test_csv_rejects_duplicate_and_empty_identifiers(self):
         obj = self.handler("csv")
         for identifiers in (["005", "005"], ["005", ""]):

@@ -555,10 +555,16 @@ class DatasetHandler:
             ids = dataset[id_column].map(lambda value: prediction_key(value, "csv"))
         else:
             ids = dataset[id_column].apply(Helpers.get_rid_of_decimals)
-        unknown = dataset[class_column].map(lambda value: value is None or not str(value).strip())
-        order = pd.DataFrame({"unknown": unknown.to_numpy(), "id": ids.to_numpy(),
+        # Use an explicit integer rank rather than an inferred boolean/object
+        # dtype: pandas versions must sort labelled rows before missing labels.
+        missing_rank = np.fromiter(
+            (1 if pd.isna(value) or not str(value).strip() else 0
+             for value in dataset[class_column].tolist()),
+            dtype=np.int8, count=len(dataset),
+        )
+        order = pd.DataFrame({"missing_rank": missing_rank, "id": ids.to_numpy(),
                               "position": np.arange(len(dataset))})
-        positions = order.sort_values(["unknown", "id"], kind="mergesort")["position"]
+        positions = order.sort_values(["missing_rank", "id"], kind="mergesort")["position"]
         self.handler.logger.print_privacy_safe(
             f"Dataset order: known labels first, then unique ID {id_column!r}; "
             "holdout split seed=42, stratified CV seed=1. Same fetched rows/IDs/labels "
@@ -2867,10 +2873,13 @@ class PredictionsHandler:
         
         self.handler.logger.print_key_value_pair(f"Total number of mispredicted elements", self.num_mispredicted, print_always=True)
         
-        ids = ', '.join([str(id) for id in self.X_most_mispredicted.index.tolist()])
-        most_mispredicted_query = f"{self._get_rid_of_TOP_stuffs(self.handler.read_data_query)} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
-        
-        self.handler.logger.print_query("most mispredicted data", most_mispredicted_query)
+        # SQL inspection queries are not meaningful for file-backed CSV sources.
+        # In particular, opaque CSV IDs must never be interpolated into SQL.
+        source = getattr(self.handler.config, "data_source", None)
+        if getattr(source, "kind", "sql") != "csv":
+            ids = ', '.join([str(id) for id in self.X_most_mispredicted.index.tolist()])
+            most_mispredicted_query = f"{self._get_rid_of_TOP_stuffs(self.handler.read_data_query)} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
+            self.handler.logger.print_query("most mispredicted data", most_mispredicted_query)
         Helpers.save_matrix_as_csv(
             self.X_mispredicted,
             misplaced_filepath,
