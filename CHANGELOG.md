@@ -1,3 +1,4 @@
+- 248: Add a privacy-safe, operator-run SQL regression acceptance protocol; documentation only, no SQL/CSV production behavior changed.
 - 247: Add registered CSV prediction composition boundary with persisted source/role verification and synthetic scoped tests. No GUI activation or live CSV run.
 - 246: Expose the immutable CSV correction head through prediction data layer; reject missing snapshot provenance before classifier construction. Add synthetic scoped-repository tests for snapshot stability and source guard. Live bootstrap is still unverified. SQL live regression is mandatory before first live CSV run.
 - 245: Add CSV application entry-point to native AutomaticClassifier.run integration regression (synthetic model, SQL guards, corrupted model and wrong-source rejection); no production code changes.
