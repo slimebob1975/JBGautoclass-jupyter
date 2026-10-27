@@ -18,6 +18,11 @@ class CSVPredictionDataLayer:
         self._reader = reader
         self._sink = sink
 
+    @property
+    def correction_revision(self):
+        """Immutable correction head selected when this CSV reader was prepared."""
+        return self._reader.correction_revision
+
     def get_dataset(self, num_rows=None):
         return self._reader.get_dataset(num_rows=num_rows)
 

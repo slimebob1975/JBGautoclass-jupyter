@@ -1,3 +1,5 @@
+- 247: Add registered CSV prediction composition boundary with persisted source/role verification and synthetic scoped tests. No GUI activation or live CSV run.
+- 246: Expose the immutable CSV correction head through prediction data layer; reject missing snapshot provenance before classifier construction. Add synthetic scoped-repository tests for snapshot stability and source guard. Live bootstrap is still unverified. SQL live regression is mandatory before first live CSV run.
 - 245: Add CSV application entry-point to native AutomaticClassifier.run integration regression (synthetic model, SQL guards, corrupted model and wrong-source rejection); no production code changes.
 - 244: Add application-level CSV prediction regression tests covering AutomaticClassifier.run(), SQL guards, versioned model reload, result publication and corrupted-model fail-closed behavior; no production behavior changed.
 ## Revision 243 - guarded CSV application composition
