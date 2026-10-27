@@ -1,3 +1,13 @@
+## Revision 222 - source-aware DatasetHandler row IDs
+
+- [x] Preserve opaque CSV row IDs through DatasetHandler ordering and indexing while retaining SQL integer IDs.
+- [ ] Verify complete handler lifecycle with real JBG configuration, conversion and TaskRunner before GUI activation.
+
+## Revision 221 - shared CSV prediction handler integration
+
+- [x] Exercise actual JBGHandler/PredictionsHandler/ModelHandler save and result-construction methods with scoped CSV results.
+- [ ] Full DatasetHandler parsing/conversion and complete TaskRunner lifecycle still need a SQL-blocked integration test before GUI activation.
+
 ## Revision 220 - bounded CSV TaskRunner execution smoke
 
 - [x] Exercise production task dispatch and task methods with scoped CSV I/O, a serialized estimator and controlled handler adapters.

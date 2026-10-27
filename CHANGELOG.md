@@ -1,3 +1,13 @@
+## Revision 222 - CSV row identifiers in DatasetHandler
+
+- Make DatasetHandler source-aware for CSV row ordering and index construction; keep SQL numeric indexing unchanged.
+- Add focused CSV/SQL regression coverage. CSV GUI execution remains disabled and full task lifecycle is not yet verified.
+
+## Revision 221 - CSV prediction handler persistence integration (GUI inactive)
+
+- Add isolated integration tests executing production JBG handler methods with a real fitted estimator, CSV result sink, string IDs, and fail-closed negative cases.
+- No runtime or SQL changes. Full DatasetHandler and GUI execution remain unverified; Windows tests pending.
+
 ## Revision 220 - CSV TaskRunner execution smoke (GUI inactive)
 
 - Run the real TaskRunner dispatch and task methods on a scoped CSV fixture with a fitted/reloaded sklearn estimator and file result publication; use controlled JBG-handler adapters.

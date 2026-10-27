@@ -550,7 +550,11 @@ class DatasetHandler:
         id_column = self.handler.config.get_id_column_name()
         class_column = self.handler.config.get_class_column_name()
         # Reuse the same ID normalization as split_keys_from_dataset.
-        ids = dataset[id_column].apply(Helpers.get_rid_of_decimals)
+        source_kind = getattr(getattr(self.handler.config, "data_source", None), "kind", "sql")
+        if source_kind == "csv":
+            ids = dataset[id_column].map(lambda value: prediction_key(value, "csv"))
+        else:
+            ids = dataset[id_column].apply(Helpers.get_rid_of_decimals)
         unknown = dataset[class_column].map(lambda value: value is None or not str(value).strip())
         order = pd.DataFrame({"unknown": unknown.to_numpy(), "id": ids.to_numpy(),
                               "position": np.arange(len(dataset))})
@@ -568,11 +572,17 @@ class DatasetHandler:
         # Use the unique id column from the data as the index column and take a copy, 
         # since it will not be used in the classification but only to reconnect each 
         # data row with classification results later on
+        source_kind = getattr(getattr(self.handler.config, "data_source", None), "kind", "sql")
         try:
-            keys = dataset[id_column].copy(deep = True).apply(Helpers.get_rid_of_decimals)
+            if source_kind == "csv":
+                keys = dataset[id_column].copy(deep=True).map(
+                    lambda value: prediction_key(value, "csv")
+                )
+            else:
+                keys = dataset[id_column].copy(deep=True).apply(Helpers.get_rid_of_decimals)
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
-            raise DatasetException(f"Could not convert to integer: {e}")
+            raise DatasetException("Could not normalize unique row identifiers") from None
 
         duplicate_mask = keys.duplicated(keep=False)
         if duplicate_mask.any():
@@ -586,7 +596,8 @@ class DatasetHandler:
             
         
         try:
-            dataset.set_index(keys.astype('int64'), drop=False, append=False, inplace=True)
+            index_keys = keys if source_kind == 'csv' else keys.astype('int64')
+            dataset.set_index(index_keys, drop=False, append=False, inplace=True)
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise DatasetException(f"Could not set index for dataset: {e}")
