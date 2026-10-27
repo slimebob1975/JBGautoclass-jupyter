@@ -25,9 +25,11 @@ def _runner(kind='csv', text=False):
     config = SimpleNamespace(data_source=SimpleNamespace(kind=kind), should_train=lambda: False,
                              get_text_column_names=lambda: ['feature'] if text else [])
     logger = Mock()
+    layer = CSVPredictionDataLayer(Mock(), Mock())
     handler = Mock()
+    handler.datalayer = layer
     handler.get_handler.return_value = Mock()
-    runner = SimpleNamespace(config=config, datalayer=CSVPredictionDataLayer(Mock(), Mock()),
+    runner = SimpleNamespace(config=config, datalayer=layer,
                              logger=logger, handler=handler, regression_suite=False)
     return runner
 

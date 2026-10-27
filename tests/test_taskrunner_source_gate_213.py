@@ -23,6 +23,7 @@ def _runner(kind, layer, *, training=False, suite=False):
     config = SimpleNamespace(data_source=SimpleNamespace(kind=kind), should_train=lambda: training, get_text_column_names=lambda: [])
     logger = Mock()
     handler = Mock()
+    handler.datalayer = layer
     handler.get_handler.return_value = Mock()
     runner = SimpleNamespace(config=config, datalayer=layer, logger=logger, handler=handler, regression_suite=suite)
     return runner

@@ -74,10 +74,12 @@ class CSVTrainingAdapter:
             elif predict and not train:
                 frame = frame.loc[~labelled]
             limit = num_rows if num_rows is not None else self.config.get_data_limit()
+            # JBG Config represents an unset data limit as zero.
             if limit is not None:
-                if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+                if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
                     raise ValueError('Invalid CSV row limit')
-                frame = frame.iloc[:limit]
+                if limit > 0:
+                    frame = frame.iloc[:limit]
             return list(frame.itertuples(index=False, name=None))
         except (OSError, UnicodeError, LookupError, KeyError, ValueError,
                 pd.errors.ParserError, pd.errors.EmptyDataError):

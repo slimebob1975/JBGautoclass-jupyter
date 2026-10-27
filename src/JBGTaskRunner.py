@@ -185,6 +185,11 @@ class TaskRunner:
             if (self.regression_suite or self.config.should_train()
                     or not isinstance(self.datalayer, CSVPredictionDataLayer)):
                 raise ValueError("CSV execution requires a prepared prediction data layer")
+            # TaskRunner fetches from self.datalayer, but JBGHandler writes
+            # predictions through handler.datalayer. Both must use the exact
+            # same validated CSV facade, or writes could reach SQL instead.
+            if getattr(self.handler, "datalayer", None) is not self.datalayer:
+                raise ValueError("CSV prediction data-layer mismatch")
             # The caller may supply task names directly. Do not rely solely on
             # should_train(): block training, diagnostics and unknown tasks
             # before any data is read or any result artifact is published.

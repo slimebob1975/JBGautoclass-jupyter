@@ -1,3 +1,24 @@
+## Revision 220 - CSV TaskRunner execution smoke (GUI inactive)
+
+- Run the real TaskRunner dispatch and task methods on a scoped CSV fixture with a fitted/reloaded sklearn estimator and file result publication; use controlled JBG-handler adapters.
+- Assert that writer mismatch and injected training tasks fail before publication. This does not certify the complete JBG handler initialization, model compatibility lifecycle, or GUI execution.
+
+## Revision 219 - source-safe CSV TaskRunner storage identity
+
+- Fail closed if the runner reads CSV through one facade but JBGHandler would save predictions through another (potentially SQL) data layer.
+- Retain SQL behavior and the CSV GUI gate; add focused read/write identity and prior task-sequence regressions.
+
+## Revision 218 - real Config CSV model restore boundary (tests only)
+
+- Add a dependency-gated integration test for the real JBG Config.load_config_from_model_file using a trusted, versioned model artifact and scoped registered CSV input.
+- Cover successful column-role/ID restoration, cross-dataset and cross-source rejection, and preservation of runtime mail settings; no SQL connections or GUI activation.
+- The full JBG TaskRunner and GUI are not yet end-to-end tested. Missing bootstrap dependencies are reported as skips, not successful live verification.
+
+## Revision 217 - JBG artifact and prediction handler integration (inactive)
+
+- Add synthetic integration coverage using the actual JBG versioned model serialization reader/writer and the shared PredictionsHandler result builder with the scoped CSV reader and writer.
+- Keep a test-only Config loader wrapper to isolate GUI/runtime dependencies; full classifier/TaskRunner execution remains unverified. No production behavior changes.
+
 ## Revision 216 - CSV prediction integration smoke (inactive)
 
 - Add a SQL-independent integration test spanning locally serialized sklearn estimator reload, registered CSV rows, scoped read facade and private prediction output/public manifest.

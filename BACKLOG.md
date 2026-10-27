@@ -1,3 +1,24 @@
+## Revision 220 - bounded CSV TaskRunner execution smoke
+
+- [x] Exercise production task dispatch and task methods with scoped CSV I/O, a serialized estimator and controlled handler adapters.
+- [ ] Full JBG DatasetHandler/ModelHandler/PredictionsHandler lifecycle, SQL isolation and GUI activation remain unverified.
+
+## Revision 219 - CSV read/write data-layer identity guard
+
+- [x] Require the same prepared CSV data-layer facade for TaskRunner reads and JBGHandler prediction writes before task dispatch.
+- [ ] Full TaskRunner end-to-end execution and GUI activation are still pending; the guard does not prove the full pipeline works.
+
+## Revision 218 - real configuration restore integration checks
+
+- [x] Add Windows-targeted tests that run the real Config model-file loader through scoped CSV prediction preparation; keep CSV GUI execution disabled.
+- [ ] Full TaskRunner execution and production JBG classification remain unverified.
+- [ ] In environments lacking JBG bootstrap dependencies, integration tests skip explicitly rather than passing vacuously.
+
+## Revision 217 - real JBG artifact and shared prediction handler
+
+- [x] Integration-test the actual JBG model artifact read/write contract, the shared prediction-result constructor, registered CSV input and scoped result publication.
+- [ ] Full Config loading, TaskRunner lifecycle, GUI execution and SQL isolation under real runtime startup remain pending.
+
 ## Revision 216 - CSV prediction integration smoke
 
 - [x] Test a trusted serialized sklearn estimator with registered CSV input and scoped prediction result publication through the existing CSV composition facade.
