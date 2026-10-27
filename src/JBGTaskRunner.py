@@ -614,7 +614,12 @@ def get_tasks(config: Config, regression_suite: bool = False) -> list:
         "separate_dataset"
     ]
 
-    if config.get_text_column_names():
+    # CSV artifacts require a fitted input-schema converter even when every
+    # predictor is numeric. SQL retains its historical text-only conversion.
+    if config.get_text_column_names() or (
+        getattr(getattr(config, "data_source", None), "kind", "sql") == "csv"
+        and config.should_train()
+    ):
         tasks.append("convert_to_numbers")
 
     if config.should_train():

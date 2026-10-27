@@ -40,6 +40,15 @@ class CSVFullClassifierRun259(CSVNativeHandlerBridge258):
         config.mode.max_iterations = 300
         (self.root / 'models').mkdir()
         (self.root / 'output' / 'csvs').mkdir(parents=True)
+        # The fixture logger is a Mock. Restore the production CV export
+        # behavior without invoking notebook/terminal presentation code.
+        from Helpers import build_model_performance_matrix, save_matrix_as_csv
+        def export_cv_results(results, filepath):
+            save_matrix_as_csv(build_model_performance_matrix(results), filepath)
+        self.logger.print_test_performance.side_effect = export_cv_results
+        # Mock logger must expose actual text to the completion task.
+        self.logger.get_log_output.return_value = ''
+        self.logger.get_log_output_html.return_value = ''
         model_path = Path(config.get_model_filename())
         self.assertFalse(model_path.exists())
 
@@ -49,11 +58,14 @@ class CSVFullClassifierRun259(CSVNativeHandlerBridge258):
             guards.enter_context(patch.object(pyodbc, 'connect', side_effect=AssertionError('SQL connection forbidden')))
             from SQLDataLayer import DataLayer as SQLDataLayer
             guards.enter_context(patch.object(SQLDataLayer, '__init__', side_effect=AssertionError('SQL layer forbidden')))
+            mock_send_email = guards.enter_context(
+                patch('JBGTaskRunner.send_email', return_value=False))
             classifier = prepare_registered_csv_training_classifier(
                 config, self.repo, self.scope, self.roles.configuration_id, self.logger)
             self.assertIs(classifier.datalayer, classifier.handler.datalayer)
             result = classifier.run()
             self.assertIsInstance(result, dict, 'Classifier did not finish the native train-only task sequence')
+            mock_send_email.assert_called_once()
             self.assertTrue(model_path.is_file(), 'Native CSV model checkpoint was not saved')
             payload, compatibility = load_model_artifact_with_compatibility(model_path)
             self.assertEqual(compatibility['source_kind'], 'csv')
