@@ -971,8 +971,8 @@ class Widgets:
         self.categorize_columns.options = config.get_text_column_names()
         saved_dark_number_target = config.get_dark_number_target()
         if saved_dark_number_target:
-            self.dark_number_target.options = self._with_saved_options(
-                self.dark_number_target.options, (saved_dark_number_target,)
+            self.dark_number_target.options = self._with_saved_target_options(
+                self.dark_number_target.options, saved_dark_number_target
             )
             
         # Values from config
@@ -1073,6 +1073,21 @@ class Widgets:
         return tuple(current)
 
     @staticmethod
+    def _with_saved_target_options(options, target: str) -> tuple:
+        """Keep RadioButtons options as label/value pairs, without duplicates."""
+        normalized = []
+        for option in options:
+            if isinstance(option, (tuple, list)) and len(option) == 2:
+                label, value = option
+            else:
+                label = value = option
+            if not any(previous_value == value for _, previous_value in normalized):
+                normalized.append((str(label), value))
+        if target not in (None, "") and not any(value == target for _, value in normalized):
+            normalized.append((str(target), target))
+        return tuple(normalized)
+
+    @staticmethod
     def _without_stale_na_placeholder(options) -> tuple:
         """Drop the initial N/A option once at least one real option is available."""
         current = tuple(options)
@@ -1138,8 +1153,8 @@ class Widgets:
             self.categorize_columns.options = text_columns
             saved_dark_number_target = str(getattr(mode, "dark_number_target", "") or "")
             if saved_dark_number_target:
-                self.dark_number_target.options = self._with_saved_options(
-                    self.dark_number_target.options, (saved_dark_number_target,)
+                self.dark_number_target.options = self._with_saved_target_options(
+                    self.dark_number_target.options, saved_dark_number_target
                 )
 
             self.update_values({
@@ -2330,7 +2345,7 @@ class Widgets:
         ready = assisted and bool(self.data_columns.value) and bool(self.class_column.value) and bool(self.id_column.value)
         running = getattr(self, "_feature_search_running", False)
         self.feature_search_investigate_button.disabled = running or not ready
-        if running or (mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False)):
+        if dataset_editable and (running or (mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False))):
             self.disable_button("continuation_button")
         if not ready:
             self.feature_search_investigate_button.button_style = "primary"
@@ -2343,7 +2358,7 @@ class Widgets:
         self.feature_search_save_button.disabled = not (
             assisted and self.feature_search_result and self.feature_search_result.get("status") == "completed" and self.feature_search_result.get("recommendation") is not None
         )
-        if mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False):
+        if dataset_editable and mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False):
             self.disable_button("continuation_button")
         if not preserve_status:
             if mode == "manual":

@@ -472,6 +472,15 @@ class DataLayer(DataLayerBase):
                 f"fetching at most {num_rows} instead of {requested_num_rows}."
             )
         
+        if num_rows == 0:
+            self.logger.print_warning(
+                "No eligible SQL rows for this mode. Prediction requires rows with an "
+                "empty class value; no predictions were written."
+                if self.config.should_predict() and not self.config.should_train()
+                else "No eligible SQL rows for this mode; no data was fetched."
+            )
+            return None
+
         # Start fetching the data from the database
         try:
         

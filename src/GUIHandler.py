@@ -639,7 +639,11 @@ class GUIHandler:
                 self._classifier_diagnostic("classifier.run: begin (database fetch follows in task runner)")
                 result = the_classifier.run()
                 self._classifier_diagnostic("classifier.run: end")
-                if not result:
+                if result is False:
+                    self.logger.print_warning(
+                        "Classification ended without eligible data; no predictions were saved."
+                    )
+                elif not result:
                     self.logger.print_info("No data was fetched from database!")
 
             self._classifier_diagnostic("Script output capture: exited")
@@ -660,7 +664,7 @@ class GUIHandler:
                             f"Reclassification widget unavailable; model run completed: "
                             f"{type(exc).__name__}: {exc}"
                         )
-            if set_rerun:
+            if set_rerun and result is not False:
                 self.widgets.set_rerun()
             self._classifier_diagnostic("post-run GUI: completed")
             self._classifier_diagnostic(f"callback completed; elapsed={time.monotonic()-started:.1f}s")

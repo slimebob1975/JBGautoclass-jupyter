@@ -1,3 +1,4 @@
+- 249 SQL REGRESSION: Verify successful persisted SQL prediction against eligible unlabeled rows, including database write counts and failure reporting. Fix GUI saved-model Continue/Target state. Keep CSV live gate closed.
 - 248 SQL REGRESSION GATE: Execute the privacy-safe SQL regression protocol in tests/SQL_REGRESSION_PROTOCOL_248.md after the 247 commit. Block live CSV and CSV GUI until SQL baseline, saved-model reload, prediction and result checks pass; fix any regression first.
 - 247: Add opt-in repository-backed CSV registration check before prediction composition; source identity and roles must match persisted configuration. Full classifier bootstrap and SQL regression gate still pending.
 - 246: CSV prediction composition exposes and requires a pinned correction snapshot (including the unmodified-original case). Remaining: ordinary saved-config restore and genuine classifier bootstrap without fixture overrides.

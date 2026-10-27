@@ -1,3 +1,4 @@
+- 249: Repair saved SQL model GUI continuation and consistent Dark Numbers radio options; report empty SQL prediction as no work and avoid false Rerun indication. Add synthetic tests. SQL output persistence still requires Windows/live acceptance.
 - 248: Add a privacy-safe, operator-run SQL regression acceptance protocol; documentation only, no SQL/CSV production behavior changed.
 - 247: Add registered CSV prediction composition boundary with persisted source/role verification and synthetic scoped tests. No GUI activation or live CSV run.
 - 246: Expose the immutable CSV correction head through prediction data layer; reject missing snapshot provenance before classifier construction. Add synthetic scoped-repository tests for snapshot stability and source guard. Live bootstrap is still unverified. SQL live regression is mandatory before first live CSV run.
