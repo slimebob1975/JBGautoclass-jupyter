@@ -1,3 +1,12 @@
+## Version 0.19.0 - CSV classifier lifecycle and regression stabilization (revisions 257-271a)
+
+- Enable source-scoped CSV classifier training through the existing ML pipeline, including native model fitting, persisted checkpoints and safe reuse of saved CSV models for prediction. Preserve the separate SQL execution path.
+- Add saved CSV model inspection and pipeline display; support prediction-result export and explicit, guarded deletion of saved models, prediction runs and datasets with related artifacts.
+- Enforce source, dataset and checkpoint identity checks before CSV model reuse or publication. Keep CSV prediction artifacts scoped and avoid exposing row-level data in routine logs.
+- Stabilize multiclass feature-search probability diagnostics and native CatBoost handling of categorical columns.
+- Add a local launcher regression gate: run unittest discovery and the legacy pytest modules before starting Voila; block startup when mandatory tests fail.
+- Windows acceptance for this checkpoint: 761 unittest cases (758 passed, 3 skipped) and 70 pytest cases passed. Skipped symlink cases require separate coverage on a supported environment. Live SQL acceptance remains a separate operator-run requirement.
+
 ## Revision 256 - CSV retraining checkpoint reload guard
 
 - Require a successfully reloaded saved-model checkpoint before CSV retraining continues; do not silently use the in-memory model after a CSV reload failure. Preserve SQL fallback behavior.

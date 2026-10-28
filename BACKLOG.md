@@ -1,3 +1,133 @@
+# JBG AutoClassification - Active BACKLOG (revision 272)
+
+This is the **current, agreed development order**. The detailed revision notes below
+are retained for traceability, not as a second active priority queue. Earlier
+instructions saying that all CSV execution is blocked are historical; **the
+complete configurable CSV ML pipeline is not yet enabled in the GUI**, even though
+restricted CSV training and saved-model prediction already work.
+
+## Confirmed baseline
+
+- [x] CSV dataset registration, source-specific validation, restricted native
+  classifier training, saved-model inspection/reuse and prediction through the
+  shared ML engine (257-266). This does **not** demonstrate feature parity with SQL.
+- [x] Scoped CSV prediction export and guarded deletion of CSV models, prediction
+  runs and datasets (267-269c). These controls do not imply SQL model erasure works.
+- [x] Full Windows regression checkpoint after 270f1: 761 unittest cases
+  (758 passed, 3 skipped) plus 70 pytest cases passed. Three skipped symlink
+  checks remain unverified on this host.
+- [x] Revision 272: fast fail-closed regression check at normal local launch;
+  separate explicit full regression before commit/release. Both modes passed
+  in the local Windows environment. Do not silently weaken either gate.
+- [x] Version 0.19.0 and the 271-series status/roadmap update were prepared;
+  individual commit/push status must be checked in Git, not inferred here.
+
+## Binding development sequence (decided after revision 272)
+
+**Phase 1 - Complete and verify the ML engine for both data sources (P1).**
+
+- [ ] **273a: CSV GUI capability audit.** Build a source-by-source capability
+  matrix: already working, GUI-blocked, adapter work needed, and unverified.
+  Trace controls and execution gates through the shared configuration,
+  AutomaticClassifier/TaskRunner, converters, handlers, persistence and results.
+  Document source-specific restrictions and define safe, incremental patches.
+- [ ] **273b+: Enable the complete CSV ML pipeline in the current GUI.** Aim for
+  functional parity with supported SQL features where semantically applicable:
+  numeric/categorical/text processing, preprocessing, feature selection and RFE,
+  class imbalance/sampling, Dark Numbers, algorithm and hyperparameter choice,
+  parallelism, validation/CV, model comparison, feature importance, diagnostics,
+  save/reload/predict and results/export. Do not assume that currently visible
+  controls actually reach the CSV runtime. Preserve one shared ML implementation;
+  use source-aware adapters rather than copying SQL-specific code or bypassing
+  identity, compatibility, scope and publication checks.
+- [ ] **SQL regression and known defect.** Use the authorized, privacy-safe
+  protocol in `tests/SQL_REGRESSION_PROTOCOL_248.md` to confirm train -> save ->
+  fresh-process reload -> predict -> result persistence, including error handling.
+  **SQL `Erase models` is reported not to work and needs diagnosis and repair.**
+  Do not change SQL behavior merely to accommodate CSV. Record findings without
+  private schema/table names or row-level data.
+- [ ] **End-to-end acceptance for both sources.** Test representative numeric,
+  categorical and text workloads, supported feature-selection and validation
+  options, saved-model compatibility, failures/retries, source switching and
+  result publication from the current Windows/Voila GUI. Tests and synthetic
+  fixtures complement, but do not replace, authorized SQL live acceptance.
+  Treat parity as an acceptance objective, not a claim of current completion.
+
+**Phase 2 - Major backend refactor, after functional acceptance (P1 architecture).**
+
+- [ ] Refactor the oversized metadata/algorithm registry, especially
+  `JBGMeta.py`, and other mixed-responsibility modules incrementally. Separate
+  algorithm registration, capability metadata, validated parameter definitions
+  and GUI presentation metadata where justified by real dependencies.
+- [ ] Establish cohesive package boundaries, stable import/public facades,
+  dependency direction, runtime configuration and model serialization contracts.
+  First add behavioral/compatibility tests; refactor in small reversible patches
+  and verify saved current-model reload. Avoid a disruptive all-at-once rewrite.
+- [ ] Preserve SQL and CSV as first-class peers in the same ML engine; retain
+  data-source-specific I/O and source identity without exposing local storage
+  paths or credentials to future clients.
+
+**Phase 3 - GUI-independent application layer, BEFORE building the new GUI.**
+
+- [ ] Define a Python application/service interface independent of Voilà,
+  ipywidgets and FastAPI: source/config validation, capabilities/parameters,
+  job submission and lifecycle, progress/events, model/run catalogs, prediction,
+  results/export and controlled deletion. Implement testable typed contracts
+  and adapters, with no ML business rules in GUI callbacks or HTTP handlers.
+- [ ] Keep long-running ML jobs decoupled from web request lifetimes. Define
+  cancellation, failure handling, concurrency, resumability and persistence
+  semantics before selecting transport or deployment technology.
+- [ ] Migrate one complete vertical workflow to this layer before broadening it;
+  verify that the current GUI and a future HTTP adapter can call the same API.
+
+**Phase 4 - New web GUI (after application-layer contracts are stable).**
+
+- [ ] Use **FastAPI** as HTTP adapter above the application layer, not as the
+  ML business-logic layer. Build the HTML/CSS/JavaScript interface using the
+  organization's existing Azure web applications, sample code and visual
+  conventions when those references are supplied.
+- [ ] Start with source selection, validation, configuration, train/status,
+  results and saved-model reuse; expand incrementally after acceptance. Keep
+  the existing Voilà GUI available during migration until replacement is proven.
+- [ ] Allow a future GUI to be replaced without modifying ML engine or application
+  contracts. Avoid hidden GUI-specific state as a source of truth.
+
+**Phase 5 - Azure deployment, identity and multi-user security (deferred).**
+
+- [ ] Use **Microsoft Entra ID** for authentication when the Azure deployment
+  phase begins. Azure App Service authentication alone does not enforce
+  per-project/per-artifact authorization: design server-side authorization,
+  tenant/project isolation, credential handling, session context, retention,
+  concurrency and audit rules before any multi-user rollout.
+- [ ] Validate Azure deployment, secrets and storage policies against actual
+  hosting architecture. Do not add speculative cloud coupling to today's
+  standalone ML engine.
+
+## Cross-cutting rules and deferred work
+
+- [ ] Keep the fast local start gate and run full unittest + pytest regression
+  before relevant commits/releases. Run focused tests for each small patch;
+  retain clear failures and explicit skips.
+- [ ] Scan tracked Markdown and proposed commits with the documentation privacy
+  checker and local private blocklist. Do not commit runtime logs, datasets,
+  SQL text, credentials, personal identifiers or local launcher settings.
+- [ ] Keep optional modelling research, GUI cosmetics, performance tuning and
+  new estimator families (such as XGBoost/fastai) in the detailed backlog, but
+  do not let them displace the agreed ML-parity -> refactor -> service -> GUI order
+  without an explicit priority decision.
+- [ ] Revisit automatic project naming and the lightweight reclassification
+  table; these remain usability follow-ups, not prerequisites for new GUI work.
+
+## Historical revision notes and detailed roadmap
+
+The notes below preserve prior decisions and open questions as recorded at the
+respective revisions. Their unchecked boxes are **not automatically active**;
+compare them against the binding phases above before scheduling work. In
+particular, older CSV-execution prohibitions, full-suite-at-every-start requests
+and descriptions of unfinished CSV model deletion have been superseded.
+
+- [ ] CSV Models: add an "Erase model" button beside the Models dropdown, following the CSV "Erase saved" confirmation pattern. Delete only the selected saved checkpoint and its registration, preserve dataset and other models, refresh options immediately, disable for New model, reject wrong project/dataset, never touch SQL artifacts; add synthetic regression tests.
+- [ ] Auto-name projects when the user leaves the default project name unchanged and presses Dataset actions / Continue. Derive a sanitized, descriptive name from the selected dataset/source (CSV or SQL) and class role; preserve user-entered names and avoid accidental collisions or silent overwrites of model/configuration artifacts. Use only synthetic names in tests and documentation.
 - [ ] Local startup test gate: run the full Python test suite before starting JBG in a local installation; report passed, failed and skipped counts separately. Abort startup on required test failures, and ensure tests use isolated synthetic fixtures without production SQL connections or modifying persisted models. Define an explicit opt-in or scheduled mode for slow ML tests if startup latency becomes unacceptable.
 - [x] Revision 256: Fail closed on CSV retraining when the saved-model checkpoint cannot be reloaded; preserve the SQL in-memory fallback. Four focused Windows tests passed.
 - [x] Revision 255: Verify fitted synthetic CSV-model save/reload/predict equivalence and guard CSV save failures. Four focused Windows tests passed; this is not full native handler training.
@@ -398,13 +528,12 @@ where it matters.
 
 ## P2 — Configuration, packaging and architecture
 
-**Architecture execution order:** after direct P1 defects and stability issues, prefer the sequence
-**dual SQL Server/CSV I/O abstraction → source/package and `JBGMeta.py` refactor → Azure FastAPI GUI spike**.
-Treat this as the default dependency order unless a blocking production issue requires otherwise: first make SQL
-Server and CSV explicit peer data-source modes behind the same application/data interfaces, then modularize the
-backend behind stable application/data/job boundaries, and only then couple the new web GUI prototype to those
-interfaces. SQL Server remains a fully supported first-class source; CSV removes the current hard dependency on
-database access for every workflow rather than replacing SQL Server.
+**Current architecture decision:** the binding order is defined at the top of this
+file: finish CSV/SQL functionality and acceptance -> refactor `JBGMeta.py` and
+backend/package boundaries -> build a GUI-independent Python application layer
+-> build a FastAPI-based web GUI -> address Azure/Entra/multi-user deployment.
+The detailed items below are retained as technical reference. Older priority
+wording here must not override the current sequence.
 
 - [x] **Versioned JSON configuration migration (revision 176):** generated runtime configuration is now
   schema-validated JSON only. Python config generation/import has been removed; schema-v1 transitional JSON
@@ -442,7 +571,7 @@ database access for every workflow rather than replacing SQL Server.
   pickle cannot serialize. Revision 176 increments the artifact envelope and rejects pre-176 payloads rather
   than carrying legacy readers. Keep the trusted-artifact security boundary unchanged and smoke-test representative
   sklearn, PyTorch/skorch, Keras and Flax models as those families are exercised.
-- [ ] **High-priority GUI replacement architecture track — Azure FastAPI first:** after direct defects/stability,
+- [ ] **Future GUI replacement architecture track — FastAPI after application-layer extraction:** after full CSV/SQL ML acceptance,
   the CSV/file I/O abstraction and the main source/`JBGMeta.py` boundary refactor, prioritize evaluating a move
   away from JupyterLab/Voilà/ipywidgets. The first technology candidate must be the organisation's already
   established Azure web-service stack: FastAPI/Python
@@ -542,3 +671,5 @@ database access for every workflow rather than replacing SQL Server.
 - [ ] Verify end-to-end CSV task execution and artifact publication before enabling GUI execution.
 
 - [ ] After revision 255, verify full native CSV fitting through AutomaticClassifier/TaskRunner with saved model and reload in Windows ML environment; release CSV GUI only after the full flow and source/identity checks pass.
+
+- [ ] GUI cosmetic: when restoring a saved CSV model, auto-scroll multi-select pipeline widgets to their selected options when supported by ipywidgets/Voilà; do not change selection values or SQL behavior.
