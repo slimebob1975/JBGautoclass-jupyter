@@ -101,6 +101,37 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Source-layout migration failed. Resolve the reported collision before launching Voila.'
 }
 
+# --- Local regression gate (after installing dependencies, before Voila) ---
+# Tests must use synthetic/isolated fixtures. The repository's complete
+# unittest discovery is intentional: skipped tests are reported by unittest.
+# Native SQL integration still requires its separate opt-in test protocol.
+$PreviousPythonPath = $env:PYTHONPATH
+try {
+    $env:PYTHONPATH = Join-Path $DevRoot 'src'
+    Write-Host 'Running local Python regression suite before launching Voila...'
+    Invoke-InDir -Path $DevRoot -ScriptBlock {
+        & $Py -m unittest discover -s tests -p 'test_*.py' -v
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Python regression tests failed. Voila startup was cancelled.'
+        }
+        # Legacy pytest-only modules are imported but not executed by unittest.
+        # Keep their results separate; pytest must also pass before Voila starts.
+        Write-Host 'Running pytest-only configuration and metadata regression tests...'
+        & $Py -m pytest tests/test_config.py tests/test_meta.py -q
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Pytest regression tests failed. Voila startup was cancelled.'
+        }
+    }
+}
+finally {
+    if ($null -eq $PreviousPythonPath) {
+        Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:PYTHONPATH = $PreviousPythonPath
+    }
+}
+
 # --- Launch Voila ---
 # This log starts outside the notebook/kernel process and therefore also captures
 # Voila, Jupyter/IPKernel and native-library output that the in-application Python

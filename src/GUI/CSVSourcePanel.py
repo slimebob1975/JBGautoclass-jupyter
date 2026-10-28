@@ -35,19 +35,47 @@ class CSVSourcePanel:
         set_action_state(self.erase_saved_button, "blocked")
         self.loaded_saved_artifact_id = None
         self.saved_datasets.observe(self._saved_selection_changed, names="value")
+        self.saved_prediction_runs = widgets.Dropdown(description="Predictions:",
+            options=(("No saved runs", ""),), value="")
+        self.refresh_predictions_button = widgets.Button(description="Refresh runs")
+        self.export_predictions_button = widgets.Button(description="Export CSV", disabled=True)
+        self.export_joined_button = widgets.Button(description="Export joined", disabled=True)
+        self.erase_predictions_button = widgets.Button(description="Erase predictions", disabled=True)
+        self._erase_predictions_confirmation = ""
+        set_action_state(self.erase_predictions_button, "blocked")
+        self.prediction_download = widgets.HTML(value="")
+        self.saved_prediction_runs.observe(self._prediction_run_changed, names="value")
         self.status = widgets.HTML(value="CSV inspection only. SQL Server remains the active execution source.")
         self.validate_button.on_click(self.validate)
         self.widget = widgets.VBox([
             widgets.HBox([self.file_picker, self.selected_file]), widgets.HBox([self.delimiter, self.quotechar, self.encoding]),
             widgets.HBox([self.validate_button, self.register_button]),
-            widgets.HBox([self.saved_datasets, self.refresh_saved_button, self.load_saved_button, self.erase_saved_button]), self.status,
+            widgets.HBox([self.saved_datasets, self.refresh_saved_button, self.load_saved_button, self.erase_saved_button]),
+            widgets.HBox([self.saved_prediction_runs, self.refresh_predictions_button,
+                          self.export_predictions_button, self.export_joined_button,
+                          self.erase_predictions_button]),
+            self.prediction_download, self.status,
         ])
+
+    def _prediction_run_changed(self, change):
+        enabled = bool(change.get("new"))
+        self.export_predictions_button.disabled = not enabled
+        self.export_joined_button.disabled = not enabled
+        self._erase_predictions_confirmation = ""
+        self.erase_predictions_button.description = "Erase predictions"
+        set_action_state(self.erase_predictions_button, "warning" if enabled else "blocked")
+        self.prediction_download.value = ""
 
     def _saved_selection_changed(self, change):
         set_action_state(self.load_saved_button, "ready" if change.get("new") else "blocked")
         set_action_state(self.erase_saved_button, "warning" if change.get("new") else "blocked")
         self._erase_confirmation = ""
         self.erase_saved_button.description = "Erase saved"
+        self.saved_prediction_runs.options = (("Select prediction run", ""),)
+        self._erase_predictions_confirmation = ""
+        self.erase_predictions_button.description = "Erase predictions"
+        set_action_state(self.erase_predictions_button, "blocked")
+        self.prediction_download.value = ""
 
     def stage_saved_csv(self, content: bytes, display_name="Registered CSV", artifact_id=None):
         """Stage already-authorized data without exposing its server path."""

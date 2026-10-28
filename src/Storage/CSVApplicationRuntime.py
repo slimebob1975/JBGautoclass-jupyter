@@ -4,6 +4,8 @@ The caller must authorize the repository scope and supply a trusted local model
 path. This module does not enable CSV in the legacy GUI or support training.
 """
 
+from pathlib import Path
+
 from Storage.ArtifactContract import StorageScope
 from Storage.CSVPredictionDataLayer import (
     CSVPredictionDataLayer, prepare_csv_prediction_datalayer,
@@ -42,6 +44,16 @@ def prepare_csv_prediction_classifier(model_filename, runtime_config, repository
             or restored_config.should_train()
             or not restored_config.should_predict()):
         raise ValueError('Restored model is not a CSV prediction configuration')
+
+    # AutomaticClassifier reconstructs the checkpoint path from Config.io.
+    # Bind it to the already scope-validated CSV filename, not the empty
+    # training-time io.model_name in the saved configuration. An absolute
+    # directory overrides script_path in Config.get_model_filename().
+    checkpoint = Path(model_filename)
+    restored_config.io.model_path = str(checkpoint.parent)
+    restored_config.io.model_name = checkpoint.stem
+    if restored_config.get_model_filename() != checkpoint:
+        raise ValueError('CSV checkpoint path could not be bound')
 
     # Import only after repository and source validation; SQL remains untouched.
     from AutomaticClassifier import AutomaticClassifier

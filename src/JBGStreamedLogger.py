@@ -224,6 +224,19 @@ class JBGLogger(terminal.Logger):
         if self._enable_quiet:
             return self
 
+        # File-backed CSV predictions have no SQL retrieval query. Report only
+        # the saved row count; never expose prediction IDs or row payloads.
+        if 'query' not in results and 'artifact_id' in results and 'run_id' in results:
+            row_count = results.get('row_count')
+            if not isinstance(row_count, int) or isinstance(row_count, bool) or row_count < 0:
+                raise ValueError('Invalid saved CSV prediction row count')
+            message = f'Saved {row_count} CSV predictions to the CSV artifact store.'
+            if self.in_terminal:
+                return self.writeln('unformatted', message)
+            print_html(message)
+            self.log_file.write_message(message)
+            return self
+
         query_text = str(results['query'])
         safe_log = safe_prediction_query_log_message(results['row_count'], query_text)
         if self.in_terminal:

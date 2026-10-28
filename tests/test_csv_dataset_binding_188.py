@@ -170,6 +170,10 @@ class CSVModelWorkflow188fTests(unittest.TestCase):
             models_dropdown = types.SimpleNamespace(value='')
             id_column_diagnostic = types.SimpleNamespace(value='')
             results = []
+            def _csv_update_erase_model_button(self): pass
+            def _csv_set_training_controls(self, enabled): pass
+            def _csv_set_model_status(self, message): pass
+            def _csv_refresh_training_action(self): pass
             def _csv_set_role_editability(self, enabled):
                 self.results.append(enabled)
             def update_ready(self): pass

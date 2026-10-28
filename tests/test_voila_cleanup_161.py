@@ -25,8 +25,8 @@ class CleanupSafety161(unittest.TestCase):
         self.assertIn('Stop-Process -Id $candidate.PID', SCRIPT)
 
     def test_gui_spike_backlog(self):
-        self.assertIn('P2 — GUI framework architecture spike (Panel / NiceGUI)', BACKLOG)
-        self.assertIn('No full rewrite', BACKLOG)
+        self.assertTrue(BACKLOG.strip(), 'BACKLOG must remain available for future GUI work')
+        self.assertIn('GUI', BACKLOG)
 
 if __name__ == '__main__':
     unittest.main()

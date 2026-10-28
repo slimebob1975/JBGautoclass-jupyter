@@ -3,6 +3,7 @@ import sys
 import types
 import unittest
 from types import SimpleNamespace
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 from Storage.CSVPredictionDataLayer import CSVPredictionDataLayer
@@ -15,8 +16,12 @@ class CSVSnapshotComposition246(CSVCorrectionReader226):
     def _runtime(self):
         source = SimpleNamespace(kind='csv', dataset_id=self.roles.dataset_id,
                                  artifact_id=self.roles.artifact_id)
-        return SimpleNamespace(data_source=source, should_train=lambda: False,
-                               should_predict=lambda: True)
+        config = SimpleNamespace(data_source=source, should_train=lambda: False,
+                                 should_predict=lambda: True,
+                                 io=SimpleNamespace(model_path="", model_name=""))
+        config.get_model_filename = lambda: (
+            Path(config.io.model_path) / (config.io.model_name + ".sav"))
+        return config
 
     def _compose(self, reader):
         config = self._runtime()

@@ -4,6 +4,8 @@ The registered CSV I/O builder and handler initialization are still controlled b
 previous native fixtures; this is not an unassisted production bootstrap test.
 """
 import json
+from pathlib import Path
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -20,6 +22,12 @@ class CSVApplicationRun245(CSVClassifierRun244):
 
     def _prepared_classifier(self):
         self.config.should_display_mispredicted = lambda: False
+        # Revision 265b binds this I/O facade to the trusted checkpoint.
+        # The legacy native fixture supplied only a fixed filename callback.
+        self.config.io = SimpleNamespace(model_path="", model_name="")
+        self.config.get_model_filename = lambda: (
+            Path(self.config.io.model_path) /
+            (self.config.io.model_name + self.jbg_model_path.suffix))
         # Keep the real AutomaticClassifier constructor; only native handlers
         # prepared by the 241 fixture and external configuration I/O are injected.
         def registry(instance):

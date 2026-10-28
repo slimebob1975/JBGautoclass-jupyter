@@ -1,4 +1,4 @@
-"""Revision 260: GUI training preflight remains fail-closed until source binding exists.
+"""Revision 260/263: CSV GUI readiness opens only the verified train-only path.
 
 No private datasets or SQL connections are used by these tests.
 """
@@ -37,14 +37,17 @@ class CSVGUITrainingReadiness260(unittest.TestCase):
         instance.id_column = SimpleNamespace(value='row_id')
         instance.class_column = SimpleNamespace(value='label')
         instance.data_columns = SimpleNamespace(value=('measurement',))
+        instance.algorithm_dropdown = SimpleNamespace(value=('LRN',))
+        instance.preprocess_dropdown = SimpleNamespace(value=('STA',))
+        instance.reduction_dropdown = SimpleNamespace(value=('NOR',))
         instance.start_button = SimpleNamespace(tooltip='', disabled=False, button_style='')
         return instance
 
-    def test_validated_registered_csv_still_requires_runtime_binding(self):
+    def test_validated_registered_csv_is_ready_for_train_only_execution(self):
         w = self.make_widget()
         state, explanation = w._csv_training_readiness()
-        self.assertEqual(state, 'blocked')
-        self.assertIn('runtime binding', explanation)
+        self.assertEqual(state, 'ready')
+        self.assertIn('Prediction and saved-model reuse remain disabled', explanation)
 
     def test_unregistered_and_incomplete_csv_are_not_ready(self):
         w = self.make_widget()
@@ -56,6 +59,9 @@ class CSVGUITrainingReadiness260(unittest.TestCase):
         w.data_columns.value = ('measurement',)
         w.models_dropdown.value = ''
         self.assertEqual(w._csv_training_readiness()[0], 'waiting')
+        w.models_dropdown.value = 'New model'
+        w.algorithm_dropdown.value = ()
+        self.assertEqual(w._csv_training_readiness()[0], 'waiting')
 
     def test_source_switch_and_validation_requirements(self):
         w = self.make_widget()
@@ -65,7 +71,7 @@ class CSVGUITrainingReadiness260(unittest.TestCase):
         w._csv_roles_loaded_188 = False
         self.assertEqual(w._csv_training_readiness()[0], 'waiting')
 
-    def test_start_remains_disabled_by_semantic_action_state(self):
+    def test_ready_start_uses_semantic_action_state(self):
         w = self.make_widget()
         # Run the real lightweight button-state implementation with a fake widget.
         from GUI.ButtonStates import set_action_state
@@ -79,10 +85,10 @@ class CSVGUITrainingReadiness260(unittest.TestCase):
         w.start_button = Button()
         with patch('GUI.ButtonStates.set_action_state', wraps=set_action_state):
             state, explanation = w._csv_refresh_training_action()
-        self.assertEqual(state, 'blocked')
-        self.assertTrue(w.start_button.disabled)
+        self.assertEqual(state, 'ready')
+        self.assertFalse(w.start_button.disabled)
         self.assertEqual(w.start_button.tooltip, explanation)
-        self.assertEqual(w.start_button.button_style, 'danger')
+        self.assertEqual(w.start_button.button_style, 'success')
 
 
 if __name__ == '__main__':

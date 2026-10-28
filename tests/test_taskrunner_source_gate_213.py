@@ -20,7 +20,7 @@ def _runner_method():
 
 
 def _runner(kind, layer, *, training=False, suite=False):
-    config = SimpleNamespace(data_source=SimpleNamespace(kind=kind), should_train=lambda: training, get_text_column_names=lambda: [])
+    config = SimpleNamespace(data_source=SimpleNamespace(kind=kind), should_train=lambda: training, should_predict=lambda: not training, get_text_column_names=lambda: [])
     logger = Mock()
     handler = Mock()
     handler.datalayer = layer
@@ -44,7 +44,7 @@ class TaskRunnerSourceGateTests(TestCase):
             _runner_method()(runner, [])
         runner.logger.initiate_progress.assert_not_called()
 
-    def test_csv_training_remains_disabled(self):
+    def test_unprepared_csv_training_is_rejected(self):
         runner = _runner("csv", CSVPredictionDataLayer(Mock(), Mock()), training=True)
         with self.assertRaises(ValueError):
             _runner_method()(runner, [])

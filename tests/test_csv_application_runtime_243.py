@@ -1,5 +1,6 @@
 """Revision 243: guarded CSV application composition, without GUI activation."""
 import sys
+from pathlib import Path
 import types
 import unittest
 from unittest.mock import Mock, patch
@@ -22,6 +23,10 @@ class CSVApplicationRuntime243(unittest.TestCase):
         self.saved.data_source.kind = 'csv'
         self.saved.should_train.return_value = False
         self.saved.should_predict.return_value = True
+        self.saved.io.model_path = ""
+        self.saved.io.model_name = ""
+        self.saved.get_model_filename.side_effect = lambda: (
+            Path(self.saved.io.model_path) / (self.saved.io.model_name + ".pkl"))
         self.layer = CSVPredictionDataLayer(Mock(get_dataset=Mock()), Mock(save_prediction_data=Mock()))
         self.logger = Mock()
 

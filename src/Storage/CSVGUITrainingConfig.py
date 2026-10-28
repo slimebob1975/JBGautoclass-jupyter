@@ -1,6 +1,6 @@
 """Prepare a source-bound train-only CSV config without reusing SQL credentials.
 
-This is a preparation API, not permission to enable the legacy GUI Start action.
+The CSV GUI uses this boundary for training; prediction and saved-model reuse stay separate.
 """
 from copy import deepcopy
 from pathlib import Path
@@ -57,7 +57,9 @@ def prepare_csv_gui_training_config(base_config, repository, scope, dataset_arti
         project_id = str(UUID(scope.project_id))
     except (ValueError, AttributeError, TypeError):
         raise ValueError('Invalid CSV model storage scope') from None
-    config.io.model_path = str(root / tenant_id / project_id / ref.dataset_id)
+    model_path = root / tenant_id / project_id / ref.dataset_id
+    model_path.mkdir(parents=True, exist_ok=True)
+    config.io.model_path = str(model_path)
     config.io.model_name = "csv_model_" + ref.artifact_id
     config.mode.train = True
     config.mode.predict = False

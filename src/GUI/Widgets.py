@@ -1,6 +1,7 @@
 from __future__ import annotations
 from enum import Enum
 import html
+import csv
 import os
 from pathlib import Path
 import sys
@@ -308,6 +309,11 @@ class EventHandler:
         self.check_num_alg_pre_red(change)
     
     def check_num_alg_pre_red(self, change: Bunch) -> None:
+        if self.widgets._csv_view_active():
+            # CSV readiness owns the semantic Start state. Do not bypass it by
+            # toggling only ``disabled`` when pipeline selections change.
+            self.widgets._csv_refresh_training_action()
+            return
         num_alg = len(self.widgets.algorithm_dropdown.value)
         num_pre = len(self.widgets.preprocess_dropdown.value)
         num_red = len(self.widgets.reduction_dropdown.value)
@@ -364,7 +370,14 @@ class EventHandler:
 
     def continuation_button_was_clicked(self, button: widgets.Button) -> None:
         """ Callback: Sets various states based on the value in models dropdown. """
-        if self.widgets._csv_view_active() or getattr(self.widgets, "_feature_search_running", False):
+        if self.widgets._csv_view_active():
+            if self.widgets.continuation_button.disabled or not self.widgets._csv_continue_ready():
+                self.widgets.update_ready()
+                return
+            # CSV has its own verified train-only controls: never enter SQL setup.
+            self.widgets._csv_model_selected()
+            return
+        if getattr(self.widgets, "_feature_search_running", False):
             return
         if self.widgets.feature_selection_mode.value in ("assisted", "reuse") and not getattr(self.widgets, "_feature_search_applied", False):
             self.widgets.update_ready()
@@ -405,10 +418,13 @@ class EventHandler:
         
 
     def start_button_was_clicked(self, button: widgets.Button) -> None:
-        """ Callback: Changes the state to be read-only, starts the classifier (or the class summary) """
+        """Start the source-specific classifier path without crossing I/O boundaries."""
         if self.widgets._csv_view_active():
+            if self.widgets.models_dropdown.value not in (None, '', Config.DEFAULT_TRAIN_OPTION):
+                self.widgets._csv_start_saved_prediction()
+            else:
+                self.widgets._csv_start_training()
             return
-
 
         self.widgets.deactivate_section("classifier")
         self.widgets.start_button_actions()
@@ -467,6 +483,14 @@ class GUIhandler(Protocol):
 
     def run_regression_suite(self, base_config_params: dict, output: widgets.Output) -> None:
         """ Run the configured regression datasets sequentially """
+
+    def run_csv_classifier(self, runtime_config, repository, scope, configuration_id,
+                           output: widgets.Output):
+        """Run an already prepared train-only CSV configuration without SQL setup."""
+
+    def run_csv_saved_prediction(self, model_filename, runtime_config, repository,
+                                 scope, configuration_id, output: widgets.Output):
+        """Run a verified saved CSV checkpoint without SQL setup."""
 
     def run_feature_selection_investigation(self, config_params: dict, options, on_event=None):
         """Run a training-only original-column investigation."""
@@ -557,7 +581,7 @@ class Widgets:
         self.refresh_model_settings_panel()
         self.forms = {
             "connection": [self.sql_username, self.sql_password, self.data_catalogs_dropdown, self.data_tables_dropdown],
-            "models": [self.models_dropdown, self.field_status("models")],
+            "models": [self.models_dropdown, self.field_status("models"), self._csv_erase_model_button],
             "data": [self.class_cardinality_limit, self.class_column, self.id_column, self.data_columns, self.text_columns],
             "feature_selection": [
                 self.feature_selection_mode, self.feature_selection_profile, self.feature_search_rows, self.feature_search_model_type, self.feature_search_preset, self.feature_search_tree_estimator,
@@ -2141,11 +2165,28 @@ class Widgets:
         }
         self.update_item("text_columns", updates)
 
+    def _csv_continue_ready(self) -> bool:
+        """CSV Continue requires a registered dataset and selected train-only roles."""
+        return bool(
+            getattr(self, "_csv_roles_loaded_188", False)
+            and self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION
+            and self._csv_current_dataset_artifact()
+            and self.id_column.value and self.class_column.value
+            and self.data_columns.value
+        )
+
     def update_ready(self) -> None:
         """ Sets whether it can continue into Classifier Settings  """
         num_vars = len(self.data_columns.value)
         self.num_variables.value = num_vars
-        if self._csv_view_active() or getattr(self, "_feature_search_running", False):
+        if self._csv_view_active():
+            if self._csv_continue_ready():
+                self.enable_button("continuation_button")
+            else:
+                self.disable_button("continuation_button")
+            self.disable_button("test_profile_button")
+            return
+        if getattr(self, "_feature_search_running", False):
             self.disable_button("continuation_button")
             return
 
@@ -2971,14 +3012,53 @@ class Widgets:
             self.eventhandler.lock_observe_1 = previous_lock
         self.reset_field_status("models")
 
-    def _csv_training_readiness(self):
-        """Return a fail-closed CSV GUI readiness verdict without constructing SQL I/O.
+    _CSV_TRAINING_EDITABLE_FIELDS = (
+        "algorithm_dropdown", "preprocess_dropdown", "reduction_dropdown",
+        "scoremetric_dropdown", "oversampler_dropdown", "undersampler_dropdown",
+        "testdata_slider", "iterations_slider", "encryption_checkbox",
+        "categorize_checkbox", "categorize_columns", "filter_checkbox",
+        "ngram_range_dropdown", "data_limit", "show_info_checkbox",
+    )
 
-        A registered dataset alone is insufficient: the verified classifier
-        entrypoint also requires a persisted, source-bound model configuration.
-        GUI configuration persistence and train-only runtime wiring are not yet
-        implemented, so this method deliberately cannot mark Start ready.
-        """
+    _CSV_TRAINING_LOCKED_FIELDS = (
+        "train_checkbox", "predict_checkbox", "mispredicted_checkbox", "metas_checkbox",
+        "dark_numbers_checkbox", "dark_number_method", "dark_number_alpha",
+        "dark_number_target", "dark_number_failure_mode",
+        "feature_importance_checkbox", "feature_importance_repeats",
+    )
+
+    def _csv_set_training_controls(self, enabled):
+        """Expose only the verified train-only CSV controls; never query SQL metadata."""
+        if enabled:
+            previous_lock = self.eventhandler.lock_observe_1
+            self.eventhandler.lock_observe_1 = True
+            try:
+                self.update_values({
+                    "train_checkbox": True,
+                    "predict_checkbox": False,
+                    "mispredicted_checkbox": False,
+                    "metas_checkbox": False,
+                    "dark_numbers_checkbox": False,
+                    "feature_importance_checkbox": False,
+                    "feature_selection_mode": "manual",
+                    "feature_selection_profile": "",
+                })
+            finally:
+                self.eventhandler.lock_observe_1 = previous_lock
+            self.categorize_columns.options = tuple(self.text_columns.value)
+            self.num_variables.value = len(self.data_columns.value)
+            self.deactivate_section("feature_selection")
+            self.enable_items(list(self._CSV_TRAINING_EDITABLE_FIELDS))
+            self.disable_items(list(self._CSV_TRAINING_LOCKED_FIELDS))
+            self.start_button.description = "Train CSV"
+        else:
+            self.deactivate_section("feature_selection")
+            self.disable_items(list(self._CSV_TRAINING_EDITABLE_FIELDS)
+                               + list(self._CSV_TRAINING_LOCKED_FIELDS)
+                               + ["start_button"])
+
+    def _csv_training_readiness(self):
+        """Return the train-only CSV GUI readiness verdict without constructing SQL I/O."""
         if not self._csv_view_active():
             return "blocked", "CSV training is unavailable outside CSV source mode."
         if not getattr(self, "_csv_roles_loaded_188", False):
@@ -2988,11 +3068,16 @@ class Widgets:
         if not self._csv_current_dataset_artifact():
             return "waiting", "Register the validated CSV dataset before training."
         if not self.id_column.value or not self.class_column.value or not self.data_columns.value:
-            return "waiting", "Select an ID, a class and at least one numerical predictor."
-        return "blocked", "CSV model configuration and runtime binding are not yet available in the GUI."
+            return "waiting", "Select an ID, a class and at least one predictor."
+        if (not self.algorithm_dropdown.value or not self.preprocess_dropdown.value
+                or not self.reduction_dropdown.value):
+            return "waiting", "Select at least one model, preprocessing method and reduction method."
+        return "ready", (
+            "Ready to train a new CSV model. Prediction and saved-model reuse remain disabled."
+        )
 
     def _csv_prepare_training_runtime(self):
-        """Build a source-scoped training plan; never execute the SQL Start path.
+        """Build a source-scoped train-only runtime without executing the SQL Start path.
 
         The stored configuration is immutable and the returned classifier must
         be created only through prepare_registered_csv_training_classifier.
@@ -3024,25 +3109,322 @@ class Widgets:
                             encoding=panel.encoding.value))
         return runtime, saved, repository, scope
 
+    def _csv_saved_prediction_readiness(self):
+        """A saved checkpoint must be reverified at execution, not only at selection."""
+        if not self._csv_view_active() or not getattr(self, '_csv_roles_loaded_188', False):
+            return 'waiting', 'Validate the registered CSV dataset first.'
+        selected = self.models_dropdown.value
+        if selected in (None, '', Config.DEFAULT_TRAIN_OPTION):
+            return 'waiting', 'Select a saved CSV model.'
+        if not self._csv_current_dataset_artifact():
+            return 'waiting', 'Load a registered CSV dataset.'
+        return 'ready', 'Run the verified saved CSV model against unlabeled rows.'
+
     def _csv_refresh_training_action(self):
-        """Expose accurate state and never enable the SQL-backed Start handler."""
+        """Route CSV Start to training or saved-model prediction by model selection."""
         from GUI.ButtonStates import set_action_state
-        state, message = self._csv_training_readiness()
+        if self.models_dropdown.value not in (None, '', Config.DEFAULT_TRAIN_OPTION):
+            state, message = self._csv_saved_prediction_readiness()
+            self.start_button.description = 'Predict CSV'
+        else:
+            state, message = self._csv_training_readiness()
+            self.start_button.description = 'Train CSV'
         set_action_state(self.start_button, state)
         self.start_button.tooltip = message
         return state, message
 
+    def _csv_start_saved_prediction(self):
+        """Execute a selected local checkpoint only through the CSV application boundary."""
+        from GUI.ButtonStates import set_action_state
+        state, message = self._csv_saved_prediction_readiness()
+        if state != 'ready':
+            self._csv_source_panel.status.value = message
+            self._csv_refresh_training_action()
+            return False
+        self.output.clear_output(wait=True)
+        self.clear_mispredicted_output()
+        set_action_state(self.start_button, 'waiting')
+        self._csv_source_panel.status.value = 'CSV prediction is running.'
+        try:
+            from pathlib import Path
+            from copy import deepcopy
+            from JBGModelPersistence import load_model_config
+            from Storage.CSVSavedModelInspection import inspect_saved_csv_model
+            repository, scope = self._csv_catalog_storage()
+            configuration_id = self.models_dropdown.value
+            filename = inspect_saved_csv_model(
+                repository, scope, self._csv_current_dataset_artifact(),
+                configuration_id, model_root=Path.cwd() / 'output' / 'csv_artifacts' / 'models')
+            runtime = deepcopy(load_model_config(filename))
+            runtime.mode.train = False
+            runtime.mode.predict = True
+            runtime.mode.mispredicted = False
+            runtime.mode.use_metas = False
+            runtime.mode.calculate_feature_importance = False
+            runtime.mode.calculate_dark_numbers = False
+            result = self.guihandler.run_csv_saved_prediction(
+                str(filename), runtime, repository, scope, configuration_id, self.output)
+        except Exception as exc:
+            # Do not display serialized metadata or filesystem paths in the GUI.
+            message = 'CSV prediction failed (' + type(exc).__name__ + '). See application log.'
+            self._csv_source_panel.status.value = message
+            set_action_state(self.start_button, 'warning')
+            self.start_button.tooltip = message
+            return False
+        self._csv_source_panel.status.value = (
+            'CSV prediction completed; results were saved in the scoped CSV artifacts.'
+            if result is not False else 'CSV prediction found no eligible unlabeled rows.')
+        if result is not False:
+            self._csv_refresh_prediction_runs()
+        self._csv_refresh_training_action()
+        return result
+
+    def _csv_start_training(self):
+        """Prepare and run one verified train-only CSV classifier from the GUI."""
+        from GUI.ButtonStates import set_action_state
+
+        state, message = self._csv_training_readiness()
+        if state != "ready":
+            self._csv_source_panel.status.value = message
+            self._csv_refresh_training_action()
+            return False
+
+        self.output.clear_output(wait=True)
+        self.clear_mispredicted_output()
+        set_action_state(self.start_button, "waiting")
+        self.start_button.tooltip = "CSV training is running."
+        self._csv_source_panel.status.value = "CSV training is running."
+        try:
+            runtime, saved, repository, scope = self._csv_prepare_training_runtime()
+            result = self.guihandler.run_csv_classifier(
+                runtime, repository, scope, saved.configuration_id, self.output)
+        except Exception as ex:
+            message = f"CSV training failed: {type(ex).__name__}: {ex}"
+            self._csv_source_panel.status.value = message
+            set_action_state(self.start_button, "warning")
+            self.start_button.tooltip = message + " Retry after correcting the problem."
+            return False
+
+        if result is False:
+            message = "CSV training ended without eligible labelled data; no model was saved."
+            self._csv_source_panel.status.value = message
+            set_action_state(self.start_button, "warning")
+            self.start_button.tooltip = message
+            return False
+
+        self._csv_source_panel.status.value = (
+            "CSV training completed and the model checkpoint was saved. "
+            "Prediction and saved-model reuse remain disabled."
+        )
+        self._csv_refresh_training_action()
+        return result
+
+    def _csv_set_model_status(self, message):
+        """Show current CSV model state beside the selector, never stale SQL status."""
+        if "models" in self.field_statuses:
+            self.field_statuses["models"]["note"].value = html.escape(message)
+
+    @property
+    def _csv_erase_model_button(self):
+        if not hasattr(self, "_csv_erase_model_control"):
+            self._csv_erase_model_control = widgets.Button(
+                description="Erase model", disabled=True,
+                tooltip="Delete selected saved CSV model after confirmation")
+            from GUI.ButtonStates import set_action_state
+            set_action_state(self._csv_erase_model_control, "blocked")
+            self._csv_erase_model_control.on_click(self._csv_erase_model)
+            self._csv_erase_model_confirmation = ""
+        return self._csv_erase_model_control
+
+    def _csv_update_erase_model_button(self):
+        """Keep a stale confirmation from authorizing a different selection."""
+        button = self._csv_erase_model_button
+        selection = self.models_dropdown.value
+        enabled = (self._csv_view_active() and
+                   selection not in (None, "", Config.DEFAULT_TRAIN_OPTION) and
+                   bool(self._csv_current_dataset_artifact()))
+        key = (self._csv_current_dataset_artifact(), selection)
+        if getattr(self, "_csv_erase_model_confirmation", "") not in ("", key):
+            self._csv_erase_model_confirmation = ""
+            button.description = "Erase model"
+        from GUI.ButtonStates import set_action_state
+        set_action_state(button, "warning" if enabled else "blocked")
+
+    def _csv_erase_model(self, _button=None):
+        """Two-click, dataset-bound deletion; SQL models never pass this gate."""
+        button = self._csv_erase_model_button
+        selection = self.models_dropdown.value
+        dataset_id = self._csv_current_dataset_artifact()
+        if (not self._csv_view_active() or not dataset_id or
+                selection in (None, "", Config.DEFAULT_TRAIN_OPTION)):
+            self._csv_erase_model_confirmation = ""
+            button.description = "Erase model"
+            button.disabled = True
+            return False
+        key = (dataset_id, selection)
+        if self._csv_erase_model_confirmation != key:
+            from GUI.ButtonStates import set_action_state
+            set_action_state(button, "warning")
+            self._csv_erase_model_confirmation = key
+            button.description = "Confirm erase"
+            self._csv_set_model_status("Confirm deletion of selected CSV model")
+            self._csv_source_panel.status.value = (
+                "Click Confirm erase to permanently delete this CSV model. "
+                "Dataset and prediction runs will be preserved.")
+            return False
+        self._csv_erase_model_confirmation = ""
+        button.description = "Erase model"
+        try:
+            from pathlib import Path
+            from Storage.CSVModelErasure import erase_saved_csv_model
+            repository, scope = self._csv_catalog_storage()
+            erase_saved_csv_model(repository, scope, dataset_id, selection,
+                model_root=Path.cwd() / "output" / "csv_artifacts" / "models")
+        except (OSError, ValueError, TypeError):
+            self._csv_set_model_status("Unable to erase selected CSV model")
+            self._csv_source_panel.status.value = "Unable to erase selected CSV model."
+            return False
+        self._csv_refresh_saved_models()
+        self._csv_model_selected()
+        self._csv_set_model_status("Saved CSV model erased")
+        self._csv_source_panel.status.value = "Saved CSV model erased; dataset and predictions retained."
+        return True
+
+    def _csv_refresh_saved_models(self):
+        """Expose verified local CSV checkpoints, never legacy SQL model options."""
+        current = self._csv_current_dataset_artifact()
+        options = [("", ""), (Config.DEFAULT_TRAIN_OPTION, Config.DEFAULT_TRAIN_OPTION)]
+        if current and self._csv_view_active():
+            try:
+                from pathlib import Path
+                from Storage.CSVSavedModelInspection import diagnose_saved_csv_models
+                repository, scope = self._csv_catalog_storage()
+                root = Path.cwd() / "output" / "csv_artifacts" / "models"
+                verified, rejected, total = diagnose_saved_csv_models(
+                    repository, scope, current, model_root=root)
+                from Storage.CSVSavedModelInspection import saved_csv_model_label
+                for label, config_id, filename in verified:
+                    try:
+                        display = saved_csv_model_label(filename, config_id, self.project.value)
+                    except (ValueError, OSError, TypeError, KeyError, AttributeError):
+                        display = ((self.project.value or "Project").strip()[:48] + " | Saved CSV " + label)
+                    options.append((display, config_id))
+                if not verified:
+                    if total == 0:
+                        message = "No saved CSV configurations for this registered dataset and project."
+                    elif any(key.startswith('configuration_mismatch') for key in rejected):
+                        fields = sorted(key.removeprefix('configuration_mismatch_')
+                                        for key in rejected if key.startswith('configuration_mismatch_'))
+                        message = ("Saved CSV checkpoints rejected: training configuration differs "
+                                   "from registration" + (" (field: " + ", ".join(fields) + ")" if fields else "")
+                                   + ". No models unlocked.")
+                    elif rejected.get('checkpoint_missing') == total:
+                        message = "CSV configurations found, but no checkpoint files match their identities."
+                    elif rejected.get('source_mismatch'):
+                        message = "Saved CSV checkpoints rejected: data-source identity mismatch."
+                    elif rejected.get('column_roles_mismatch'):
+                        message = "Saved CSV checkpoints rejected: column roles differ."
+                    else:
+                        message = "Saved CSV checkpoints found but failed compatibility verification."
+                    self._csv_source_panel.status.value = message
+                elif rejected:
+                    self._csv_source_panel.status.value = (
+                        "Verified CSV checkpoints available; additional checkpoints were rejected "
+                        "by compatibility checks.")
+            except (OSError, ValueError, TypeError):
+                self._csv_source_panel.status.value = (
+                    "Unable to inspect saved CSV configurations for this project.")
+        previous_lock = self.eventhandler.lock_observe_1
+        self.eventhandler.lock_observe_1 = True
+        try:
+            self.models_dropdown.options = tuple(options)
+            self.models_dropdown.value = Config.DEFAULT_TRAIN_OPTION
+        finally:
+            self.eventhandler.lock_observe_1 = previous_lock
+        self._csv_update_erase_model_button()
+        self._csv_set_model_status("Ready to train a new CSV model" if current else "Validate a CSV dataset")
+        return len(options) - 2
+
+    @staticmethod
+    def _csv_saved_pipeline_values(config):
+        """Return only saved ML widget values, never dataset roles or I/O settings."""
+        return {
+            "algorithm_dropdown": tuple(config.get_algorithm_abbreviations()),
+            "preprocess_dropdown": tuple(config.get_preprocessor_abbreviations()),
+            "reduction_dropdown": tuple(config.get_feature_selection_abbreviations()),
+            "oversampler_dropdown": tuple(config.get_oversampler_abbreviations()),
+            "undersampler_dropdown": tuple(config.get_undersampler_abbreviations()),
+            "scoremetric_dropdown": config.mode.scoring.name,
+        }
+
+    def _csv_show_saved_pipeline(self, filename):
+        """Synchronize the read-only GUI with an already authorized CSV model.
+
+        A restored model remains the sole authority for prediction.  Widget
+        state cannot replace its persisted preprocessing or fitted pipeline.
+        """
+        from JBGModelPersistence import load_model_config
+        config = load_model_config(filename)
+        values = self._csv_saved_pipeline_values(config)
+        previous_lock = self.eventhandler.lock_observe_1
+        self.eventhandler.lock_observe_1 = True
+        try:
+            # Build all values before changing any widget.  A checkpoint with
+            # unsupported choices fails closed rather than partly updating UI.
+            for name, value in values.items():
+                widget = getattr(self, name)
+                available = tuple(option[1] if isinstance(option, tuple) else option
+                                  for option in widget.options)
+                chosen = value if isinstance(value, tuple) else (value,)
+                if any(item not in available for item in chosen):
+                    raise ValueError('Unsupported saved CSV pipeline widget value')
+            self.update_values(values)
+        finally:
+            self.eventhandler.lock_observe_1 = previous_lock
+
+    def _csv_inspect_selected_model(self):
+        """Read saved checkpoint metadata only: no training or prediction."""
+        selection = self.models_dropdown.value
+        if selection in (None, "", Config.DEFAULT_TRAIN_OPTION):
+            return False
+        try:
+            from pathlib import Path
+            from Storage.CSVSavedModelInspection import inspect_saved_csv_model
+            repository, scope = self._csv_catalog_storage()
+            filename = inspect_saved_csv_model(
+                repository, scope, self._csv_current_dataset_artifact(), selection,
+                model_root=Path.cwd() / "output" / "csv_artifacts" / "models")
+            self._csv_show_saved_pipeline(filename)
+        except (ValueError, OSError, TypeError) as exc:
+            self._csv_set_model_status("Saved CSV model unavailable (verification failed)")
+            self._csv_source_panel.status.value = (
+                "Saved CSV checkpoint cannot be reused: " + type(exc).__name__)
+            return False
+        self._csv_set_model_status("Saved model verified - ready to predict")
+        self._csv_source_panel.status.value = (
+            "Saved CSV checkpoint verified. Select Predict CSV to classify unlabeled rows.")
+        return True
+
     def _csv_model_selected(self):
-        """Unlock inspected CSV roles only after the New model step."""
+        """Unlock inspected CSV roles and verified train-only controls for New model."""
+        self._csv_update_erase_model_button()
         ready = (getattr(self, "_csv_roles_loaded_188", False)
                  and self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION)
         self._csv_set_role_editability(ready)
+        self._csv_set_training_controls(ready)
         if hasattr(self, "_csv_source_panel"):
             self._csv_source_panel.register_button.disabled = not ready
         self.id_column_diagnostic.value = (
-            "CSV columns are ready for inspection. Execution remains disabled."
-            if ready else "Select New model to configure CSV Dataset columns. CSV execution is disabled."
+            "CSV columns are ready. Register the dataset and choose training settings."
+            if ready else "Select New model to configure CSV Dataset columns."
         )
+        if ready:
+            self._csv_set_model_status("Ready to train a new CSV model")
+        elif self.models_dropdown.value not in (None, "", Config.DEFAULT_TRAIN_OPTION):
+            self._csv_inspect_selected_model()
+        else:
+            self._csv_set_model_status("Validate a CSV dataset" if not getattr(self, "_csv_roles_loaded_188", False)
+                                       else "Select a CSV model")
         self.update_ready()
         self._csv_refresh_training_action()
         self.disable_button("feature_search_investigate_button")
@@ -3067,7 +3449,8 @@ class Widgets:
             self._restore_source_roles({name: ((), () if name in ("data_columns", "text_columns") else None)
                                         for name in self._SOURCE_ROLE_FIELDS})
             self._csv_set_role_editability(False)
-            self.id_column_diagnostic.value = "Validate a CSV file to load Dataset columns. CSV execution is disabled."
+            self._csv_set_training_controls(False)
+            self.id_column_diagnostic.value = "Validate a CSV file to load Dataset columns."
         else:
             if hasattr(self, "_sql_model_options_188f"):
                 self.models_dropdown.options = self._sql_model_options_188f
@@ -3079,6 +3462,12 @@ class Widgets:
             self.id_column_diagnostic.value = ""
             for name, disabled in getattr(self, "_sql_action_state_188", {}).items():
                 getattr(self, name).disabled = disabled
+        self._csv_set_model_status("Validate a CSV dataset" if choice == "csv" else "")
+        if hasattr(self, "_csv_erase_model_control"):
+            self._csv_erase_model_confirmation = ""
+            self._csv_erase_model_control.description = "Erase model"
+            from GUI.ButtonStates import set_action_state
+            set_action_state(self._csv_erase_model_control, "blocked")
         self.update_ready()
         self.update_regression_suite_ready()
         if choice == "csv":
@@ -3124,14 +3513,42 @@ class Widgets:
         selected_class = schema.class_candidates[0] if schema.class_candidates else None
         ids = tuple(name for name in schema.unique_id_candidates if name != selected_class)
         selected_id = ids[0] if ids else None
+        selected_data = ()
+        selected_text = ()
+        if self._csv_current_dataset_artifact():
+            # A saved dataset can have several trained configurations. Restore
+            # roles only if all registered configurations agree; never guess.
+            from Storage.CSVModelConfiguration import (
+                list_csv_model_configurations, load_csv_model_configuration)
+            repository, scope = self._csv_catalog_storage()
+            configurations = list_csv_model_configurations(
+                repository, scope, self._csv_current_dataset_artifact())
+            role_sets = set()
+            for _label, configuration_id in configurations:
+                saved = load_csv_model_configuration(repository, scope, configuration_id)
+                role_sets.add((saved.class_column, saved.id_column,
+                               saved.data_columns, saved.text_columns))
+            if len(role_sets) == 1:
+                saved_class, saved_id, saved_data, saved_text = next(iter(role_sets))
+                valid_features = set(columns) - {saved_class, saved_id}
+                if (saved_class in schema.class_candidates
+                        and saved_id in schema.unique_id_candidates
+                        and set(saved_data).issubset(valid_features)
+                        and set(saved_text).issubset(valid_features)):
+                    selected_class, selected_id = saved_class, saved_id
+                    ids = tuple(n for n in schema.unique_id_candidates if n != selected_class)
+                    selected_data, selected_text = saved_data, saved_text
+        available_features = tuple(n for n in columns if n not in (selected_class, selected_id))
         self._restore_source_roles({
             "class_column": (schema.class_candidates, selected_class),
             "id_column": (ids, selected_id),
-            "data_columns": (tuple(n for n in columns if n not in (selected_class, selected_id)), ()),
-            "text_columns": ((), ()),
+            "data_columns": (available_features, selected_data),
+            "text_columns": (selected_text, selected_text),
         })
         # Validation populates options, but does not bypass the Models step.
         self.models_dropdown.disabled = False
+        if self._csv_current_dataset_artifact():
+            self._csv_refresh_saved_models()
         self._csv_model_selected()
 
     def _csv_file_changed(self):
@@ -3142,6 +3559,7 @@ class Widgets:
         self._csv_registered_dataset_190 = None
         self._csv_source_panel.loaded_saved_artifact_id = None
         self._csv_set_role_editability(False)
+        self._csv_set_training_controls(False)
         self._csv_source_panel.register_button.disabled = True
         self.models_dropdown.disabled = True
         if self._csv_view_active():
@@ -3172,6 +3590,7 @@ class Widgets:
                 return False
             panel.status.value = "CSV dataset already registered (dataset ID: " + ref.dataset_id + "). No duplicate created."
             panel.register_button.disabled = False
+            self.update_ready()
             self._csv_refresh_training_action()
             return True
         try:
@@ -3194,6 +3613,9 @@ class Widgets:
         self._csv_registered_dataset_190 = result
         panel.loaded_saved_artifact_id = result.reference.artifact_id
         panel.status.value = "CSV dataset registered for this local project (dataset ID: " + result.dataset_id + ")."
+        self._csv_refresh_saved_models()
+        self._csv_refresh_prediction_runs()
+        self.update_ready()
         self._csv_refresh_training_action()
         return True
 
@@ -3229,7 +3651,7 @@ class Widgets:
             panel.status.value = "Unable to list saved CSV datasets."
 
     def _csv_erase_saved(self, _button=None):
-        """Two-click confirmation for deleting only the selected scoped CSV."""
+        """Two-click confirmation for deleting a CSV and all its dependent artifacts."""
         self.guihandler.clear_csv_reclassification_context()
         panel = self._csv_source_panel
         artifact_id = panel.saved_datasets.value
@@ -3238,19 +3660,103 @@ class Widgets:
         if panel._erase_confirmation != artifact_id:
             panel._erase_confirmation = artifact_id
             panel.erase_saved_button.description = "Confirm erase"
-            panel.status.value = "Click Confirm erase to permanently delete the selected saved dataset."
+            panel.status.value = ("Confirm erase deletes this CSV dataset, all its saved models "
+                                  "and all its prediction runs permanently.")
             return False
         panel._erase_confirmation = ""
         panel.erase_saved_button.description = "Erase saved"
         try:
-            from Storage.CSVDatasetCatalog import erase_csv_dataset
+            from pathlib import Path
+            from Storage.CSVDatasetCascadeErasure import erase_csv_dataset_cascade
             repository, scope = self._csv_catalog_storage()
-            erase_csv_dataset(repository, scope, artifact_id)
+            erase_csv_dataset_cascade(repository, scope, artifact_id,
+                model_root=Path.cwd() / "output" / "csv_artifacts" / "models")
         except (OSError, ValueError, TypeError):
-            panel.status.value = "Unable to erase dataset; it may be used by a saved run."
+            panel.status.value = "Unable to erase dataset and dependencies safely; nothing else will be deleted."
             return False
+        self._csv_registered_dataset_190 = None
+        panel.loaded_saved_artifact_id = None
+        self._csv_roles_loaded_188 = False
         self._csv_refresh_saved()
-        panel.status.value = "Saved CSV dataset erased."
+        self._csv_refresh_saved_models()
+        self._csv_refresh_prediction_runs()
+        panel.status.value = "Saved CSV dataset, models and prediction history erased."
+        return True
+
+    def _csv_refresh_prediction_runs(self, _button=None):
+        """Discover completed runs for the selected, registered CSV dataset only."""
+        panel = self._csv_source_panel
+        panel.prediction_download.value = ""
+        entries = ()
+        if self._csv_view_active() and self._csv_current_dataset_artifact():
+            try:
+                from Storage.CSVPredictionExport import list_csv_prediction_runs
+                repo, scope = self._csv_catalog_storage()
+                entries = list_csv_prediction_runs(repo, scope, self._csv_current_dataset_artifact())
+            except (ValueError, OSError, TypeError):
+                panel.status.value = "Unable to list saved CSV prediction runs."
+        panel.saved_prediction_runs.options = (("Select prediction run", ""),) + entries
+        panel.saved_prediction_runs.value = ""
+        return len(entries)
+
+    def _csv_erase_prediction_run(self, _button=None):
+        """Two-click confirmation bound to dataset, run, and current CSV view."""
+        from GUI.ButtonStates import set_action_state
+        panel = self._csv_source_panel
+        selected = panel.saved_prediction_runs.value
+        dataset_id = self._csv_current_dataset_artifact()
+        button = panel.erase_predictions_button
+        if not self._csv_view_active() or not selected or not dataset_id:
+            panel._erase_predictions_confirmation = ""
+            button.description = "Erase predictions"
+            set_action_state(button, "blocked")
+            return False
+        key = (dataset_id, selected)
+        if panel._erase_predictions_confirmation != key:
+            panel._erase_predictions_confirmation = key
+            button.description = "Confirm erase"
+            set_action_state(button, "warning")
+            panel.status.value = "Click Confirm erase to delete only the selected CSV prediction run."
+            return False
+        panel._erase_predictions_confirmation = ""
+        button.description = "Erase predictions"
+        try:
+            from Storage.CSVPredictionErasure import erase_csv_prediction_run
+            repo, scope = self._csv_catalog_storage()
+            erase_csv_prediction_run(repo, scope, dataset_id, selected)
+        except (ValueError, OSError, TypeError, KeyError):
+            panel.status.value = "Unable to erase selected CSV prediction run."
+            set_action_state(button, "warning")
+            return False
+        self._csv_refresh_prediction_runs()
+        panel.status.value = "Saved CSV prediction run erased; dataset and models retained."
+        return True
+
+    def _csv_export_prediction_run(self, include_original=False):
+        """Create a bounded, click-to-download result file inside the Voilà browser."""
+        import base64
+        import html
+        panel = self._csv_source_panel
+        panel.prediction_download.value = ""
+        selected = panel.saved_prediction_runs.value
+        if not self._csv_view_active() or not selected or not self._csv_current_dataset_artifact():
+            panel.status.value = "Select a registered CSV dataset and saved prediction run."
+            return False
+        try:
+            from Storage.CSVPredictionExport import export_csv_prediction_run
+            repo, scope = self._csv_catalog_storage()
+            data = export_csv_prediction_run(
+                repo, scope, self._csv_current_dataset_artifact(), selected,
+                include_original=include_original)
+        except (ValueError, OSError, TypeError, UnicodeError, KeyError, csv.Error):
+            panel.status.value = "Unable to export this CSV prediction run."
+            return False
+        filename = 'csv_predictions_' + selected[:8] + ('_joined' if include_original else '') + '.csv'
+        encoded = base64.b64encode(data).decode('ascii')
+        panel.prediction_download.value = (
+            '<a download="' + html.escape(filename, quote=True) + '" href="data:text/csv;base64,'
+            + encoded + '">Download ' + html.escape(filename) + '</a>')
+        panel.status.value = "CSV export ready. Click the download link."
         return True
 
     def _csv_load_saved(self, _button=None):
@@ -3274,11 +3780,12 @@ class Widgets:
         except (OSError, ValueError, TypeError):
             panel.status.value = "Unable to load selected CSV dataset."
             return False
+        self._csv_refresh_prediction_runs()
         return True
 
     def connection_form(self) -> widgets.Box:
-        # Presentation-only source choice. The classifier remains SQL-backed
-        # until CSV role binding and execution are implemented explicitly.
+        # Source selection is presentation-only until an explicit source-specific
+        # execution path is chosen; CSV training never falls through to SQL Start.
         if not hasattr(self, "_data_source_selector"):
             from GUI.CSVSourcePanel import CSVSourcePanel, DataSourceSelector
             self._csv_source_panel = CSVSourcePanel()
@@ -3292,6 +3799,12 @@ class Widgets:
             self._csv_source_panel.refresh_saved_button.on_click(self._csv_refresh_saved)
             self._csv_source_panel.load_saved_button.on_click(self._csv_load_saved)
             self._csv_source_panel.erase_saved_button.on_click(self._csv_erase_saved)
+            self._csv_source_panel.refresh_predictions_button.on_click(self._csv_refresh_prediction_runs)
+            self._csv_source_panel.export_predictions_button.on_click(
+                lambda _: self._csv_export_prediction_run(False))
+            self._csv_source_panel.export_joined_button.on_click(
+                lambda _: self._csv_export_prediction_run(True))
+            self._csv_source_panel.erase_predictions_button.on_click(self._csv_erase_prediction_run)
         return self.create_section_form("Data source", [self._data_source_selector.widget], widgets.Box)
 
     @property

@@ -1,4 +1,4 @@
-"""Opt-in registered CSV training assembly; legacy GUI remains disabled."""
+"""Registered CSV training assembly for explicit train-only application paths."""
 from Storage.ArtifactContract import StorageScope
 from Storage.CSVModelConfiguration import load_csv_model_configuration
 from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer, prepare_csv_training_datalayer

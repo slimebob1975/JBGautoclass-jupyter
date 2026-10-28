@@ -16,8 +16,8 @@ class GuiColumnFilterTests(unittest.TestCase):
         self.assertIn('self._class_cardinalities.get(name, ceiling + 1)', WIDGETS)
 
     def test_slider_above_class_radio_group(self):
-        self.assertIn('widgets.VBox([self.class_cardinality_limit, self.class_column])', WIDGETS)
-        self.assertIn('[class_controls, self.id_column, self.data_columns, self.text_columns]', WIDGETS)
+        self.assertIn('"data": [self.class_cardinality_limit, self.class_column,', WIDGETS)
+        self.assertIn('self.class_cardinality_limit, self.class_column, self.id_column', WIDGETS)
 
     def test_sql_cardinality_cached_per_dataset(self):
         self.assertIn('def get_column_cardinalities(', SQL)

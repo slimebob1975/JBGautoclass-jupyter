@@ -677,6 +677,59 @@ class GUIHandler:
             )
             raise
 
+    def run_csv_saved_prediction(self, model_filename, runtime_config, repository,
+                                 scope, configuration_id, output: Output):
+        """Execute a locally verified model using the scoped CSV-only I/O facade."""
+        started = time.monotonic()
+        self._classifier_diagnostic('CSV saved-model prediction entered')
+        try:
+            with output, self.logger.capture_console_output():
+                from Storage.CSVApplicationRuntime import prepare_registered_csv_prediction_classifier
+                classifier = prepare_registered_csv_prediction_classifier(
+                    model_filename, runtime_config, repository, scope,
+                    configuration_id, self.logger)
+                result = classifier.run()
+            self._classifier_diagnostic(
+                f'CSV prediction completed; elapsed={time.monotonic()-started:.1f}s')
+            return result
+        except Exception:
+            self._classifier_diagnostic('CSV prediction failed\n' + traceback.format_exc(), 'ERROR')
+            raise
+
+    def run_csv_classifier(self, runtime_config, repository, scope, configuration_id, output: Output):
+        """Run the dedicated train-only CSV classifier without SQL data-layer setup."""
+        stage = "CSV classifier preparation"
+        started = time.monotonic()
+        self._classifier_diagnostic("CSV callback entered")
+        try:
+            source = getattr(runtime_config, "data_source", None)
+            if getattr(source, "kind", None) != "csv":
+                raise ValueError("CSV training requires a CSV runtime configuration")
+            self.logger.set_enable_quiet(not runtime_config.io.verbose)
+            with output, self.logger.capture_console_output():
+                from Storage.CSVTrainingApplication import prepare_registered_csv_training_classifier
+                classifier = prepare_registered_csv_training_classifier(
+                    runtime_config, repository, scope, configuration_id, self.logger)
+                stage = "CSV classifier.run"
+                self._classifier_diagnostic("CSV classifier.run: begin")
+                result = classifier.run()
+                self._classifier_diagnostic("CSV classifier.run: end")
+                if result is False:
+                    self.logger.print_warning(
+                        "CSV training ended without eligible labelled data; no model was saved."
+                    )
+            self._classifier_diagnostic(
+                f"CSV callback completed; elapsed={time.monotonic()-started:.1f}s")
+            return result
+        except Exception as ex:
+            self._classifier_diagnostic(
+                f"CSV failure at stage={stage}; elapsed={time.monotonic()-started:.1f}s\n"
+                + traceback.format_exc(), "ERROR"
+            )
+            with output, self.logger.capture_console_output():
+                self.logger.print_error(f"CSV training failed: {type(ex).__name__}: {ex}")
+            raise
+
     @classmethod
     def _regression_suite_dataset_labels(cls) -> str:
         return ", ".join(dataset["label"] for dataset in cls.REGRESSION_SUITE_DATASETS)

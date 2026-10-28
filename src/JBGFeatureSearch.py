@@ -919,8 +919,10 @@ def evaluate_probability_diagnostics(X, y, target, options, text_options, groups
                                      columns=None, pause_event=None, on_event=None,
                                      subgroup_column=None):
     """Fold-local training; each development record is predicted exactly once."""
-    if len(set(y)) != 2:
-        raise ValueError('Probability diagnostics currently support binary classification')
+    # The target probability is evaluated one-versus-rest for multiclass studies.
+    # This keeps the existing binary threshold metrics and their interpretation.
+    if target not in set(y) or len(set(y)) < 2:
+        raise ValueError('Diagnostics require a target and at least two classes')
     columns = tuple(columns if columns is not None else X.columns)
     scores = np.full(len(y), np.nan, dtype=float)
     for fold, (train, test) in enumerate(folds_for(X, y, options.outer_folds, options.seed, groups), 1):

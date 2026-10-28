@@ -29,11 +29,14 @@ class CSVConfigurationGUI198Tests(unittest.TestCase):
         tree=ast.parse((root/'Widgets.py').read_text(encoding='utf-8'))
         cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name=='Widgets')
         methods={n.name: ast.unparse(n) for n in cls.body if isinstance(n,ast.FunctionDef)}
-        self.assertIn('save_configuration_button.on_click(self._csv_save_configuration)',methods['connection_form'])
-        self.assertIn('load_configuration_button.on_click(self._csv_load_configuration)',methods['connection_form'])
-        for handler in ('_csv_save_configuration','_csv_load_configuration'):
-            self.assertNotIn('run_classifier',methods[handler])
-            self.assertNotIn('start_button_actions',methods[handler])
-        self.assertIn('self._restore_source_roles',methods['_csv_load_configuration'])
+        form = methods['connection_form']
+        self.assertIn('register_button.on_click(self._csv_register_dataset)', form)
+        self.assertIn('load_saved_button.on_click(self._csv_load_saved)', form)
+        self.assertIn('erase_saved_button.on_click(self._csv_erase_saved)', form)
+        self.assertNotIn('save_configuration_button.on_click', form)
+        self.assertNotIn('load_configuration_button.on_click', form)
+        for handler in ('_csv_register_dataset', '_csv_load_saved'):
+            self.assertNotIn('run_classifier', methods[handler])
+            self.assertNotIn('start_button_actions', methods[handler])
 
 if __name__=='__main__': unittest.main()

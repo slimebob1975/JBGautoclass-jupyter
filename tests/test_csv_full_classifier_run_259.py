@@ -2,7 +2,7 @@
 
 All rows and artifact identifiers are synthetic. This is an acceptance probe:
 production selection, evaluation, checkpoint reload and retraining are NOT mocked.
-CSV GUI execution remains disabled regardless of test outcome.
+Revision 263 may call this verified core path; this remains the native ML acceptance probe.
 """
 from contextlib import ExitStack
 from pathlib import Path

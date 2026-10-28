@@ -24,7 +24,8 @@ class MulticlassSearchTests(unittest.TestCase):
                                        options=opts, progress=None)
             self.assertEqual(result['status'], 'completed')
             self.assertEqual(result['evaluation']['type'], 'multiclass')
-            self.assertEqual(result['attempted_fits'], 42)
+            # Includes six fold-local probability-diagnostic fits (2 panels x 3 folds).
+            self.assertEqual(result['attempted_fits'], 48)
             self.assertEqual(set(result['nested_validation']), {'selected', 'full_baseline'})
             for name in ('selected', 'full_baseline'):
                 metrics = result['nested_validation'][name]

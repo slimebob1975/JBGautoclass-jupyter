@@ -29,7 +29,7 @@ class RawCatBoostColumns(BaseEstimator, TransformerMixin):
         categories = set(self.categorical_columns)
         for name in self.columns:
             if name in categories:
-                frame[name] = frame[name].astype("string").fillna("__MISSING__").astype(str)
+                frame[name] = frame[name].astype("string").fillna("__MISSING__").astype(object)
             else:
                 frame[name] = pd.to_numeric(frame[name], errors="coerce").astype(float)
         return frame

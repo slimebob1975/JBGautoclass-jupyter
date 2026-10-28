@@ -250,8 +250,8 @@ def binary_classification_dataset():
 @pytest.fixture
 def valid_iris_config() -> Config:
     config = Config(
-        Config.Connection(
-            odbc_driver="Mock Server",
+        connection=Config.Connection(
+            odbc_driver="SQL Server",
             host="tcp:database.jbg.mock",
             trusted_connection=True,
             class_catalog="DatabaseOne",
@@ -265,7 +265,7 @@ def valid_iris_config() -> Config:
             data_numerical_columns=["sepal-length","sepal-width","petal-length", "petal-width"],
             id_column="id",
         ),
-        Config.Mode(
+        mode=Config.Mode(
             train=False,
             predict=True,
             mispredicted=False,
@@ -285,12 +285,12 @@ def valid_iris_config() -> Config:
             scoring=ScoreMetric.accuracy,
             max_iterations=20000
         ),
-        Config.IO(
+        io=Config.IO(
             verbose=True,
             model_path="./model",
             model_name="test"
         ),
-        Config.Debug(
+        debug=Config.Debug(
             on=True,
             data_limit=150
         ),
@@ -302,8 +302,8 @@ def valid_iris_config() -> Config:
 @pytest.fixture
 def bare_iris_config() -> Config:
     config = Config(
-        Config.Connection(
-            odbc_driver="Mock Server",
+        connection=Config.Connection(
+            odbc_driver="SQL Server",
             host="tcp:database.jbg.mock",
             trusted_connection=True,
             class_catalog="DatabaseOne",
@@ -317,7 +317,7 @@ def bare_iris_config() -> Config:
             data_numerical_columns=["sepal-length","sepal-width","petal-length","petal-width"],
             id_column="id",
         ),
-        Config.Mode(
+        mode=Config.Mode(
             train=False,
             predict=True,
             mispredicted=False,
@@ -337,12 +337,12 @@ def bare_iris_config() -> Config:
             scoring=ScoreMetric.accuracy,
             max_iterations=20000
         ),
-        Config.IO(
+        io=Config.IO(
             verbose=True,
             model_path="./model",
             model_name="test"
         ),
-        Config.Debug(
+        debug=Config.Debug(
             on=True,
             data_limit=150
         ),
@@ -363,8 +363,8 @@ def bare_iris_config() -> Config:
 @pytest.fixture
 def saved_with_valid_iris_config() -> Config:
     config = Config(
-        Config.Connection(
-            odbc_driver="Mock Server",
+        connection=Config.Connection(
+            odbc_driver="SQL Server",
             host="tcp:database.jbg.mock",
             trusted_connection=True,
             class_catalog="DatabaseOne",
@@ -378,7 +378,7 @@ def saved_with_valid_iris_config() -> Config:
             data_numerical_columns=["sepal-length","sepal-width","petal-length","petal-width"],
             id_column="id",
         ),
-        Config.Mode(
+        mode=Config.Mode(
             train=False,
             predict=True,
             mispredicted=False,
@@ -398,12 +398,12 @@ def saved_with_valid_iris_config() -> Config:
             scoring=ScoreMetric.accuracy,
             max_iterations=20000
         ),
-        Config.IO(
+        io=Config.IO(
             verbose=True,
             model_path="./model",
             model_name="test"
         ),
-        Config.Debug(
+        debug=Config.Debug(
             on=True,
             data_limit=150
         ),

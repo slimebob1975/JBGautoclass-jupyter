@@ -76,7 +76,13 @@ class CSVTrainingAdapter:
                     or not frame[c.id_column].is_unique):
                 raise ValueError
             frame = frame.loc[:, self.column_names]
-            labelled = frame[c.class_column].astype(str).str.strip().ne('')
+            # Interpret missing-label tokens only in the configured class column.
+            # Keep feature values and identifiers untouched, including literal NULL.
+            values = frame[c.class_column]
+            stripped = values.astype('string').str.strip()
+            unknown = values.isna() | stripped.eq('').fillna(True) | stripped.str.casefold().eq('null').fillna(True)
+            frame.loc[unknown, c.class_column] = ''
+            labelled = ~unknown
             train = self.config.should_train()
             predict = self.config.should_predict()
             if train and not predict:

@@ -42,8 +42,15 @@ class CSVColumnSchemaTests(unittest.TestCase):
         self.assertNotIn(str(self.path), str(error.exception))
 
     def test_no_sql_import_needed(self):
+        import subprocess
         import sys
-        self.assertNotIn("SQLDataLayer", sys.modules)
+        root = Path(__file__).resolve().parents[1] / 'src'
+        probe = ("import sys; import CSVColumnSchema; "
+                 "assert 'SQLDataLayer' not in sys.modules")
+        completed = subprocess.run([sys.executable, '-c', probe],
+            cwd=str(root), capture_output=True, text=True, timeout=20)
+        self.assertEqual(completed.returncode, 0,
+                         'CSV schema import should not import SQLDataLayer')
 
 
 if __name__ == "__main__":

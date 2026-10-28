@@ -2,8 +2,10 @@ from typing import Callable
 import pytest
 
 from Config import Config, DarkNumberAlpha, DarkNumberMethod
-from imblearn.over_sampling import oversampler
+from JBGMeta import Oversampling, Undersampling
+from imblearn.base import BaseSampler as oversampler
 from imblearn.under_sampling import RandomUnderSampler
+from sklearn.preprocessing import FunctionTransformer
 from JBGExceptions import ConfigException
 from JBGModelPersistence import save_model_artifact
 from path import Path
@@ -103,21 +105,25 @@ class TestConfig:
         
 
     def test_oversampler_and_undersampler(self, valid_iris_config):
-        # Using the default both oversampler and undersampler are False and should return None
-        assert valid_iris_config.get_callable_oversamplers() is None
-        assert valid_iris_config.get_undersampler() is None
-        assert not valid_iris_config.use_imb_pipeline(), "Neither oversampler nor undersampler means no imb_pipeline"
-        
-        # Update the config to confirm that it's the right type of class
-        valid_iris_config.mode.oversampler = True
-        
-        assert valid_iris_config.use_imb_pipeline(), "oversampler or undersampler means imb_pipeline"
-        valid_iris_config.mode.undersampler = True
+        """The active sampler API uses enum choices, not boolean flags."""
+        assert not valid_iris_config.use_imb_pipeline()
+        assert not valid_iris_config.use_oversampling()
+        assert not valid_iris_config.use_undersampling()
+        inactive_sampler = valid_iris_config.get_undersampler()
+        assert isinstance(inactive_sampler, FunctionTransformer)
+        sample = [[1, 2], [3, 4]]
+        assert inactive_sampler.transform(sample) is sample
 
-        assert isinstance(valid_iris_config.get_callable_oversamplers(), oversampler)
+        valid_iris_config.set_oversampler(Oversampling.RND)
+        assert valid_iris_config.use_oversampling()
+        assert valid_iris_config.use_imb_pipeline()
+        assert isinstance(valid_iris_config.get_oversampler(), oversampler)
+
+        valid_iris_config.set_undersampler(Undersampling.RND)
+        assert valid_iris_config.use_undersampling()
         assert isinstance(valid_iris_config.get_undersampler(), RandomUnderSampler)
-        assert valid_iris_config.use_imb_pipeline(), "oversampler and undersampler means imb_pipeline"
-        
+        assert valid_iris_config.use_imb_pipeline()
+
     def test_none_or_positive_int(self, valid_iris_config):
         """ Some values return either an int or None """
         assert valid_iris_config.get_num_selected_features() == 0 # None returns 0
