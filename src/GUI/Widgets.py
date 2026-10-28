@@ -2971,6 +2971,67 @@ class Widgets:
             self.eventhandler.lock_observe_1 = previous_lock
         self.reset_field_status("models")
 
+    def _csv_training_readiness(self):
+        """Return a fail-closed CSV GUI readiness verdict without constructing SQL I/O.
+
+        A registered dataset alone is insufficient: the verified classifier
+        entrypoint also requires a persisted, source-bound model configuration.
+        GUI configuration persistence and train-only runtime wiring are not yet
+        implemented, so this method deliberately cannot mark Start ready.
+        """
+        if not self._csv_view_active():
+            return "blocked", "CSV training is unavailable outside CSV source mode."
+        if not getattr(self, "_csv_roles_loaded_188", False):
+            return "waiting", "Validate a CSV dataset before training."
+        if self.models_dropdown.value != Config.DEFAULT_TRAIN_OPTION:
+            return "waiting", "Select New model for CSV training."
+        if not self._csv_current_dataset_artifact():
+            return "waiting", "Register the validated CSV dataset before training."
+        if not self.id_column.value or not self.class_column.value or not self.data_columns.value:
+            return "waiting", "Select an ID, a class and at least one numerical predictor."
+        return "blocked", "CSV model configuration and runtime binding are not yet available in the GUI."
+
+    def _csv_prepare_training_runtime(self):
+        """Build a source-scoped training plan; never execute the SQL Start path.
+
+        The stored configuration is immutable and the returned classifier must
+        be created only through prepare_registered_csv_training_classifier.
+        """
+        if not self._csv_view_active():
+            raise ValueError("CSV training preparation requires CSV source mode")
+        if not getattr(self, "_csv_roles_loaded_188", False):
+            raise ValueError("Validate CSV before preparing training")
+        if self.models_dropdown.value != Config.DEFAULT_TRAIN_OPTION:
+            raise ValueError("Select New model before preparing CSV training")
+        artifact_id = self._csv_current_dataset_artifact()
+        if not artifact_id or not self.id_column.value or not self.class_column.value:
+            raise ValueError("Register CSV and select its column roles before training")
+        text_columns = tuple(self.text_columns.value)
+        data_columns = tuple(name for name in self.data_columns.value if name not in text_columns)
+        if not data_columns and not text_columns:
+            raise ValueError("Select at least one CSV feature")
+        panel = self._csv_source_panel
+        from Storage.CSVGUITrainingConfig import prepare_csv_gui_training_config
+        repository, scope = self._csv_catalog_storage()
+        base_config = Config(**self.get_config_params())
+        runtime, saved = prepare_csv_gui_training_config(
+            base_config, repository, scope, artifact_id,
+            id_column=self.id_column.value,
+            class_column=self.class_column.value,
+            data_columns=data_columns, text_columns=text_columns,
+            csv_format=dict(delimiter=panel.delimiter.value,
+                            quotechar=panel.quotechar.value,
+                            encoding=panel.encoding.value))
+        return runtime, saved, repository, scope
+
+    def _csv_refresh_training_action(self):
+        """Expose accurate state and never enable the SQL-backed Start handler."""
+        from GUI.ButtonStates import set_action_state
+        state, message = self._csv_training_readiness()
+        set_action_state(self.start_button, state)
+        self.start_button.tooltip = message
+        return state, message
+
     def _csv_model_selected(self):
         """Unlock inspected CSV roles only after the New model step."""
         ready = (getattr(self, "_csv_roles_loaded_188", False)
@@ -2983,7 +3044,7 @@ class Widgets:
             if ready else "Select New model to configure CSV Dataset columns. CSV execution is disabled."
         )
         self.update_ready()
-        self.disable_button("start_button")
+        self._csv_refresh_training_action()
         self.disable_button("feature_search_investigate_button")
 
     def _csv_source_selected(self, choice):
@@ -3021,7 +3082,7 @@ class Widgets:
         self.update_ready()
         self.update_regression_suite_ready()
         if choice == "csv":
-            self.disable_button("start_button")
+            self._csv_refresh_training_action()
             self.disable_button("feature_search_investigate_button")
 
     def _csv_column_role_changed(self):
@@ -3044,6 +3105,7 @@ class Widgets:
         if hasattr(self, "_csv_source_panel"):
             self._csv_source_panel.register_button.disabled = False
         self.update_ready()
+        self._csv_refresh_training_action()
 
     def _csv_validated_columns(self, panel):
         """Populate common role controls after CSV validation; no SQL calls."""
@@ -3082,6 +3144,8 @@ class Widgets:
         self._csv_set_role_editability(False)
         self._csv_source_panel.register_button.disabled = True
         self.models_dropdown.disabled = True
+        if self._csv_view_active():
+            self._csv_refresh_training_action()
 
     def _csv_register_dataset(self, _button=None):
         """Explicit local-only persistence of selected CSV; never starts SQL/ML."""
@@ -3108,6 +3172,7 @@ class Widgets:
                 return False
             panel.status.value = "CSV dataset already registered (dataset ID: " + ref.dataset_id + "). No duplicate created."
             panel.register_button.disabled = False
+            self._csv_refresh_training_action()
             return True
         try:
             from pathlib import Path
@@ -3129,6 +3194,7 @@ class Widgets:
         self._csv_registered_dataset_190 = result
         panel.loaded_saved_artifact_id = result.reference.artifact_id
         panel.status.value = "CSV dataset registered for this local project (dataset ID: " + result.dataset_id + ")."
+        self._csv_refresh_training_action()
         return True
 
     def _csv_current_dataset_artifact(self):

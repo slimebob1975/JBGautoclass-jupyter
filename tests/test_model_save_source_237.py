@@ -5,6 +5,7 @@ from unittest.mock import Mock
 
 from JBGModelCompatibility import ModelCompatibilityError, build_model_save_compatibility
 from Storage.CSVTrainingAdapter import CSVTrainingAdapter
+from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer
 from test_csv_model_compatibility_235 import CSVModelCompatibility235
 
 
@@ -30,6 +31,24 @@ class ModelSaveSource237(unittest.TestCase):
         self.assertEqual(result['schema_version'], 2)
         self.assertEqual(result['source_kind'], 'csv')
         self.assertNotIn('source_driver_sha256', result)
+
+    def test_csv_registered_training_facade_produces_v2(self):
+        adapter = object.__new__(CSVTrainingAdapter)
+        adapter.configuration = self.csv
+        adapter.config = self.config
+        facade = CSVTrainingDataLayer(adapter)
+        result = build_model_save_compatibility(self.config, self.converter, facade)
+        self.assertEqual(result['schema_version'], 2)
+        self.assertEqual(result['source_kind'], 'csv')
+        self.assertNotIn('source_driver_sha256', result)
+
+    def test_csv_training_facade_rejects_foreign_config(self):
+        adapter = object.__new__(CSVTrainingAdapter)
+        adapter.configuration = self.csv
+        adapter.config = object()
+        facade = CSVTrainingDataLayer(adapter)
+        with self.assertRaises(ModelCompatibilityError):
+            build_model_save_compatibility(self.config, self.converter, facade)
 
     def test_csv_rejects_foreign_runtime_configuration(self):
         adapter = object.__new__(CSVTrainingAdapter)
