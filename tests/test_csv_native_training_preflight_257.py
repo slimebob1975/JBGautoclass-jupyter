@@ -12,6 +12,7 @@ class CSVPreflight257(unittest.TestCase):
         cfg = Mock()
         cfg.data_source.kind = 'csv'
         cfg.should_train.return_value = True
+        cfg.should_predict.return_value = False
         return cfg
 
     def layer(self, rows):

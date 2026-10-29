@@ -707,9 +707,21 @@ class GUIHandler:
                 raise ValueError("CSV training requires a CSV runtime configuration")
             self.logger.set_enable_quiet(not runtime_config.io.verbose)
             with output, self.logger.capture_console_output():
-                from Storage.CSVTrainingApplication import prepare_registered_csv_training_classifier
-                classifier = prepare_registered_csv_training_classifier(
-                    runtime_config, repository, scope, configuration_id, self.logger)
+                if runtime_config.should_predict():
+                    from Storage.CSVCombinedDataLayer import prepare_csv_combined_datalayer
+                    from AutomaticClassifier import AutomaticClassifier
+                    layer = prepare_csv_combined_datalayer(
+                        runtime_config, repository, scope, configuration_id)
+                    classifier = AutomaticClassifier(
+                        config=runtime_config, logger=self.logger,
+                        datalayer=layer, regression_suite=False)
+                    if (classifier.datalayer is not layer
+                            or getattr(classifier.handler, 'datalayer', None) is not layer):
+                        raise ValueError('CSV combined classifier lost data-layer binding')
+                else:
+                    from Storage.CSVTrainingApplication import prepare_registered_csv_training_classifier
+                    classifier = prepare_registered_csv_training_classifier(
+                        runtime_config, repository, scope, configuration_id, self.logger)
                 stage = "CSV classifier.run"
                 self._classifier_diagnostic("CSV classifier.run: begin")
                 result = classifier.run()

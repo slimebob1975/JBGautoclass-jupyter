@@ -178,7 +178,20 @@ class TaskRunner:
                 - Other keys as used by the following task
         """
         source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
-        if source_kind == "csv" and self.config.should_train():
+        if (source_kind == "csv" and self.config.should_train()
+                and self.config.should_predict()):
+            # Combined CSV execution is explicitly opt-in through a validated,
+            # same-scope reader/result sink. No GUI route is enabled here.
+            from Storage.CSVCombinedDataLayer import CSVCombinedDataLayer
+            if (self.regression_suite
+                    or not isinstance(self.datalayer, CSVCombinedDataLayer)
+                    or getattr(self.handler, "datalayer", None) is not self.datalayer):
+                raise ValueError("CSV combined execution requires a prepared training and shared data layer")
+            expected = get_tasks(self.config, regression_suite=False)
+            if (not isinstance(tasks, (list, tuple)) or list(tasks) != expected
+                    or self.config.should_calculate_feature_importance()):
+                raise ValueError("Unsupported CSV combined task sequence or diagnostics")
+        elif source_kind == "csv" and self.config.should_train():
             # Training never uses the prediction sink. Only the registered,
             # pinned CSV reader is allowed to enter the common ML task chain.
             from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer
@@ -282,10 +295,21 @@ class TaskRunner:
         Fetches the dataset from the database, and if there is none calls for an early exit
         """
         self.logger.print_task_header(title="Fetching data")
-        data =  self.datalayer.get_dataset()
-
         source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
-        if source_kind == "csv" and self.config.should_train():
+        if (source_kind == "csv" and self.config.should_train()
+                and self.config.should_predict()):
+            # One pinned read. DatasetHandler receives both partitions and
+            # separates known/unknown rows in its normal shared workflow.
+            from Storage.CSVCombinedDataLayer import CSVCombinedDataLayer
+            if not isinstance(self.datalayer, CSVCombinedDataLayer):
+                raise DatasetException("CSV combined source is not prepared")
+            training, prediction = self.datalayer.read_partitions()
+            data = list(training) + list(prediction)
+        else:
+            data = self.datalayer.get_dataset()
+
+        if (source_kind == "csv" and self.config.should_train()
+                and not self.config.should_predict()):
             if not data:
                 raise DatasetException("CSV training has no labelled rows; model not saved")
             # The training reader returns rows in text/data/ID/class order.
@@ -298,7 +322,7 @@ class TaskRunner:
                 raise DatasetException(
                     "CSV training needs at least two labelled classes with two rows each"
                 )
-        if data is None or (not data and source_kind == "csv"):
+        if data is None or (source_kind == "csv" and len(data) == 0):
             return {"early_exit": True}
 
         return {"data": data}

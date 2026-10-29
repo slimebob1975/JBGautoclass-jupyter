@@ -55,12 +55,29 @@ class CSVContinue263a(unittest.TestCase):
         w.data_columns.value = ()
         self.assertFalse(w._csv_continue_ready())
 
+    def test_verified_saved_model_enables_continue(self):
+        w = self.widget()
+        w.models_dropdown.value = 'saved-synthetic-model'
+        w._csv_verified_model_selection = 'saved-synthetic-model'
+        w.update_ready()
+        self.assertFalse(w.states['continuation_button'])
+        w._csv_verified_model_selection = None
+        w.update_ready()
+        self.assertTrue(w.states['continuation_button'])
+
+    def test_saved_model_requires_registered_dataset(self):
+        w = self.widget()
+        w.models_dropdown.value = 'saved-synthetic-model'
+        w._csv_verified_model_selection = 'saved-synthetic-model'
+        w._csv_current_dataset_artifact = lambda: None
+        self.assertFalse(w._csv_continue_ready())
+
     def test_continue_dispatch_does_not_use_sql_actions(self):
         e = method_owner(('continuation_button_was_clicked',))()
         w = self.widget()
         w.continuation_button = SimpleNamespace(disabled=False)
         calls = []
-        w._csv_model_selected = lambda: calls.append('csv')
+        w._csv_continue_actions = lambda: calls.append('csv')
         w.continuation_button_actions = lambda: self.fail('SQL continuation invoked')
         w.deactivate_section = lambda x: self.fail('SQL section invoked')
         e.widgets = w
@@ -72,7 +89,7 @@ class CSVContinue263a(unittest.TestCase):
         w = self.widget()
         w._csv_current_dataset_artifact = lambda: None
         w.continuation_button = SimpleNamespace(disabled=False)
-        w._csv_model_selected = lambda: self.fail('CSV settings opened without registration')
+        w._csv_continue_actions = lambda: self.fail('CSV settings opened without registration')
         e.widgets = w
         e.continuation_button_was_clicked(None)
         self.assertTrue(w.states['continuation_button'])

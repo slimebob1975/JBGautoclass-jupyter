@@ -43,7 +43,8 @@ class Mispredicted223(unittest.TestCase):
                                  should_display_mispredicted=lambda: True,
                                  get_id_column_name=lambda: "row_id")
         logger = Mock()
-        obj = SimpleNamespace(handler=SimpleNamespace(config=config, logger=logger,
+        layer = SimpleNamespace(save_mispredicted_data=Mock())
+        obj = SimpleNamespace(handler=SimpleNamespace(config=config, logger=logger, datalayer=layer,
                                                         read_data_query="SELECT TOP(3) * FROM source"),
                               LIMIT_MISPREDICTED=10, NO_MODEL="none",
                               CROSS_TRAINED_MODEL="cross", RETRAINED_MODEL="retrained")
@@ -69,7 +70,7 @@ class Mispredicted223(unittest.TestCase):
         obj.evaluate_mispredictions("synthetic.csv")
         logger.print_query.assert_not_called()
         namespace_helpers = METHODS["evaluate_mispredictions"].__globals__["Helpers"]
-        namespace_helpers.save_matrix_as_csv.assert_called()
+        obj.handler.datalayer.save_mispredicted_data.assert_called_once()
         self.assertEqual(obj.X_mispredicted.index.tolist(), ["005"])
 
     def test_csv_reporting_never_reads_sql_query(self):
@@ -80,6 +81,7 @@ class Mispredicted223(unittest.TestCase):
         obj.num_mispredicted = 1
         obj.evaluate_mispredictions("synthetic.csv")
         logger.print_query.assert_not_called()
+        obj.handler.datalayer.save_mispredicted_data.assert_called_once()
 
     def test_sql_retains_numeric_query(self):
         obj, logger = self.handler("sql")

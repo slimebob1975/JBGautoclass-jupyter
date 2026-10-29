@@ -329,9 +329,10 @@ def build_model_save_compatibility(config, converter, datalayer) -> dict:
         from Storage.CSVTrainingAdapter import CSVTrainingAdapter
         from Storage.CSVPredictionDataLayer import CSVPredictionDataLayer
         from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer
+        from Storage.CSVCombinedDataLayer import CSVCombinedDataLayer
 
         reader = (datalayer._reader if isinstance(
-            datalayer, (CSVPredictionDataLayer, CSVTrainingDataLayer)) else datalayer)
+            datalayer, (CSVPredictionDataLayer, CSVTrainingDataLayer, CSVCombinedDataLayer)) else datalayer)
         if not isinstance(reader, CSVTrainingAdapter):
             raise ModelCompatibilityError("CSV model saving requires a registered CSV reader.")
         if (getattr(reader, "config", None) is not config

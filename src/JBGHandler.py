@@ -2885,10 +2885,18 @@ class PredictionsHandler:
         # SQL inspection queries are not meaningful for file-backed CSV sources.
         # In particular, opaque CSV IDs must never be interpolated into SQL.
         source = getattr(self.handler.config, "data_source", None)
-        if getattr(source, "kind", "sql") != "csv":
-            ids = ', '.join([str(id) for id in self.X_most_mispredicted.index.tolist()])
-            most_mispredicted_query = f"{self._get_rid_of_TOP_stuffs(self.handler.read_data_query)} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
-            self.handler.logger.print_query("most mispredicted data", most_mispredicted_query)
+        if getattr(source, "kind", "sql") == "csv":
+            # The analysis above is shared by SQL and CSV. Only the result sink
+            # differs: file-backed runs must use their scoped data layer.
+            publish = getattr(self.handler.datalayer, "save_mispredicted_data", None)
+            if not callable(publish):
+                raise RuntimeError("CSV misprediction result sink is unavailable")
+            publish(self.X_mispredicted)
+            return
+
+        ids = ', '.join([str(id) for id in self.X_most_mispredicted.index.tolist()])
+        most_mispredicted_query = f"{self._get_rid_of_TOP_stuffs(self.handler.read_data_query)} WHERE {self.handler.config.get_id_column_name()} IN ({ids})"
+        self.handler.logger.print_query("most mispredicted data", most_mispredicted_query)
         Helpers.save_matrix_as_csv(
             self.X_mispredicted,
             misplaced_filepath,

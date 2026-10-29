@@ -109,6 +109,7 @@ class CSVTrainingFetchPortable254(unittest.TestCase):
         cfg = Mock()
         cfg.data_source.kind = 'csv'
         cfg.should_train.return_value = True
+        cfg.should_predict.return_value = False
         runner = SimpleNamespace(config=cfg, datalayer=layer, logger=Mock())
         with self.assertRaisesRegex(ValueError, 'no labelled rows'):
             self.fetch_method()(runner)

@@ -51,6 +51,7 @@ class CSVGUITrainingExecution263(unittest.TestCase):
         target.output = Mock()
         target.clear_mispredicted_output = Mock()
         target.start_button = Button()
+        target.predict_checkbox = SimpleNamespace(value=False)
         target._csv_prepare_training_runtime = Mock(return_value=(
             SimpleNamespace(), SimpleNamespace(configuration_id='synthetic-config'),
             object(), object()))
@@ -117,7 +118,8 @@ class CSVGUITrainingExecution263(unittest.TestCase):
             set_enable_quiet=Mock(), capture_console_output=Mock(return_value=nullcontext()),
             print_warning=Mock(), print_error=Mock())
         runtime = SimpleNamespace(data_source=SimpleNamespace(kind='csv'),
-                                  io=SimpleNamespace(verbose=True))
+                                  io=SimpleNamespace(verbose=True),
+                                  should_predict=lambda: False)
         classifier = SimpleNamespace(run=Mock(return_value={'mispredicted': None}))
         prepare = Mock(return_value=classifier)
         fake_module = ModuleType('Storage.CSVTrainingApplication')

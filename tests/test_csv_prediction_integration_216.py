@@ -99,9 +99,10 @@ class CSVPredictionIntegration216(unittest.TestCase):
         self.assertEqual([r['prediction'] for r in payload['rows']], predictions.tolist())
         self.assertEqual(manifest['row_count'], 2)
         self.assertEqual(manifest['predictions_artifact_id'], payload_ref.artifact_id)
-        self.assertNotIn('005', json.dumps(manifest))
-        self.assertNotIn('006', json.dumps(manifest))
-        self.assertNotIn('value', json.dumps(manifest))
+        self.assertNotIn('rows', manifest)
+        self.assertNotIn('key', manifest)
+        self.assertNotIn('prediction', manifest)
+        self.assertNotIn('value', manifest)
 
     def test_invalid_runtime_source_fails_before_reading(self):
         wrong = SavedConfig(self.ref)

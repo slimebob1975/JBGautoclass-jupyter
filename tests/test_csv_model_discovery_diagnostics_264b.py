@@ -70,6 +70,7 @@ class GUIMessage264b(unittest.TestCase):
             _csv_current_dataset_artifact=lambda: 'dataset', _csv_view_active=lambda: True,
             _csv_catalog_storage=lambda: (Mock(), Mock()),
             _csv_update_erase_model_button=Mock(), _csv_set_model_status=Mock(),
+            update_ready=Mock(),
             _csv_source_panel=SimpleNamespace(status=SimpleNamespace(value='')),
             eventhandler=handler,
             models_dropdown=SimpleNamespace(options=(), value=None))

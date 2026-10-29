@@ -334,7 +334,16 @@ class EventHandler:
 
     def predict_checkbox(self, change: Bunch) -> None:
         #Default is that predictions should use meta values, e.g., for comparison afterwards
-        if change['name'] == 'value':                
+        if change['name'] == 'value':
+            if self.widgets._csv_view_active():
+                # CSV combined runs must not switch on SQL-only meta handling.
+                if self.widgets.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION:
+                    self.widgets.metas_checkbox.value = False
+                    self.widgets.metas_checkbox.disabled = True
+                else:
+                    self.widgets.metas_checkbox.disabled = not self.widgets.predict_checkbox.value
+                self.widgets._csv_refresh_training_action()
+                return
             if self.widgets.predict_checkbox.value:
                 self.widgets.metas_checkbox.disabled = False
                 self.widgets.metas_checkbox.value = True
@@ -374,8 +383,9 @@ class EventHandler:
             if self.widgets.continuation_button.disabled or not self.widgets._csv_continue_ready():
                 self.widgets.update_ready()
                 return
-            # CSV has its own verified train-only controls: never enter SQL setup.
-            self.widgets._csv_model_selected()
+            # CSV has its own continuation path. Refreshing the model here
+            # reinitializes controls and never advances the user workflow.
+            self.widgets._csv_continue_actions()
             return
         if getattr(self.widgets, "_feature_search_running", False):
             return
@@ -1365,6 +1375,45 @@ class Widgets:
         """Apply the temporary numeric regression profile to classifier widgets."""
         self.update_values(self.REGRESSION_TEST_PROFILE)
 
+    def _csv_continue_actions(self) -> None:
+        """Advance validated CSV selection without SQL-only continuation setup.
+
+        Keep source roles and the chosen checkpoint intact. Running the model
+        remains an explicit separate Start action.
+        """
+        if not self._csv_view_active() or not self._csv_continue_ready():
+            self.update_ready()
+            return
+        selected = self.models_dropdown.value
+        previous_lock = self.eventhandler.lock_observe_1
+        self.eventhandler.lock_observe_1 = True
+        try:
+            if selected == Config.DEFAULT_TRAIN_OPTION:
+                self.update_values({"train_checkbox": True, "predict_checkbox": False,
+                                    "mispredicted_checkbox": False, "metas_checkbox": False})
+            else:
+                self.update_values({"train_checkbox": False, "predict_checkbox": True,
+                                    "mispredicted_checkbox": False, "metas_checkbox": False})
+        finally:
+            self.eventhandler.lock_observe_1 = previous_lock
+        if selected == Config.DEFAULT_TRAIN_OPTION:
+            self.enable_items(list(self._CSV_TRAINING_EDITABLE_FIELDS)
+                              + ["train_checkbox", "predict_checkbox", "mispredicted_checkbox"])
+            self.disable_items([field for field in self._CSV_TRAINING_LOCKED_FIELDS
+                                if field not in ("train_checkbox", "mispredicted_checkbox")])
+            self.disable_items(["metas_checkbox"])
+            self._csv_source_panel.status.value = (
+                "CSV training is ready. Predict is optional. Mispredicted is available with Train + Predict."
+            )
+        else:
+            self.enable_items(["predict_checkbox", "metas_checkbox"])
+            self.disable_items(["train_checkbox", "mispredicted_checkbox"])
+            self._csv_source_panel.status.value = (
+                "Saved CSV model ready. Pass on Metadata is optional but is not yet supported for CSV execution."
+            )
+        self._csv_mode_confirmed_selection = selected
+        self._csv_refresh_training_action()
+
     def continuation_button_actions(self) -> None:
         """ Complex actions when button is clicked """
         self.regression_suite_state = False
@@ -2166,14 +2215,15 @@ class Widgets:
         self.update_item("text_columns", updates)
 
     def _csv_continue_ready(self) -> bool:
-        """CSV Continue requires a registered dataset and selected train-only roles."""
-        return bool(
-            getattr(self, "_csv_roles_loaded_188", False)
-            and self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION
-            and self._csv_current_dataset_artifact()
-            and self.id_column.value and self.class_column.value
-            and self.data_columns.value
-        )
+        """Allow CSV Continue only for valid new-model roles or a verified checkpoint."""
+        if not (getattr(self, "_csv_roles_loaded_188", False)
+                and self._csv_current_dataset_artifact()):
+            return False
+        selected = self.models_dropdown.value
+        if selected == Config.DEFAULT_TRAIN_OPTION:
+            return bool(self.id_column.value and self.class_column.value
+                        and self.data_columns.value)
+        return bool(selected and getattr(self, "_csv_verified_model_selection", None) == selected)
 
     def update_ready(self) -> None:
         """ Sets whether it can continue into Classifier Settings  """
@@ -3021,7 +3071,7 @@ class Widgets:
     )
 
     _CSV_TRAINING_LOCKED_FIELDS = (
-        "train_checkbox", "predict_checkbox", "mispredicted_checkbox", "metas_checkbox",
+        "train_checkbox", "mispredicted_checkbox", "metas_checkbox",
         "dark_numbers_checkbox", "dark_number_method", "dark_number_alpha",
         "dark_number_target", "dark_number_failure_mode",
         "feature_importance_checkbox", "feature_importance_repeats",
@@ -3049,7 +3099,7 @@ class Widgets:
             self.num_variables.value = len(self.data_columns.value)
             self.deactivate_section("feature_selection")
             self.enable_items(list(self._CSV_TRAINING_EDITABLE_FIELDS))
-            self.disable_items(list(self._CSV_TRAINING_LOCKED_FIELDS))
+            self.disable_items(list(self._CSV_TRAINING_LOCKED_FIELDS) + ["predict_checkbox"])
             self.start_button.description = "Train CSV"
         else:
             self.deactivate_section("feature_selection")
@@ -3072,8 +3122,12 @@ class Widgets:
         if (not self.algorithm_dropdown.value or not self.preprocess_dropdown.value
                 or not self.reduction_dropdown.value):
             return "waiting", "Select at least one model, preprocessing method and reduction method."
+        if self.mispredicted_checkbox.value and not self.predict_checkbox.value:
+            return "waiting", "Select Predict as well to run CSV Mispredicted."
         return "ready", (
-            "Ready to train a new CSV model. Prediction and saved-model reuse remain disabled."
+            "Ready for combined CSV training and prediction."
+            if self.predict_checkbox.value else
+            "Ready to train a new CSV model."
         )
 
     def _csv_prepare_training_runtime(self):
@@ -3106,7 +3160,9 @@ class Widgets:
             data_columns=data_columns, text_columns=text_columns,
             csv_format=dict(delimiter=panel.delimiter.value,
                             quotechar=panel.quotechar.value,
-                            encoding=panel.encoding.value))
+                            encoding=panel.encoding.value),
+            predict=bool(self.predict_checkbox.value),
+            mispredicted=bool(self.mispredicted_checkbox.value))
         return runtime, saved, repository, scope
 
     def _csv_saved_prediction_readiness(self):
@@ -3118,6 +3174,8 @@ class Widgets:
             return 'waiting', 'Select a saved CSV model.'
         if not self._csv_current_dataset_artifact():
             return 'waiting', 'Load a registered CSV dataset.'
+        if self.metas_checkbox.value:
+            return 'waiting', 'CSV Pass on Metadata is not implemented yet; uncheck it to run.'
         return 'ready', 'Run the verified saved CSV model against unlabeled rows.'
 
     def _csv_refresh_training_action(self):
@@ -3128,9 +3186,15 @@ class Widgets:
             self.start_button.description = 'Predict CSV'
         else:
             state, message = self._csv_training_readiness()
-            self.start_button.description = 'Train CSV'
+            self.start_button.description = (
+                'Train + Predict CSV' if self.predict_checkbox.value else 'Train CSV')
+        if getattr(self, "_csv_mode_confirmed_selection", None) != self.models_dropdown.value:
+            state, message = "waiting", "Press Continue to configure CSV Mode."
         set_action_state(self.start_button, state)
         self.start_button.tooltip = message
+        # Readiness must track the live CSV controls, not only the legacy
+        # Dataset columns observer (which does not fire on every CSV action).
+        self.update_ready()
         return state, message
 
     def _csv_start_saved_prediction(self):
@@ -3193,7 +3257,10 @@ class Widgets:
         self.clear_mispredicted_output()
         set_action_state(self.start_button, "waiting")
         self.start_button.tooltip = "CSV training is running."
-        self._csv_source_panel.status.value = "CSV training is running."
+        combined = bool(self.predict_checkbox.value)
+        self._csv_source_panel.status.value = (
+            "CSV training and prediction are running." if combined
+            else "CSV training is running.")
         try:
             runtime, saved, repository, scope = self._csv_prepare_training_runtime()
             result = self.guihandler.run_csv_classifier(
@@ -3213,9 +3280,11 @@ class Widgets:
             return False
 
         self._csv_source_panel.status.value = (
-            "CSV training completed and the model checkpoint was saved. "
-            "Prediction and saved-model reuse remain disabled."
+            "CSV combined training and prediction completed; refresh saved prediction runs."
+            if combined else "CSV training completed and the model checkpoint was saved."
         )
+        if combined:
+            self._csv_refresh_prediction_runs()
         self._csv_refresh_training_action()
         return result
 
@@ -3293,7 +3362,8 @@ class Widgets:
     def _csv_refresh_saved_models(self):
         """Expose verified local CSV checkpoints, never legacy SQL model options."""
         current = self._csv_current_dataset_artifact()
-        options = [("", ""), (Config.DEFAULT_TRAIN_OPTION, Config.DEFAULT_TRAIN_OPTION)]
+        options = [("Train new or pick ready model", ""),
+                   (Config.DEFAULT_TRAIN_OPTION, Config.DEFAULT_TRAIN_OPTION)]
         if current and self._csv_view_active():
             try:
                 from pathlib import Path
@@ -3338,11 +3408,12 @@ class Widgets:
         self.eventhandler.lock_observe_1 = True
         try:
             self.models_dropdown.options = tuple(options)
-            self.models_dropdown.value = Config.DEFAULT_TRAIN_OPTION
+            self.models_dropdown.value = ""
         finally:
             self.eventhandler.lock_observe_1 = previous_lock
         self._csv_update_erase_model_button()
-        self._csv_set_model_status("Ready to train a new CSV model" if current else "Validate a CSV dataset")
+        self._csv_set_model_status("Select a CSV model" if current else "Validate a CSV dataset")
+        self.update_ready()
         return len(options) - 2
 
     @staticmethod
@@ -3385,6 +3456,7 @@ class Widgets:
     def _csv_inspect_selected_model(self):
         """Read saved checkpoint metadata only: no training or prediction."""
         selection = self.models_dropdown.value
+        self._csv_verified_model_selection = None
         if selection in (None, "", Config.DEFAULT_TRAIN_OPTION):
             return False
         try:
@@ -3400,13 +3472,16 @@ class Widgets:
             self._csv_source_panel.status.value = (
                 "Saved CSV checkpoint cannot be reused: " + type(exc).__name__)
             return False
+        self._csv_verified_model_selection = selection
         self._csv_set_model_status("Saved model verified - ready to predict")
         self._csv_source_panel.status.value = (
             "Saved CSV checkpoint verified. Select Predict CSV to classify unlabeled rows.")
         return True
 
     def _csv_model_selected(self):
-        """Unlock inspected CSV roles and verified train-only controls for New model."""
+        """Synchronize CSV controls and Continue with the selected model."""
+        self._csv_verified_model_selection = None
+        self._csv_mode_confirmed_selection = None
         self._csv_update_erase_model_button()
         ready = (getattr(self, "_csv_roles_loaded_188", False)
                  and self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION)
@@ -3438,7 +3513,8 @@ class Widgets:
         if choice == "csv":
             self._sql_model_options_188f = tuple(self.models_dropdown.options)
             self._sql_model_disabled_188f = self.models_dropdown.disabled
-            self.models_dropdown.options = ("", Config.DEFAULT_TRAIN_OPTION)
+            self.models_dropdown.options = (("Train new or pick ready model", ""),
+                                            (Config.DEFAULT_TRAIN_OPTION, Config.DEFAULT_TRAIN_OPTION))
             self.models_dropdown.disabled = True
             self._sql_action_state_188 = {name: getattr(self, name).disabled for name in ("start_button", "feature_search_investigate_button")}
             self._sql_role_snapshot_188 = self._source_role_snapshot()
@@ -3471,6 +3547,7 @@ class Widgets:
         self.update_ready()
         self.update_regression_suite_ready()
         if choice == "csv":
+            self._csv_refresh_saved()
             self._csv_refresh_training_action()
             self.disable_button("feature_search_investigate_button")
 
@@ -3805,6 +3882,8 @@ class Widgets:
             self._csv_source_panel.export_joined_button.on_click(
                 lambda _: self._csv_export_prediction_run(True))
             self._csv_source_panel.erase_predictions_button.on_click(self._csv_erase_prediction_run)
+            # Populate the local catalog on first display, not on first Refresh.
+            self._csv_refresh_saved()
         return self.create_section_form("Data source", [self._data_source_selector.widget], widgets.Box)
 
     @property

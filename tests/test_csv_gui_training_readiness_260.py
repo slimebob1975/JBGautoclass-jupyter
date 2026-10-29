@@ -41,13 +41,17 @@ class CSVGUITrainingReadiness260(unittest.TestCase):
         instance.preprocess_dropdown = SimpleNamespace(value=('STA',))
         instance.reduction_dropdown = SimpleNamespace(value=('NOR',))
         instance.start_button = SimpleNamespace(tooltip='', disabled=False, button_style='')
+        instance.predict_checkbox = SimpleNamespace(value=False)
+        instance.mispredicted_checkbox = SimpleNamespace(value=False)
+        instance.update_ready = Mock()
+        instance._csv_mode_confirmed_selection = 'New model'
         return instance
 
     def test_validated_registered_csv_is_ready_for_train_only_execution(self):
         w = self.make_widget()
         state, explanation = w._csv_training_readiness()
         self.assertEqual(state, 'ready')
-        self.assertIn('Prediction and saved-model reuse remain disabled', explanation)
+        self.assertIn('Ready to train a new CSV model', explanation)
 
     def test_unregistered_and_incomplete_csv_are_not_ready(self):
         w = self.make_widget()

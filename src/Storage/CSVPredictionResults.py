@@ -128,3 +128,45 @@ class CSVPredictionResultSink:
             json.dumps(manifest, sort_keys=True).encode("utf-8")))
         return {"error": None, "results": {"run_id": run_id,
                 "row_count": len(normalized), "artifact_id": manifest_ref.artifact_id}}
+
+    def save_mispredicted_data(self, frame):
+        """Publish a private CSV diagnostic; only opaque IDs appear in the manifest.
+
+        This storage boundary does not enable the GUI option or run analysis.
+        """
+        import pandas as pd
+
+        if not isinstance(frame, pd.DataFrame) or frame.empty:
+            raise ValueError("CSV misprediction diagnostic requires a nonempty table")
+        if not frame.index.is_unique or frame.index.hasnans:
+            raise ValueError("CSV diagnostic requires unique, non-null row IDs")
+        if len(frame) > 100000 or len(frame.columns) > 1024:
+            raise ValueError("CSV diagnostic exceeds safe publication limits")
+        if any(not isinstance(str(key), str) or not str(key) for key in frame.index):
+            raise ValueError("Invalid CSV diagnostic row ID")
+        dataset = self.repository.get_reference(self.scope, self.context.artifact_id)
+        if (dataset.kind != ArtifactKind.DATASET or dataset.content_type != "text/csv"
+                or dataset.dataset_id != self.context.dataset_id):
+            raise ValueError("CSV diagnostic dataset mismatch")
+
+        run_id = str(uuid4())
+        payload_ref = ArtifactReference(self.scope, str(uuid4()), ArtifactKind.SPOT_CHECK,
+                                        "text/csv", run_id=run_id,
+                                        dataset_id=self.context.dataset_id)
+        manifest_ref = ArtifactReference(self.scope, str(uuid4()), ArtifactKind.MANIFEST,
+                                         "application/json", run_id=run_id,
+                                         dataset_id=self.context.dataset_id)
+        # The payload is intentionally private; do not log its path or contents.
+        payload = frame.to_csv(index=True, index_label=self.context.id_column).encode("utf-8")
+        self.repository.save_artifact(self.scope, payload_ref, BytesIO(payload))
+        manifest = {"schema_version": 1, "run_id": run_id,
+                    "dataset_id": self.context.dataset_id,
+                    "dataset_artifact_id": self.context.artifact_id,
+                    "diagnostic_artifact_id": payload_ref.artifact_id,
+                    "row_count": len(frame), "storage_kind": StorageKind.FILES.value,
+                    "status": "mispredicted_saved",
+                    "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        self.repository.save_artifact(self.scope, manifest_ref, BytesIO(
+            json.dumps(manifest, sort_keys=True).encode("utf-8")))
+        return {"run_id": run_id, "artifact_id": manifest_ref.artifact_id,
+                "row_count": len(frame)}

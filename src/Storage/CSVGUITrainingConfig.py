@@ -12,7 +12,8 @@ from Storage.CSVModelConfiguration import save_csv_model_configuration
 
 def prepare_csv_gui_training_config(base_config, repository, scope, dataset_artifact_id, *,
                                     id_column, class_column, data_columns,
-                                    text_columns=(), csv_format=None, model_root=None):
+                                    text_columns=(), csv_format=None, model_root=None,
+                                    predict=False, mispredicted=False):
     """Return (runtime_config, registered_config) after fail-closed validation.
 
     The caller supplies the already-collected ML settings as a Config instance;
@@ -62,8 +63,12 @@ def prepare_csv_gui_training_config(base_config, repository, scope, dataset_arti
     config.io.model_path = str(model_path)
     config.io.model_name = "csv_model_" + ref.artifact_id
     config.mode.train = True
-    config.mode.predict = False
-    config.mode.mispredicted = False
+    config.mode.predict = bool(predict)
+    # The scoped combined adapter is the verified publication route for CSV
+    # diagnostics. Train-only CSV retains its existing read-only boundary.
+    if mispredicted and not predict:
+        raise ValueError('CSV Mispredicted requires combined Train + Predict')
+    config.mode.mispredicted = bool(mispredicted)
     config.mail = Config.Mail(notification_email='')
     # Check the resulting runtime configuration, not just its source metadata.
     config.connection.validate()
