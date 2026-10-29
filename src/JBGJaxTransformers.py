@@ -53,7 +53,9 @@ class FlaxClassifier(BaseEstimator, ClassifierMixin):
         
         self.label_encoder = self.label_encoder.fit(y)
         y_encoded = self.label_encoder.transform(y)
-        self.classes_ = [str(the_class) for the_class in jnp.unique(y_encoded)]
+        # sklearn classes_ must use the original labels in predict_proba column order.
+        # The encoder maps these labels to indices 0..n-1 for Flax training.
+        self.classes_ = self.label_encoder.classes_.copy()
         
         # Convert data to JAX arrays
         X = jnp.array(X)

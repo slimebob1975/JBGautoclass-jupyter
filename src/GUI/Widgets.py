@@ -1342,7 +1342,7 @@ class Widgets:
                 "mispredicted_checkbox": True,
                 "feature_importance_checkbox": False,
                 "feature_importance_repeats": 5,
-                "dark_numbers_checkbox": True,
+                "dark_numbers_checkbox": False,
                 "dark_number_method": "LINEAR",
                 "dark_number_alpha": "SEPARATED",
                 "dark_number_target": "",
@@ -1401,17 +1401,25 @@ class Widgets:
                               + ["train_checkbox", "predict_checkbox", "mispredicted_checkbox"])
             self.disable_items([field for field in self._CSV_TRAINING_LOCKED_FIELDS
                                 if field not in ("train_checkbox", "mispredicted_checkbox")])
+            self.enable_items(["dark_numbers_checkbox"])
+            # Reset stale defaults, including checked but previously disabled controls.
+            self.dark_numbers_checkbox.value = False
+            self.sync_dark_number_control_state()
             self.disable_items(["metas_checkbox"])
             self._csv_source_panel.status.value = (
                 "CSV training is ready. Predict is optional. Mispredicted is available with Train + Predict."
             )
         else:
             self.enable_items(["predict_checkbox", "metas_checkbox"])
+            self.dark_numbers_checkbox.value = False
+            self.disable_items(["dark_numbers_checkbox", *self._CSV_DARK_NUMBER_FIELDS])
+            self.sync_dark_number_control_state()
             self.disable_items(["train_checkbox", "mispredicted_checkbox"])
             self._csv_source_panel.status.value = (
                 "Saved CSV model ready. Pass on Metadata is optional but is not yet supported for CSV execution."
             )
         self._csv_mode_confirmed_selection = selected
+        self._csv_run_completed_278 = False
         self._csv_refresh_training_action()
 
     def continuation_button_actions(self) -> None:
@@ -1592,14 +1600,15 @@ class Widgets:
                 len(children), len(display_widgets), closed,
             )
 
-    def handle_mispredicted(self, mispredicted: DataFrame, unique_classes: list[str]) -> bool:
+    def handle_mispredicted(self, mispredicted: DataFrame, unique_classes: list[str], *,
+                            allow_reclassification=True, csv_correction_callback=None) -> bool:
         """Render a bounded, editable preview; never fail the completed ML run.
 
         Full results remain in the classifier output. Rendering is intentionally
         capped because one comm-backed widget is allocated per table cell.
         """
         total_rows = len(mispredicted)
-        total_columns = len(mispredicted.columns) + 2
+        total_columns = len(mispredicted.columns) + (3 if allow_reclassification else 1)
         logger = logging.getLogger(__name__)
         widget_budget = max(1, int(getattr(self, "MISPREDICTED_WIDGET_LIMIT", 640)))
         row_limit = max(0, int(getattr(self, "MISPREDICTED_RENDER_LIMIT", 40)))
@@ -1639,15 +1648,65 @@ class Widgets:
         displayed_rows = min(total_rows, row_limit, max_rows_by_widget_budget)
         try:
             preview = mispredicted.iloc[:displayed_rows]
-            headers = [str(mispredicted.index.name or "Index"), *map(str, mispredicted.columns), "Reclassify as"]
+            headers = [str(mispredicted.index.name or "Index"), *map(str, mispredicted.columns)]
+            if allow_reclassification:
+                # Both SQL and CSV render a dropdown AND an Apply button.
+                # Every header must have a corresponding cell in each grid row.
+                headers.extend(("Reclassify as", "Apply"))
             items = [widgets.Label(value=label).add_class("header") for label in headers]
             # iterrows, not loc[index]: duplicate index labels must not turn a row
             # into an entire DataFrame or duplicate rendered output.
+            from GUI.ButtonStates import set_action_state
+            apply_buttons = []
             for row_index, row in preview.iterrows():
                 row_name = str(row_index)
                 items.append(widgets.Label(value=row_name))
                 items.extend(self.get_text_widget(value) for value in row)
-                items.append(self.reclassify_dropdown(unique_classes, row_name))
+                if allow_reclassification:
+                    actual = str(row.get('Actual', ''))
+                    options = [(str(label), str(label)) for label in unique_classes]
+                    # The current actual class must be the default; never alter a
+                    # classification merely because a dropdown was initialized.
+                    if actual not in [value for _, value in options]:
+                        options.insert(0, (actual, actual))
+                    choice = widgets.Dropdown(options=options, value=actual, description='')
+                    apply_button = widgets.Button(description='Apply')
+                    set_action_state(apply_button, 'blocked')
+                    apply_buttons.append(apply_button)
+
+                    def selected(change, button=apply_button, original=actual):
+                        if change['name'] == 'value' and button.description == 'Apply':
+                            set_action_state(button, 'ready' if change['new'] != original else 'blocked')
+                    choice.observe(selected, names='value')
+
+                    def apply_choice(_button, row_id=row_name, dropdown=choice,
+                                     button=apply_button, original=actual):
+                        if button.disabled or dropdown.value == original:
+                            return
+                        set_action_state(button, 'waiting')
+                        try:
+                            if csv_correction_callback is not None:
+                                csv_correction_callback(row_id, dropdown.value)
+                            else:
+                                self.correct_mispredicted_data(dropdown.value, row_id)
+                            button.description = 'Saved'
+                            set_action_state(button, 'blocked')
+                            if csv_correction_callback is not None:
+                                # A CSV revision invalidates every other row's preview.
+                                for other in apply_buttons:
+                                    set_action_state(other, 'blocked')
+                                for cell in grid.children:
+                                    if isinstance(cell, widgets.Dropdown):
+                                        cell.disabled = True
+                                with self.mispredicted_output:
+                                    print('CSV correction saved as a new revision. Rerun to edit more rows.')
+                        except Exception as exc:
+                            button.description = 'Retry'
+                            set_action_state(button, 'warning')
+                            with self.mispredicted_output:
+                                print(f'Correction was not saved: {type(exc).__name__}. Refresh and rerun.')
+                    apply_button.on_click(apply_choice)
+                    items.extend((choice, apply_button))
 
             grid.layout.grid_template_columns = f"repeat({total_columns}, max-content)"
             grid.children = tuple(items)
@@ -1728,14 +1787,6 @@ class Widgets:
         return DisplayHTML(html_string)
 
 
-    def reclassify_dropdown(self, unique_classes: list[str], row_name: str) -> widgets.Dropdown:
-        dropdown_options = [('Keep', 0)] + [(label, (label, row_name)) for label in unique_classes]
-        reclassify_dropdown = widgets.Dropdown(options = dropdown_options, value = 0, description = '', disabled = False)
-        reclassify_dropdown.observe(self.eventhandler.reclassify_dropdown__value,'value')
-
-        return reclassify_dropdown
-
-    
     def correct_mispredicted_data(self, new_class: str, index: int) -> None:
         """ 
             From the reclassify dropdown change 
@@ -2389,6 +2440,9 @@ class Widgets:
     def sync_feature_selection_controls(self, preserve_status: bool = False) -> None:
         mode = self.feature_selection_mode.value
         dataset_editable = not self.data_columns.disabled and self.new_model
+        if self._csv_view_active():
+            dataset_editable = (self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION
+                                and getattr(self, "_csv_mode_confirmed_selection", None) == Config.DEFAULT_TRAIN_OPTION)
         self.feature_selection_mode.disabled = not dataset_editable
         assisted = dataset_editable and mode == "assisted"
         reuse = dataset_editable and mode == "reuse"
@@ -2449,6 +2503,12 @@ class Widgets:
         )
         if dataset_editable and mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False):
             self.disable_button("continuation_button")
+        # These controls set .disabled directly, not via enable_button().
+        # Keep their colours aligned with availability on the initial SQL view
+        # as well as after changes of model, mode or investigation result.
+        for action in (self.feature_search_apply_button, self.feature_search_save_button,
+                       self.feature_search_review_button, self.feature_search_delete_button):
+            set_action_state(action, "blocked" if action.disabled else "ready")
         if not preserve_status:
             if mode == "manual":
                 self.feature_search_status.value = "Manual data settings; no investigation will run."
@@ -2501,14 +2561,14 @@ class Widgets:
     @property
     def feature_search_pause_button(self):
         if not hasattr(self, '_feature_search_pause_widget'):
-            self._feature_search_pause_widget = widgets.Button(description='Pause', icon='pause', disabled=True)
+            self._feature_search_pause_widget = widgets.Button(description='Pause', icon='pause', disabled=True, button_style='danger')
             self._feature_search_pause_widget.on_click(lambda _: self.pause_feature_selection_investigation())
         return self._feature_search_pause_widget
 
     @property
     def feature_search_resume_button(self):
         if not hasattr(self, '_feature_search_resume_widget'):
-            self._feature_search_resume_widget = widgets.Button(description='Resume', icon='play')
+            self._feature_search_resume_widget = widgets.Button(description='Resume', icon='play', disabled=True, button_style='danger')
             self._feature_search_resume_widget.on_click(lambda _: self.resume_feature_selection_investigation())
         return self._feature_search_resume_widget
 
@@ -2517,6 +2577,8 @@ class Widgets:
             self._feature_search_pause_event.set()
             self._feature_search_lifecycle_log("pause_requested")
             self.feature_search_pause_button.disabled = True
+            from GUI.ButtonStates import set_action_state
+            set_action_state(self.feature_search_pause_button, 'waiting')
             self.feature_search_status.value = 'Pause requested; finishing the current evaluation before checkpointing.'
 
     def _feature_search_recovery_choices(self):
@@ -2657,13 +2719,9 @@ class Widgets:
             '; output: ' + html.escape(result.get('output_directory', '')))
 
     def run_feature_selection_investigation(self) -> None:
-        if self._csv_view_active():
-            return
         self._launch_feature_selection_investigation()
 
     def _launch_feature_selection_investigation(self, resume_directory=None):
-        if self._csv_view_active():
-            return
         import threading
         if getattr(self, '_feature_search_running', False):
             return
@@ -2671,10 +2729,17 @@ class Widgets:
         # read mutable widget values while an investigation is running.
         try:
             if resume_directory is None:
-                params = self.get_config_params()
                 options = self.feature_search_options()
                 options.validate()
                 row_limit = int(self.feature_search_rows.value)
+                if self._csv_view_active():
+                    if (self.models_dropdown.value != Config.DEFAULT_TRAIN_OPTION
+                            or self._csv_mode_confirmed_selection != Config.DEFAULT_TRAIN_OPTION):
+                        raise ValueError("Confirm CSV training with Continue first")
+                    runtime, saved, repository, scope = self._csv_prepare_training_runtime()
+                    params = (runtime, repository, scope, saved.configuration_id)
+                else:
+                    params = self.get_config_params()
             else:
                 params, options, row_limit = None, None, None
         except Exception as ex:
@@ -2687,6 +2752,9 @@ class Widgets:
         self._feature_search_pause_event = threading.Event()
         self.feature_search_pause_button.disabled = False
         self.feature_search_resume_button.disabled = True
+        from GUI.ButtonStates import set_action_state
+        set_action_state(self.feature_search_pause_button, 'ready')
+        set_action_state(self.feature_search_resume_button, 'blocked')
         self.feature_search_investigate_button.disabled = True
         self._feature_search_job = threading.Thread(
             target=self._run_feature_selection_investigation_worker,
@@ -2770,6 +2838,9 @@ class Widgets:
             self._feature_search_running = False
             self.feature_search_pause_button.disabled = True
             self.feature_search_resume_button.disabled = False
+            from GUI.ButtonStates import set_action_state
+            set_action_state(self.feature_search_pause_button, 'blocked')
+            set_action_state(self.feature_search_resume_button, 'ready')
             self.update_ready()
             self.sync_feature_selection_controls(preserve_status=True)
             self.feature_search_status.value = final_status
@@ -3072,9 +3143,11 @@ class Widgets:
 
     _CSV_TRAINING_LOCKED_FIELDS = (
         "train_checkbox", "mispredicted_checkbox", "metas_checkbox",
-        "dark_numbers_checkbox", "dark_number_method", "dark_number_alpha",
-        "dark_number_target", "dark_number_failure_mode",
-        "feature_importance_checkbox", "feature_importance_repeats",
+    )
+
+    _CSV_DARK_NUMBER_FIELDS = (
+        "dark_number_method", "dark_number_alpha", "dark_number_target",
+        "dark_number_failure_mode",
     )
 
     def _csv_set_training_controls(self, enabled):
@@ -3098,14 +3171,19 @@ class Widgets:
             self.categorize_columns.options = tuple(self.text_columns.value)
             self.num_variables.value = len(self.data_columns.value)
             self.deactivate_section("feature_selection")
-            self.enable_items(list(self._CSV_TRAINING_EDITABLE_FIELDS))
+            self.enable_items(list(self._CSV_TRAINING_EDITABLE_FIELDS) + ["feature_importance_checkbox"])
             self.disable_items(list(self._CSV_TRAINING_LOCKED_FIELDS) + ["predict_checkbox"])
+            self.sync_dark_number_control_state()
+            self.sync_feature_importance_control_state()
             self.start_button.description = "Train CSV"
         else:
             self.deactivate_section("feature_selection")
             self.disable_items(list(self._CSV_TRAINING_EDITABLE_FIELDS)
+                               + ["feature_importance_checkbox", "feature_importance_repeats",
+                                  "dark_numbers_checkbox", *self._CSV_DARK_NUMBER_FIELDS]
                                + list(self._CSV_TRAINING_LOCKED_FIELDS)
                                + ["start_button"])
+            self.sync_dark_number_control_state()
 
     def _csv_training_readiness(self):
         """Return the train-only CSV GUI readiness verdict without constructing SQL I/O."""
@@ -3186,10 +3264,13 @@ class Widgets:
             self.start_button.description = 'Predict CSV'
         else:
             state, message = self._csv_training_readiness()
-            self.start_button.description = (
-                'Train + Predict CSV' if self.predict_checkbox.value else 'Train CSV')
+            self.start_button.description = 'Start'
         if getattr(self, "_csv_mode_confirmed_selection", None) != self.models_dropdown.value:
-            state, message = "waiting", "Press Continue to configure CSV Mode."
+            state, message = "blocked", "Press Continue to configure CSV Mode."
+        elif state == "waiting":
+            state = "blocked"  # Awaiting user input is not an active operation.
+        if state == "ready" and getattr(self, "_csv_run_completed_278", False):
+            self.start_button.description = "Rerun"
         set_action_state(self.start_button, state)
         self.start_button.tooltip = message
         # Readiness must track the live CSV controls, not only the legacy
@@ -3240,6 +3321,7 @@ class Widgets:
             if result is not False else 'CSV prediction found no eligible unlabeled rows.')
         if result is not False:
             self._csv_refresh_prediction_runs()
+            self._csv_run_completed_278 = True
         self._csv_refresh_training_action()
         return result
 
@@ -3285,6 +3367,7 @@ class Widgets:
         )
         if combined:
             self._csv_refresh_prediction_runs()
+        self._csv_run_completed_278 = True
         self._csv_refresh_training_action()
         return result
 
@@ -3482,16 +3565,21 @@ class Widgets:
         """Synchronize CSV controls and Continue with the selected model."""
         self._csv_verified_model_selection = None
         self._csv_mode_confirmed_selection = None
+        self._csv_run_completed_278 = False
         self._csv_update_erase_model_button()
         ready = (getattr(self, "_csv_roles_loaded_188", False)
                  and self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION)
         self._csv_set_role_editability(ready)
-        self._csv_set_training_controls(ready)
+        # Dataset roles remain editable, but classifier multi-select controls
+        # are locked until the user explicitly presses Continue.
+        self._csv_set_training_controls(False)
+        if self._csv_view_active():
+            self.dark_numbers_checkbox.value = False
+            self.sync_dark_number_control_state()
         if hasattr(self, "_csv_source_panel"):
             self._csv_source_panel.register_button.disabled = not ready
         self.id_column_diagnostic.value = (
-            "CSV columns are ready. Register the dataset and choose training settings."
-            if ready else "Select New model to configure CSV Dataset columns."
+            "" if ready else "Select New model to configure CSV Dataset columns."
         )
         if ready:
             self._csv_set_model_status("Ready to train a new CSV model")
@@ -3502,7 +3590,7 @@ class Widgets:
                                        else "Select a CSV model")
         self.update_ready()
         self._csv_refresh_training_action()
-        self.disable_button("feature_search_investigate_button")
+        self.sync_feature_selection_controls()
 
     def _csv_source_selected(self, choice):
         """Switch role choices without leaking CSV columns into SQL state."""
@@ -3549,7 +3637,7 @@ class Widgets:
         if choice == "csv":
             self._csv_refresh_saved()
             self._csv_refresh_training_action()
-            self.disable_button("feature_search_investigate_button")
+            self.sync_feature_selection_controls()
 
     def _csv_column_role_changed(self):
         """Keep CSV role choices consistent without touching SQL metadata."""
@@ -3634,6 +3722,7 @@ class Widgets:
         self._csv_roles_loaded_188 = False
         self._csv_schema_188 = None
         self._csv_registered_dataset_190 = None
+        self._csv_run_completed_278 = False
         self._csv_source_panel.loaded_saved_artifact_id = None
         self._csv_set_role_editability(False)
         self._csv_set_training_controls(False)
@@ -4280,6 +4369,12 @@ class Widgets:
                 widget_class = getattr(widgets, config["type"])
                 widget_params = config["params"] | calculated_params
                 self.widgets[name] = widget_class(**widget_params)
+                # Initial colours must represent availability, including when a
+                # persisted settings.json still specifies primary/blank styles.
+                # Subsequent callbacks continue to own running/warning states.
+                if isinstance(self.widgets[name], widgets.Button):
+                    button = self.widgets[name]
+                    button.button_style = "danger" if button.disabled else "success"
 
                 if callback:
                     self.widgets[name].on_click(callback=callback)
@@ -4589,7 +4684,10 @@ class Widgets:
     def sync_feature_importance_control_state(self) -> None:
         # Display-only synchronization also runs while Repeat Last observers are locked.
         checkbox = self.feature_importance_checkbox
-        checkbox.disabled = self.train_checkbox.disabled or not self.train_checkbox.value or self.regression_suite_state
+        csv_train_ready = (self._csv_view_active() and
+                           getattr(self, '_csv_mode_confirmed_selection', None) == Config.DEFAULT_TRAIN_OPTION and
+                           self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION)
+        checkbox.disabled = (not csv_train_ready and self.train_checkbox.disabled) or not self.train_checkbox.value or self.regression_suite_state
         self.feature_importance_repeats.disabled = checkbox.disabled or not checkbox.value
         
     

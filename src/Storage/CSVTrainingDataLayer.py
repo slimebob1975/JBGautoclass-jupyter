@@ -5,20 +5,30 @@ This boundary intentionally cannot publish SQL predictions or mutate source CSV.
 from Storage.ArtifactContract import StorageScope
 from Storage.CSVModelConfiguration import load_csv_model_configuration
 from Storage.CSVTrainingAdapter import CSVTrainingAdapter
+from Storage.CSVDataLayer import CSVDataLayer
 
 
-class CSVTrainingDataLayer:
+class CSVTrainingDataLayer(CSVDataLayer):
+    execution_mode = 'train'
     def __init__(self, reader):
         if not isinstance(reader, CSVTrainingAdapter):
             raise ValueError('Training requires a registered CSV reader')
-        self._reader = reader
-
-    @property
-    def correction_revision(self):
-        return self._reader.correction_revision
+        super().__init__(reader)
 
     def get_dataset(self, num_rows=None):
-        return self._reader.get_dataset(num_rows=num_rows)
+        from collections import Counter
+        from JBGExceptions import DatasetException
+
+        rows = super().get_dataset(num_rows=num_rows)
+        if rows is None or len(rows) == 0:
+            raise DatasetException('CSV training has no labelled rows; model not saved')
+        labels = [str(row[-1]).strip() for row in rows]
+        counts = Counter(labels)
+        if (any(not label for label in labels) or len(counts) < 2
+                or min(counts.values()) < 2):
+            raise DatasetException('CSV training needs at least two labelled classes with two rows each')
+        return rows
+
 
 
 def prepare_csv_training_datalayer(runtime_config, repository, scope, configuration_id):

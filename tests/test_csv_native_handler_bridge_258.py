@@ -131,7 +131,8 @@ class CSVNativeFixturePortable258(TestCase):
         self.addCleanup(case.doCleanups)
         reader = case.adapter(train=True, predict=False)
         layer = CSVTrainingDataLayer(reader)
-        self.assertEqual(layer.get_dataset(), [('1', '005', 'A'), ('3', '009', 'B')])
+        # This fixture checks source-row fidelity, not model trainability.
+        self.assertEqual(reader.get_dataset(), [('1', '005', 'A'), ('3', '009', 'B')])
         self.assertFalse(hasattr(layer, 'save_prediction_data'))
 
 

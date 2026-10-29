@@ -10,10 +10,10 @@ class LocalStartupGateTests(unittest.TestCase):
         cls.launcher = (root / 'start_application_template.ps1').read_text(encoding='utf-8')
         cls.runner = (root / 'scripts/run_regression.ps1').read_text(encoding='utf-8')
 
-    def test_launcher_invokes_shared_fast_gate_before_voila(self):
-        self.assertIn("scripts\\run_regression.ps1') -PythonExecutable $Py", self.launcher)
-        self.assertLess(self.launcher.index('run_regression.ps1'), self.launcher.index('# --- Launch Voila ---'))
-        self.assertNotIn("-m unittest discover -s tests -p 'test_*.py'", self.launcher)
+    def test_launcher_does_not_run_regressions_automatically(self):
+        self.assertIn('# --- Launch Voila ---', self.launcher)
+        self.assertNotIn("& (Join-Path $DevRoot 'scripts\\run_regression.ps1')", self.launcher)
+        self.assertIn('run_regression.ps1 -Full -PythonExecutable $Py', self.launcher)
 
     def test_full_suite_is_explicit_and_includes_pytest(self):
         self.assertIn('[switch]$Full', self.runner)

@@ -35,7 +35,7 @@ class CSVPreflight257(unittest.TestCase):
         for rows in ([], [(1, 'a', '')], [(1, 'a', 'x'), (2, 'b', 'x')],
                      [(1, 'a', 'x'), (2, 'b', 'x'), (3, 'c', 'y')]):
             with self.subTest(size=len(rows)):
-                with self.assertRaisesRegex(ValueError, 'no labelled rows|two labelled classes'):
+                with self.assertRaisesRegex(Exception, 'no labelled rows|two labelled classes'):
                     runner = SimpleNamespace(config=self.config(), datalayer=self.layer(rows), logger=Mock())
                     CSVTrainingFetchPortable254.fetch_method()(runner)
 

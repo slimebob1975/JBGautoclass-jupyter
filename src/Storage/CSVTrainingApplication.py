@@ -1,6 +1,7 @@
 """Registered CSV training assembly for explicit train-only application paths."""
 from Storage.ArtifactContract import StorageScope
 from Storage.CSVModelConfiguration import load_csv_model_configuration
+from Storage.CSVRegisteredSource import registered_csv_mismatch
 from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer, prepare_csv_training_datalayer
 
 
@@ -14,14 +15,10 @@ def prepare_registered_csv_training_classifier(runtime_config, repository, scope
             or not runtime_config.should_train() or runtime_config.should_predict()):
         raise ValueError('CSV training requires a train-only CSV configuration')
     saved = load_csv_model_configuration(repository, scope, configuration_id)
-    if (getattr(source, 'dataset_id', None) != saved.dataset_id
-            or getattr(source, 'artifact_id', None) != saved.artifact_id):
+    mismatch = registered_csv_mismatch(runtime_config, saved)
+    if mismatch == 'identity':
         raise ValueError('Registered CSV training source mismatch')
-    if (runtime_config.get_id_column_name() != saved.id_column
-            or runtime_config.get_class_column_name() != saved.class_column
-            or tuple(runtime_config.get_column_names()) !=
-                tuple(saved.text_columns) + tuple(saved.data_columns) +
-                (saved.id_column, saved.class_column)):
+    if mismatch == 'roles':
         raise ValueError('Registered CSV training column roles mismatch')
     layer = prepare_csv_training_datalayer(runtime_config, repository, scope, configuration_id)
     if not isinstance(layer, CSVTrainingDataLayer) or not hasattr(layer, 'correction_revision'):

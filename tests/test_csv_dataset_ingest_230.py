@@ -77,6 +77,36 @@ class RealDatasetCSVIngest230(unittest.TestCase):
         obj.load_data([('1', '5', ''), ('2', '005', '')])
         self.assertEqual(obj.keys.tolist(), ['005', '5'])
 
+    def test_sql_null_and_blank_labels_are_prediction_rows(self):
+        # SQL NULL may reach pandas as None, np.nan or pd.NA; all are unknown.
+        obj = self.build('sql')
+        obj.load_data([
+            ('0.1', '101', 'negative'), ('0.2', '102', np.nan),
+            ('0.3', '103', 'positive'), ('0.4', '104', None),
+            ('0.5', '105', '   '), ('0.6', '106', pd.NA),
+        ])
+        self.assertEqual(obj.get_num_unpredicted_rows(), 4)
+        obj.separate_dataset()
+        self.assertEqual(obj.Y.tolist(), ['negative', 'positive'])
+        self.assertEqual(len(obj.X), 2)
+        self.assertEqual(len(obj.X_prediction), 4)
+        self.assertEqual(obj.unpredicted_keys.tolist(), [102, 104, 105, 106])
+
+    def test_unknown_sql_rows_are_not_in_training_when_prediction_disabled(self):
+        obj = self.build('sql')
+        obj.handler.config.should_predict = lambda: False
+        obj.handler.config.should_train = lambda: True
+        # The common dataset partitioner excludes unknown labels from training,
+        # while the task sequence decides whether prediction is performed.
+        obj.load_data([
+            ('0.1', '101', 'negative'), ('0.2', '102', np.nan),
+            ('0.3', '103', 'positive'), ('0.4', '104', ''),
+        ])
+        obj.separate_dataset()
+        self.assertEqual(obj.Y.tolist(), ['negative', 'positive'])
+        self.assertFalse(obj.Y.isna().any())
+        self.assertEqual(len(obj.X_prediction), 2)
+
     def test_sql_numeric_id_validation_unchanged(self):
         obj = self.build('sql')
         result = obj.validate_column('uid', pd.Series(['005', '010']))

@@ -85,7 +85,7 @@ class CombinedDispatch273d(unittest.TestCase):
         outcome = self.runner.fetch_data__task()
         self.assertEqual(outcome['data'], [('a', '001', 'A'),
                                            ('b', '002', 'B'), ('c', '003', '')])
-        self.layer.read_partitions.assert_called_once_with()
+        self.layer.read_partitions.assert_called_once_with(num_rows=None)
 
     def test_invalid_partition_aborts_without_returning_data(self):
         self.layer.read_partitions = Mock(side_effect=ValueError('invalid synthetic classes'))

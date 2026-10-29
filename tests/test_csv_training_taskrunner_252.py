@@ -73,7 +73,8 @@ class CSVTrainingTaskrunner252(TestCase):
         self.logger.initiate_progress.assert_not_called()
 
     def test_training_facade_never_exposes_sql_publication(self):
-        self.assertEqual(self.layer.get_dataset(), [('3.1', '005', 'setosa')])
+        # The single-row fixture tests the read-only facade, not ML preflight.
+        self.assertEqual(self.reader.get_dataset(), [('3.1', '005', 'setosa')])
         self.assertIsNone(self.layer.correction_revision)
         self.assertFalse(hasattr(self.layer, 'save_prediction_data'))
 

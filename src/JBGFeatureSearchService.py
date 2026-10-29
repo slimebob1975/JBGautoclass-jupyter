@@ -72,7 +72,8 @@ def _exclusive_investigation(output):
 
 
 def run_training_feature_search(config, logger, options: SearchOptions, on_event=None, output=None,
-                                resume=False, pause_event=None, investigation_mode="selection_plus_diagnostics", subgroup_column=None):
+                                resume=False, pause_event=None, investigation_mode="selection_plus_diagnostics", subgroup_column=None,
+                                csv_source=None):
     """Fetch and split data exactly once, then expose only original training rows to the search.
 
     The normal JBG holdout remains reserved. This service never runs the classifier task runner,
@@ -115,10 +116,25 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         investigation_mode = summary.get('investigation_mode', 'selection_plus_diagnostics')
         subgroup_column = summary.get('subgroup_column')
     else:
-        datalayer = DataLayer(config=config, logger=investigation_logger)
-        source_sql_schema = datalayer.get_table_columns(
-            config.connection.data_catalog, config.connection.data_table
-        )
+        if csv_source is None:
+            datalayer = DataLayer(config=config, logger=investigation_logger)
+            source_sql_schema = datalayer.get_table_columns(
+                config.connection.data_catalog, config.connection.data_table
+            )
+        else:
+            from Storage.CSVTrainingAdapter import CSVTrainingAdapter
+            from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer
+            from Storage.CSVModelConfiguration import load_csv_model_configuration
+            repository, scope, configuration_id = csv_source
+            saved = load_csv_model_configuration(repository, scope, configuration_id)
+            source = config.data_source
+            if (getattr(source, 'kind', None) != 'csv'
+                    or source.dataset_id != saved.dataset_id
+                    or source.artifact_id != saved.artifact_id):
+                raise ValueError('Feature investigation CSV dataset identity mismatch')
+            datalayer = CSVTrainingDataLayer(
+                CSVTrainingAdapter(repository, scope, configuration_id, config))
+            source_sql_schema = None
         rows = datalayer.get_dataset()
         if rows is None:
             raise ValueError("No data was fetched for feature-selection investigation")
@@ -133,12 +149,13 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         y = dataset.Y_train.copy(deep=True)
         if X.empty or y.empty:
             raise ValueError("Feature-selection investigation has no labelled training rows")
-        missing_sql_schema = [column for column in X.columns if column not in source_sql_schema]
-        if missing_sql_schema:
-            raise ValueError(
-                f"Feature-selection SQL schema is missing {len(missing_sql_schema)} investigated predictor column(s)"
-            )
-        source_sql_schema = {column: source_sql_schema[column] for column in X.columns}
+        if source_sql_schema is not None:
+            missing_sql_schema = [column for column in X.columns if column not in source_sql_schema]
+            if missing_sql_schema:
+                raise ValueError(
+                    f"Feature-selection SQL schema is missing {len(missing_sql_schema)} investigated predictor column(s)"
+                )
+            source_sql_schema = {column: source_sql_schema[column] for column in X.columns}
         classes = sorted({str(value) for value in y})
         if len(classes) != 2:
             raise ValueError(
@@ -160,8 +177,10 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
     if not resume:
         context = dict(
             project=config.name,
-            source_kind="sql",
-            source_tables=[f"{config.connection.data_catalog}.{config.connection.data_table}"],
+            source_kind="csv" if csv_source is not None else "sql",
+            source_tables=([f"dataset:{saved.dataset_id}:artifact:{saved.artifact_id}:correction:{datalayer.correction_revision or 'original'}"]
+                           if csv_source is not None else
+                           [f"{config.connection.data_catalog}.{config.connection.data_table}"]),
             class_column=config.get_class_column_name(),
             id_column=config.get_id_column_name(),
             excluded_columns=[],

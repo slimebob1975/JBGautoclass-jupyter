@@ -33,6 +33,7 @@ class CSVPredictionResultSink:
         self.repository = repository
         self.scope = scope
         self.context = context
+        self._last_mispredicted_ref = None
 
     def save_prediction_data(self, results: list, class_rate_type, model_name: str,
                              class_labels, create_tables: bool = True, test_run: int = 0) -> dict:
@@ -168,5 +169,17 @@ class CSVPredictionResultSink:
                     "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
         self.repository.save_artifact(self.scope, manifest_ref, BytesIO(
             json.dumps(manifest, sort_keys=True).encode("utf-8")))
+        self._last_mispredicted_ref = payload_ref
         return {"run_id": run_id, "artifact_id": manifest_ref.artifact_id,
                 "row_count": len(frame)}
+
+    def get_mispredicted_export(self):
+        """Read the diagnostic produced by this sink during this run."""
+        ref = self._last_mispredicted_ref
+        if ref is None or ref.dataset_id != self.context.dataset_id:
+            raise ValueError("No CSV mispredicted diagnostic for this run")
+        with self.repository.open_artifact(self.scope, ref.artifact_id) as stream:
+            data = stream.read()
+        if len(data) > 16 * 1024 * 1024:
+            raise ValueError("CSV mispredicted export exceeds browser download limit")
+        return data

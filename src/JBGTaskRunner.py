@@ -178,59 +178,12 @@ class TaskRunner:
                 - Other keys as used by the following task
         """
         source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
-        if (source_kind == "csv" and self.config.should_train()
-                and self.config.should_predict()):
-            # Combined CSV execution is explicitly opt-in through a validated,
-            # same-scope reader/result sink. No GUI route is enabled here.
-            from Storage.CSVCombinedDataLayer import CSVCombinedDataLayer
-            if (self.regression_suite
-                    or not isinstance(self.datalayer, CSVCombinedDataLayer)
-                    or getattr(self.handler, "datalayer", None) is not self.datalayer):
-                raise ValueError("CSV combined execution requires a prepared training and shared data layer")
-            expected = get_tasks(self.config, regression_suite=False)
-            if (not isinstance(tasks, (list, tuple)) or list(tasks) != expected
-                    or self.config.should_calculate_feature_importance()):
-                raise ValueError("Unsupported CSV combined task sequence or diagnostics")
-        elif source_kind == "csv" and self.config.should_train():
-            # Training never uses the prediction sink. Only the registered,
-            # pinned CSV reader is allowed to enter the common ML task chain.
-            from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer
-            if (self.regression_suite or self.config.should_predict()
-                    or not isinstance(self.datalayer, CSVTrainingDataLayer)
-                    or getattr(self.handler, "datalayer", None) is not self.datalayer):
-                raise ValueError("CSV training requires a prepared training data layer")
-            expected = get_tasks(self.config, regression_suite=False)
-            if not isinstance(tasks, (list, tuple)) or list(tasks) != expected:
-                raise ValueError("Unsupported CSV training task sequence")
-        elif source_kind == "csv":
-            # CSV prediction must enter through the scoped, prevalidated facade.
-            # Prediction must use its dedicated validated facade.
-            from Storage.CSVPredictionDataLayer import CSVPredictionDataLayer
-            if (self.regression_suite or self.config.should_train()
-                    or not isinstance(self.datalayer, CSVPredictionDataLayer)):
-                raise ValueError("CSV execution requires a prepared prediction data layer")
-            # TaskRunner fetches from self.datalayer, but JBGHandler writes
-            # predictions through handler.datalayer. Both must use the exact
-            # same validated CSV facade, or writes could reach SQL instead.
-            if getattr(self.handler, "datalayer", None) is not self.datalayer:
-                raise ValueError("CSV prediction data-layer mismatch")
-            # The caller may supply task names directly. Do not rely solely on
-            # should_train(): block training, diagnostics and unknown tasks
-            # before any data is read or any result artifact is published.
-            allowed = (
-                "load_model", "fetch_data", "load_dataset", "separate_dataset",
-                "convert_to_numbers", "make_predictions", "send_completetion_email",
-            )
-            if (not isinstance(tasks, (list, tuple)) or not tasks
-                    or len(tasks) != len(set(tasks))
-                    or any(not isinstance(task, str) or task not in allowed for task in tasks)
-                    or tuple(tasks) != tuple(task for task in allowed if task in tasks)
-                    or not all(task in tasks for task in (
-                        "load_model", "fetch_data", "load_dataset",
-                        "separate_dataset", "make_predictions"))):
-                raise ValueError("Unsupported CSV prediction task sequence")
-            if ("convert_to_numbers" in tasks) != bool(self.config.get_text_column_names()):
-                raise ValueError("CSV prediction conversion task mismatch")
+        if source_kind == "csv":
+            # CSV-specific authorization belongs at the I/O boundary, not in
+            # the shared training, evaluation or prediction engine.
+            from Storage.CSVDataLayer import validate_csv_execution
+            validate_csv_execution(self.datalayer, self.handler, self.config,
+                                   tasks, self.regression_suite, globals().get("get_tasks"))
         elif source_kind != "sql":
             raise ValueError("Unsupported task runner data source")
 
@@ -295,33 +248,10 @@ class TaskRunner:
         Fetches the dataset from the database, and if there is none calls for an early exit
         """
         self.logger.print_task_header(title="Fetching data")
+        # The source-specific adapter validates its own rows. This task uses
+        # the same read contract for SQL and CSV (including pinned snapshots).
+        data = self.datalayer.get_dataset()
         source_kind = getattr(getattr(self.config, "data_source", None), "kind", "sql")
-        if (source_kind == "csv" and self.config.should_train()
-                and self.config.should_predict()):
-            # One pinned read. DatasetHandler receives both partitions and
-            # separates known/unknown rows in its normal shared workflow.
-            from Storage.CSVCombinedDataLayer import CSVCombinedDataLayer
-            if not isinstance(self.datalayer, CSVCombinedDataLayer):
-                raise DatasetException("CSV combined source is not prepared")
-            training, prediction = self.datalayer.read_partitions()
-            data = list(training) + list(prediction)
-        else:
-            data = self.datalayer.get_dataset()
-
-        if (source_kind == "csv" and self.config.should_train()
-                and not self.config.should_predict()):
-            if not data:
-                raise DatasetException("CSV training has no labelled rows; model not saved")
-            # The training reader returns rows in text/data/ID/class order.
-            # Reject insufficient support before the expensive native ML handlers.
-            from collections import Counter
-            labels = [str(row[-1]).strip() for row in data]
-            counts = Counter(labels)
-            if (any(not label for label in labels) or len(counts) < 2
-                    or min(counts.values()) < 2):
-                raise DatasetException(
-                    "CSV training needs at least two labelled classes with two rows each"
-                )
         if data is None or (source_kind == "csv" and len(data) == 0):
             return {"early_exit": True}
 

@@ -19,7 +19,7 @@ class CSVTrainingClassifier254(unittest.TestCase):
     def setUp(self):
         reader = object.__new__(CSVTrainingAdapter)
         reader.correction_revision = None
-        reader.get_dataset = Mock(return_value=[(5.1, '001', 'setosa'), (6.0, '002', 'versicolor')])
+        reader.get_dataset = Mock(return_value=[(5.1, '001', 'setosa'), (5.2, '003', 'setosa'), (6.0, '002', 'versicolor'), (6.1, '004', 'versicolor')])
         self.layer = CSVTrainingDataLayer(reader)
         self.config = Mock()
         self.config.data_source.kind = 'csv'
@@ -54,7 +54,7 @@ class CSVTrainingClassifier254(unittest.TestCase):
                 if name == 'fetch_data':
                     return {'data': self.layer.get_dataset()}
                 if name == 'load_dataset':
-                    self.assertEqual(len(kwargs['data']), 2)
+                    self.assertEqual(len(kwargs['data']), 4)
                 if name == 'train_model' or name == 'retrain_model':
                     self.model.save_model_to_file(self.config.get_model_filename())
                 return {}
@@ -79,13 +79,21 @@ class CSVTrainingClassifier254(unittest.TestCase):
         self.layer._reader.get_dataset.return_value = []
         self.config.should_train.return_value = False
         self.config.should_predict.return_value = True
+        # Test empty prediction/SQL reads with a source-neutral reader, not
+        # a train-only facade that correctly refuses empty training data.
         runner = TaskRunner(self.layer, self.config, self.logger, self.handler)
+        runner.datalayer = Mock()
+        runner.datalayer.get_dataset.return_value = [] if self.config.data_source.kind == 'csv' else None
         self.assertEqual(runner.fetch_data__task(), {'early_exit': True})
 
     def test_sql_none_dataset_keeps_legacy_early_exit(self):
         self.config.data_source.kind = 'sql'
         self.layer._reader.get_dataset.return_value = None
+        # Test empty prediction/SQL reads with a source-neutral reader, not
+        # a train-only facade that correctly refuses empty training data.
         runner = TaskRunner(self.layer, self.config, self.logger, self.handler)
+        runner.datalayer = Mock()
+        runner.datalayer.get_dataset.return_value = [] if self.config.data_source.kind == 'csv' else None
         self.assertEqual(runner.fetch_data__task(), {'early_exit': True})
 
 
@@ -105,13 +113,16 @@ class CSVTrainingFetchPortable254(unittest.TestCase):
         return env['fetch_data__task']
 
     def test_empty_training_raises_using_actual_fetch_method(self):
-        layer = Mock(get_dataset=Mock(return_value=[]))
+        from Storage.CSVTrainingDataLayer import CSVTrainingDataLayer
+        from Storage.CSVTrainingAdapter import CSVTrainingAdapter
+        layer = CSVTrainingDataLayer(object.__new__(CSVTrainingAdapter))
+        layer._reader.get_dataset = Mock(return_value=[])
         cfg = Mock()
         cfg.data_source.kind = 'csv'
         cfg.should_train.return_value = True
         cfg.should_predict.return_value = False
         runner = SimpleNamespace(config=cfg, datalayer=layer, logger=Mock())
-        with self.assertRaisesRegex(ValueError, 'no labelled rows'):
+        with self.assertRaisesRegex(Exception, 'no labelled rows'):
             self.fetch_method()(runner)
 
     def test_prediction_empty_and_sql_none_remain_no_work(self):

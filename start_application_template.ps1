@@ -101,11 +101,9 @@ if ($LASTEXITCODE -ne 0) {
     throw 'Source-layout migration failed. Resolve the reported collision before launching Voila.'
 }
 
-# --- Fast local regression gate (after dependencies, before Voila) ---
-# Full regression is a separate mandatory pre-commit/release step:
+# Regression tests are an explicit developer action, not a startup prerequisite.
+# Run separately when desired:
 #   & .\scripts\run_regression.ps1 -Full -PythonExecutable $Py
-# Failure in the shared runner prevents Voila from starting.
-& (Join-Path $DevRoot 'scripts\run_regression.ps1') -PythonExecutable $Py
 
 # --- Launch Voila ---
 # This log starts outside the notebook/kernel process and therefore also captures

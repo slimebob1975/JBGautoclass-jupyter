@@ -35,9 +35,9 @@ class SQLNumPyFetchRegression273m1(unittest.TestCase):
     def test_sql_none_returns_early_exit(self):
         self.assertEqual(self.fetch(self._runner("sql", None)), {"early_exit": True})
 
-    def test_csv_empty_list_returns_early_exit_or_validation_error(self):
-        with self.assertRaisesRegex(Exception, "no labelled rows"):
-            self.fetch(self._runner("csv", []))
+    def test_csv_empty_list_returns_early_exit(self):
+        # Validation of train-only CSV rows is owned by CSVTrainingDataLayer.
+        self.assertEqual(self.fetch(self._runner("csv", [])), {"early_exit": True})
 
 
 if __name__ == "__main__":

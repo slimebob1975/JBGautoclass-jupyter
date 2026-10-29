@@ -5,33 +5,19 @@ The repository and scope must have been authorized by the caller.
 """
 
 from Storage.CSVPredictionIO import prepare_csv_prediction_io
+from Storage.CSVDataLayer import CSVResultDataLayer
 
 
-class CSVPredictionDataLayer:
-    """Delegate shared data-layer calls to the prepared CSV reader and sink."""
+class CSVPredictionDataLayer(CSVResultDataLayer):
+    execution_mode = 'predict'
+    """Validated prediction I/O facade; cannot publish training diagnostics."""
 
     def __init__(self, reader, sink):
-        if not callable(getattr(reader, "get_dataset", None)):
-            raise ValueError("Invalid CSV prediction reader")
         if not callable(getattr(sink, "save_prediction_data", None)):
             raise ValueError("Invalid CSV prediction result sink")
-        self._reader = reader
-        self._sink = sink
+        super().__init__(reader, sink)
 
-    @property
-    def correction_revision(self):
-        """Immutable correction head selected when this CSV reader was prepared."""
-        return self._reader.correction_revision
-
-    def get_dataset(self, num_rows=None):
-        return self._reader.get_dataset(num_rows=num_rows)
-
-    def save_prediction_data(self, results, class_rate_type, model_name,
-                             class_labels, create_tables=True, test_run=0):
-        # No SQL tables are created; the sink writes scoped file artifacts.
-        return self._sink.save_prediction_data(
-            results, class_rate_type, model_name, class_labels,
-            create_tables=create_tables, test_run=test_run)
+    save_mispredicted_data = None
 
 
 def prepare_csv_prediction_datalayer(model_filename, runtime_config,

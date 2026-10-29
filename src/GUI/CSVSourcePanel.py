@@ -23,7 +23,6 @@ class CSVSourcePanel:
         self.delimiter = widgets.Text(value=",", description="Delimiter:")
         self.quotechar = widgets.Text(value='"', description="Text qualifier:")
         self.encoding = widgets.Text(value="utf-8-sig", description="Encoding:")
-        self.validate_button = widgets.Button(description="Validate CSV", button_style="")
         self.register_button = widgets.Button(description="Register dataset", disabled=True)
         self.saved_datasets = widgets.Dropdown(description="Saved CSV:", options=(("No saved datasets", ""),), value="")
         self.refresh_saved_button = widgets.Button(description="Refresh saved")
@@ -46,10 +45,11 @@ class CSVSourcePanel:
         self.prediction_download = widgets.HTML(value="")
         self.saved_prediction_runs.observe(self._prediction_run_changed, names="value")
         self.status = widgets.HTML(value="CSV inspection only. SQL Server remains the active execution source.")
-        self.validate_button.on_click(self.validate)
+        for control in (self.delimiter, self.quotechar, self.encoding):
+            control.observe(self._format_changed, names="value")
         self.widget = widgets.VBox([
             widgets.HBox([self.file_picker, self.selected_file]), widgets.HBox([self.delimiter, self.quotechar, self.encoding]),
-            widgets.HBox([self.validate_button, self.register_button]),
+            widgets.HBox([self.register_button]),
             widgets.HBox([self.saved_datasets, self.refresh_saved_button, self.load_saved_button, self.erase_saved_button]),
             widgets.HBox([self.saved_prediction_runs, self.refresh_predictions_button,
                           self.export_predictions_button, self.export_joined_button,
@@ -92,8 +92,12 @@ class CSVSourcePanel:
         self.loaded_saved_artifact_id = artifact_id
         detected = self._detect_dialect(target)
         if detected:
-            self.delimiter.value, self.quotechar.value = detected
-        self.status.value = "Saved CSV loaded. Click Validate CSV before selecting model and column roles."
+            self._setting_detected_dialect = True
+            try:
+                self.delimiter.value, self.quotechar.value = detected
+            finally:
+                self._setting_detected_dialect = False
+        self.validate()
 
     def _file_selected(self, change):
         """Stage a browser-selected CSV; never trust its client-side filename as a path."""
@@ -136,13 +140,23 @@ class CSVSourcePanel:
             self.selected_file.value = Path(name).name
             detected = self._detect_dialect(target)
             if detected:
-                self.delimiter.value, self.quotechar.value = detected
-                self.status.value = "CSV format detected. Click Validate CSV to inspect its structure."
-            else:
-                self.status.value = "CSV selected. Confirm delimiter and text qualifier before validation."
+                self._setting_detected_dialect = True
+                try:
+                    self.delimiter.value, self.quotechar.value = detected
+                finally:
+                    self._setting_detected_dialect = False
+            self.validate()
 
         except (OSError, TypeError, ValueError, KeyError, AttributeError):
             self.status.value = "CSV selection failed. Choose a .csv file."
+
+    def _format_changed(self, change):
+        """Revalidate a staged file when its parsing settings change."""
+        if self.path.value and not getattr(self, "_setting_detected_dialect", False):
+            callback = getattr(self, "on_file_changed", None)
+            if callback is not None:
+                callback()
+            self.validate()
 
     def _detect_dialect(self, path):
         """Conservative bounded dialect detection; never publish file contents/errors."""
@@ -199,7 +213,7 @@ class CSVSourcePanel:
             return False
         self.status.value = (
             f"CSV validated: {count} rows and {len(header)} columns. "
-            "Column roles remain in Dataset columns; preview only, SQL Server remains the active execution source."
+            "Select dataset column roles and register the dataset before continuing."
         )
         callback = getattr(self, "on_validated", None)
         if callback is not None:

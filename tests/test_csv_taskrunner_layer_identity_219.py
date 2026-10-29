@@ -3,12 +3,20 @@ import unittest
 from unittest.mock import Mock
 
 from Storage.CSVPredictionDataLayer import CSVPredictionDataLayer
+from Storage.CSVDataLayer import CSVDataLayer
 from test_taskrunner_source_gate_213 import _runner, _runner_method
 
 TASKS = ['load_model', 'fetch_data', 'load_dataset', 'separate_dataset', 'make_predictions']
 
 
 class CSVTaskRunnerLayerIdentity219(unittest.TestCase):
+    def test_unbound_shared_reader_cannot_enter_runner(self):
+        facade = CSVDataLayer(Mock())
+        runner = _runner('csv', facade)
+        with self.assertRaisesRegex(ValueError, 'prepared prediction'):
+            _runner_method()(runner, TASKS)
+        runner.logger.initiate_progress.assert_not_called()
+
     def test_same_facade_is_accepted(self):
         facade = CSVPredictionDataLayer(Mock(), Mock())
         runner = _runner('csv', facade)

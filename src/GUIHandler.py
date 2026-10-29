@@ -555,17 +555,35 @@ class GUIHandler:
         """Run the GUI-assisted feature investigation without touching classifier state."""
         from JBGFeatureSearchService import run_training_feature_search
 
-        investigation_params = copy.deepcopy(config_params)
-        investigation_params["save"] = False
+        csv_source = None
+        if isinstance(config_params, tuple) and len(config_params) == 4:
+            # Prepared by the CSV GUI on the callback thread, with a verified
+            # registered configuration and authorized repository scope.
+            csv_source = config_params[1:]
+            investigation_params = None
+            investigation_config = copy.deepcopy(config_params[0])
+            investigation_config.mode.predict = False
+        else:
+            investigation_params = copy.deepcopy(config_params)
+        if investigation_params is not None:
+            investigation_params["save"] = False
         if row_limit is None or int(row_limit) < 1:
             raise ValueError("Choose at least one investigation row before starting")
-        investigation_params["debug"].data_limit = int(row_limit)
-        investigation_params["mode"].train = True
-        investigation_params["mode"].predict = False
-        investigation_params["mode"].mispredicted = False
-        investigation_params["mode"].calculate_dark_numbers = False
-        investigation_params["mode"].calculate_feature_importance = False
-        investigation_config = Config(**investigation_params)
+        if investigation_params is not None:
+            investigation_params["debug"].data_limit = int(row_limit)
+            investigation_params["mode"].train = True
+            investigation_params["mode"].predict = False
+            investigation_params["mode"].mispredicted = False
+            investigation_params["mode"].calculate_dark_numbers = False
+            investigation_params["mode"].calculate_feature_importance = False
+            investigation_config = Config(**investigation_params)
+        else:
+            investigation_config.debug.data_limit = int(row_limit)
+            investigation_config.mode.train = True
+            investigation_config.mode.predict = False
+            investigation_config.mode.mispredicted = False
+            investigation_config.mode.calculate_dark_numbers = False
+            investigation_config.mode.calculate_feature_importance = False
         return run_training_feature_search(
             investigation_config,
             self.logger,
@@ -575,6 +593,7 @@ class GUIHandler:
             resume=resume,
             pause_event=pause_event,
             investigation_mode=investigation_mode, subgroup_column=subgroup_column,
+            csv_source=csv_source,
         )
 
     def resume_saved_feature_selection_investigation(self, output, on_event=None, pause_event=None):
@@ -706,30 +725,100 @@ class GUIHandler:
             if getattr(source, "kind", None) != "csv":
                 raise ValueError("CSV training requires a CSV runtime configuration")
             self.logger.set_enable_quiet(not runtime_config.io.verbose)
+            # Capture output, but do not let the GUI output context mask the
+            # original classifier exception or turn it into UnboundLocalError.
+            run_error = None
+            result = None
             with output, self.logger.capture_console_output():
-                if runtime_config.should_predict():
-                    from Storage.CSVCombinedDataLayer import prepare_csv_combined_datalayer
-                    from AutomaticClassifier import AutomaticClassifier
-                    layer = prepare_csv_combined_datalayer(
-                        runtime_config, repository, scope, configuration_id)
-                    classifier = AutomaticClassifier(
-                        config=runtime_config, logger=self.logger,
-                        datalayer=layer, regression_suite=False)
-                    if (classifier.datalayer is not layer
-                            or getattr(classifier.handler, 'datalayer', None) is not layer):
-                        raise ValueError('CSV combined classifier lost data-layer binding')
-                else:
-                    from Storage.CSVTrainingApplication import prepare_registered_csv_training_classifier
-                    classifier = prepare_registered_csv_training_classifier(
-                        runtime_config, repository, scope, configuration_id, self.logger)
-                stage = "CSV classifier.run"
-                self._classifier_diagnostic("CSV classifier.run: begin")
-                result = classifier.run()
-                self._classifier_diagnostic("CSV classifier.run: end")
-                if result is False:
-                    self.logger.print_warning(
-                        "CSV training ended without eligible labelled data; no model was saved."
-                    )
+                try:
+                    if runtime_config.should_predict():
+                        from Storage.CSVCombinedDataLayer import prepare_csv_combined_datalayer
+                        from AutomaticClassifier import AutomaticClassifier
+                        layer = prepare_csv_combined_datalayer(
+                            runtime_config, repository, scope, configuration_id)
+                        classifier = AutomaticClassifier(
+                            config=runtime_config, logger=self.logger,
+                            datalayer=layer, regression_suite=False)
+                        if (classifier.datalayer is not layer
+                                or getattr(classifier.handler, 'datalayer', None) is not layer):
+                            raise ValueError('CSV combined classifier lost data-layer binding')
+                    else:
+                        from Storage.CSVTrainingApplication import prepare_registered_csv_training_classifier
+                        classifier = prepare_registered_csv_training_classifier(
+                            runtime_config, repository, scope, configuration_id, self.logger)
+                    stage = "CSV classifier.run"
+                    self._classifier_diagnostic("CSV classifier.run: begin")
+                    result = classifier.run()
+                    self._classifier_diagnostic("CSV classifier.run: end")
+                    if result is False:
+                        self.logger.print_warning(
+                            "CSV training ended without eligible labelled data; no model was saved."
+                        )
+                except Exception as exc:
+                    run_error = exc
+            if run_error is not None:
+                raise run_error
+            # Bind the immutable source and the correction head observed by this run.
+            # Editing is deliberately explicit and never routed to the SQL writer.
+            self.clear_csv_reclassification_context()
+            correction_callback = None
+            if (runtime_config.should_predict() and isinstance(result, dict)
+                    and result.get("mispredicted") is not None):
+                try:
+                    from Storage.CSVReclassificationWorkflow import prepare_csv_reclassification_context
+                    from Storage.CSVReclassification import list_csv_corrections
+                    saved = layer._reader.configuration
+                    context = prepare_csv_reclassification_context(
+                        repository, scope, configuration_id,
+                        dataset_id=saved.dataset_id,
+                        dataset_artifact_id=saved.artifact_id,
+                        id_column=saved.id_column,
+                        class_column=saved.class_column,
+                        allowed_classes=tuple(str(v) for v in result["unique_classes"]))
+                    pinned_revision = layer.correction_revision
+                    latest = list_csv_corrections(repository, scope, configuration_id)
+                    if (latest[-1] if latest else None) != pinned_revision:
+                        raise ValueError('CSV correction revision changed during training')
+                    self.bind_csv_reclassification_context(context)
+
+                    def correction_callback(row_id, new_class):
+                        current = list_csv_corrections(repository, scope, configuration_id)
+                        if (current[-1] if current else None) != pinned_revision:
+                            self.clear_csv_reclassification_context()
+                            raise ValueError('CSV revision changed; refresh and rerun before editing')
+                        result_ref = self.correct_bound_csv_mispredicted_data(
+                            new_class, row_id, confirmed=True)
+                        # Only one correction per run preview. Re-run to apply more.
+                        self.clear_csv_reclassification_context()
+                        return result_ref
+                except (ValueError, TypeError) as exc:
+                    self._classifier_diagnostic(
+                        f"CSV reclassification disabled: {type(exc).__name__}", "WARNING")
+            # The SQL and CSV views share the same bounded grid and labels.
+            if (isinstance(result, dict) and result.get("mispredicted") is not None):
+                try:
+                    self.widgets.handle_mispredicted(
+                        result["mispredicted"], result["unique_classes"],
+                        allow_reclassification=correction_callback is not None,
+                        csv_correction_callback=correction_callback)
+                except Exception as exc:
+                    self._classifier_diagnostic(
+                        f"CSV mispredicted preview unavailable: {type(exc).__name__}", "WARNING")
+                if not result["mispredicted"].empty:
+                    try:
+                        import base64
+                        from IPython.display import HTML, display
+                        export = layer.get_mispredicted_export() if runtime_config.should_predict() else None
+                        if export is not None:
+                            encoded = base64.b64encode(export).decode("ascii")
+                            with self.widgets.mispredicted_output:
+                                display(HTML(
+                                    '<a download="csv_mispredicted.csv" '
+                                    'href="data:text/csv;base64,' + encoded + '">'
+                                    'Download all CSV mispredictions</a>'))
+                    except Exception as exc:
+                        self._classifier_diagnostic(
+                            f"CSV mispredicted download unavailable: {type(exc).__name__}", "WARNING")
             self._classifier_diagnostic(
                 f"CSV callback completed; elapsed={time.monotonic()-started:.1f}s")
             return result

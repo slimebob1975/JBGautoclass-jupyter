@@ -92,6 +92,13 @@ restricted CSV training and saved-model prediction already work.
 - [ ] Allow a future GUI to be replaced without modifying ML engine or application
   contracts. Avoid hidden GUI-specific state as a source of truth.
 
+**Deferred until AFTER the new GUI - DataLayer API v1.**
+
+- [ ] Formalize a replaceable DataLayer contract for SQL, CSV and future sources:
+  source capabilities, dataset identity/revisions, reading, results/export,
+  corrections and explicit authorization. Defer this general refactor until
+  the new GUI is in place; do not fold it into revision 277d.
+
 **Phase 5 - Azure deployment, identity and multi-user security (deferred).**
 
 - [ ] Use **Microsoft Entra ID** for authentication when the Azure deployment

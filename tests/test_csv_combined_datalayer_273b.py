@@ -55,7 +55,7 @@ class CombinedBoundary273b(unittest.TestCase):
             actual_reader.scope = self.scope
             actual_reader.configuration = self.saved
             actual_reader.correction_revision = None
-            actual_reader.get_dataset = Mock(return_value=[('1', '001', 'A'), ('2', '002', '')])
+            actual_reader.get_dataset = Mock(return_value=[('1', '001', 'A'), ('2', '002', 'A'), ('3', '003', 'B'), ('4', '004', 'B'), ('5', '005', '')])
             actual_sink = object.__new__(CSVPredictionResultSink)
             actual_sink.repository = self.repository
             actual_sink.scope = self.scope
@@ -63,7 +63,7 @@ class CombinedBoundary273b(unittest.TestCase):
             actual_sink.save_prediction_data = Mock(return_value={'results': 1})
             layer = CSVCombinedDataLayer(actual_reader, actual_sink)
             self.assertIsNone(layer.correction_revision)
-            self.assertEqual(len(layer.get_dataset()), 2)
+            self.assertEqual(len(layer.get_dataset()), 5)
             self.assertEqual(layer.save_prediction_data([], None, 'm', []), {'results': 1})
             actual_sink.context.artifact_id = 'other'
             with self.assertRaisesRegex(ValueError, 'scope mismatch'):

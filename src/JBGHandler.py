@@ -1001,11 +1001,11 @@ class DatasetHandler:
     def get_num_unpredicted_rows(self, dataset: pd.DataFrame = None) -> int:
         if dataset is None:
             dataset = self.dataset
-        num = 0
-        for item in dataset[self.handler.config.get_class_column_name()]:
-            if item == None or not str(item).strip(): # Corresponds to empty string and SQL NULL
-                num += 1
-        return num
+        # Match shuffle_dataset's missing-label predicate exactly. SQL NULL
+        # commonly becomes np.nan after pandas conversion; treating it as a
+        # training label would let NaN reach the stratified training split.
+        values = dataset[self.handler.config.get_class_column_name()]
+        return int(sum(pd.isna(value) or not str(value).strip() for value in values))
 
 @dataclass
 class Model:

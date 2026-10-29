@@ -502,7 +502,7 @@
             "type": "Button",
             "params": {
                 "description": "Start",
-                "button_style": "primary",
+                "button_style": "danger",
                 "disabled": true,
                 "tooltip": "Run the classifier using the current settings",
                 "icon": "check"

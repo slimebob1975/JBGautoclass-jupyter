@@ -7,6 +7,7 @@ path. This module does not enable CSV in the legacy GUI or support training.
 from pathlib import Path
 
 from Storage.ArtifactContract import StorageScope
+from Storage.CSVRegisteredSource import registered_csv_mismatch
 from Storage.CSVPredictionDataLayer import (
     CSVPredictionDataLayer, prepare_csv_prediction_datalayer,
 )
@@ -85,14 +86,10 @@ def prepare_registered_csv_prediction_classifier(model_filename, runtime_config,
             or not runtime_config.should_predict()):
         raise ValueError('CSV prediction requires prediction-only CSV configuration')
     saved = load_csv_model_configuration(repository, scope, configuration_id)
-    if (getattr(source, 'dataset_id', None) != saved.dataset_id
-            or getattr(source, 'artifact_id', None) != saved.artifact_id):
+    mismatch = registered_csv_mismatch(runtime_config, saved)
+    if mismatch == 'identity':
         raise ValueError('Registered CSV source identity mismatch')
-    if (runtime_config.get_id_column_name() != saved.id_column
-            or runtime_config.get_class_column_name() != saved.class_column
-            or tuple(runtime_config.get_column_names()) !=
-                tuple(saved.text_columns) + tuple(saved.data_columns) +
-                (saved.id_column, saved.class_column)):
+    if mismatch == 'roles':
         raise ValueError('Registered CSV model roles mismatch')
     return prepare_csv_prediction_classifier(
         model_filename, runtime_config, repository, scope, configuration_id, logger)
