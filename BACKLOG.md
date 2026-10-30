@@ -1,5 +1,16 @@
 # JBG AutoClassification - Active BACKLOG (revision 272)
 
+## Revision 279ai â€“ verified regression baseline and next development phase (2026-10-30)
+
+- [x] Windows Python 3.13 full pytest suite: **1,760 passed, 3 skipped, 9 warnings, 0 failed**; exit code 0; 966.67 seconds. This is a synthetic/automated regression baseline, NOT proof of full SQL/CSV feature parity or authorized live SQL acceptance.
+- [x] Revisions 279qâ€“279ah6: current CSV/SQL GUI and test fixtures aligned; Naive Bayes hashability and sparse integer SMOTE/imputation ordering corrected; CatBoost dependency verified; PyTorch fresh-process persistence and CV diagnostics tested.
+- [x] Release version **0.19.1**: regression stabilization checkpoint, no claim of completed SQL/CSV functional parity. Git commit/tag/push must be verified separately.
+- [ ] Confirm exact commit hash, release tag and remote push; record them after the Git operation. Do not invent a hash.
+- [ ] Keep the SQL operator-run regression protocol (	ests/SQL_REGRESSION_PROTOCOL_248.md) as a separate acceptance gate. SQL Erase models remains open until verified and repaired.
+- [ ] Retain CSV artifact lookup intermittency, bounded feature-investigation class support, worker utilization, and cleanup of redundant CSV adapters as tracked follow-ups.
+- [ ] Review three skipped tests and nine warnings; in particular the 	raitlets.Layout(overflow_x=...) deprecation and feature-search progress-callback warnings.
+- [ ] **Phase 2/3 transition:** incrementally refactor JBGMeta.py and ML/application seams, keeping source-specific adapters and one shared ML engine. Build a GUI-independent service layer before the new FastAPI/HTML/CSS/JS GUI. Add behavioral regressions for discovered defects; preserve source isolation, model compatibility, persistence and failure safety.
+
 This is the **current, agreed development order**. The detailed revision notes below
 are retained for traceability, not as a second active priority queue. Earlier
 instructions saying that all CSV execution is blocked are historical. As of

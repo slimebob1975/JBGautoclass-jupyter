@@ -1,3 +1,8 @@
+## Version 0.19.1 â€“ verified regression stabilization (2026-10-30)
+
+- Windows Python 3.13 full pytest regression: **1,760 passed, 3 skipped, 9 warnings, 0 failed**, exit code 0 (revision 279ai).
+- Stabilized CSV/SQL integration fixtures and GUI contracts; corrected sparse-integer SMOTE pipeline order and a Naive Bayes preflight hashability fault; verified CatBoost and PyTorch fresh-process model load.
+- This release is a tested refactoring baseline, not a claim of complete SQL/CSV parity. Live SQL protocol and known BACKLOG defects remain open.
 ## Revision 279n - CSV functional checkpoint (2026-10-30)
 
 - Live CSV GUI exercise completed registration, text-role selection, full Feature

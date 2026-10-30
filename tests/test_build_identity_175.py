@@ -15,8 +15,8 @@ DEFAULT_SETTINGS = (ROOT / "src" / "GUI" / "default_settings.json").read_text(en
 def test_product_version_is_stable_and_separate_from_repository_state():
     identity = BuildIdentity(branch="dev", commit="abc1234", dirty=True)
     assert APP_NAME == "JBG AutoClassification"
-    assert APP_VERSION == "0.19.0"
-    assert identity.compact_label == "v0.19.0 · Git: dev @ abc1234 (modified)"
+    assert APP_VERSION == "0.19.1"
+    assert identity.compact_label == "v0.19.1 · Git: dev @ abc1234 (modified)"
 
 
 def test_exact_tag_is_preferred_over_branch_in_repository_label():
@@ -44,7 +44,7 @@ def test_non_git_installation_falls_back_without_error(monkeypatch, tmp_path):
     with patch("JBGVersion._git", return_value=None):
         identity = get_build_identity(repo_root=tmp_path)
     assert identity.repository_label == "Git: unavailable"
-    assert application_version_line(repo_root=tmp_path).startswith("v0.19.0 · Git:")
+    assert application_version_line(repo_root=tmp_path).startswith("v0.19.1 · Git:")
 
 
 def test_git_checkout_reports_branch_commit_and_modified_state(monkeypatch, tmp_path):
@@ -66,7 +66,7 @@ def test_runtime_log_records_application_and_repository_identity(tmp_path):
         log_file = TimestampedLogFile(log_dir=tmp_path, filename="identity.log")
     try:
         text = log_file.path.read_text(encoding="utf-8")
-        assert "[INFO] Application: JBG AutoClassification v0.19.0" in text
+        assert "[INFO] Application: JBG AutoClassification v0.19.1" in text
         assert "[INFO] Repository: Git: dev @ abcdef123456 (modified)" in text
     finally:
         log_file.close()
