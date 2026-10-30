@@ -64,10 +64,7 @@ def prepare_csv_gui_training_config(base_config, repository, scope, dataset_arti
     config.io.model_name = "csv_model_" + ref.artifact_id
     config.mode.train = True
     config.mode.predict = bool(predict)
-    # The scoped combined adapter is the verified publication route for CSV
-    # diagnostics. Train-only CSV retains its existing read-only boundary.
-    if mispredicted and not predict:
-        raise ValueError('CSV Mispredicted requires combined Train + Predict')
+    # Training diagnostics do not require prediction of unlabelled rows.
     config.mode.mispredicted = bool(mispredicted)
     config.mail = Config.Mail(notification_email='')
     # Check the resulting runtime configuration, not just its source metadata.

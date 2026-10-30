@@ -208,7 +208,10 @@ class EventHandler:
             return
         
         if self.widgets._csv_view_active():
-            self.widgets._csv_column_role_changed()
+            # SelectMultiple also emits index/options events. Only its completed
+            # value transition has a reliable old/new feature set.
+            if change.name == "value":
+                self.widgets._csv_column_role_changed(previous_features=change.old)
             return
 
         if change.name not in ["index", "options"]:
@@ -226,6 +229,7 @@ class EventHandler:
         if change.get("name") == "value":
             self.widgets._feature_search_applied = False
             self.widgets.update_ready()
+            self.widgets.sync_feature_selection_controls()
 
     def feature_selection_profile(self, change: Bunch) -> None:
         if not self.lock_observe_1 and change.get("name") == "value":
@@ -750,6 +754,11 @@ class Widgets:
         if "feature_selection_modelling_form" not in display_items:
             position = display_items.index("continuation_form") if "continuation_form" in display_items else len(display_items)
             display_items.insert(position, "feature_selection_modelling_form")
+        # Migrate persisted layouts as well: history follows the class distribution.
+        if "regression_suite_form" in display_items:
+            display_items.remove("regression_suite_form")
+            position = display_items.index("class_summary") + 1 if "class_summary" in display_items else len(display_items)
+            display_items.insert(position, "regression_suite_form")
         self.settings.setdefault("sections", {})["feature_selection"] = [
             "feature_selection_mode", "feature_selection_profile", "feature_search_rows", "feature_search_model_type",
             "feature_search_scaler", "feature_search_oversampling", "feature_search_reduction", "feature_search_trials", "feature_search_sizes",
@@ -1407,7 +1416,7 @@ class Widgets:
             self.sync_dark_number_control_state()
             self.disable_items(["metas_checkbox"])
             self._csv_source_panel.status.value = (
-                "CSV training is ready. Predict is optional. Mispredicted is available with Train + Predict."
+                "CSV training is ready. Predict is optional; Mispredicted evaluates labelled training rows."
             )
         else:
             self.enable_items(["predict_checkbox", "metas_checkbox"])
@@ -1421,6 +1430,7 @@ class Widgets:
         self._csv_mode_confirmed_selection = selected
         self._csv_run_completed_278 = False
         self._csv_refresh_training_action()
+        self.sync_feature_selection_controls()
 
     def continuation_button_actions(self) -> None:
         """ Complex actions when button is clicked """
@@ -2192,11 +2202,14 @@ class Widgets:
 
     def update_class_summary(self):
         """ Sets the class summary """
-        if not self.summarise_state or self._csv_view_active():
+        if self._csv_view_active():
+            self._csv_update_class_summary()
             return
-        
+        if not self.summarise_state:
+            return
+
         current_class = self.class_column.value
-        
+
         distribution = self.guihandler.get_class_distribution(self.data_settings, current_class)
         self.sync_dark_number_target_options(distribution)
         number_of_categories = len(distribution)
@@ -2231,6 +2244,56 @@ class Widgets:
 
         self.class_summary.value = "<br>".join(texts)
         
+
+    def _csv_update_class_summary(self) -> None:
+        """Read only the selected target column from the validated local CSV."""
+        from collections import Counter
+        import csv
+        from pathlib import Path
+
+        if not getattr(self, "_csv_roles_loaded_188", False):
+            self.class_summary.value = "<em>Class distribution</em>: N/A"
+            return
+        target = self.class_column.value
+        schema = getattr(self, "_csv_schema_188", None)
+        if not target or schema is None or target not in schema.columns:
+            self.class_summary.value = "<em>Class distribution</em>: Select a class column."
+            return
+        panel = self._csv_source_panel
+        try:
+            counts = Counter()
+            with Path(panel.path.value).open("r", encoding=panel.encoding.value, newline="") as stream:
+                reader = csv.DictReader(stream, delimiter=panel.delimiter.value,
+                                        quotechar=panel.quotechar.value)
+                if target not in (reader.fieldnames or ()):
+                    raise ValueError("Selected class column is absent")
+                for row in reader:
+                    value = row.get(target)
+                    if value is None:
+                        raise ValueError("Malformed CSV row")
+                    counts[value] += 1
+            total = sum(counts.values())
+            unknown = counts.get("", 0) + counts.get("NULL", 0)
+            shown = sorted(counts.items(), key=lambda pair: str(pair[0]))[:30]
+            labels = "; ".join(f"{html.escape(str(key or '(empty)'))} ({count})" for key, count in shown)
+            if len(counts) > len(shown):
+                labels += f"; … ({len(counts) - len(shown)} more classes)"
+            self.class_summary.value = (
+                f"<em>Class column</em>: {html.escape(str(target))}<br>"
+                f"<em>Distribution</em>: {labels}<br>"
+                f"<em>Total rows</em>: {total}<br>"
+                f"<em>Labelled rows (available for feature selection)</em>: {total - unknown}"
+                + (f"<br><em>Unlabelled rows excluded</em>: {unknown}" if unknown else "")
+            )
+            identity = (str(panel.path.value), target, tuple(sorted(counts.items())))
+            if total > unknown and identity != getattr(self, "_feature_search_rows_source", None):
+                self._feature_search_rows_source = identity
+                self.feature_search_rows.value = total - unknown
+        except (OSError, UnicodeError, ValueError, csv.Error) as exc:
+            self.class_summary.value = (
+                "<em>Class distribution</em>: Unable to read selected CSV class column "
+                f"({html.escape(type(exc).__name__)})."
+            )
 
     def update_id_column(self) -> None:
         """ Removes class_column from the id_column options """
@@ -2441,8 +2504,16 @@ class Widgets:
         mode = self.feature_selection_mode.value
         dataset_editable = not self.data_columns.disabled and self.new_model
         if self._csv_view_active():
-            dataset_editable = (self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION
-                                and getattr(self, "_csv_mode_confirmed_selection", None) == Config.DEFAULT_TRAIN_OPTION)
+            # Feature Modelling precedes Continue. Match SQL: choosing a new
+            # model unlocks the investigation when the registered source and
+            # column roles are ready; Continue is for later training settings.
+            dataset_editable = (
+                self.models_dropdown.value == Config.DEFAULT_TRAIN_OPTION
+                and getattr(self, "_csv_roles_loaded_188", False)
+                and bool(self._csv_current_dataset_artifact())
+                and bool(self.class_column.value and self.id_column.value)
+                and bool(self.data_columns.value or self.text_columns.value)
+            )
         self.feature_selection_mode.disabled = not dataset_editable
         assisted = dataset_editable and mode == "assisted"
         reuse = dataset_editable and mode == "reuse"
@@ -2487,7 +2558,7 @@ class Widgets:
             self.feature_search_reduction.disabled = True
             self.feature_search_scaler.disabled = True  # CatBoost uses raw numeric values.
 
-        ready = assisted and bool(self.data_columns.value) and bool(self.class_column.value) and bool(self.id_column.value)
+        ready = assisted and bool(self.data_columns.value or self.text_columns.value) and bool(self.class_column.value) and bool(self.id_column.value)
         running = getattr(self, "_feature_search_running", False)
         self.feature_search_investigate_button.disabled = running or not ready
         if dataset_editable and (running or (mode in ("assisted", "reuse") and not getattr(self, "_feature_search_applied", False))):
@@ -2650,8 +2721,8 @@ class Widgets:
     def feature_search_investigation_mode(self):
         if not hasattr(self, '_feature_search_investigation_mode_widget'):
             self._feature_search_investigation_mode_widget = widgets.ToggleButtons(
-                options=[('Diagnostics only', 'diagnostics_only'),
-                         ('Feature selection + diagnostics', 'selection_plus_diagnostics')],
+                options=[('Diagnostics only (no recommendation)', 'diagnostics_only'),
+                         ('Feature selection + diagnostics (recommendation)', 'selection_plus_diagnostics')],
                 value='selection_plus_diagnostics', description='Investigation:',
                 style={'description_width': 'initial'})
         return self._feature_search_investigation_mode_widget
@@ -2734,9 +2805,10 @@ class Widgets:
                 row_limit = int(self.feature_search_rows.value)
                 if self._csv_view_active():
                     if (self.models_dropdown.value != Config.DEFAULT_TRAIN_OPTION
-                            or self._csv_mode_confirmed_selection != Config.DEFAULT_TRAIN_OPTION):
-                        raise ValueError("Confirm CSV training with Continue first")
-                    runtime, saved, repository, scope = self._csv_prepare_training_runtime()
+                            or not getattr(self, "_csv_roles_loaded_188", False)
+                            or not self._csv_current_dataset_artifact()):
+                        raise ValueError("Register CSV and select Train a new model before investigating")
+                    runtime, saved, repository, scope = self._csv_prepare_training_runtime(investigation=True)
                     params = (runtime, repository, scope, saved.configuration_id)
                 else:
                     params = self.get_config_params()
@@ -2788,7 +2860,7 @@ class Widgets:
                 self.feature_search_preview.value = ('<b>Diagnostics only: no feature selection or '
                     'applicable recommendation was produced.</b><br>Results: <code>' +
                     html.escape(result.get('output_directory', '')) + '</code>')
-                self.feature_search_status.value = 'Classification diagnostics completed.'
+                self.feature_search_status.value = 'Diagnostics completed; choose Feature selection + diagnostics to search for a recommendation.'
                 return
             selected = result["nested_validation"]["selected"]
             baseline = result["nested_validation"]["full_baseline"]
@@ -3200,15 +3272,13 @@ class Widgets:
         if (not self.algorithm_dropdown.value or not self.preprocess_dropdown.value
                 or not self.reduction_dropdown.value):
             return "waiting", "Select at least one model, preprocessing method and reduction method."
-        if self.mispredicted_checkbox.value and not self.predict_checkbox.value:
-            return "waiting", "Select Predict as well to run CSV Mispredicted."
         return "ready", (
             "Ready for combined CSV training and prediction."
             if self.predict_checkbox.value else
             "Ready to train a new CSV model."
         )
 
-    def _csv_prepare_training_runtime(self):
+    def _csv_prepare_training_runtime(self, *, investigation=False):
         """Build a source-scoped train-only runtime without executing the SQL Start path.
 
         The stored configuration is immutable and the returned classifier must
@@ -3227,10 +3297,32 @@ class Widgets:
         data_columns = tuple(name for name in self.data_columns.value if name not in text_columns)
         if not data_columns and not text_columns:
             raise ValueError("Select at least one CSV feature")
+        if investigation:
+            # Registered CSV roles are authoritative. Reject nonnumeric data
+            # accidentally assigned to the numeric channel before model fitting.
+            schema = getattr(self, "_csv_schema_188", None)
+            suspected = set(getattr(schema, "text_feature_candidates", ())) & set(data_columns)
+            if suspected:
+                raise ValueError(
+                    "CSV features contain nonnumeric text but are not marked Text: "
+                    + ", ".join(sorted(suspected))
+                    + ". Select them in Text data columns before investigating."
+                )
         panel = self._csv_source_panel
         from Storage.CSVGUITrainingConfig import prepare_csv_gui_training_config
         repository, scope = self._csv_catalog_storage()
-        base_config = Config(**self.get_config_params())
+        config_params = self.get_config_params()
+        if investigation:
+            # Feature Modelling precedes Continue, so the ordinary Train/Predict
+            # controls can still be disabled. The investigation is intrinsically
+            # training-only; do not mutate GUI widget state to validate it.
+            mode = config_params['mode']
+            mode.train = True
+            mode.predict = False
+            mode.mispredicted = False
+            mode.calculate_feature_importance = False
+            mode.calculate_dark_numbers = False
+        base_config = Config(**config_params)
         runtime, saved = prepare_csv_gui_training_config(
             base_config, repository, scope, artifact_id,
             id_column=self.id_column.value,
@@ -3239,8 +3331,8 @@ class Widgets:
             csv_format=dict(delimiter=panel.delimiter.value,
                             quotechar=panel.quotechar.value,
                             encoding=panel.encoding.value),
-            predict=bool(self.predict_checkbox.value),
-            mispredicted=bool(self.mispredicted_checkbox.value))
+            predict=False if investigation else bool(self.predict_checkbox.value),
+            mispredicted=False if investigation else bool(self.mispredicted_checkbox.value))
         return runtime, saved, repository, scope
 
     def _csv_saved_prediction_readiness(self):
@@ -3609,7 +3701,9 @@ class Widgets:
             self._sql_role_disabled_188d = {name: getattr(self, name).disabled for name in self._SOURCE_ROLE_FIELDS}
             self._csv_roles_loaded_188 = False
             self._csv_schema_188 = None
+            self._csv_previous_selected_features_279j = ()
             self._csv_registered_dataset_190 = None
+            self.class_summary.value = "<em>Class distribution</em>: N/A"
             self._restore_source_roles({name: ((), () if name in ("data_columns", "text_columns") else None)
                                         for name in self._SOURCE_ROLE_FIELDS})
             self._csv_set_role_editability(False)
@@ -3624,6 +3718,7 @@ class Widgets:
             for name, disabled in getattr(self, "_sql_role_disabled_188d", {}).items():
                 getattr(self, name).disabled = disabled
             self.id_column_diagnostic.value = ""
+            self.update_class_summary()
             for name, disabled in getattr(self, "_sql_action_state_188", {}).items():
                 getattr(self, name).disabled = disabled
         self._csv_set_model_status("Validate a CSV dataset" if choice == "csv" else "")
@@ -3639,7 +3734,7 @@ class Widgets:
             self._csv_refresh_training_action()
             self.sync_feature_selection_controls()
 
-    def _csv_column_role_changed(self):
+    def _csv_column_role_changed(self, previous_features=None):
         """Keep CSV role choices consistent without touching SQL metadata."""
         schema = getattr(self, "_csv_schema_188", None)
         if schema is None or not self._csv_view_active():
@@ -3650,6 +3745,16 @@ class Widgets:
         features = tuple(name for name in schema.columns if name not in (class_name, selected_id))
         selected_features = tuple(name for name in self.data_columns.value if name in features)
         selected_text = tuple(name for name in self.text_columns.value if name in selected_features)
+        # Infer roles only for newly selected predictors, not for explicit edits
+        # to an existing Text selection or restored registered configurations.
+        previous = (set(previous_features) if previous_features is not None
+                    else set(getattr(self, "_csv_previous_selected_features_279j", ())))
+        inferred = set(getattr(schema, "text_feature_candidates", ()))
+        selected_text = tuple(
+            name for name in selected_features
+            if name in selected_text or (name not in previous and name in inferred)
+        )
+        self._csv_previous_selected_features_279j = selected_features
         self._restore_source_roles({
             "class_column": (schema.class_candidates, class_name),
             "id_column": (ids, selected_id),
@@ -3658,8 +3763,10 @@ class Widgets:
         })
         if hasattr(self, "_csv_source_panel"):
             self._csv_source_panel.register_button.disabled = False
+        self._csv_update_class_summary()
         self.update_ready()
         self._csv_refresh_training_action()
+        self.sync_feature_selection_controls()
 
     def _csv_validated_columns(self, panel):
         """Populate common role controls after CSV validation; no SQL calls."""
@@ -3677,7 +3784,8 @@ class Widgets:
         columns = schema.columns
         selected_class = schema.class_candidates[0] if schema.class_candidates else None
         ids = tuple(name for name in schema.unique_id_candidates if name != selected_class)
-        selected_id = ids[0] if ids else None
+        selected_id = next((name for name in ids if name == "jbg_row_id" or name.startswith("jbg_row_id_")),
+                           ids[0] if ids else None)
         selected_data = ()
         selected_text = ()
         if self._csv_current_dataset_artifact():
@@ -3704,6 +3812,8 @@ class Widgets:
                     ids = tuple(n for n in schema.unique_id_candidates if n != selected_class)
                     selected_data, selected_text = saved_data, saved_text
         available_features = tuple(n for n in columns if n not in (selected_class, selected_id))
+        # Existing registered model configurations retain their exact saved roles.
+        self._csv_previous_selected_features_279j = tuple(selected_data)
         self._restore_source_roles({
             "class_column": (schema.class_candidates, selected_class),
             "id_column": (ids, selected_id),
@@ -3715,13 +3825,16 @@ class Widgets:
         if self._csv_current_dataset_artifact():
             self._csv_refresh_saved_models()
         self._csv_model_selected()
+        self._csv_update_class_summary()
 
     def _csv_file_changed(self):
         """New uploads invalidate previous CSV roles and registration state."""
         self.guihandler.clear_csv_reclassification_context()
         self._csv_roles_loaded_188 = False
         self._csv_schema_188 = None
+        self._csv_previous_selected_features_279j = ()
         self._csv_registered_dataset_190 = None
+        self.class_summary.value = "<em>Class distribution</em>: N/A"
         self._csv_run_completed_278 = False
         self._csv_source_panel.loaded_saved_artifact_id = None
         self._csv_set_role_editability(False)
@@ -3783,6 +3896,7 @@ class Widgets:
         self._csv_refresh_prediction_runs()
         self.update_ready()
         self._csv_refresh_training_action()
+        self.sync_feature_selection_controls()
         return True
 
     def _csv_current_dataset_artifact(self):
@@ -3996,7 +4110,7 @@ class Widgets:
     def regression_suite_form(self) -> widgets.Box:
         """Display run history without the retired regression-suite action."""
         return self.create_section_form(
-            "Run history & regression",
+            "Run history",
             [self.repeat_last_run_button],
             widgets.HBox,
         )

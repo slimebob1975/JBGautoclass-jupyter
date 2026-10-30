@@ -126,13 +126,15 @@ class CSVSourcePanel:
                 entry = value[0]
                 name = entry.get("name", "")
             if not isinstance(name, str) or Path(name).suffix.lower() != ".csv":
+                self.status.value = "CSV selection failed: select a .csv file."
                 return
             content = entry.get("content")
             if content is None:
+                self.status.value = "CSV selection failed: upload contains no file content."
                 return
             data = bytes(content)
             if len(data) > 25 * 1024 * 1024 or not data:
-                self.status.value = "CSV selection failed. File must be 1–25 MB or smaller."
+                self.status.value = "CSV selection failed: the file must be nonempty and at most 25 MB."
                 return
             target = Path(self._upload_directory.name) / "dataset.csv"
             target.write_bytes(data)
@@ -211,9 +213,20 @@ class CSVSourcePanel:
                     return False
         except (OSError, UnicodeError, ValueError, csv.Error, LookupError, StopIteration):
             return False
+        generated = False
+        generated_name = None
+        if not self.loaded_saved_artifact_id:
+            try:
+                from CSVStagingIdentity import ensure_integer_row_id
+                generated, generated_name = ensure_integer_row_id(
+                    path, delimiter=delimiter, quotechar=quotechar, encoding=encoding)
+            except (OSError, ValueError, UnicodeError, csv.Error) as ex:
+                self.status.value = "CSV ID inspection failed (" + type(ex).__name__ + ")."
+                return False
         self.status.value = (
-            f"CSV validated: {count} rows and {len(header)} columns. "
-            "Select dataset column roles and register the dataset before continuing."
+            f"CSV validated: {count} rows and {len(header) + int(generated)} columns. "
+            + ("Generated an ID column in the staged registration copy. " if generated else "")
+            + "Select dataset column roles and register the dataset before continuing."
         )
         callback = getattr(self, "on_validated", None)
         if callback is not None:

@@ -12,12 +12,14 @@ import pickle
 from datetime import datetime
 from pathlib import Path
 
+
 from threadpoolctl import threadpool_limits
 
 from JBGCVReporting import partition_signature
 from JBGFeatureSearch import (SearchOptions, describe_feature_search_parallelism,
                               run_experiment)
 from JBGHandler import JBGHandler
+from JBGFeaturePreservation import validate_investigation_feature_preservation
 from SQLDataLayer import DataLayer
 
 
@@ -142,6 +144,11 @@ def run_training_feature_search(config, logger, options: SearchOptions, on_event
         handler = JBGHandler(datalayer, config, investigation_logger)
         dataset = handler.add_handler("dataset")
         dataset.load_data(rows)
+        # The shared DatasetHandler may coerce non-numeric values into NaN.
+        # Validate the original raw records before its all-NaN column drop;
+        # this protects SQL and CSV investigations without changing ordinary training.
+        validate_investigation_feature_preservation(
+            rows, config.get_column_names(), config, dataset.dataset)
         dataset.separate_dataset()
         dataset.split_dataset_for_training_and_validation()
 

@@ -1,3 +1,17 @@
+## Revision 279n - CSV functional checkpoint (2026-10-30)
+
+- Live CSV GUI exercise completed registration, text-role selection, full Feature
+  Modelling with five selected features, Apply/Continue, Logistic Regression with
+  Standard Scaler, train-only Mispredicted, Dark Numbers and Reclassify/Apply.
+- Follow-up patches 279j-279n corrected text-role suggestions, train-only
+  Mispredicted mode and CSV reclassification binding without adding a second
+  feature-search engine. Regression of the unbound CSV data layer was repaired
+  in 279n; this does not establish full SQL/CSV parity.
+- Deferred: intermittent saved CSV artifact lookup, class-balanced row-limit
+  sampling, actual feature-search worker utilization and redundant CSV code
+  review. Full Windows suites and authorized SQL acceptance remain to be run
+  for the release commit.
+
 ## Version 0.19.0 - CSV classifier lifecycle and regression stabilization (revisions 257-271a)
 
 - Enable source-scoped CSV classifier training through the existing ML pipeline, including native model fitting, persisted checkpoints and safe reuse of saved CSV models for prediction. Preserve the separate SQL execution path.

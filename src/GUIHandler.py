@@ -746,6 +746,10 @@ class GUIHandler:
                         from Storage.CSVTrainingApplication import prepare_registered_csv_training_classifier
                         classifier = prepare_registered_csv_training_classifier(
                             runtime_config, repository, scope, configuration_id, self.logger)
+                    # Both execution paths must bind the classifier's actual CSV data layer.
+                    layer = classifier.datalayer
+                    if layer is None:
+                        raise ValueError('CSV classifier has no bound data layer')
                     stage = "CSV classifier.run"
                     self._classifier_diagnostic("CSV classifier.run: begin")
                     result = classifier.run()
@@ -762,7 +766,10 @@ class GUIHandler:
             # Editing is deliberately explicit and never routed to the SQL writer.
             self.clear_csv_reclassification_context()
             correction_callback = None
-            if (runtime_config.should_predict() and isinstance(result, dict)
+            # Mispredicted is a training diagnostic, independent of Predict.
+            if (runtime_config.should_train()
+                    and runtime_config.should_display_mispredicted()
+                    and isinstance(result, dict)
                     and result.get("mispredicted") is not None):
                 try:
                     from Storage.CSVReclassificationWorkflow import prepare_csv_reclassification_context

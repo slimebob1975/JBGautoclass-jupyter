@@ -2,9 +2,10 @@
 
 This is the **current, agreed development order**. The detailed revision notes below
 are retained for traceability, not as a second active priority queue. Earlier
-instructions saying that all CSV execution is blocked are historical; **the
-complete configurable CSV ML pipeline is not yet enabled in the GUI**, even though
-restricted CSV training and saved-model prediction already work.
+instructions saying that all CSV execution is blocked are historical. As of
+revision 279n, the CSV GUI has completed a live train/Feature Modelling/
+Mispredicted/Dark Numbers/reclassification workflow; broader SQL/CSV parity and
+full SQL regression acceptance remain separately unverified.
 
 ## Confirmed baseline
 
@@ -21,6 +22,36 @@ restricted CSV training and saved-model prediction already work.
   in the local Windows environment. Do not silently weaken either gate.
 - [x] Version 0.19.0 and the 271-series status/roadmap update were prepared;
   individual commit/push status must be checked in Git, not inferred here.
+
+## CSV completion checkpoint (279n; 2026-10-30)
+
+- [x] Live Windows/Voila CSV: registration, automatic text roles, Feature
+  Modelling diagnostics and candidate selection, Apply/Continue, train-only
+  Logistic Regression with Standard Scaler, Mispredicted, Dark Numbers and
+  Reclassify/Apply were exercised. The specific test used 286 labelled records
+  and a five-of-nine-column feature recommendation. This is a workflow smoke
+  test, not a complete matrix of SQL/CSV parity or a guarantee of model quality.
+- [x] Train + Mispredicted works with Predict disabled; CSV reclassification
+  uses its scoped revision mechanism, not the SQL writer (279l-279n).
+- [ ] **P2 / intermittent: saved CSV `Artifact not found`.** Once occurred when
+  starting Feature Modelling from a saved registration, while registering the
+  same source again worked; no longer reproducible. On recurrence capture
+  dataset/artifact/configuration identities, storage scope, source path and
+  lifecycle transitions without disclosing private data; distinguish a stale
+  GUI reference from an absent artifact. Do not bypass identity validation.
+- [ ] **P2: investigation row limits.** Reproduce the 200-row class-support
+  failure and compare bounded selection with reproducible stratified sampling
+  for both SQL and CSV. Preserve class-support checks and clear explanations.
+- [ ] **P2: feature-search parallelism.** Compare requested vs actual worker
+  concurrency, process/thread counts and elapsed time in SQL and CSV for the
+  same search budget; inspect dispatch, serialization, memory caps and Windows
+  process behavior. Check reproducibility, pause/resume and resource safety.
+- [ ] **P2: CSV cleanup after release checkpoint.** Review redundant CSV-only
+  adapter/GUI paths against shared ML services, remove only with focused tests,
+  and retain source isolation and correction provenance.
+- [ ] **Release/acceptance gate:** run the full local unittest and pytest suites
+  and authorized SQL regression protocol before claiming broad parity; inspect
+  the staged Git diff for secrets, logs, datasets and unintended changes.
 
 ## Binding development sequence (decided after revision 272)
 
@@ -680,3 +711,5 @@ wording here must not override the current sequence.
 - [ ] After revision 255, verify full native CSV fitting through AutomaticClassifier/TaskRunner with saved model and reload in Windows ML environment; release CSV GUI only after the full flow and source/identity checks pass.
 
 - [ ] GUI cosmetic: when restoring a saved CSV model, auto-scroll multi-select pipeline widgets to their selected options when supported by ipywidgets/Voilà; do not change selection values or SQL behavior.
+
+- **After the new GUI:** Multiclass Feature Modelling (One-vs-Rest): target-vs-rest and all-classes investigations with shared CV folds, class-aware metrics and aggregated ranking, followed by genuine multiclass holdout validation. Same engine for SQL and CSV.

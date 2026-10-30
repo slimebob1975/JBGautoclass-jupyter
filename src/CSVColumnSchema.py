@@ -16,6 +16,7 @@ class CSVColumnSchema:
     class_candidates: tuple[str, ...]
     feature_candidates: tuple[str, ...]
     rows: int
+    text_feature_candidates: tuple[str, ...] = ()
 
 
 def inspect_csv_columns(path, *, delimiter=",", encoding="utf-8-sig", class_cardinality_limit=30):
@@ -69,8 +70,15 @@ def inspect_csv_columns(path, *, delimiter=",", encoding="utf-8-sig", class_card
 
     class_columns = tuple(h for i, h in enumerate(headers)
                           if 2 <= len(categories[i]) <= class_cardinality_limit
-                          and not numeric_values(categories[i]))
-    return CSVColumnSchema(tuple(headers), id_columns, class_columns, tuple(headers), count)
+                          and (not numeric_values(categories[i])
+                               or all(value.strip().isascii() and value.strip().isdecimal()
+                                      for value in categories[i])))
+    # Preserve actual CSV content semantics: object-valued text cannot be passed
+    # through the numerical conversion path without losing its values.
+    text_features = tuple(h for i, h in enumerate(headers)
+                          if categories[i] and not numeric_values(categories[i]))
+    return CSVColumnSchema(tuple(headers), id_columns, class_columns,
+                           tuple(headers), count, text_features)
 
 
 def validate_csv_column_roles(schema, *, id_column, class_column, feature_columns):
