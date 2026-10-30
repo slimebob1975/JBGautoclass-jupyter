@@ -236,13 +236,18 @@ def test_pandas_dtype_families_are_stable_for_prediction_guard():
 def test_save_path_fails_closed_when_compatibility_contract_cannot_be_built():
     source = (Path(__file__).resolve().parents[1] / "src" / "JBGHandler.py").read_text(encoding="utf-8")
     block = source.split("def save_model_to_file", 1)[1].split("@dataclass", 1)[0]
-    assert "build_model_compatibility_metadata" in block
+    assert "build_model_save_compatibility(" in block
     assert "Model was not saved because source/schema compatibility metadata could not be established" in block
-    assert "return" not in block.split("except Exception as compatibility_error:", 1)[1].split("# Handle KERAS", 1)[0]
+    # Compatibility must be built before any artifact is persisted, and failures
+    # must propagate rather than silently returning or continuing.
+    assert block.index("build_model_save_compatibility(") < block.index("save_model_artifact(")
+    assert "raise ModelInitializationException(" in block
+    assert "except ModelCompatibilityError as compatibility_error:" in block
 
 
 def test_runtime_checks_source_before_saved_config_replaces_live_source():
     source = (Path(__file__).resolve().parents[1] / "src" / "AutomaticClassifier.py").read_text(encoding="utf-8")
-    assert source.index("load_model_compatibility(model_filename)") < source.index("load_config_from_model_file(model_filename")
-    assert "self.datalayer.get_table_columns(" in source
-    assert "Saved model is not compatible with the selected data source" in source
+    sql_path = source.split('elif source_kind == "sql":', 1)[1].split('else:\n                raise ConfigException("Unsupported prediction data source")', 1)[0]
+    assert sql_path.index("load_model_compatibility(model_filename)") < sql_path.index("load_config_from_model_file(")
+    assert "self.datalayer.get_table_columns(" in sql_path
+    assert "Saved model is not compatible with the selected data source" in sql_path

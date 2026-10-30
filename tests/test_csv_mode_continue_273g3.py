@@ -19,7 +19,7 @@ def methods(*names):
 
 
 class ContinueModes273g3(unittest.TestCase):
-    def test_mispredicted_training_fails_closed(self):
+    def test_mispredicted_training_is_ready_without_predict(self):
         w = methods("_csv_training_readiness")()
         w._csv_view_active = lambda: True
         w._csv_roles_loaded_188 = True
@@ -33,7 +33,7 @@ class ContinueModes273g3(unittest.TestCase):
         w.reduction_dropdown = SimpleNamespace(value=("none",))
         w.predict_checkbox = SimpleNamespace(value=False)
         w.mispredicted_checkbox = SimpleNamespace(value=True)
-        self.assertEqual(w._csv_training_readiness()[0], "waiting")
+        self.assertEqual(w._csv_training_readiness()[0], "ready")
         w.mispredicted_checkbox.value = False
         self.assertEqual(w._csv_training_readiness()[0], "ready")
 

@@ -24,10 +24,14 @@ class CSVModeGate273g4(unittest.TestCase):
         self.w._csv_continue_ready = lambda: True
         self.w._CSV_TRAINING_EDITABLE_FIELDS = ("algorithm_dropdown",)
         self.w._CSV_TRAINING_LOCKED_FIELDS = ("train_checkbox", "mispredicted_checkbox", "metas_checkbox")
+        self.w._CSV_DARK_NUMBER_FIELDS = ("dark_number_method", "dark_number_alpha")
         self.w.eventhandler = SimpleNamespace(lock_observe_1=False)
         for name in ("train", "predict", "mispredicted", "metas"):
             setattr(self.w, name + "_checkbox", SimpleNamespace(value=False, disabled=True))
         self.w.models_dropdown = SimpleNamespace(value="New model")
+        self.w.dark_numbers_checkbox = SimpleNamespace(value=True, disabled=True)
+        self.w.sync_dark_number_control_state = lambda: None
+        self.w.sync_feature_selection_controls = lambda: None
         self.w._csv_source_panel = SimpleNamespace(status=SimpleNamespace(value=""))
         self.w.enable_items = lambda names: [setattr(getattr(self.w,n),"disabled",False) for n in names if hasattr(self.w,n)]
         self.w.disable_items = lambda names: [setattr(getattr(self.w,n),"disabled",True) for n in names if hasattr(self.w,n)]

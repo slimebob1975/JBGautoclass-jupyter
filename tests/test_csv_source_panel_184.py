@@ -58,7 +58,7 @@ class CSVSourcePanelTests(unittest.TestCase):
             self.assertIn("2 rows and 3 columns", panel.status.value)
             self.assertNotIn(str(path), panel.status.value)
             self.assertNotIn("private_value", panel.status.value)
-            self.assertIn("Dataset columns", panel.status.value)
+            self.assertIn("Select dataset column roles", panel.status.value)
             self.assertFalse(hasattr(panel, "id_column"))
             self.assertFalse(hasattr(panel, "class_column"))
 
@@ -72,7 +72,8 @@ class CSVSourcePanelTests(unittest.TestCase):
 
     def test_no_widget_execution_action(self):
         panel = CSVSourcePanel()
-        self.assertEqual(panel.validate_button.description, "Validate CSV")
+        self.assertEqual(panel.file_picker.description, "Choose CSV")
+        self.assertTrue(hasattr(panel, "register_button"))
         self.assertFalse(hasattr(panel, "run_button"))
 
     def test_source_view_switches_without_changing_execution(self):

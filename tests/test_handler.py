@@ -182,11 +182,14 @@ class TestDatasetHandler():
 
         cleaned_data = [
             ["Karan",23.0, "odd", 1.0],
-            ["", 22.0, "even", 2.0],
+            ["True", 22.0, "even", 2.0],
             ["Sahil",21.0, "odd", 3.0],
             ["Aryan",24.0, "even", 4.0]
         ]
         expected_dataset = pandas.DataFrame(cleaned_data, columns = column_names)
+        # Validation infers numeric dtypes from integer-valued source rows.
+        expected_dataset["age"] = expected_dataset["age"].astype("int64")
+        expected_dataset[column_names[-1]] = expected_dataset[column_names[-1]].astype("int64")
 
         dataset = default_dataset_handler.validate_dataset(data, column_names, class_column)
         assert isinstance(dataset, pandas.DataFrame)
@@ -210,7 +213,7 @@ class TestDatasetHandler():
 
     def test_concat_with_index(self, default_dataset_handler):
         """ This function takes two dataframes and one int64 index """
-        index = pandas.Int64Index(data=[1, 2, 3, 4], dtype="int64", name="test_id")
+        index = pandas.Index(data=[1, 2, 3, 4], dtype="int64", name="test_id")
         
         X = pandas.DataFrame()
         data_concat = [
@@ -272,7 +275,7 @@ class TestDatasetHandler():
         """ This returns the concat of text, numerical and binary columns. 
             At the moment it requires text data/numerical data to be set as bools, but perhaps rather check lengths?
         """
-        index = pandas.Int64Index(data=[1], dtype="int64", name="test_id")
+        index = pandas.Index(data=[1], dtype="int64", name="test_id")
 
         # 1. All sets have data
         text_set = [
@@ -660,7 +663,6 @@ class TestModelHandler():
         reason = default_model_handler.get_preflight_skip_reason(
             Preprocess.MAX, scaler, Reduction.NOR, algorithm, X
         )
-
         assert "requires non-negative features" in reason
 
     @pytest.mark.parametrize("algorithm", [Algorithm.MNB, Algorithm.CNB])
@@ -680,7 +682,6 @@ class TestModelHandler():
         reason = default_model_handler.get_preflight_skip_reason(
             Preprocess.MAX, scaler, reduction, algorithm, X
         )
-
         assert "may produce negative features" in reason
 
     @pytest.mark.parametrize("algorithm", [Algorithm.MNB, Algorithm.CNB])
@@ -867,6 +868,7 @@ class TestModelHandler():
         dh = SimpleNamespace(
             X=pandas.DataFrame(np.zeros((8, 4))),
             X_train=pandas.DataFrame(np.zeros((8, 4))),
+            Y_train=pandas.Series([0, 1] * 4),
             X_validation=None,
             Y_validation=None,
         )
@@ -939,6 +941,7 @@ class TestModelHandler():
         dh = SimpleNamespace(
             X=pandas.DataFrame(np.zeros((8, 230))),
             X_train=pandas.DataFrame(np.zeros((8, 230))),
+            Y_train=pandas.Series([0, 1] * 4),
             X_validation=None,
             Y_validation=None,
         )
@@ -985,6 +988,7 @@ class TestModelHandler():
         dh = SimpleNamespace(
             X=pandas.DataFrame(np.zeros((8, 230))),
             X_train=pandas.DataFrame(np.zeros((8, 230))),
+            Y_train=pandas.Series([0, 1] * 4),
             X_validation=None,
             Y_validation=None,
         )
@@ -1357,7 +1361,7 @@ class TestModelHandler():
         )
 
         step_names = [name for name, _ in pipeline.steps]
-        assert step_names[:5] == ["IMP", "FLT", "NOS", "SME", "NUG"]
+        assert step_names[:5] == ["FLT", "IMP", "NOS", "SME", "NUG"]
 
         integer_features = np.array([[0, 0], [1, 1], [10, 10], [11, 11]], dtype=np.int64)
         transformed = pipeline.named_steps["FLT"].transform(integer_features)

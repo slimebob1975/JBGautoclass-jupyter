@@ -3,7 +3,7 @@ import warnings
 
 import numpy as np
 import pytest
-from numpy.linalg import LinAlgError
+from scipy.linalg import LinAlgWarning
 from sklearn.datasets import load_breast_cancer
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.ensemble import BaggingClassifier
@@ -273,7 +273,7 @@ def test_qda_spot_check_starts_with_regularization_for_rank_deficient_covariance
     ])
     y = np.array([0, 0, 0, 0, 1, 1, 1, 1])
 
-    with pytest.raises(LinAlgError, match="not full rank"):
+    with pytest.warns(LinAlgWarning, match="not full rank"):
         QuadraticDiscriminantAnalysis().fit(X, y)
 
     estimator = Algorithm.QDA.call_algorithm(max_iterations=200, size=len(X))

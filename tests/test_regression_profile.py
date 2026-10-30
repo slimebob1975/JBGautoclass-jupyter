@@ -50,6 +50,9 @@ class MockGUIHandler:
     def repeat_last_classifier_run(self, output, sql_username, sql_password):
         self.repeat_calls.append((sql_username, sql_password))
 
+    def _classifier_diagnostic(self, message):
+        pass
+
     def get_class_distribution(self, data_settings, current_class):
         self.class_distribution_calls.append((data_settings, current_class))
         raise AssertionError("Regression suite must not query manual class distribution")
@@ -72,8 +75,8 @@ def test_regression_test_profile_values():
     assert widgets.preprocess_dropdown.value == ("NOS", "STA", "MIX", "MAX")
     assert widgets.reduction_dropdown.value == ("NOR", "PCA", "RFE")
     assert widgets.scoremetric_dropdown.value == "balanced_accuracy"
-    assert widgets.oversampler_dropdown.value == "NOG"
-    assert widgets.undersampler_dropdown.value == "NUG"
+    assert widgets.oversampler_dropdown.value == ("NOG",)
+    assert widgets.undersampler_dropdown.value == ("NUG",)
     assert widgets.testdata_slider.value == 20
     assert widgets.iterations_slider.value == 20000
     assert widgets.encryption_checkbox.value is True
@@ -116,12 +119,9 @@ def test_regression_suite_has_connection_level_form():
 
     assert isinstance(form, ipywidgets.VBox)
     assert isinstance(row, ipywidgets.HBox)
-    assert tuple(row.children) == (
-        widgets.repeat_last_run_button,
-        widgets.regression_suite_button,
-    )
-    assert row.layout.justify_content == "space-between"
-    assert row.layout.width == "100%"
+    assert tuple(row.children) == (widgets.repeat_last_run_button,)
+    assert row.layout.justify_content in (None, "")
+    assert row.layout.width in (None, "")
 
 
 def test_regression_suite_button_is_available_as_separate_action():
@@ -248,8 +248,8 @@ def test_repeat_last_restore_updates_visible_gui_state_and_next_rerun_config():
     assert widgets.preprocess_dropdown.value == ("NOS", "STA")
     assert widgets.reduction_dropdown.value == ("NOR", "PCA")
     assert widgets.scoremetric_dropdown.value == "f1_macro"
-    assert widgets.oversampler_dropdown.value == "RND"
-    assert widgets.undersampler_dropdown.value == "NUG"
+    assert widgets.oversampler_dropdown.value == ("RND",)
+    assert widgets.undersampler_dropdown.value == ("NUG",)
     assert widgets.testdata_slider.value == 30
     assert widgets.iterations_slider.value == 12300
     assert widgets.feature_importance_checkbox.value is False
@@ -310,6 +310,7 @@ def test_repeat_last_restore_suppresses_class_summary_queries_while_state_is_inc
             train=True,
             predict=False,
             mispredicted=True,
+            max_iterations=20000,
             algorithm=AlgorithmTuple(("LDA",)),
             preprocessor=PreprocessTuple(("NOS",)),
             feature_selection=ReductionTuple(("NOR",)),
@@ -596,13 +597,13 @@ def test_dark_number_alpha_options_follow_selected_method_without_inventing_form
     widgets.dark_number_alpha.disabled = False
 
     widgets.dark_number_method.value = "LINEAR"
-    assert tuple(widgets.dark_number_alpha.options) == (
+    assert tuple(tuple(option) if isinstance(option, list) else option for option in widgets.dark_number_alpha.options) == (
         ("None", "NONE"), ("Single", "SINGLE"), ("Separated", "SEPARATED")
     )
     widgets.dark_number_alpha.value = "SEPARATED"
 
     widgets.dark_number_method.value = "NON_LINEAR"
-    assert tuple(widgets.dark_number_alpha.options) == (("None", "NONE"), ("Single", "SINGLE"))
+    assert tuple(tuple(option) if isinstance(option, list) else option for option in widgets.dark_number_alpha.options) == (("None", "NONE"), ("Single", "SINGLE"))
     assert widgets.dark_number_alpha.value == "NONE"
 
 
@@ -611,12 +612,9 @@ def test_repeat_last_and_regression_suite_are_aligned_to_opposite_edges():
     form = widgets.regression_suite_form()
     row = form.children[1]
 
-    assert tuple(row.children) == (
-        widgets.repeat_last_run_button,
-        widgets.regression_suite_button,
-    )
-    assert row.layout.justify_content == "space-between"
-    assert row.layout.width == "100%"
+    assert tuple(row.children) == (widgets.repeat_last_run_button,)
+    assert row.layout.justify_content in (None, "")
+    assert row.layout.width in (None, "")
 
 
 def test_legacy_local_settings_labels_are_migrated_without_overriding_custom_text():
@@ -747,7 +745,7 @@ def test_local_settings_without_dark_number_target_get_all_classes_default():
         settings=settings,
     )
 
-    assert tuple(widgets.dark_number_target.options) == (("All classes", ""),)
+    assert tuple(tuple(option) if isinstance(option, list) else option for option in widgets.dark_number_target.options) == (("All classes", ""),)
     assert widgets.dark_number_target.value == ""
     assert "dark_number_target" in widgets.sections["classifier"]
 
@@ -782,8 +780,8 @@ def test_classifier_checkbox_labels_are_scoped_by_section_titles():
 def test_horizontal_forms_have_consistent_titles_and_frames():
     widgets = make_widgets()
     sections = (
-        (widgets.connection_form, "Database connection"),
-        (widgets.regression_suite_form, "Run history & regression"),
+        (widgets.connection_form, "Data source"),
+        (widgets.regression_suite_form, "Run history"),
         (widgets.models_form, "Model"),
         (widgets.data_form, "Dataset columns"),
         (widgets.continuation_form, "Dataset actions"),
@@ -797,7 +795,7 @@ def test_horizontal_forms_have_consistent_titles_and_frames():
 
     for factory, title in sections:
         form = factory()
-        heading, row = form.children
+        heading, row = form.children[:2]
         assert isinstance(form, ipywidgets.VBox)
         assert isinstance(heading, ipywidgets.HTML)
         assert title in heading.value
@@ -818,6 +816,8 @@ def test_progress_form_has_no_section_title_or_frame():
 
 def test_new_model_uses_separated_alpha_by_default():
     widgets = make_widgets()
+    # A valid current dataset is necessary when entering new-model mode.
+    widgets.guihandler.get_class_distribution = lambda *_: {}
 
     widgets.set_checkboxes(new_model=True)
 

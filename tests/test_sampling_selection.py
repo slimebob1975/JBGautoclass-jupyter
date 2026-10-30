@@ -43,21 +43,19 @@ def test_old_mode_and_selected_model_fields():
 
 def test_generated_config_records_candidates(tmp_path):
     config = Config(mode=Config.Mode(oversamplers=['NOG', 'RND'], undersamplers=['NUG', 'TKL']))
-    filepath = tmp_path / 'generated.py'
+    filepath = tmp_path / 'generated.json'
     config.save_to_file(filepath)
-    contents = filepath.read_text()
-    assert '"oversamplers": "NOG,RND"' in contents
-    assert '"undersamplers": "NUG,TKL"' in contents
-    assert '"oversampler": "NOG"' in contents
-    namespace = {}
-    exec(compile(contents, str(filepath), 'exec'), namespace)
-    loaded = Config.load_config(SimpleNamespace(**namespace))
+    payload = json.loads(filepath.read_text(encoding='utf-8'))
+    assert payload['mode']['oversamplers'] == ['NOG', 'RND']
+    assert payload['mode']['undersamplers'] == ['NUG', 'TKL']
+    assert payload['mode']['oversampler'] == 'NOG'
+    loaded = Config.load_config_from_json(filepath)
     assert loaded.get_oversampler_abbreviations() == ['NOG', 'RND']
     assert loaded.get_undersampler_abbreviations() == ['NUG', 'TKL']
-    namespace['mode'].pop('oversamplers')
-    namespace['mode'].pop('undersamplers')
-    namespace['mode']['oversampler'] = 'SME'
-    legacy = Config.load_config(SimpleNamespace(**namespace))
+    # Legacy scalar fallback is supported for in-memory historical modes,
+    # not for incomplete schema-v2 JSON (which intentionally fails closed).
+    legacy_mode = Config.Mode(oversampler=Oversampling.SME)
+    legacy = Config(mode=legacy_mode)
     assert legacy.get_oversampler_abbreviations() == ['SME']
 
 

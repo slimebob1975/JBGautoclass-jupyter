@@ -25,7 +25,9 @@ class WidgetRender174a(unittest.TestCase):
 
     def test_interactive_grid_is_retained(self):
         self.assertIn("grid.children = tuple(items)", self.source)
-        self.assertIn("self.reclassify_dropdown(unique_classes, row_name)", self.source)
+        self.assertIn("choice = widgets.Dropdown(options=options, value=actual, description='')", self.source)
+        self.assertIn("apply_button = widgets.Button(description='Apply')", self.source)
+        self.assertIn("apply_button.on_click(apply_choice)", self.source)
         self.assertIn("display(grid)", self.source)
 
 

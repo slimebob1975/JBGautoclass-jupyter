@@ -56,7 +56,7 @@ def pipeline(sampler=Oversampling.SME, preprocessor=Preprocess.STA,
 ])
 def test_numerical_neighbor_samplers_place_scaling_before_both_samplers(sampler):
     names = [name for name, _ in pipeline(sampler).steps]
-    assert names == ["IMP", "FLT", "STA", sampler.name, "NUG", "LRN"]
+    assert names == ["FLT", "IMP", "STA", sampler.name, "NUG", "LRN"]
     assert sampler.uses_scaled_distances()
 
 
@@ -80,7 +80,7 @@ def test_smote_n_requires_all_converted_features_to_be_categorical():
 def test_categorical_sampler_pipeline_order_preserves_category_codes_until_sampling():
     smotenc = pipeline(Oversampling.SNC, categorical_feature_indices=(4,))
     smoten = pipeline(Oversampling.SNN, categorical_feature_indices=tuple(range(5)))
-    assert [name for name, _ in smotenc.steps] == ["IMP", "FLT", "SNC", "NUG", "STA", "LRN"]
+    assert [name for name, _ in smotenc.steps] == ["FLT", "IMP", "SNC", "NUG", "STA", "LRN"]
     assert [name for name, _ in smoten.steps] == ["IMP", "SNN", "NUG", "STA", "LRN"]
     assert smotenc.named_steps["SNC"].categorical_features == [4]
     assert not Oversampling.SNC.uses_scaled_distances()
@@ -105,7 +105,7 @@ def test_numerical_sampler_families_fit_with_scaler_on_original_rows(sampler):
 def test_rfe_and_neighbor_undersampling_stay_after_scaled_smote():
     X, y = data()
     fitted = pipeline(reduction=Reduction.RFE, undersampler=Undersampling.TKL).fit(X, y)
-    assert [name for name, _ in fitted.steps] == ["IMP", "FLT", "STA", "SME", "TKL", "RFE", "LRN"]
+    assert [name for name, _ in fitted.steps] == ["FLT", "IMP", "STA", "SME", "TKL", "RFE", "LRN"]
     assert fitted.named_steps["STA"].n_samples_seen_ == len(X)
     assert fitted.named_steps["RFE"].n_features_ == 3
     assert fitted.predict(X[:9]).shape == (9,)
@@ -230,7 +230,7 @@ def test_current_artifacts_reload_without_reordering_persisted_pipeline_steps(tm
     current = pipeline()
     nonstandard = pipeline()
     steps = nonstandard.named_steps
-    nonstandard.steps = [(name, steps[name]) for name in ["IMP", "FLT", "SME", "NUG", "STA", "LRN"]]
+    nonstandard.steps = [(name, steps[name]) for name in ["FLT", "IMP", "SME", "NUG", "STA", "LRN"]]
     np.save(tmp_path / "X.npy", X)
     for name, model in [("ordered", current), ("nonstandard", nonstandard)]:
         model.fit(X, y)

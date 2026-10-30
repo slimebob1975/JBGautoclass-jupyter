@@ -114,13 +114,16 @@ class CSVGUITrainingExecution263(unittest.TestCase):
         handler = SimpleNamespace()
         handler.run_csv_classifier = method.__get__(handler, type(handler))
         handler._classifier_diagnostic = Mock()
+        handler.clear_csv_reclassification_context = Mock()
         handler.logger = SimpleNamespace(
             set_enable_quiet=Mock(), capture_console_output=Mock(return_value=nullcontext()),
             print_warning=Mock(), print_error=Mock())
         runtime = SimpleNamespace(data_source=SimpleNamespace(kind='csv'),
                                   io=SimpleNamespace(verbose=True),
-                                  should_predict=lambda: False)
-        classifier = SimpleNamespace(run=Mock(return_value={'mispredicted': None}))
+                                  should_predict=lambda: False,
+                                  should_train=lambda: True,
+                                  should_display_mispredicted=lambda: False)
+        classifier = SimpleNamespace(datalayer=object(), run=Mock(return_value={'mispredicted': None}))
         prepare = Mock(return_value=classifier)
         fake_module = ModuleType('Storage.CSVTrainingApplication')
         fake_module.prepare_registered_csv_training_classifier = prepare

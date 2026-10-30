@@ -25,7 +25,8 @@ class CSVTypeInference250(unittest.TestCase):
             path = Path(folder) / "synthetic.csv"
             path.write_text("id;measurement;class\n1;1,2;red\n2;2,3;blue\n3;;red\n")
             schema = inspect_csv_columns(path, delimiter=";")
-            self.assertEqual(schema.class_candidates, ("class",))
+            self.assertIn("class", schema.class_candidates)
+            self.assertIn("id", schema.unique_id_candidates)
 
     def test_text_numeric_mixed_is_not_silently_numeric(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -1820,14 +1820,14 @@ class ModelHandler:
             # preserve non-negativity (NOR/NMF) or, with the configured defaults, generate
             # non-negative features (Nystroem with the RBF kernel).
             if algorithm in (Algorithm.MNB, Algorithm.CNB):
-                signed_reductions = {
+                signed_reductions = (
                     Reduction.PCA,
                     Reduction.TSVD,
                     Reduction.FICA,
                     Reduction.GRP,
                     Reduction.ISO,
                     Reduction.LLE,
-                }
+                )
                 if reduction in signed_reductions:
                     return (
                         f"{reduction.full_name} may produce negative features, "
@@ -2554,6 +2554,13 @@ class ModelHandler:
             if oversampler or undersampler:
                 imputer = SimpleImputer(strategy="constant", fill_value=0, keep_empty_features=True) 
                 steps.insert(0, ("IMP", imputer))
+
+            # Sparse integer matrices must be converted before SimpleImputer:
+            # sklearn cannot cast a floating-point fill value back to int64.
+            # Keep SciPy sparse input sparse and preserve the original order
+            # for random and all-categorical sampling alternatives.
+            if oversampler.requires_float_input():
+                steps.insert(0, steps.pop(1))  # FLT, IMP, scaler, sampler
 
             # Enforce the sampling-order contract at runtime. Numerical neighbor
             # interpolation must see the selected fold-fitted scaler first; categorical

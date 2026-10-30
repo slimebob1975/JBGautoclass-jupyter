@@ -21,6 +21,7 @@ from JBGEstimatorInput import call_with_sparse_input_retry, is_sparse_input_reje
 class Logger:
     def __init__(self):
         self.warnings = []
+        self.log_file = SimpleNamespace(write_message=lambda *args, **kwargs: None)
     def print_warning(self, message):
         self.warnings.append(message)
     def print_info(self, *args, **kwargs):
@@ -152,7 +153,9 @@ def handler():
     mh = object.__new__(JBGHandler.ModelHandler)
     logger = Logger()
     mh.handler = SimpleNamespace(logger=logger, STANDARD_DESIRED_N_JOBS=2,
-                                 config=SimpleNamespace(debug=False, io=SimpleNamespace(verbose=False),
+                                 config=SimpleNamespace(debug=False, mode=SimpleNamespace(holdout_split_mode="stratified_rows",
+                                                                               grouped_cross_validation=False),
+                                                        io=SimpleNamespace(verbose=False),
                                                         get_scoring_mechanism=lambda: "accuracy"))
     return mh, logger
 

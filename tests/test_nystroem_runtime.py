@@ -162,6 +162,8 @@ def test_true_score_error_propagates_unchanged():
 @pytest.mark.filterwarnings('ignore:lbfgs failed to converge.*:sklearn.exceptions.ConvergenceWarning')
 def test_handler_retains_original_pipeline_timing_provenance(default_model_handler):
     mh = default_model_handler
+    # The shared MockConfig has no configured scorer; production Config always does.
+    mh.handler.config.get_scoring_mechanism = lambda: 'accuracy'
     X, y, cv = data()
     dh = SimpleNamespace(X_train=pd.DataFrame(X), Y_train=pd.Series(y))
     original = pipeline()
@@ -233,11 +235,13 @@ def test_spot_check_clears_previous_runtime_rows(default_model_handler):
     mh.handler.config.get_callable_algorithms = lambda **kwargs: []
     mh.handler.config.get_max_iterations = lambda: 15
     mh.handler.config.get_callable_preprocessors = lambda: []
+    mh.handler.config.get_oversampler_abbreviations = lambda: ['NOG']
+    mh.handler.config.get_undersampler_abbreviations = lambda: ['NUG']
     mh.handler.config.mode = SimpleNamespace(oversampler=None, undersampler=None)
     mh.handler.logger = Mock()
     mh._create_spot_check_kfold = lambda k: StratifiedKFold(k)
     X, y, _ = data()
-    dh = SimpleNamespace(X=pd.DataFrame(X), X_train=pd.DataFrame(X))
+    dh = SimpleNamespace(X=pd.DataFrame(X), X_train=pd.DataFrame(X), Y_train=pd.Series(y))
     from JBGExceptions import ModelException
     with pytest.raises(ModelException, match='No model candidate completed'):
         mh.spot_check_machine_learning_models(dh, 'crossval.csv', k=3)

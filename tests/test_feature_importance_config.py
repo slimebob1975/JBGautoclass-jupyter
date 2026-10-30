@@ -14,6 +14,7 @@ from GUIHandler import GUIHandler
 def lightweight_config(mode=None):
     config = Config.__new__(Config)
     config.mode = mode or Config.Mode()
+    config.data_source = Config.DataSource()
     config.connection = Config.Connection(sql_username="user", sql_password="secret", id_column="id")
     config.io = Config.IO(model_name="test")
     config.debug = Config.Debug()
@@ -70,8 +71,12 @@ def test_previous_run_roundtrip_and_missing_field_migration_keep_credentials_run
 
 def test_saved_model_missing_current_mode_fields_is_rejected(monkeypatch):
     saved = lightweight_config()
-    del saved.mode.calculate_feature_importance
-    del saved.mode.feature_importance_repeats
+    # Dataclass defaults remain class attributes after del on an instance.
+    # A legacy artifact must truly lack the fields, not merely their instance values.
+    old_mode = vars(saved.mode).copy()
+    old_mode.pop("calculate_feature_importance")
+    old_mode.pop("feature_importance_repeats")
+    saved.mode = SimpleNamespace(**old_mode)
     monkeypatch.setattr(config_module, 'load_model_config', lambda filename: saved)
     with pytest.raises(ConfigException, match="missing current fields"):
         Config.load_config_from_model_file('unused.sav')

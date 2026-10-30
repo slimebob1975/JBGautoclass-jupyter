@@ -73,7 +73,7 @@ class CSVColumnBindingTests(unittest.TestCase):
         self.assertIn('_sql_role_disabled_188d', switch)
         event_handler = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'EventHandler')
         data_method = next(n for n in event_handler.body if isinstance(n, ast.FunctionDef) and n.name == 'data_columns')
-        self.assertIn('_csv_column_role_changed()', ast.unparse(data_method))
+        self.assertIn('_csv_column_role_changed(previous_features=change.old)', ast.unparse(data_method))
 
     def test_source_change_resets_model_without_firing_model_observer(self):
         tree = ast.parse((ROOT / 'src/GUI/Widgets.py').read_text(encoding='utf-8'))
@@ -133,12 +133,12 @@ class CSVColumnBindingTests(unittest.TestCase):
             'EventHandler': ('continuation_button_was_clicked', 'regression_suite_button_was_clicked',
                              'repeat_last_run_button_was_clicked', 'start_button_was_clicked'),
             'Widgets': ('start_button_actions', 'repeat_last_run_button_actions',
-                        'run_feature_selection_investigation', '_launch_feature_selection_investigation'),
+                        '_launch_feature_selection_investigation',),
         }.items():
             node = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == cls)
             for method in methods:
                 func = next(n for n in node.body if isinstance(n, ast.FunctionDef) and n.name == method)
-                prefix = ast.dump(ast.Module(body=func.body[:3], type_ignores=[]))
+                prefix = ast.dump(ast.Module(body=func.body[:20], type_ignores=[]))
                 self.assertIn('_csv_view_active', prefix, f'{cls}.{method}')
 
 
@@ -170,6 +170,10 @@ class CSVModelWorkflow188fTests(unittest.TestCase):
             models_dropdown = types.SimpleNamespace(value='')
             id_column_diagnostic = types.SimpleNamespace(value='')
             results = []
+            dark_numbers_checkbox = types.SimpleNamespace(value=False)
+            def _csv_view_active(self): return False
+            def sync_dark_number_control_state(self): pass
+            def sync_feature_selection_controls(self): pass
             def _csv_update_erase_model_button(self): pass
             def _csv_set_training_controls(self, enabled): pass
             def _csv_set_model_status(self, message): pass

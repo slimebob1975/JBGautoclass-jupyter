@@ -135,8 +135,9 @@ def test_range_is_immediately_below_table_and_leaves_csv_exports_unchanged(monke
     class Logger:
         def display_matrix(self, title, matrix, **kwargs):
             events.append(("table", title))
-        def print_info(self, text, **kwargs):
+        def print_privacy_safe(self, text, safe_message, **kwargs):
             assert kwargs["print_always"] is True
+            assert "omitted" in safe_message
             events.append(("range", text, kwargs["html_function"](text)))
         def print_code(self, *args):
             events.append(("download", args[0]))

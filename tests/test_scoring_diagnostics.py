@@ -68,7 +68,7 @@ def test_both_loggers_include_diagnostics_with_existing_report_signature(module_
     logger._enable_quiet = True
     outputs = {}
     logger.print_progress = lambda **kwargs: None
-    logger.display_matrix = lambda title, matrix: outputs.update({title: matrix})
+    logger.display_matrix = lambda title, matrix, **kwargs: outputs.update({title: matrix})
     matrix = np.array([[4781, 162], [73, 11]])
     logger.print_prediction_report(
         accuracy_score=(4781 + 11) / 5027,

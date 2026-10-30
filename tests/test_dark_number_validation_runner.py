@@ -11,6 +11,7 @@ class _FakeConfig:
     def __init__(self, script_path=None):
         self.script_path = script_path
         self.io = SimpleNamespace(model_name="perturbed validation model")
+        self.connection = SimpleNamespace(data_catalog="test_catalog", data_table="test_table")
 
     def get_dark_number_flip_fraction(self):
         return 0.2

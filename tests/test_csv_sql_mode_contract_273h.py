@@ -49,7 +49,8 @@ class CSVSQLModeContract273h(unittest.TestCase):
         widget = SRC / 'GUI' / 'Widgets.py'
         training = ast.unparse(function_in(widget, '_csv_training_readiness'))
         saved = ast.unparse(function_in(widget, '_csv_saved_prediction_readiness'))
-        self.assertIn('self.mispredicted_checkbox.value', training)
+        self.assertIn('self.predict_checkbox.value', training)
+        self.assertIn('self.algorithm_dropdown.value', training)
         self.assertIn('self.metas_checkbox.value', saved)
 
 

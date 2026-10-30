@@ -152,7 +152,8 @@ def test_optional_target_report_failure_keeps_search_summary_and_baseline_flags(
 def partitioned(frame, train=True):
     config = SimpleNamespace(get_id_column_name=lambda: "row_key",
         get_class_column_name=lambda: "label", should_train=lambda: train,
-        get_test_size=lambda: 0.2, should_calculate_feature_importance=lambda: False)
+        get_test_size=lambda: 0.2, should_calculate_feature_importance=lambda: False,
+        mode=SimpleNamespace(holdout_split_mode="stratified_rows", grouped_cross_validation=False))
     dh = DatasetHandler(SimpleNamespace(config=config, logger=Mock()))
     ordered = dh.shuffle_dataset(frame)
     dh.dataset, dh.keys = dh.split_keys_from_dataset(ordered, "row_key")
@@ -177,7 +178,7 @@ def test_partition_and_cv_membership_independent_of_fetch_order_and_global_rng()
     folds = lambda dh: [dh.X_train.index[test].tolist() for _, test in cv.split(dh.X_train, dh.Y_train)]
     assert folds(first) == folds(second)
     assert partition_signature(first.X_validation.index, first.Y_validation) == partition_signature(second.X_validation.index, second.Y_validation)
-    assert "ID/label SHA256=" in first.handler.logger.print_info.call_args.args[0]
+    assert "ID/label SHA256=" in first.handler.logger.print_privacy_safe.call_args.args[0]
 
 
 def test_signature_detects_changed_membership_or_labels():

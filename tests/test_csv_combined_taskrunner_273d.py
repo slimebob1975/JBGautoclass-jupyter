@@ -74,8 +74,13 @@ class CombinedDispatch273d(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Unsupported CSV combined'):
                 self.runner.run(self.tasks[:-1])
             self.config.should_calculate_feature_importance.return_value = True
-            with self.assertRaisesRegex(ValueError, 'Unsupported CSV combined'):
-                self.runner.run(self.tasks)
+            # The real get_tasks() inserts a Feature Importance step when enabled.
+            # The original constant-list mock hid this and reached dispatch instead.
+            with patch.dict(self.runner.run.__func__.__globals__,
+                            {'get_tasks': lambda *a, **kw: self.tasks[:-4] +
+                             ['feature_importance'] + self.tasks[-4:]}):
+                with self.assertRaisesRegex(ValueError, 'Unsupported CSV combined'):
+                    self.runner.run(self.tasks)
         self.logger.initiate_progress.assert_not_called()
 
     def test_fetch_reads_one_snapshot_for_both_partitions(self):

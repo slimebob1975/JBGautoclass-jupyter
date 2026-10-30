@@ -169,7 +169,9 @@ def handler_for_history(tmp_path):
     handler = ModelHandler(handler=SimpleNamespace(
         STANDARD_DESIRED_N_JOBS=1,
         config=SimpleNamespace(
-            debug=False, io=SimpleNamespace(verbose=False), script_path=tmp_path,
+            debug=False, mode=SimpleNamespace(holdout_split_mode="stratified_rows",
+                                              grouped_cross_validation=False),
+            io=SimpleNamespace(verbose=False), script_path=tmp_path,
             connection=SimpleNamespace(host="server", data_catalog="catalog",
                                        data_table="training_table", class_column="target"),
         ), logger=Mock(),

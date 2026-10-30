@@ -44,9 +44,10 @@ def test_schema_v2_serializes_every_runtime_section_field_without_password(tmp_p
     payload = json.loads(path.read_text(encoding="utf-8"))
 
     assert payload["schema_version"] == 2
-    assert set(payload) == {"schema_version", "name", "connection", "mode", "io", "debug", "mail"}
+    assert set(payload) == {"schema_version", "name", "connection", "data_source", "mode", "io", "debug", "mail"}
     for section_name, section_type in (
         ("connection", Config.Connection),
+        ("data_source", Config.DataSource),
         ("mode", Config.Mode),
         ("io", Config.IO),
         ("debug", Config.Debug),

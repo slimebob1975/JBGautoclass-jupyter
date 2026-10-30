@@ -230,8 +230,18 @@ from JBGModelPersistence import load_model_artifact
 model = load_model_artifact(sys.argv[1])[3]
 print(json.dumps(model.predict_proba(np.load(sys.argv[2])).tolist()))
 """
+    # pytest's in-process sys.path modifications are not inherited by a fresh
+    # interpreter. Explicitly provide the source directory, without relying on
+    # the developer's shell PYTHONPATH or the working directory.
+    env = os.environ.copy()
+    source_dir = str(Path(__file__).resolve().parents[1] / "src")
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, (source_dir, env.get("PYTHONPATH", ""))))
     process = subprocess.run([sys.executable, "-c", code, str(artifact), str(data)],
-                             env=os.environ.copy(), text=True, capture_output=True, check=True)
+                             env=env, text=True, capture_output=True)
+    assert process.returncode == 0, (
+        f"Fresh-process artifact reload failed (exit {process.returncode}):\n"
+        f"{process.stderr}"
+    )
     np.testing.assert_array_equal(np.asarray(json.loads(process.stdout)), pipeline.predict_proba(X))
 
 

@@ -180,6 +180,7 @@ def test_original_holdout_is_captured_only_when_enabled_and_keeps_label_alignmen
     dh.handler = SimpleNamespace(logger=Mock(), config=SimpleNamespace(
         should_train=lambda: True, get_test_size=lambda: 0.2,
         should_calculate_feature_importance=lambda: enabled,
+        mode=SimpleNamespace(holdout_split_mode="stratified_rows", grouped_cross_validation=False),
     ))
     assert dh.split_dataset_for_training_and_validation() is True
     if enabled:

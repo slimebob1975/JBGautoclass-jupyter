@@ -69,13 +69,13 @@ def widget_parameters() -> dict:
             "format": "png"
         },
         "welcome": {
-            "value": "<h1>Welcome to JBG automatic classification!</h1>"
+            "value": "<h1>Supervised Machine Learning</h1>"
         },
         "project": {
             "pre__load": {
                 "value": "default",
                 "placeholder": "Project name",
-                "description": "Project name:",
+                "description": "Project:",
                 "tooltip": "Enter a distinct project name for the model"
             }
         },
@@ -143,7 +143,7 @@ def widget_parameters() -> dict:
                 "options": ["N/A"],
                 "value": (),
                 "disabled": True,
-                "description": "Data columns:",
+                "description": "Data:",
                 "tooltip": "Pick the columns with the data to be used in the classification"
             }
         },
@@ -308,7 +308,7 @@ def widget_parameters() -> dict:
                 "disabled": True,
                 "indent": True,
                 "description": "Filter",
-                "tooltip": "Use Better Tooltip"
+                "tooltip": "Filter stop words from non-categorical text variables"
             }
         },
         "ngram_range": {
@@ -401,9 +401,10 @@ class TestWidgets:
         widgets.load_contents()
         
         data_catalogs_dropdown = widgets.data_catalogs_dropdown
-        assert data_catalogs_dropdown.options == widget_parameters["data_catalogs_dropdown"]["post__load"]["options"]
-        assert data_catalogs_dropdown.value == widget_parameters["data_catalogs_dropdown"]["post__load"]["value"]
-        assert data_catalogs_dropdown.disabled == widget_parameters["data_catalogs_dropdown"]["post__load"]["disabled"]
+        # Catalogs require SQL credentials; load_contents() only loads model files.
+        assert data_catalogs_dropdown.options == tuple(widget_parameters["data_catalogs_dropdown"]["pre__load"]["options"])
+        assert data_catalogs_dropdown.value == widget_parameters["data_catalogs_dropdown"]["pre__load"]["value"]
+        assert data_catalogs_dropdown.disabled == widget_parameters["data_catalogs_dropdown"]["pre__load"]["disabled"]
 
         models_dropdown = widgets.models_dropdown
         assert models_dropdown.options == widget_parameters["models_dropdown"]["post__load"]["options"]
@@ -507,7 +508,7 @@ class TestWidgets:
         assert continuation_button.disabled == widget_parameters["continuation_button"]["disabled"]
         assert continuation_button.description == widget_parameters["continuation_button"]["description"]
         assert continuation_button.tooltip == widget_parameters["continuation_button"]["tooltip"]
-        assert continuation_button.button_style == widget_parameters["continuation_button"]["button_style"]
+        assert continuation_button.button_style == "danger"  # Disabled actions use the blocked button state.
         assert continuation_button.icon == widget_parameters["continuation_button"]["icon"]
 
         # Train Checkbox
@@ -573,25 +574,23 @@ class TestWidgets:
         assert reduction_dropdown.description == widget_parameters["reduction_dropdown"]["pre__load"]["description"]
         assert reduction_dropdown.tooltip == widget_parameters["reduction_dropdown"]["pre__load"]["tooltip"]
 
-        # oversampler Checkbox
-        oversampler_checkbox = widgets.oversampler_checkbox
-        assert isinstance(oversampler_checkbox, ipywidgets.Checkbox)
-        assert oversampler_checkbox.value == widget_parameters["oversampler_checkbox"]["pre__load"]["value"]
-        assert oversampler_checkbox.disabled == widget_parameters["oversampler_checkbox"]["pre__load"]["disabled"]
-        assert oversampler_checkbox.indent == widget_parameters["oversampler_checkbox"]["pre__load"]["indent"]
-        assert oversampler_checkbox.description == widget_parameters["oversampler_checkbox"]["pre__load"]["description"]
-        assert oversampler_checkbox.tooltip == widget_parameters["oversampler_checkbox"]["pre__load"]["tooltip"]
-       
+        # Sampling is now a multi-select. Verify the no-sampling defaults and
+        # that explicit sampling alternatives remain available to users.
+        oversampler = widgets.oversampler_dropdown
+        undersampler = widgets.undersampler_dropdown
+        assert isinstance(oversampler, ipywidgets.SelectMultiple)
+        assert isinstance(undersampler, ipywidgets.SelectMultiple)
+        assert oversampler.value == ("NOG",)
+        assert undersampler.value == ("NUG",)
+        assert oversampler.disabled and undersampler.disabled
+        # ipywidgets exposes labelled choices as (label, value) pairs.
+        oversampler_values = [option[1] if isinstance(option, (tuple, list)) else option
+                              for option in oversampler.options]
+        undersampler_values = [option[1] if isinstance(option, (tuple, list)) else option
+                               for option in undersampler.options]
+        assert "NOG" in oversampler_values
+        assert "NUG" in undersampler_values
 
-        # undersampler Checkbox
-        undersample_checkbox = widgets.undersample_checkbox
-        assert isinstance(undersample_checkbox, ipywidgets.Checkbox)
-        assert undersample_checkbox.value == widget_parameters["undersample_checkbox"]["pre__load"]["value"]
-        assert undersample_checkbox.disabled == widget_parameters["undersample_checkbox"]["pre__load"]["disabled"]
-        assert undersample_checkbox.indent == widget_parameters["undersample_checkbox"]["pre__load"]["indent"]
-        assert undersample_checkbox.description == widget_parameters["undersample_checkbox"]["pre__load"]["description"]
-        assert undersample_checkbox.tooltip == widget_parameters["undersample_checkbox"]["pre__load"]["tooltip"]
-        
         # Testdata Slider
         testdata_slider = widgets.testdata_slider
         assert isinstance(testdata_slider, ipywidgets.IntSlider)
@@ -658,21 +657,15 @@ class TestWidgets:
         assert filter_checkbox.description == widget_parameters["filter_checkbox"]["pre__load"]["description"]
         assert filter_checkbox.tooltip == widget_parameters["filter_checkbox"]["pre__load"]["tooltip"]
 
-        # Filter Slider
-        ngram_range = widgets.ngram_range
-        assert isinstance(ngram_range, ipywidgets.IntSlider)
-        assert ngram_range.value == widget_parameters["ngram_range"]["pre__load"]["value"]
-        assert ngram_range.min == widget_parameters["ngram_range"]["pre__load"]["min"]
-        assert ngram_range.max == widget_parameters["ngram_range"]["pre__load"]["max"]
-        assert ngram_range.step == widget_parameters["ngram_range"]["pre__load"]["step"]
-        assert ngram_range.disabled == widget_parameters["ngram_range"]["pre__load"]["disabled"]
-        assert ngram_range.continuous_update == widget_parameters["ngram_range"]["pre__load"]["continuous_update"]
-        assert ngram_range.orientation == widget_parameters["ngram_range"]["pre__load"]["orientation"]
-        assert ngram_range.readout == widget_parameters["ngram_range"]["pre__load"]["readout"]
-        assert ngram_range.readout_format == widget_parameters["ngram_range"]["pre__load"]["readout_format"]
-        assert ngram_range.description == widget_parameters["ngram_range"]["pre__load"]["description"]
-        assert ngram_range.tooltip == widget_parameters["ngram_range"]["pre__load"]["tooltip"]
-       
+        # Document frequency slider was replaced by an n-gram selector.
+        ngram_range = widgets.ngram_range_dropdown
+        assert isinstance(ngram_range, ipywidgets.Dropdown)
+        assert ngram_range.value == "UNI_GRAM"
+        assert ngram_range.disabled
+        ngram_values = [option[1] if isinstance(option, (tuple, list)) else option
+                        for option in ngram_range.options]
+        assert "UNI_GRAM" in ngram_values
+
         # Num Rows IntText
         data_limit = widgets.data_limit
         assert isinstance(data_limit, ipywidgets.IntText)
@@ -702,7 +695,7 @@ class TestWidgets:
         start_button = widgets.start_button
         assert isinstance(start_button, ipywidgets.Button)
         assert start_button.disabled == widget_parameters["start_button"]["pre__load"]["disabled"]
-        assert start_button.button_style == widget_parameters["start_button"]["pre__load"]["button_style"]
+        assert start_button.button_style == "danger"  # Disabled actions use the blocked button state.
         assert start_button.icon == widget_parameters["start_button"]["pre__load"]["icon"]
         assert start_button.description == widget_parameters["start_button"]["pre__load"]["description"]
         assert start_button.tooltip == widget_parameters["start_button"]["pre__load"]["tooltip"]
@@ -743,6 +736,7 @@ class TestWidgets:
         data_settings = widgets.data_settings
         expected_data_settings = {
             'project': 'default',
+            'connection': {'sql_username': '', 'sql_password': ''},
             'data': {
                 'catalog': 'N/A',
                 'table': 'N/A'
@@ -779,7 +773,9 @@ def test_unique_id_options_exclude_non_unique_integer_columns(widgets):
         "message": "nvarchar",
     }
     datalayer.get_unique_int_id_columns = lambda catalog, table, columns: ["id"]
-    widgets.guihandler = SimpleNamespace(datalayer=datalayer)
+    datalayer.get_column_cardinalities = lambda catalog, table, columns: {"class": 2, "id": 4, "priority": 3}
+    datalayer.get_column_uniqueness_stats = lambda catalog, table, column: {"total": 4, "nonnull": 4, "distinct": 2}
+    widgets.guihandler = SimpleNamespace(datalayer=datalayer, get_class_distribution=lambda *args, **kwargs: {"A": 2, "B": 2})
     widgets.eventhandler.lock_observe_1 = True
     widgets.data_catalogs_dropdown.options = ["catalog"]
     widgets.data_catalogs_dropdown.value = "catalog"
@@ -790,9 +786,14 @@ def test_unique_id_options_exclude_non_unique_integer_columns(widgets):
 
     assert list(widgets.id_column.options) == ["id"]
     assert "priority" not in widgets.id_column.options
-    widgets.class_column.value = "id"
+    # ID is excluded from the class candidates by the cardinality ceiling.
+    assert "id" not in widgets.class_column.options
+    # Choosing another eligible class must retain the unique ID, while the
+    # non-unique integer column remains ineligible as an ID.
+    widgets.class_column.value = "priority"
     widgets.update_id_column()
-    assert list(widgets.id_column.options) == []
+    assert list(widgets.id_column.options) == ["id"]
+    assert "priority" not in widgets.id_column.options
 
 
 def test_scoremetric_labels_and_help_survive_programmatic_locked_restoration(widgets):

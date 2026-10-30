@@ -20,6 +20,11 @@ class FakeWidget:
         self.kwargs = kwargs
         self.closed = False
         self.classes = []
+        self.disabled = False
+        self.description = kwargs.get("description", "")
+        self.button_style = ""
+        self.style = SimpleNamespace(button_color="")
+        self._callbacks = []
 
     def add_class(self, class_name):
         self.classes.append(class_name)
@@ -28,9 +33,21 @@ class FakeWidget:
     def close(self):
         self.closed = True
 
+    def observe(self, callback, names=None):
+        self._callbacks.append(callback)
+
+    def on_click(self, callback):
+        self._callbacks.append(callback)
+
+    def remove_class(self, class_name):
+        if class_name in self.classes:
+            self.classes.remove(class_name)
+
 
 class FakeWidgets:
     Label = FakeWidget
+    Dropdown = FakeWidget
+    Button = FakeWidget
 
 
 class FakeStaticHTML:
@@ -127,10 +144,10 @@ class WidgetRender163(unittest.TestCase):
 
         rendered = self.Widgets.handle_mispredicted(view, data, ["ok", "bad"])
 
-        # 20 data columns + index + reclassify = 22 widgets per rendered grid row.
-        # The header consumes one row, leaving room for three data rows: 4 * 22 = 88.
+        # Two editable controls (choice and Apply): 20 + index + 2 = 23.
+        # Header plus three rows consume 4 * 23 = 92 widgets.
         self.assertTrue(rendered)
-        self.assertEqual(len(view.mispredicted_gridbox.children), 88)
+        self.assertEqual(len(view.mispredicted_gridbox.children), 92)
         self.assertLessEqual(len(view.mispredicted_gridbox.children), 100)
 
 
@@ -140,10 +157,10 @@ class WidgetRender163(unittest.TestCase):
 
         rendered = self.Widgets.handle_mispredicted(view, data, ["ok", "bad"])
 
-        # 58 data columns + index + reclassify = 60 widgets per grid row.
-        # The 640-widget default fits the header plus nine data rows (600 widgets).
+        # 58 data columns + index + choice + Apply = 61 widgets per row.
+        # Header plus nine rows consume 610 widgets.
         self.assertTrue(rendered)
-        self.assertEqual(len(view.mispredicted_gridbox.children), 600)
+        self.assertEqual(len(view.mispredicted_gridbox.children), 610)
         self.assertLessEqual(len(view.mispredicted_gridbox.children), 640)
 
     def test_existing_40_row_behavior_is_preserved_for_small_tables(self):
@@ -153,7 +170,7 @@ class WidgetRender163(unittest.TestCase):
         rendered = self.Widgets.handle_mispredicted(view, data, ["wrong", "correct"])
 
         self.assertTrue(rendered)
-        self.assertEqual(len(view.mispredicted_gridbox.children), (40 + 1) * 4)
+        self.assertEqual(len(view.mispredicted_gridbox.children), (40 + 1) * 5)
 
     def test_too_many_columns_skips_interactive_grid(self):
         view = make_view(widget_budget=20)

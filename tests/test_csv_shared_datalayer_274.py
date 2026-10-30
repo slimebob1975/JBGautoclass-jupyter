@@ -30,7 +30,14 @@ class CSVSharedDataLayer274(unittest.TestCase):
         layer = CSVTrainingDataLayer(reader)
         self.assertIsInstance(layer, CSVDataLayer)
         self.assertFalse(hasattr(layer, "save_prediction_data"))
-        self.assertFalse(hasattr(layer, "save_mispredicted_data"))
+        # Train-only CSV may persist scoped diagnostics, but never predictions.
+        with self.assertRaisesRegex(ValueError, 'not enabled'):
+            layer.save_mispredicted_data('synthetic-frame')
+        sink = Mock()
+        authorized = CSVTrainingDataLayer(reader, diagnostic_sink=sink)
+        authorized.save_mispredicted_data('synthetic-frame')
+        sink.save_mispredicted_data.assert_called_once_with('synthetic-frame')
+        self.assertFalse(hasattr(authorized, "save_prediction_data"))
 
     def test_prediction_diagnostics_remain_blocked(self):
         layer = CSVPredictionDataLayer(Mock(), Mock())

@@ -27,15 +27,15 @@ def test_bounded_render_and_columns():
     view = _view()
     data = pd.DataFrame({"text": ["x"] * 60, "score": range(60)})
     Widgets.handle_mispredicted(view, data, ["wrong", "correct"])
-    assert len(view.mispredicted_gridbox.children) == (40 + 1) * 4
-    assert view.mispredicted_gridbox.layout.grid_template_columns == "repeat(4, max-content)"
+    assert len(view.mispredicted_gridbox.children) == (40 + 1) * 5
+    assert view.mispredicted_gridbox.layout.grid_template_columns == "repeat(5, max-content)"
 
 
 def test_duplicate_index_is_one_row_per_position():
     view = _view()
     data = pd.DataFrame({"x": [1, 2]}, index=["dup", "dup"])
     Widgets.handle_mispredicted(view, data, ["good"])
-    assert len(view.mispredicted_gridbox.children) == 3 * 3
+    assert len(view.mispredicted_gridbox.children) == 3 * 4
 
 
 def test_render_failure_is_logged_and_swallowed(caplog):

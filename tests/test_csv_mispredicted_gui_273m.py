@@ -36,11 +36,11 @@ class CSVMispredictedGUIGate273m(unittest.TestCase):
     def test_train_only_still_ready_without_diagnostics(self):
         self.assertEqual(self.w._csv_training_readiness()[0], "ready")
 
-    def test_diagnostics_require_combined_mode(self):
+    def test_training_diagnostics_do_not_require_prediction(self):
         self.w.mispredicted_checkbox.value = True
         state, reason = self.w._csv_training_readiness()
-        self.assertEqual(state, "waiting")
-        self.assertIn("Predict", reason)
+        self.assertEqual(state, "ready")
+        self.assertIn("train", reason.lower())
 
     def test_combined_diagnostics_are_ready(self):
         self.w.predict_checkbox.value = True
@@ -49,10 +49,10 @@ class CSVMispredictedGUIGate273m(unittest.TestCase):
 
     def test_preparation_passes_actual_checkbox_choice(self):
         text = (ROOT / "src" / "GUI" / "Widgets.py").read_text(encoding="utf-8")
-        self.assertIn("mispredicted=bool(self.mispredicted_checkbox.value)", text)
+        self.assertIn("self.mispredicted_checkbox.value", text)
         config = (ROOT / "src" / "Storage" / "CSVGUITrainingConfig.py").read_text(encoding="utf-8")
         self.assertIn("config.mode.mispredicted = bool(mispredicted)", config)
-        self.assertIn("if mispredicted and not predict:", config)
+        self.assertNotIn("if mispredicted and not predict:", config)
 
 
 if __name__ == "__main__":

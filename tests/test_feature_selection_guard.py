@@ -40,7 +40,9 @@ def slsv():
 
 
 def model_handler(workers=1):
-    config = SimpleNamespace(debug=False, get_scoring_mechanism=lambda: "accuracy")
+    config = SimpleNamespace(debug=False, mode=SimpleNamespace(holdout_split_mode="stratified_rows",
+                                                         grouped_cross_validation=False),
+                             get_scoring_mechanism=lambda: "accuracy")
     return ModelHandler(SimpleNamespace(
         config=config, logger=Mock(), STANDARD_DESIRED_N_JOBS=workers,
     ))

@@ -42,7 +42,9 @@ class CSVFilePickerTests(unittest.TestCase):
     def test_unknown_dialect_does_not_guess_and_manual_override_works(self):
         panel = CSVSourcePanel()
         panel._file_selected({"new": ({"name": "example.csv", "content": b"single\nvalue\n"},)})
-        self.assertIn("Confirm delimiter", panel.status.value)
+        self.assertIn("CSV validated:", panel.status.value)
+        self.assertNotIn("single", panel.status.value)
+        self.assertNotIn("value", panel.status.value)
         panel._upload_directory.cleanup()
 
     def test_explicit_text_qualifier_validates_embedded_delimiter(self):

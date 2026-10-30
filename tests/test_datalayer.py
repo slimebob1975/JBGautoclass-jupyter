@@ -22,7 +22,8 @@ class TestDataLayer():
 
     def test_get_connection(self, default_sqldatalayer) -> None:
         con = default_sqldatalayer.get_connection()
-        expected_con_str = "DRIVER=Mock Server;SERVER=tcp:database.jbg.mock;DATABASE=DatabaseOne;TRUSTED_CONNECTION=yes"
+        expected_con_str = ("DRIVER=SQL Server;SERVER=tcp:database.jbg.mock;DATABASE=DatabaseOne;"
+                            "TRUSTED_CONNECTION=yes;Encrypt=yes;TrustServerCertificate=yes;Connection Timeout=30")
         
         # While this will also hit an error if the JBGSqlHelper changes it's str-method
         # that isn't necessarily a bug
@@ -136,6 +137,9 @@ class TestDataLayer():
                 return None
 
         fake_sql = FakeSqlHelper()
+        logged_queries = []
+        monkeypatch.setattr(default_sqldatalayer.logger, "print_query",
+                            lambda **kwargs: logged_queries.append(kwargs), raising=False)
         default_sqldatalayer.config.mode.train = False
         default_sqldatalayer.config.mode.predict = True
         monkeypatch.setattr(
@@ -155,6 +159,8 @@ class TestDataLayer():
         assert len(data) == 15
         assert len(fake_sql.queries) == 1
         assert "TOP(15)" in fake_sql.queries[0]
+        assert len(logged_queries) == 1
+        assert logged_queries[0]["query"] == fake_sql.queries[0]
 
     def test_mispredicted(self, default_sqldatalayer) -> None:
         """ This is a query in string format """

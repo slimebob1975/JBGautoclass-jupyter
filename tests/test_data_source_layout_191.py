@@ -13,7 +13,7 @@ class DataSourceLayoutTests(unittest.TestCase):
         order = settings["display"]
         self.assertLess(order.index("connection_form"), order.index("models_form"))
         self.assertLess(order.index("models_form"), order.index("data_form"))
-        self.assertEqual(order.index("regression_suite_form"), order.index("data_form") + 1)
+        self.assertEqual(order.index("regression_suite_form"), order.index("class_summary") + 1)
 
     def test_source_selector_has_no_redundant_label(self):
         tree = ast.parse((ROOT / "src/GUI/CSVSourcePanel.py").read_text(encoding="utf-8"))

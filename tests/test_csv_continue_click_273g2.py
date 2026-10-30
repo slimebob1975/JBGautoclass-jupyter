@@ -29,6 +29,7 @@ class CSVContinueClick273g2(unittest.TestCase):
         self.w._csv_continue_ready = lambda: True
         self.w._CSV_TRAINING_EDITABLE_FIELDS = ("algorithm_dropdown",)
         self.w._CSV_TRAINING_LOCKED_FIELDS = ("train_checkbox", "mispredicted_checkbox", "metas_checkbox")
+        self.w._CSV_DARK_NUMBER_FIELDS = ("dark_number_method", "dark_number_alpha")
         self.w.eventhandler = SimpleNamespace(lock_observe_1=False)
         self.w.update_values = lambda values: self.events.append(("values", values))
         self.w.enable_items = lambda names: self.events.append(("enable", tuple(names)))
@@ -37,6 +38,9 @@ class CSVContinueClick273g2(unittest.TestCase):
         self.w._csv_source_panel = SimpleNamespace(status=SimpleNamespace(value=""))
         self.w.models_dropdown = SimpleNamespace(value="New model")
         self.w.update_ready = lambda: self.events.append("update_ready")
+        self.w.dark_numbers_checkbox = SimpleNamespace(value=True)
+        self.w.sync_dark_number_control_state = lambda: self.events.append("sync_dark_numbers")
+        self.w.sync_feature_selection_controls = lambda: self.events.append("sync_feature_selection")
 
     def test_new_model_continue_exposes_settings(self):
         self.w._csv_continue_actions()

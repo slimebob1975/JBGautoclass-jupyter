@@ -1,4 +1,5 @@
 import os
+from types import SimpleNamespace
 import pytest
 from Config import Config
 from JBGMeta import (AlgorithmTuple, Algorithm, PreprocessTuple, Preprocess, ReductionTuple, Reduction,
@@ -25,6 +26,9 @@ def get_fixture_content_as_string(filename: str) -> str:
 
 class MockLogger():
     """To avoid the issue of circular imports, we use Protocols with the defined functions/properties"""
+
+    def print_privacy_safe(self, display_message, log_message=None) -> None:
+        """Current logger interface: suppress output in unit tests."""
 
     def print_info(self, *args) -> None:
         """printing info"""
@@ -75,6 +79,29 @@ class MockLogger():
 
 class MockConfig():
     # Methods to hide implementation of Config
+    def __init__(self):
+        # The task runner now consults mode and debug directly. Keep the mock's
+        # defaults explicit rather than changing production code to tolerate
+        # incomplete test configurations.
+        self.mode = SimpleNamespace(
+            holdout_split_mode="stratified_rows",
+            grouped_cross_validation=False,
+            threshold_diagnostics=False,
+            model_benchmark_150=False,
+            scoring=ScoreMetric.mcc,
+            oversampler=Oversampling.NOG,
+            undersampler=Undersampling.NUG,
+            dark_number_flip_fraction=0.2,
+            experimental_perturbed_dark_number_fallback=True,
+        )
+        self.debug = False
+
+    def get_dark_number_flip_fraction(self) -> float:
+        return self.mode.dark_number_flip_fraction
+
+    def should_use_experimental_perturbed_dark_number_fallback(self) -> bool:
+        return self.mode.experimental_perturbed_dark_number_fallback
+
     def set_num_selected_features(self, num_features: int) -> None:
         """ Updates the config with the number """
 

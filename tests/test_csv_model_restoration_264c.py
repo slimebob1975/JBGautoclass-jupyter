@@ -31,7 +31,8 @@ class RestoredRoles264c(TestCase):
             _csv_view_active=lambda: True, _csv_current_dataset_artifact=lambda: 'dataset',
             _csv_catalog_storage=lambda: ('repo', 'scope'),
             _csv_model_selected=Mock(), _csv_refresh_saved_models=Mock(),
-            _restore_source_roles=Mock(), models_dropdown=SimpleNamespace(disabled=True),
+            _restore_source_roles=Mock(), _csv_update_class_summary=Mock(),
+            models_dropdown=SimpleNamespace(disabled=True),
         )
 
     def run_validation(self, configs, lookup):
