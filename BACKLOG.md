@@ -724,3 +724,5 @@ wording here must not override the current sequence.
 - [ ] GUI cosmetic: when restoring a saved CSV model, auto-scroll multi-select pipeline widgets to their selected options when supported by ipywidgets/Voilà; do not change selection values or SQL behavior.
 
 - **After the new GUI:** Multiclass Feature Modelling (One-vs-Rest): target-vs-rest and all-classes investigations with shared CV folds, class-aware metrics and aggregated ranking, followed by genuine multiclass holdout validation. Same engine for SQL and CSV.
+
+- [x] Release commit: 51d19c17a6e3f03ca20127b71056338d63f934ce; tag: v0.19.1; branch: dev.
