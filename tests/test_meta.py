@@ -320,3 +320,12 @@ class TestScoreMetric:
         y = np.array(["0"] * 99 + ["1"])
         model = DummyClassifier(strategy="most_frequent").fit(X, y)
         assert ScoreMetric.f1_micro.get_parametrized_scorer()(model, X, y) == accuracy_score(y, model.predict(X))
+
+
+def test_jbgmeta_preserves_public_meta_base_imports_after_extraction():
+    from JBGMeta import MetaEnum as PublicMetaEnum, MetaTuple as PublicMetaTuple
+    from JBGMetaBase import MetaEnum as BaseMetaEnum, MetaTuple as BaseMetaTuple
+
+    assert PublicMetaEnum is BaseMetaEnum
+    assert PublicMetaTuple is BaseMetaTuple
+    assert issubclass(Algorithm, PublicMetaEnum)
