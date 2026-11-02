@@ -90,7 +90,10 @@ DARK_NUMBER_DEBUG_LOGGING = False
 DARK_NUMBER_LOW_RECOVERY_WARNING_THRESHOLD = 0.05
 
 from JBGHandlerContracts import Logger, DataLayer, Config
-from JBGModelArtifactPayload import build_model_artifact_payload
+from JBGModelArtifactPayload import (
+    build_model_artifact_payload, restore_model_from_artifact_payload,
+)
+from JBGModelArtifactService import load_checked_model_artifact, save_checked_model_artifact
 
 
 
@@ -922,47 +925,21 @@ class ModelHandler:
         # Load model from file, but handle Keras models differently since their algorithm was
         # replaced by a path to model training information
         try:
-            artifact, compatibility = load_model_artifact_with_compatibility(filename)
-            config, text_converter, (oversampler, undersampler, preprocess, reduction, algorithm), pipeline, \
-                keras_name, n_features = artifact
-
-            source_review = review_model_source_boundary(self.handler.config, config, compatibility)
-            if source_review.issues:
-                raise ModelInitializationException("; ".join(source_review.issues))
-            compatibility_review = review_artifact_semantics(config, text_converter, compatibility)
-            if compatibility_review.issues:
-                raise ModelInitializationException(
-                    "Saved model compatibility metadata is inconsistent: "
-                    + "; ".join(compatibility_review.issues)
-                )
-            for warning in compatibility_review.warnings:
-                self.handler.logger.print_warning(warning)
-                        
-            # Handle Keras models differently
-            if (keras_name is not None):
-                keras_sidecar = resolve_keras_model_sidecar_path(filename, keras_name)
-                keras_model = keras.models.load_model(str(keras_sidecar))
-
-                # Current artifacts retain the fitted SciKeras wrapper metadata in the
-                # pipeline and only externalize its native Keras model_. Reattaching the
-                # sidecar is enough for prediction and does not require live training data.
-                if not attach_keras_model_to_pipeline(pipeline, keras_name, keras_model):
-                    raise ModelInitializationException(
-                        "Current Keras artifact lacks fitted SciKeras wrapper metadata; "
-                        "retrain and save a new model with the current JBG version."
-                    )
-            
-            the_model = Model(
-                text_converter=text_converter,
-                oversampler=oversampler,
-                undersampler=undersampler,
-                preprocess=preprocess,
-                reduction=reduction,
-                algorithm=algorithm,
-                pipeline=pipeline,
-                n_features_out=n_features
+            the_model, n_features = load_checked_model_artifact(
+                filename,
+                self.handler.config,
+                self.handler.logger,
+                Model,
+                load_artifact=load_model_artifact_with_compatibility,
+                review_source=review_model_source_boundary,
+                review_semantics=review_artifact_semantics,
+                resolve_sidecar=resolve_keras_model_sidecar_path,
+                load_keras=keras.models.load_model,
+                attach_keras=attach_keras_model_to_pipeline,
+                restore_model=restore_model_from_artifact_payload,
+                initialization_error=ModelInitializationException,
             )
-            
+
             if self.handler.config.should_predict():
                 
                 self.handler.config.set_num_selected_features(n_features)
@@ -2545,35 +2522,14 @@ class ModelHandler:
 
         # Handle KERAS models differently because of problems with Access denied errors
         try:
-            if self.model.algorithm.lib == Library.KERAS:
-                
-                # Prepare the data to save
-                keras_name = self.model.pipeline.steps[-1][0]
-                persisted_pipeline = detach_keras_model_from_pipeline(
-                    self.model.pipeline,
-                    keras_name,
-                )
-
-                data = build_model_artifact_payload(
-                    save_config, self.model, persisted_pipeline, keras_name
-                )
-                
-                # Save the data minus the KERAS model using the versioned artifact contract.
-                save_model_artifact(filename, *data, compatibility=compatibility)
-
-                # Save the KERAS model separately
-                keras_sidecar = get_keras_model_sidecar_path(filename, keras_name)
-                self.model.pipeline.steps[-1][-1].model_.save(str(keras_sidecar))
-
-            else: # Non KERAS models
-                
-                # Prepare the data to save
-                data = build_model_artifact_payload(
-                    save_config, self.model, self.model.pipeline, None
-                )
-                
-                # Save the data using the versioned artifact contract.
-                save_model_artifact(filename, *data, compatibility=compatibility)
+            save_checked_model_artifact(
+                filename, save_config, self.model, compatibility,
+                keras_library=Library.KERAS,
+                detach_keras=detach_keras_model_from_pipeline,
+                build_payload=build_model_artifact_payload,
+                save_artifact=save_model_artifact,
+                sidecar_path=get_keras_model_sidecar_path,
+            )
 
         except Exception as e:
             source_kind = getattr(getattr(self.handler.config, "data_source", None), "kind", "sql")
