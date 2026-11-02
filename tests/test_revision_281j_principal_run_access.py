@@ -97,10 +97,9 @@ def test_sql_requires_explicit_authorization_not_just_scope():
     runtime.execute.assert_not_called()
 
 
-def test_unverified_identity_objects_and_missing_policy_are_rejected():
+def test_unverified_identity_objects_and_missing_scope_resolver_are_rejected():
     access, prepared, _, _, _ = setup()
     with pytest.raises(PermissionError, match='authenticated principal'):
         access.create('developer', prepared)
     with pytest.raises(TypeError, match='trusted scope'):
-        PrincipalRunAccessService(access._presentation, scope_for=lambda p: None,
-                                  authorize_dataset=None)
+        PrincipalRunAccessService(access._presentation, scope_for=None)

@@ -1,8 +1,8 @@
-"""Principal-bound job access with server-owned CSV scope (revision 281j).
+"""Principal-bound job access with server-owned CSV scope (281j/281k).
 
-The composition root must supply authenticated principals, a trusted scope
-resolver, and an authorization policy for every data source. This is not a
-JWT verifier, login endpoint, or authorization policy implementation.
+Identity and Entra permissions are managed by the authenticating host.
+The service only enforces job ownership and preexisting CSV scope isolation.
+SQL access requires explicit authorization by the hosting application.
 """
 from __future__ import annotations
 
@@ -16,19 +16,21 @@ from Storage.ArtifactContract import StorageScope
 
 
 class PrincipalRunAccessService:
-    """Restrict job operations to an authenticated principal and authorized data."""
+    """Restrict jobs to their owner and preserve existing dataset boundaries."""
 
     def __init__(
         self,
         presentation: RunAPIPresentationService,
         *,
         scope_for: Callable[[AuthenticatedPrincipal], StorageScope],
-        authorize_dataset: Callable[[AuthenticatedPrincipal, PreparedRun], None],
+        authorize_dataset: Callable[[AuthenticatedPrincipal, PreparedRun], None] | None = None,
     ) -> None:
         if not isinstance(presentation, RunAPIPresentationService):
             raise TypeError("presentation service required")
-        if not callable(scope_for) or not callable(authorize_dataset):
-            raise TypeError("trusted scope resolver and dataset authorizer required")
+        if not callable(scope_for):
+            raise TypeError("trusted scope resolver required")
+        if authorize_dataset is not None and not callable(authorize_dataset):
+            raise TypeError("dataset authorizer must be callable")
         self._presentation = presentation
         self._scope_for = scope_for
         self._authorize_dataset = authorize_dataset
@@ -51,9 +53,12 @@ class PrincipalRunAccessService:
             # Missing or mismatched scope must not fall through to SQL policy.
             if getattr(prepared.resolved_dataset, "scope", None) != scope:
                 raise PermissionError("dataset unavailable")
-        # This mandatory trusted callback checks project membership and SQL
-        # authorization, and may impose stricter CSV permissions as well.
-        self._authorize_dataset(principal, prepared)
+        # SQL has no CSV StorageScope safeguard; require the hosting
+        # application to authorize SQL dataset use explicitly.
+        if prepared.dataset.source is DataSourceKind.SQL and self._authorize_dataset is None:
+            raise PermissionError("SQL dataset authorization required")
+        if self._authorize_dataset is not None:
+            self._authorize_dataset(principal, prepared)
 
     def create(self, principal: AuthenticatedPrincipal, prepared: PreparedRun) -> dict:
         owner = self._owner(principal)
