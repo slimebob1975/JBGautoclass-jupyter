@@ -94,6 +94,8 @@ from JBGModelArtifactPayload import (
     build_model_artifact_payload, restore_model_from_artifact_payload,
 )
 from JBGModelArtifactService import load_checked_model_artifact, save_checked_model_artifact
+from JBGFinalFitService import fit_selected_model
+from JBGCrossValidationExecution import execute_cross_validation
 
 
 
@@ -999,40 +1001,7 @@ class ModelHandler:
             if model is None:
                 raise ModelException(f"No model could be trained with the given settings: {str(ex)}")
             
-            # Now train the picked model on training data, either with a grid search or ordinary fit.
-            # We assume the algorithm is the last step in the pipeline.
-            model_name = model.get_name()
-            alg_name = model_name.split('-')[-1]
-            t0 = time.time()
-            if not model.algorithm.search_params.parameters:
-                self.handler.logger.print_progress(f"Using ordinary fit for final training of model {model_name}...(consider adding grid search parameters)")
-                model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
-            else:
-                self.handler.logger.print_progress(f"Using grid search for final training of model {model_name}...")
-
-                # Doing a grid search, we must pass on search parameters to algorithm with '__' notation. 
-                #search_params = \
-                #    Helpers.add_missing_prefix_double_underscore_to_dict_keys(prefix=alg_name, the_dict=model.algorithm.search_params.parameters)
-                search_params = \
-                    Helpers.add_prefix_to_dict_keys(prefix=alg_name, the_dict=model.algorithm.search_params.parameters)
-                self.handler.logger.print_info(f"Using grid search parameters: {str(search_params)} for model {model_name}")
-                try:
-                    # grid_cv_info is no used right now, but stays for debugging purposes
-                    model.pipeline, grid_cv_info = self.model_parameter_grid_search(
-                        model.pipeline,
-                        search_params,
-                        k,
-                        dh.X_train,
-                        dh.Y_train)
-                    self.handler.logger.print_code("Optimized parameters after grid search", model.pipeline.get_params(deep=False))
-                    self._export_final_search_results(grid_cv_info, cross_validation_filepath)
-                except ModelException as ex:
-                    # In case all estimators failed to fit, use ordinary fit as fallback
-                    self.handler.logger.print_info(f"Grid search failed: {str(ex)}. Using ordinary fit as fallback for: {model_name}. " + \
-                        f"You might need to adjust grid search parameters for pipeline: {str(model.pipeline)}")
-                    model.pipeline = self.train_picked_model(model.pipeline, dh.X_train, dh.Y_train)
-            t1 = time.time()
-            self.handler.logger.print_info(f"Final training of model {alg_name} took {str(round(t1-t0,2))} secs.")
+            model = fit_selected_model(self, model, dh, k, cross_validation_filepath)
             if getattr(self.handler.config.mode, "threshold_diagnostics", False):
                 self._run_threshold_diagnostics(model.pipeline, dh, k, cross_validation_filepath)
         except Exception as ex:
@@ -2430,35 +2399,9 @@ class ModelHandler:
             if hasattr(self, function_name) and callable(func := getattr(self, function_name)):
                 fit_params[key] = func(dh.X_train, dh.Y_train)
 
-        # We want to execute the job with as many workers as possible. Dense data keeps
-        # the historical NumPy path, while pandas sparse text data is converted to SciPy
-        # CSR so sklearn can preserve sparsity through cross-validation.
-        # CV has one task per fold. execute_n_job applies CPU and positive
-        # configured caps; a global -1 must not erase this finite task bound.
-        n_jobs_desired = len(kfold) if isinstance(kfold, list) else kfold.get_n_splits()
-        estimator_X = prepare_model_input(dh.X_train, pipeline, prefer_numpy=True)
-        self._last_execution_n_jobs = None
-        cv_pipeline, cv_scorer, profiled = pipeline, diagnostic_scorer, False
-        try:
-            cv_pipeline, cv_scorer, profiled = prepare_runtime_cv(
-                pipeline, diagnostic_scorer, getattr(algorithm, 'name', ''),
-            )
-        except Exception as profile_error:
-            self.handler.logger.print_warning(
-                f"Nystroem runtime diagnostics could not be prepared: {profile_error}. "
-                "Continuing with the original CV call."
-            )
-        started = time.perf_counter()
-        cv_results = call_with_sparse_input_retry(
-            lambda X_input: self.execute_n_job(
-                cross_validate, cv_pipeline, X_input, dh.Y_train.to_numpy(), cv=kfold,
-                scoring=cv_scorer, n_jobs_desired=n_jobs_desired,
-                params=fit_params, error_score='raise',
-            ),
-            estimator_X, logger=self.handler.logger, context="cross-validation", estimator=pipeline,
+        cv_results, profiled, wall_seconds = execute_cross_validation(
+            self, pipeline, dh, kfold, algorithm, diagnostic_scorer, fit_params,
         )
-        
-        wall_seconds = time.perf_counter() - started
         timing = CVTiming.from_results(
             cv_results, len(kfold) if isinstance(kfold, list) else kfold.get_n_splits(), self._last_execution_n_jobs,
             wall_seconds,
