@@ -12,6 +12,7 @@ from typing import Any
 from JBGApplicationContracts import RunReference, RunStatus
 from JBGRunJobService import RunJobService
 from JBGRunPreparationService import PreparedRun
+from JBGRunResultProjection import project_classifier_result
 
 
 class RunAPIPresentationService:
@@ -86,3 +87,14 @@ class RunAPIPresentationService:
             snapshot = self._jobs.snapshot(run)
         # A future explicit, allowlisted result DTO can be added separately.
         return {"run_id": run.key, "available": snapshot.status is RunStatus.SUCCEEDED}
+
+    def result_details(self, principal: str, run: RunReference) -> dict[str, Any]:
+        """Allowlisted JSON result; owner check precedes internal result access."""
+        with self._lock:
+            self._authorized(principal, run)
+            snapshot = self._jobs.snapshot(run)
+            if snapshot.status is not RunStatus.SUCCEEDED:
+                return {"run_id": run.key, "available": False, "summary": None}
+            raw = self._jobs.result(run)
+        return {"run_id": run.key, "available": True,
+                "summary": project_classifier_result(raw)}
