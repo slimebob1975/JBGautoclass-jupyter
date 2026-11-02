@@ -10,6 +10,8 @@ from __future__ import annotations
 from typing import Callable
 
 from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import RedirectResponse
+from fastapi_offline import FastAPIOffline
 
 from JBGApplicationContracts import RunReference
 from JBGIdentity import AuthenticatedPrincipal
@@ -27,7 +29,11 @@ def create_app(
     if not callable(current_principal):
         raise TypeError("trusted principal provider required")
 
-    app = FastAPI(title="JBG API", version="0.1.0")
+    app = FastAPIOffline(title="JBG API", version="0.1.0")
+
+    @app.get("/", include_in_schema=False)
+    def root():
+        return RedirectResponse(url="/docs", status_code=307)
 
     def principal_dependency() -> AuthenticatedPrincipal:
         try:
