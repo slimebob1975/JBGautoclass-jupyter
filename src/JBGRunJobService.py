@@ -13,6 +13,7 @@ from uuid import uuid4
 from JBGApplicationContracts import RunReference, RunSnapshot, RunStatus
 from JBGRunExecutionService import RunExecutionService
 from JBGRunPreparationService import PreparedRun
+from JBGRunProgress import RunProgressService, _ACTIVE_RUN
 
 
 @dataclass
@@ -26,10 +27,12 @@ class _Job:
 class RunJobService:
     """Local synchronous job registry; not a durable or multi-worker store."""
 
-    def __init__(self, execution: RunExecutionService) -> None:
+    def __init__(self, execution: RunExecutionService, *,
+                 progress: RunProgressService | None = None) -> None:
         if not isinstance(execution, RunExecutionService):
             raise TypeError("execution must be RunExecutionService")
         self._execution = execution
+        self._progress = progress if progress is not None else RunProgressService()
         self._jobs: dict[RunReference, _Job] = {}
         self._lock = RLock()
 
@@ -38,6 +41,7 @@ class RunJobService:
             raise TypeError("expected PreparedRun")
         reference = RunReference(str(uuid4()))
         with self._lock:
+            self._progress.register(reference)
             self._jobs[reference] = _Job(prepared=prepared)
         return reference
 
@@ -56,7 +60,11 @@ class RunJobService:
             job.status = RunStatus.RUNNING
             prepared = job.prepared
         try:
-            result = self._execution.execute(prepared)
+            token = _ACTIVE_RUN.set(reference)
+            try:
+                result = self._execution.execute(prepared)
+            finally:
+                _ACTIVE_RUN.reset(token)
         except Exception as error:
             with self._lock:
                 job.error = error
@@ -66,6 +74,16 @@ class RunJobService:
             job.result = result
             job.status = RunStatus.SUCCEEDED
         return result
+
+    def progress_history(self, reference: RunReference):
+        with self._lock:
+            self._get_job(reference)
+        return self._progress.history(reference)
+
+    def latest_progress(self, reference: RunReference):
+        with self._lock:
+            self._get_job(reference)
+        return self._progress.latest(reference)
 
     def result(self, reference: RunReference) -> Any:
         with self._lock:
