@@ -12,11 +12,14 @@ import numpy as np
 
 from JBGMeta import Reduction
 from JBGExceptions import ModelException
+from JBGSpotCheckContracts import (
+    SpotCheckBestState, SpotCheckExecutionOwner, SpotCheckExecutionResult,
+)
 
 
-def evaluate_spot_check_candidate(owner, dh, preprocessor, preprocessor_callable, reduction,
+def evaluate_spot_check_candidate(owner: SpotCheckExecutionOwner, dh, preprocessor, preprocessor_callable, reduction,
                                   reduction_callable, algorithm, algorithm_callable,
-                                  oversampler, undersampler, kfold, state):
+                                  oversampler, undersampler, kfold, state: SpotCheckBestState) -> SpotCheckExecutionResult:
     skip_reason = owner.get_preflight_skip_reason(
         preprocessor, preprocessor_callable, reduction, algorithm, dh.X_train,
         estimator=algorithm_callable, Y_train=dh.Y_train

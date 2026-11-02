@@ -98,6 +98,7 @@ from JBGFinalFitService import fit_selected_model
 from JBGCrossValidationExecution import execute_cross_validation
 from JBGSpotCheckSelection import consider_spot_check_candidate
 from JBGSpotCheckExecution import evaluate_spot_check_candidate
+from JBGSpotCheckContracts import SpotCheckExecutionResult, SpotCheckSelectionResult, SpotCheckResultRow
 
 
 
@@ -1651,7 +1652,7 @@ class ModelHandler:
                                  components: int, cv_score: float, cv_stdev: float,
                                  elapsed_time: float, failure: str,
                                  oversampler: Oversampling = None, undersampler: Undersampling = None,
-                                 diagnostics: dict = None) -> list:
+                                 diagnostics: dict = None) -> SpotCheckResultRow:
         sampling = [oversampler.name, undersampler.name] if oversampler is not None and undersampler is not None else []
         target_values = []
         if sampling:
@@ -1699,7 +1700,7 @@ class ModelHandler:
     def _consider_spot_check_candidate(self, state: _SpotCheckState, pipeline: Pipeline,
                                        preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
                                        cv_score: float, cv_stdev: float,
-                                       num_features: int, num_components: int, failure: str) -> tuple[str, bool]:
+                                       num_features: int, num_components: int, failure: str) -> SpotCheckSelectionResult:
         return consider_spot_check_candidate(
             state=state, pipeline=pipeline, preprocessor=preprocessor,
             reduction=reduction, algorithm=algorithm, cv_score=cv_score,
@@ -1714,7 +1715,7 @@ class ModelHandler:
                                        reduction_callable: Transform, algorithm: Algorithm,
                                        algorithm_callable: Estimator, oversampler: Oversampling,
                                        undersampler: Undersampling, kfold: StratifiedKFold,
-                                       state: _SpotCheckState) -> tuple[list[list], bool]:
+                                       state: _SpotCheckState) -> SpotCheckExecutionResult:
         return evaluate_spot_check_candidate(
             self, dh, preprocessor, preprocessor_callable, reduction,
             reduction_callable, algorithm, algorithm_callable,

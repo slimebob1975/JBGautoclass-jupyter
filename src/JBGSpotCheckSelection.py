@@ -7,16 +7,18 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from JBGSpotCheckContracts import SpotCheckBestState, SpotCheckSelectionResult
+
 import numpy as np
 
 
 def consider_spot_check_candidate(
-    *, state: Any, pipeline: Any, preprocessor: Any, reduction: Any,
+    *, state: SpotCheckBestState, pipeline: Any, preprocessor: Any, reduction: Any,
     algorithm: Any, cv_score: float, cv_stdev: float, num_features: int,
     num_components: int, failure: str,
     is_best_run_yet: Callable[[float, float, float, float], bool],
     on_best_candidate: Callable[..., None],
-) -> tuple[str, bool]:
+) -> SpotCheckSelectionResult:
     """Return (failure, is_stable) and update the existing best state if better."""
     candidate_success = (
         pipeline is not None
