@@ -96,6 +96,8 @@ from JBGModelArtifactPayload import (
 from JBGModelArtifactService import load_checked_model_artifact, save_checked_model_artifact
 from JBGFinalFitService import fit_selected_model
 from JBGCrossValidationExecution import execute_cross_validation
+from JBGSpotCheckSelection import consider_spot_check_candidate
+from JBGSpotCheckExecution import evaluate_spot_check_candidate
 
 
 
@@ -1698,31 +1700,14 @@ class ModelHandler:
                                        preprocessor: Preprocess, reduction: Reduction, algorithm: Algorithm,
                                        cv_score: float, cv_stdev: float,
                                        num_features: int, num_components: int, failure: str) -> tuple[str, bool]:
-        candidate_success = (
-            pipeline is not None
-            and not failure
-            and np.isfinite(cv_score)
-            and np.isfinite(cv_stdev)
+        return consider_spot_check_candidate(
+            state=state, pipeline=pipeline, preprocessor=preprocessor,
+            reduction=reduction, algorithm=algorithm, cv_score=cv_score,
+            cv_stdev=cv_stdev, num_features=num_features,
+            num_components=num_components, failure=failure,
+            is_best_run_yet=self.is_best_run_yet,
+            on_best_candidate=self._update_spot_check_best_state,
         )
-        if not candidate_success:
-            return failure, False
-
-        if self.is_best_run_yet(
-            cv_score, cv_stdev, state.best_cv_score, state.best_stdev
-        ):
-            self._update_spot_check_best_state(
-                state=state,
-                pipeline=pipeline,
-                preprocessor=preprocessor,
-                reduction=reduction,
-                algorithm=algorithm,
-                cv_score=cv_score,
-                cv_stdev=cv_stdev,
-                num_features=num_features,
-                num_components=num_components,
-            )
-
-        return failure, True
 
     def _evaluate_spot_check_candidate(self, dh: DatasetHandler, preprocessor: Preprocess,
                                        preprocessor_callable: Transform, reduction: Reduction,
@@ -1730,143 +1715,11 @@ class ModelHandler:
                                        algorithm_callable: Estimator, oversampler: Oversampling,
                                        undersampler: Undersampling, kfold: StratifiedKFold,
                                        state: _SpotCheckState) -> tuple[list[list], bool]:
-        skip_reason = self.get_preflight_skip_reason(
-            preprocessor, preprocessor_callable, reduction, algorithm, dh.X_train,
-            estimator=algorithm_callable, Y_train=dh.Y_train
+        return evaluate_spot_check_candidate(
+            self, dh, preprocessor, preprocessor_callable, reduction,
+            reduction_callable, algorithm, algorithm_callable,
+            oversampler, undersampler, kfold, state,
         )
-        if skip_reason:
-            failure = f"SKIPPED: {skip_reason}"
-            return [self._build_spot_check_result(
-                preprocessor=preprocessor,
-                reduction=reduction,
-                algorithm=algorithm,
-                components=dh.X_train.shape[1],
-                cv_score=np.nan,
-                cv_stdev=np.nan,
-                elapsed_time=0.0,
-                failure=failure,
-                oversampler=oversampler, undersampler=undersampler,
-            )], False
-
-        max_features_selection = dh.X.shape[1]
-        min_features_selection = 0 if reduction == Reduction.RFE else max_features_selection
-        total_features = max_features_selection
-        rfe_round = 0
-        rfe_round_limit = self._get_rfe_search_round_limit(total_features)
-        num_components = max_features_selection
-        rfe_score = 0.0
-        num_features = max_features_selection
-        first_feature_selection = True
-        candidate_results = []
-        candidate_success = False
-
-        while first_feature_selection or min_features_selection < max_features_selection:
-            if not first_feature_selection:
-                num_features = ceil((min_features_selection + max_features_selection) / 2)
-                if num_features == max_features_selection:
-                    break
-            else:
-                first_feature_selection = False
-                num_features = max_features_selection
-
-            if reduction == Reduction.RFE and rfe_round >= rfe_round_limit:
-                self.handler.logger.print_warning(
-                    f"Stopping RFE search {preprocessor.name}-{reduction.name}-{algorithm.name} "
-                    f"after {rfe_round} rounds; limit is {rfe_round_limit}."
-                )
-                break
-
-            bounds_before = (min_features_selection, max_features_selection)
-            if reduction == Reduction.RFE:
-                rfe_round += 1
-                self.handler.logger.print_progress(
-                    message=(
-                        f"RFE search {preprocessor.name}-{reduction.name}-{algorithm.name}: "
-                        f"round {rfe_round}/{rfe_round_limit}, target features "
-                        f"{num_features}/{total_features}, search interval "
-                        f"[{min_features_selection}, {max_features_selection}]."
-                    )
-                )
-
-            t0 = time.time()
-
-            try:
-                current_pipeline, cv_results, failure = self.create_pipeline_and_cv(
-                    reduction, algorithm, preprocessor, reduction_callable, algorithm_callable,
-                    preprocessor_callable, oversampler, undersampler, kfold, dh, num_features
-                )
-
-                # Spot-checking is CV-only. Do not fit candidates against or score the
-                # final holdout here; it remains untouched until final evaluation.
-
-                if current_pipeline is not None:
-                    num_components = self.get_components_from_pipeline(
-                        reduction, current_pipeline, num_features
-                    )
-                else:
-                    num_components = num_features
-            except ModelException as ex:
-                self.handler.logger.print_warning(f"ModelException: {str(ex)}")
-                break
-            except Exception as ex:
-                self.handler.logger.print_warning(f"Exception: {str(ex)}")
-
-            elapsed_time = time.time() - t0
-            temp_cv_score, temp_cv_stdev = self._summarize_cv_results(cv_results)
-            rfe_score, max_features_selection, min_features_selection = self.calculate_current_features(
-                temp_cv_score, rfe_score, num_features, max_features_selection, min_features_selection
-            )
-            rfe_search_stalled = (
-                reduction == Reduction.RFE
-                and rfe_round > 1
-                and bounds_before == (min_features_selection, max_features_selection)
-            )
-
-            failure, candidate_is_stable = self._consider_spot_check_candidate(
-                state=state,
-                pipeline=current_pipeline,
-                preprocessor=preprocessor,
-                reduction=reduction,
-                algorithm=algorithm,
-                cv_score=temp_cv_score,
-                cv_stdev=temp_cv_stdev,
-                num_features=num_features,
-                num_components=num_components,
-                failure=failure,
-            )
-            if state.trained_pipeline is current_pipeline and current_pipeline is not None:
-                state.best_oversampler = oversampler
-                state.best_undersampler = undersampler
-            if candidate_is_stable:
-                candidate_success = True
-                if getattr(self.handler.config.mode, "model_benchmark_150", False):
-                    self._benchmark_candidate_150(current_pipeline, dh, kfold,
-                        algorithm, preprocessor, reduction, oversampler, undersampler)
-
-            candidate_results.append(self._build_spot_check_result(
-                preprocessor=preprocessor,
-                reduction=reduction,
-                algorithm=algorithm,
-                components=min(num_components, num_features),
-                cv_score=temp_cv_score,
-                cv_stdev=temp_cv_stdev,
-                elapsed_time=elapsed_time,
-                failure=failure,
-                oversampler=oversampler, undersampler=undersampler,
-                diagnostics=(self._last_cv_diagnostics[1]
-                             if getattr(self, "_last_cv_diagnostics", None) is not None
-                             and self._last_cv_diagnostics[0] is current_pipeline else None),
-            ))
-
-            if rfe_search_stalled:
-                self.handler.logger.print_warning(
-                    f"Stopping RFE search {preprocessor.name}-{reduction.name}-{algorithm.name}: "
-                    f"search interval did not shrink from "
-                    f"[{bounds_before[0]}, {bounds_before[1]}]."
-                )
-                break
-
-        return candidate_results, candidate_success
 
     def _benchmark_candidate_150(self, pipeline, dh, folds, algorithm, preprocessor,
                                  reduction, oversampler, undersampler):
