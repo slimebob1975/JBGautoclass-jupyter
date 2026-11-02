@@ -1,0 +1,5 @@
+# Optional HTTP API dependencies (revision 282a).
+# Install separately; the existing backend/Voila environment is unchanged.
+fastapi>=0.110,<1
+uvicorn>=0.27,<1
+httpx>=0.27,<1  # FastAPI TestClient HTTP tests
