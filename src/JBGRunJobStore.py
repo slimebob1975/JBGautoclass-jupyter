@@ -127,6 +127,11 @@ class RunJobStore:
                                connect_args={"timeout": 30, "check_same_thread": False})
         return cls(engine, **options)
 
+    def close(self) -> None:
+        """Release pooled database connections (on Windows, an open SQLite file
+        cannot be deleted). The store reconnects if it is used again."""
+        self._engine.dispose()
+
     def create_tables(self) -> None:
         """Create missing tables. On SQL Server, run this with a deployment account."""
         self._metadata.create_all(self._engine)

@@ -98,6 +98,17 @@ def compose_sql_run(sessions: SQLSessionRegistry, principal, config, logger, *,
         raise TypeError("SQLSessionRegistry required")
     logger = _observed(logger, progress)
     layer = sessions.data_layer_for(principal, config, logger)
+    return compose_sql_run_on_layer(layer, logger)
+
+
+def compose_sql_run_on_layer(layer, logger, *,
+                             progress: RunProgressService | None = None) -> ComposedRun:
+    """Compose an SQL run on an already opened, already authorized DataLayer.
+
+    Used by the worker process (285b), which opens the layer with credentials
+    received through its pipe after the dispatcher has authorized the run.
+    """
+    logger = _observed(logger, progress)
     datasets = DatasetApplicationService(sql=ConfiguredSQLDatasetResolver(layer, layer.config))
     preparation = RunPreparationService(datasets, sql=SQLRunConfigurationValidator())
     execution = RunExecutionService(preparation, sql=SQLClassifierRuntime(logger))

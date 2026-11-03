@@ -1,3 +1,29 @@
+## Revision 285b - worker process per job (2026-11-03)
+
+- Add `src/JBGRunWorker.py` (design gaps 2-4, step 2 of 4), runnable as
+  `python -m JBGRunWorker`: claims one stored job, rebuilds the run with
+  `JBGRunComposition`, writes progress and a background heartbeat to the job
+  store, checks for cancellation at every engine progress checkpoint, and
+  stores only the projected result (failures: only the exception type).
+  `build_job_spec` describes a run as schema-v2 JSON with the SQL username and
+  password blanked; SQL credentials arrive as one JSON line on the worker's
+  stdin and an SQL job without them stays pending. Cancellation is a
+  `BaseException`, so the engine's `except Exception` handlers cannot turn it
+  into a failure.
+- `RunJobStore.close()` releases pooled connections; tests close their stores
+  before deleting temporary folders, which Windows refuses while a SQLite file
+  is open.
+- `JBGSQLSessions.open_sql_data_layer` and
+  `JBGRunComposition.compose_sql_run_on_layer` are now public, so the worker
+  reuses the 284c code; behaviour unchanged.
+- Fix: the command-line `JBGLogger` raised `KeyError: 'title'` on every
+  current configuration, because it lacked the `data_source` handling that
+  `JBGStreamedLogger` (used by the Voilà GUI) already had. The same lines are
+  now in both; `python AutomaticClassifier.py -f config.json` works again.
+- Tests: `tests/test_revision_285b_run_worker.py`, including a real CSV
+  training run in a separate worker process and a deterministic cancellation.
+- No change to the Voilà GUI or `JBGStreamedLogger`.
+
 ## Revision 285a - durable run job store (2026-11-03)
 
 - Add `src/JBGRunJobStore.py` (design gaps 2-4, step 1 of 4): `RunJobStore`

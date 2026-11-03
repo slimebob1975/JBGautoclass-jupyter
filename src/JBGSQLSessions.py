@@ -51,6 +51,28 @@ class SQLCredentials:
         return cls(windows=False, username=username, password=password)
 
 
+def open_sql_data_layer(credentials: SQLCredentials, config, logger):
+    """Open a DataLayer on a copy of ``config`` carrying ``credentials``.
+
+    DataLayer construction checks the ODBC driver and connects, so a
+    successful return is also the sign-in probe. The caller's ``config`` is
+    never modified. Authorization is the caller's job: the session registry
+    in the web process, or the dispatcher before it starts a worker (285b).
+    """
+    if not isinstance(credentials, SQLCredentials):
+        raise TypeError("SQLCredentials required")
+    if getattr(getattr(config, "data_source", None), "kind", None) != "sql":
+        raise ValueError("SQL configuration required")
+    from SQLDataLayer import DataLayer
+
+    run_config = copy.deepcopy(config)
+    connection = run_config.connection
+    connection.trusted_connection = credentials.windows
+    connection.sql_username = credentials.username
+    connection.sql_password = credentials.password
+    return DataLayer(config=run_config, logger=logger)
+
+
 def _principal_key(principal: AuthenticatedPrincipal) -> str:
     if not isinstance(principal, AuthenticatedPrincipal):
         raise PermissionError("authenticated principal required")
@@ -69,22 +91,7 @@ class SQLSessionRegistry:
 
     @staticmethod
     def _open(credentials: SQLCredentials, config, logger):
-        """Open a DataLayer on a copy of ``config`` carrying ``credentials``.
-
-        DataLayer construction checks the ODBC driver and connects, so a
-        successful return is also the sign-in probe. The caller's ``config``
-        is never modified.
-        """
-        if getattr(getattr(config, "data_source", None), "kind", None) != "sql":
-            raise ValueError("SQL configuration required")
-        from SQLDataLayer import DataLayer
-
-        run_config = copy.deepcopy(config)
-        connection = run_config.connection
-        connection.trusted_connection = credentials.windows
-        connection.sql_username = credentials.username
-        connection.sql_password = credentials.password
-        return DataLayer(config=run_config, logger=logger)
+        return open_sql_data_layer(credentials, config, logger)
 
     def _remember(self, key: str, credentials: SQLCredentials, layer) -> None:
         with self._lock:

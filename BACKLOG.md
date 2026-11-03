@@ -142,6 +142,9 @@ full SQL regression acceptance remain separately unverified.
     SQLite file or SQL Server metadata database). Next: 285b worker process
     per job, 285c dispatcher and restart handling, 285d API wiring and the
     Phase 0 gate test.
+  - [x] 285b: worker process per job (`JBGRunWorker.py`) with store-backed
+    progress, heartbeat and cooperative cancellation. Also fixes the
+    command-line logger crash on current configurations.
 
 **Phase 4 - New web GUI (after application-layer contracts are stable).**
 
