@@ -30,3 +30,6 @@ tests/fixtures/*.sav
 
 # Local registered CSV artifacts and installation identity (private, non-versioned)
 output/csv_artifacts/
+
+# Backend gate logs and summaries (scripts/run_backend_refactor_tests.ps1)
+test-results/

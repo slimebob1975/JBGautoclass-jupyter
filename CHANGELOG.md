@@ -1,3 +1,16 @@
+## Revision 284b - backend gate summary and application-layer group (2026-11-03)
+
+- `scripts/run_backend_refactor_tests.ps1`: new 16th group "Application layer
+  (revisions 280+)" runs every `tests/test_revision_NNN*.py` with NNN >= 280,
+  so new revision tests are included automatically.
+- The gate ends with a per-group table (status, tests run, passed, failed,
+  skipped, seconds), totals, and the failing test names for each failed
+  group. The same summary is written to
+  `test-results/backend_refactor_<stamp>_summary.txt` next to the full log.
+- The 15 existing groups, their invocation and the exit behaviour are
+  unchanged.
+- `.gitignore`: ignore `test-results/`.
+
 ## Revision 284a - per-run composition of application services, CSV (2026-11-03)
 
 - Add `src/JBGRunComposition.py`: builds the existing CSV resolver, validator
