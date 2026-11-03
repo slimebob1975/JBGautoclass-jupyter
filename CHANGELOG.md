@@ -1,3 +1,18 @@
+## Revision 283a - web GUI design documentation (2026-11-03)
+
+- Add the agreed design for the new FastAPI web GUI in
+  `docs/gui/JBG_web_gui_design.md`: eight tabs, seven locked decisions, a
+  Voilà parity table, the FastAPI endpoint map, ten backend gaps and the
+  delivery roadmap (`docs/gui/roadmap.png`).
+- Add eight mockup images in `docs/gui/mockups/` and their self-contained HTML
+  sources in `docs/gui/mockups/html/`. All projects, datasets, users and
+  figures shown are fictional.
+- Update BACKLOG Phases 3-5: GUI delivery Phase 0 backend items, the recorded
+  design decisions, internet access assumed for the web GUI (superseding the
+  earlier offline requirement), obsolete regression-test buttons, and no
+  JBG-specific role system.
+- Documentation only: no runtime code, defaults or tests changed.
+
 ## Version 0.19.1 â€“ verified regression stabilization (2026-10-30)
 
 - Windows Python 3.13 full pytest regression: **1,760 passed, 3 skipped, 9 warnings, 0 failed**, exit code 0 (revision 279ai).

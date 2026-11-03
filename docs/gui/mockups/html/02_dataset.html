@@ -1,0 +1,111 @@
+<!doctype html><html lang="sv"><head><meta charset="utf-8"><style>
+:root{--blue:#005293;--blue-h:#003e73;--blue-dis:#99b7d3;--ink:#333;--ink2:#555;--ink3:#777;
+--page:#f2f2f2;--panel:#fafafa;--line:#ddd;--line2:#e8e8e8;--ok:#198754;--wait:#EAB308;--block:#DC2626;
+--warn:#EA580C;--good:#2e7d32;--bad:#c62828}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--page);font-family:"Open Sans",Arial,sans-serif;color:var(--ink);font-size:14px;line-height:1.45}
+.app{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.05);overflow:hidden}
+header{display:flex;align-items:center;gap:16px;padding:14px 24px 12px}
+header img{height:34px}
+header h1{margin:0;color:var(--blue);font-size:21px;font-weight:600;line-height:1.2}
+.version{font-size:12px;color:var(--ink3)}
+.hright{margin-left:auto;display:flex;align-items:center;gap:18px;font-size:13px}
+.runind{display:flex;align-items:center;gap:8px;color:var(--ink);background:#fff7d6;border:1px solid #f1d77a;border-radius:14px;padding:3px 12px}
+.spin{width:12px;height:12px;border:2px solid #f3e3a6;border-top-color:#b58900;border-radius:50%}
+.lang{display:flex;border:1px solid #ccc;border-radius:4px;overflow:hidden}
+.lang span{padding:2px 10px;color:var(--ink2)}
+.lang span.on{background:var(--blue);color:#fff;font-weight:600}
+.user{font-style:italic;color:var(--ink2)}
+.ctx{display:flex;align-items:center;gap:10px;padding:8px 24px;background:var(--panel);border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);font-size:13px}
+.chip{display:flex;align-items:center;gap:7px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:3px 10px}
+.chip .k{color:var(--ink3)}
+.chip b{font-weight:600}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.d-ok{background:var(--ok)}.d-wait{background:var(--wait)}.d-block{background:var(--block)}.d-warn{background:var(--warn)}.d-off{background:#bbb}
+.sep{color:#aaa}
+nav.tabs{display:flex;gap:2px;padding:0 24px;border-bottom:1px solid var(--line2)}
+nav.tabs span{position:relative;padding:12px 14px 11px;color:var(--ink2)}
+nav.tabs span.on{color:var(--ink);font-weight:600}
+nav.tabs span.on:after{content:"";position:absolute;left:12px;right:12px;bottom:-1px;height:3px;border-radius:2px;background:var(--blue)}
+main{padding:20px 24px 22px}
+.foot{display:flex;align-items:center;gap:12px;padding:12px 24px;border-top:1px solid var(--line2);background:#fff}
+.foot .hint{color:var(--ink2);font-size:13px;margin-right:auto}
+.btn{display:inline-flex;align-items:center;gap:6px;background:var(--blue);color:#fff;border:none;border-radius:4px;padding:8px 16px;font:inherit;font-size:14px;white-space:nowrap}
+.btn.sub{background:#fff;color:var(--blue);border:1px solid #c8c8c8;padding:7px 14px}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn.danger{background:#fff;color:var(--bad);border:1px solid #e3b5b5}
+.act{font-weight:600;padding:9px 20px}
+.act.ready{background:var(--ok)}.act.waiting{background:var(--wait);color:#3a3000}.act.blocked{background:var(--block);opacity:.65}.act.warning{background:var(--warn)}
+.card{border:1px solid var(--line2);border-radius:8px;padding:14px 16px;background:#fff}
+.card h2,.sec h2{font-size:15px;font-weight:600;margin:0 0 10px}
+fieldset.panel{margin:0 0 14px;padding:6px 14px 12px;border:1px solid var(--line);border-radius:6px;background:var(--panel);min-width:0}
+fieldset.panel>legend{padding:0 6px;font-weight:700;color:var(--ink)}
+.muted{color:var(--ink3)}.small{font-size:12.5px}
+.grid{width:100%;border-collapse:collapse;font-size:13px}
+.grid th{text-align:left;font-weight:600;color:var(--ink2);font-size:12.5px;border-bottom:1px solid var(--line);padding:6px 8px;white-space:nowrap}
+.grid td{padding:6px 8px;border-bottom:1px solid #eee;vertical-align:middle}
+.grid tr.hl td{background:#eef4fa}
+.grid td.num,.grid th.num{text-align:right;font-variant-numeric:tabular-nums}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-ok{background:#e3f3ea;color:#14633e}.b-warn{background:#fdebdc;color:#9a3a07}.b-block{background:#fbe2e2;color:#a11d1d}
+.b-wait{background:#fdf3c7;color:#7a5c00}.b-info{background:#e2edf7;color:var(--blue)}.b-neu{background:#eee;color:#555}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:10px;min-width:150px;border:1px solid #ccc;border-radius:4px;padding:3px 8px;background:#fff;font-size:13px}
+.sel:after{content:"";width:7px;height:7px;border-right:1.5px solid #666;border-bottom:1.5px solid #666;transform:rotate(45deg) translateY(-2px)}
+.inp{display:inline-block;border:1px solid #ccc;border-radius:4px;padding:3px 8px;background:#fff;font-size:13px;min-width:90px}
+.cb{width:15px;height:15px;border:1.5px solid #888;border-radius:3px;display:inline-flex;align-items:center;justify-content:center;flex:none;background:#fff}
+.cb.on{background:var(--blue);border-color:var(--blue)}
+.cb.on:after{content:"";width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.row{display:flex;align-items:center;gap:8px}
+.check{display:flex;gap:10px;align-items:flex-start;padding:6px 0;border-bottom:1px solid #eee;font-size:13px}
+.check:last-child{border-bottom:none}
+.ico{width:18px;height:18px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:700;margin-top:1px}
+.i-ok{background:var(--ok)}.i-warn{background:var(--warn)}.i-block{background:var(--block)}.i-wait{background:var(--wait);color:#3a3000}.i-off{background:#ccc}
+.bar{height:8px;background:#e9eef3;border-radius:4px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--blue)}
+.link{color:var(--blue);text-decoration:underline}
+dl.meta{display:grid;grid-template-columns:150px 1fr;gap:5px 14px;margin:0;font-size:13px}
+dl.meta dt{color:var(--ink3)}dl.meta dd{margin:0}
+.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--line2);margin:0 0 14px}
+.subtabs span{padding:7px 12px;color:var(--ink2);font-size:13.5px;position:relative}
+.subtabs span.on{color:var(--ink);font-weight:600}
+.subtabs span.on:after{content:"";position:absolute;left:10px;right:10px;bottom:-1px;height:2px;background:var(--blue)}
+.subtabs span.off{color:#aaa}
+.kpi{border:1px solid var(--line2);border-radius:8px;padding:10px 14px;background:#fff}
+.kpi .v{font-size:24px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12.5px;color:var(--ink2)}
+.kpi.main{border-color:var(--blue);background:#f2f7fb}
+</style></head><body>
+<div class="app">
+<header><img src="data:image/png;base64,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" alt="JBG">
+<div><h1>Automatisk klassificering</h1><div class="version">Version 0.19.1 (3f2a9c1)</div></div>
+<div class="hright"><span class="runind"><span class="spin"></span>1 körning pågår</span><span class="lang"><span class="on">SV</span><span>EN</span></span>
+<span class="user">Inloggad som anna.lindqvist</span></div></header>
+<div class="ctx"><span class="chip"><span class="dot d-ok"></span><span class="k">Projekt</span><b>Ärendeklassificering</b></span><span class="sep">›</span><span class="chip"><span class="dot d-ok"></span><span class="k">Dataset</span><b>Ärenden 2025 (träning)</b></span><span class="sep">›</span><span class="chip"><span class="dot d-ok"></span><span class="k">Konfiguration</span><b>Standard v7</b></span><span class="sep">›</span><span class="chip"><span class="dot d-ok"></span><span class="k">Modell</span><b>STA-NOR-LRN</b></span></div>
+<nav class="tabs"><span class="">Översikt</span><span class="">Projekt</span><span class="on">Dataset</span><span class="">Konfiguration</span><span class="">Körning</span><span class="">Resultat</span><span class="">Modeller</span><span class="">Körhistorik</span></nav>
+<main>
+<div class="card" style="margin-bottom:16px"><div class="row" style="justify-content:space-between;margin-bottom:6px"><h2 style="margin:0">Projektets dataset</h2><span class="btn sub sm">Lägg till dataset</span></div>
+<table class="grid"><tr><th>Namn</th><th>Roll</th><th>Källa</th><th class="num">Rader</th><th>Status</th></tr>
+<tr class="hl"><td><b>Ärenden 2025 (träning)</b></td><td>Träning <span class="badge b-info">Aktivt</span></td><td>SQL</td><td class="num">48 213</td><td><span class="badge b-ok">Validerat 2026-11-02 14:12</span></td></tr>
+<tr><td><b>Ärenden nov 2026</b></td><td>Prediktion</td><td>SQL</td><td class="num">1 412</td><td><span class="badge b-warn">Kompatibelt med vald modell, 2 varningar</span></td></tr></table></div>
+<div style="display:grid;grid-template-columns:1fr 400px;gap:16px">
+<div>
+ <fieldset class="panel"><legend>1. Källa</legend><div class="row" style="justify-content:space-between"><div class="row"><span class="dot d-ok"></span>SQL: <b>Exempeldatabas</b> / <b>Arenden2025</b></div>
+  <div class="row small"><span class="muted">Ansluten som DOMÄN\anna.lindqvist (Windows)</span><span class="link">Använd SQL-inloggning i stället</span></div></div></fieldset>
+ <fieldset class="panel"><legend>2. Förhandsgranskning</legend><div class="row" style="justify-content:space-between"><span>50 av 48 213 rader, 11 kolumner</span><span class="link small">Visa</span></div></fieldset>
+ <fieldset class="panel"><legend>3. Kolumnroller</legend>
+  <div class="row" style="margin:4px 0 8px;gap:8px"><span class="btn sub sm">Alla numeriska → numerisk prediktor</span><span class="btn sub sm">Hämta roller från sparad modell</span><span class="muted small" style="margin-left:auto">2 kolumner dolda (Ignorera)</span></div>
+  <table class="grid" style="background:#fff"><tr><th>Kolumn</th><th>SQL-typ</th><th class="num">Saknas</th><th class="num">Unika</th><th>Roll</th><th>Kommentar</th></tr><tr><td><b>arende_id</b></td><td class="muted">int</td><td class="num">0 %</td><td class="num">48 213</td><td><span class="sel" style="min-width:190px">Unikt id</span></td><td class="muted small"></td></tr><tr><td><b>arendetyp</b></td><td class="muted">nvarchar(40)</td><td class="num">2,6 %</td><td class="num">5</td><td><span class="sel" style="min-width:190px">Klass (mål)</span></td><td class="muted small">Rader utan klass blir prediktionsrader</td></tr><tr><td><b>inkommen_datum</b></td><td class="muted">date</td><td class="num">0 %</td><td class="num">365</td><td><span class="sel" style="min-width:190px">Ignorera</span></td><td class="muted small"></td></tr><tr><td><b>kanal</b></td><td class="muted">nvarchar(20)</td><td class="num">0 %</td><td class="num">4</td><td><span class="sel" style="min-width:190px">Kategorisk prediktor</span></td><td class="muted small"></td></tr><tr><td><b>beskrivning</b></td><td class="muted">nvarchar(max)</td><td class="num">1,1 %</td><td class="num">47 902</td><td><span class="sel" style="min-width:190px">Textprediktor</span></td><td class="muted small"></td></tr><tr><td><b>belopp</b></td><td class="muted">decimal(12,2)</td><td class="num">12,4 %</td><td class="num">9 811</td><td><span class="sel" style="min-width:190px">Numerisk prediktor</span></td><td class="muted small"></td></tr><tr><td><b>antal_bilagor</b></td><td class="muted">int</td><td class="num">0 %</td><td class="num">17</td><td><span class="sel" style="min-width:190px">Numerisk prediktor</span></td><td class="muted small"></td></tr><tr><td><b>handlaggande_enhet</b></td><td class="muted">nvarchar(30)</td><td class="num">0 %</td><td class="num">23</td><td><span class="sel" style="min-width:190px">Kategorisk prediktor</span></td><td class="muted small"></td></tr><tr><td><b>person_ref</b></td><td class="muted">nvarchar(20)</td><td class="num">0 %</td><td class="num">31 554</td><td><span class="sel" style="min-width:190px">Grupp</span></td><td class="muted small">Används för gruppdisjunkt validering</td></tr></table></fieldset>
+</div>
+<div>
+ <fieldset class="panel"><legend>4. Klassfördelning</legend><div style="display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center;margin:7px 0;font-size:13px"><span>Ersättning</span><div class="bar" style="height:14px"><i style="width:100.0%"></i></div><span class="num" style="text-align:right">21 406</span></div><div style="display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center;margin:7px 0;font-size:13px"><span>Medlemskap</span><div class="bar" style="height:14px"><i style="width:55.5%"></i></div><span class="num" style="text-align:right">11 872</span></div><div style="display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center;margin:7px 0;font-size:13px"><span>Arbetsvillkor</span><div class="bar" style="height:14px"><i style="width:34.2%"></i></div><span class="num" style="text-align:right">7 315</span></div><div style="display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center;margin:7px 0;font-size:13px"><span>Återkrav</span><div class="bar" style="height:14px"><i style="width:22.9%"></i></div><span class="num" style="text-align:right">4 908</span></div><div style="display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center;margin:7px 0;font-size:13px"><span>Övrigt</span><div class="bar" style="height:14px"><i style="width:6.9%"></i></div><span class="num" style="text-align:right">1 479</span></div><div style="display:grid;grid-template-columns:110px 1fr 64px;gap:10px;align-items:center;margin:7px 0;font-size:13px"><span class="muted">Utan klass</span><div class="bar" style="height:14px"><i style="width:5.8%;background:#b9c7d4"></i></div><span style="text-align:right" class="muted">1 233</span></div>
+  <div class="row small" style="margin-top:10px;gap:14px"><span>Obalans <b>14,5 : 1</b></span><span class="muted">störst / minst klass</span></div></fieldset>
+ <fieldset class="panel"><legend>Validering</legend>
+  <div class="check"><span class="ico i-ok">✓</span><div>Datasetet nås inom projektets behörighet</div></div>
+  <div class="check"><span class="ico i-ok">✓</span><div>Exakt en klasskolumn och ett unikt id</div></div>
+  <div class="check"><span class="ico i-ok">✓</span><div>Unikt id saknar dubbletter</div></div>
+  <div class="check"><span class="ico i-ok">✓</span><div>Datatyperna passar de valda rollerna</div></div>
+  <div class="check"><span class="ico i-warn">!</span><div>2,6 % av raderna saknar klass<div class="small muted">De behandlas som prediktionsrader.</div></div></div>
+ </fieldset>
+</div></div></main>
+<div class="foot"><span class="hint">Senaste validering 2026-11-02 14:12. Ändrade roller kräver ny validering.</span><span class="btn act ready">Validera dataset</span></div>
+</div></body></html>

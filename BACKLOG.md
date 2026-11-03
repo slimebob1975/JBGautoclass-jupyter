@@ -121,6 +121,17 @@ full SQL regression acceptance remain separately unverified.
   semantics before selecting transport or deployment technology.
 - [ ] Migrate one complete vertical workflow to this layer before broadening it;
   verify that the current GUI and a future HTTP adapter can call the same API.
+- [ ] **283a design follow-up - GUI delivery Phase 0 (backend foundations, no
+  new UI).** Close the service-layer gaps listed under "Backend gaps" in
+  `docs/gui/JBG_web_gui_design.md`, in small revisions: wire the FastAPI
+  composition root with the existing SQL/CSV resolvers, validators and runtimes
+  (gap 1); run jobs in worker processes started by the app, backed by a durable
+  job table in a dedicated JBG metadata database on SQL Server, with
+  cooperative cancellation (gaps 2-4); add allowlisted result DTOs and a closed
+  `RunStage` enum (gaps 5-6), a Project entity (gap 7), SQL dataset
+  authorization through the user's own SQL login (gap 8), a SQL model catalog
+  (gap 9) and a configuration JSON schema/DTO (gap 10). Gate: one SQL and one
+  CSV training run via the API survives a server restart.
 
 **Phase 4 - New web GUI (after application-layer contracts are stable).**
 
@@ -133,6 +144,26 @@ full SQL regression acceptance remain separately unverified.
   the existing Voilà GUI available during migration until replacement is proven.
 - [ ] Allow a future GUI to be replaced without modifying ML engine or application
   contracts. Avoid hidden GUI-specific state as a source of truth.
+- [x] **283a: web GUI design agreed (2026-11-03).** Binding reference:
+  `docs/gui/JBG_web_gui_design.md`, with mockups in `docs/gui/mockups/` and
+  the delivery roadmap in `docs/gui/roadmap.png`. Eight tabs (Overview,
+  Projects, Dataset, Configuration, Run, Results, Models, Run History) and a
+  Voilà parity table that places every current control. Locked decisions:
+  (1) Fluent UI 2 patterns styled with the organization's existing web-app
+  stylesheet, semantic action colors only on each tab's primary action;
+  (2) FastAPI + Jinja2 + htmx + Fluent UI web components + Apache ECharts;
+  (3) dedicated JBG metadata database and job queue on SQL Server for SQL and
+  CSV projects, artifacts on disk, per-project model retention; (4) several
+  datasets per project with roles, one source type per project; (5) SQL data
+  access with the user's own login (Windows/Entra probe, SQL-login fallback),
+  JBG service identity only for its own metadata database; (6) Swedish default
+  UI language, technical terms untranslated; (7) Overview scoped to the
+  active project.
+- [ ] The web GUI assumes internet access; this supersedes the earlier
+  offline-operation requirement. `fastapi_offline` and the offline Swagger
+  setup from 282b are temporary and may be replaced.
+- [ ] The Voilà "Regr. test" and "Regr. suite" buttons are obsolete and are not
+  carried over to the web GUI.
 
 **Deferred until AFTER the new GUI - DataLayer API v1.**
 
@@ -148,6 +179,9 @@ full SQL regression acceptance remain separately unverified.
   per-project/per-artifact authorization: design server-side authorization,
   tenant/project isolation, credential handling, session context, retention,
   concurrency and audit rules before any multi-user rollout.
+- [ ] Keep the simplified access model (283a design decision 5): JBG adds no
+  allowlist or role system of its own. SQL rights come from each user's own
+  login, and JBG only isolates principals' projects and jobs.
 - [ ] Validate Azure deployment, secrets and storage policies against actual
   hosting architecture. Do not add speculative cloud coupling to today's
   standalone ML engine.
