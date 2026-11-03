@@ -2,6 +2,10 @@
 
 A job is created before execution so failures remain observable by RunReference.
 This adapter does not schedule work, persist results or implement cancellation.
+
+Revision 284a: a job may carry its own execution service, composed for one
+storage scope and configuration (see JBGRunComposition). Without one, the
+service passed to the constructor is used, as before.
 """
 from __future__ import annotations
 
@@ -19,6 +23,7 @@ from JBGRunProgress import RunProgressService, _ACTIVE_RUN
 @dataclass
 class _Job:
     prepared: PreparedRun
+    execution: RunExecutionService
     status: RunStatus = RunStatus.PENDING
     result: Any = None
     error: Exception | None = None
@@ -36,13 +41,19 @@ class RunJobService:
         self._jobs: dict[RunReference, _Job] = {}
         self._lock = RLock()
 
-    def create(self, prepared: PreparedRun) -> RunReference:
+    def create(self, prepared: PreparedRun, *,
+               execution: RunExecutionService | None = None) -> RunReference:
+        """Register a job; ``execution`` must come from a trusted composition root."""
         if not isinstance(prepared, PreparedRun):
             raise TypeError("expected PreparedRun")
+        if execution is None:
+            execution = self._execution
+        elif not isinstance(execution, RunExecutionService):
+            raise TypeError("execution must be RunExecutionService")
         reference = RunReference(str(uuid4()))
         with self._lock:
             self._progress.register(reference)
-            self._jobs[reference] = _Job(prepared=prepared)
+            self._jobs[reference] = _Job(prepared=prepared, execution=execution)
         return reference
 
     def snapshot(self, reference: RunReference) -> RunSnapshot:
@@ -59,10 +70,11 @@ class RunJobService:
                 raise ValueError("run has already started")
             job.status = RunStatus.RUNNING
             prepared = job.prepared
+            execution = job.execution
         try:
             token = _ACTIVE_RUN.set(reference)
             try:
-                result = self._execution.execute(prepared)
+                result = execution.execute(prepared)
             finally:
                 _ACTIVE_RUN.reset(token)
         except Exception as error:

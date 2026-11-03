@@ -60,10 +60,12 @@ class PrincipalRunAccessService:
         if self._authorize_dataset is not None:
             self._authorize_dataset(principal, prepared)
 
-    def create(self, principal: AuthenticatedPrincipal, prepared: PreparedRun) -> dict:
+    def create(self, principal: AuthenticatedPrincipal, prepared: PreparedRun, *,
+               execution=None) -> dict:
+        """``execution`` (284a) is an optional, server-composed execution service."""
         owner = self._owner(principal)
         self._authorize(principal, prepared)
-        response = self._presentation.create(owner, prepared)
+        response = self._presentation.create(owner, prepared, execution=execution)
         run = RunReference(response["run_id"])
         self._prepared[run] = prepared
         return response

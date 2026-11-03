@@ -132,6 +132,9 @@ full SQL regression acceptance remain separately unverified.
   authorization through the user's own SQL login (gap 8), a SQL model catalog
   (gap 9) and a configuration JSON schema/DTO (gap 10). Gate: one SQL and one
   CSV training run via the API survives a server restart.
+  - [x] 284a: gap 1 for CSV - per-run composition (`JBGRunComposition.py`)
+    with Voilà-compatible project-name scope; SQL waits for gap 8. No HTTP
+    endpoint yet.
 
 **Phase 4 - New web GUI (after application-layer contracts are stable).**
 

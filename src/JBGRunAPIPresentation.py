@@ -35,12 +35,14 @@ class RunAPIPresentationService:
             raise PermissionError("authentication required")
         return principal
 
-    def create(self, principal: str, prepared: PreparedRun) -> dict[str, Any]:
+    def create(self, principal: str, prepared: PreparedRun, *,
+               execution=None) -> dict[str, Any]:
         owner = self._principal(principal)
         # Must be called only after dataset authorization by the composition root.
-        # PreparedRun itself does not confer authorization.
+        # PreparedRun itself does not confer authorization. An optional execution
+        # service (284a) comes from the same trusted composition root, never a client.
         with self._lock:
-            run = self._jobs.create(prepared)
+            run = self._jobs.create(prepared, execution=execution)
             self._owners[run] = owner
             return self._snapshot(run)
 

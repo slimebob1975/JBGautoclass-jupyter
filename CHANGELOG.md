@@ -1,3 +1,17 @@
+## Revision 284a - per-run composition of application services, CSV (2026-11-03)
+
+- Add `src/JBGRunComposition.py`: builds the existing CSV resolver, validator
+  and runtime per run for one storage scope and saved configuration, with
+  optional job-bound progress. `local_csv_storage` uses the same storage root
+  and project-name scope as the Voilà GUI. SQL composition is rejected
+  explicitly until design gap 8 (session-bound SQL data layer).
+- `RunJobService.create`, `RunAPIPresentationService.create` and
+  `PrincipalRunAccessService.create` accept an optional, server-composed
+  `execution` service. Backward compatible: omitted, the constructor's
+  service is used as before.
+- Tests: `tests/test_revision_284a_run_composition.py` (unit tests plus a real
+  native CSV training run through `PrincipalRunAccessService`).
+
 ## Revision 283a - web GUI design documentation (2026-11-03)
 
 - Add the agreed design for the new FastAPI web GUI in
