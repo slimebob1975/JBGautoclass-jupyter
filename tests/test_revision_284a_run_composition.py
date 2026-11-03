@@ -88,10 +88,11 @@ def test_composed_execution_passes_through_principal_access():
 
 # --- Composition --------------------------------------------------------------
 
-def test_sql_composition_is_rejected_explicitly():
-    with pytest.raises(NotImplementedError, match='design gap 8'):
-        compose_run(DataSourceKind.SQL, repository=Mock(), scope=_scope(),
-                    configuration_id='cfg', logger=Mock())
+def test_sql_composition_requires_a_session_registry():
+    # 284c replaced the explicit SQL rejection with session-bound composition.
+    with pytest.raises(TypeError, match='SQLSessionRegistry required'):
+        compose_run(DataSourceKind.SQL, sessions=object(), principal=_local_principal(),
+                    config=object(), logger=Mock())
 
 
 def test_compose_run_requires_a_source_kind():

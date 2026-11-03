@@ -135,6 +135,9 @@ full SQL regression acceptance remain separately unverified.
   - [x] 284a: gap 1 for CSV - per-run composition (`JBGRunComposition.py`)
     with Voilà-compatible project-name scope; SQL waits for gap 8. No HTTP
     endpoint yet.
+  - [x] 284c: gaps 1 and 8 for SQL - `JBGSQLSessions.py` keeps each user's
+    SQL login in memory and authorizes runs only on DataLayers opened with it;
+    Windows authentication in local mode only. No HTTP endpoint yet.
 
 **Phase 4 - New web GUI (after application-layer contracts are stable).**
 

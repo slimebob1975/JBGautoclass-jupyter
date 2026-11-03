@@ -6,9 +6,9 @@ graph built at server start can therefore not serve several projects. This
 module builds that graph per run from trusted, server-side inputs; it adds no
 ML, validation or authorization rules of its own.
 
-Only CSV is supported. SQL composition needs a DataLayer opened with the
-requesting user's own credentials in the current session (BACKLOG design gap 8)
-and is rejected explicitly until then.
+SQL runs (revision 284c) use a DataLayer opened by JBGSQLSessions with the
+requesting user's own credentials in the current server session; pass the same
+registry's ``authorize`` as PrincipalRunAccessService(authorize_dataset=...).
 """
 from __future__ import annotations
 
@@ -17,11 +17,14 @@ from pathlib import Path
 
 from JBGApplicationContracts import DataSourceKind
 from JBGDatasetApplicationService import DatasetApplicationService
-from JBGDatasetResolvers import ScopedCSVDatasetResolver
-from JBGRunConfigurationValidators import CSVRunConfigurationValidator
-from JBGRunExecutionService import RegisteredCSVClassifierRuntime, RunExecutionService
+from JBGDatasetResolvers import ConfiguredSQLDatasetResolver, ScopedCSVDatasetResolver
+from JBGRunConfigurationValidators import (CSVRunConfigurationValidator,
+                                           SQLRunConfigurationValidator)
+from JBGRunExecutionService import (RegisteredCSVClassifierRuntime, RunExecutionService,
+                                    SQLClassifierRuntime)
 from JBGRunPreparationService import RunPreparationService
 from JBGRunProgress import ProgressObservingLogger, RunProgressService
+from JBGSQLSessions import SQLSessionRegistry
 from Storage.ArtifactContract import StorageScope
 
 # Same location as the Voila GUI (GUI/Widgets.py), relative to the working directory.
@@ -44,10 +47,22 @@ def local_csv_storage(project: str, *, base: str | Path | None = None):
 
 @dataclass(frozen=True)
 class ComposedRun:
-    """Preparation and execution services bound to one scope and configuration."""
+    """Preparation and execution services bound to one scope and configuration.
+
+    For SQL, ``configuration`` is the run's own Config copy that carries the
+    session credentials: use it as the RunConfiguration payload and never
+    persist it. For CSV it is None; the caller supplies its own Config.
+    """
 
     preparation: RunPreparationService
     execution: RunExecutionService
+    configuration: object = None
+
+    def sql_dataset_key(self) -> str:
+        """Dataset key for an SQL run: the configured table of ``configuration``."""
+        if self.configuration is None:
+            raise ValueError("Not an SQL composition")
+        return self.configuration.get_data_table(include_database=True)
 
 
 def compose_csv_run(repository, scope: StorageScope, configuration_id: str, logger, *,
@@ -62,10 +77,7 @@ def compose_csv_run(repository, scope: StorageScope, configuration_id: str, logg
         raise TypeError("trusted StorageScope required")
     if not isinstance(configuration_id, str) or not configuration_id.strip():
         raise ValueError("configuration_id required")
-    if progress is not None:
-        if not isinstance(progress, RunProgressService):
-            raise TypeError("progress must be RunProgressService")
-        logger = ProgressObservingLogger(logger, progress)
+    logger = _observed(logger, progress)
     datasets = DatasetApplicationService(csv=ScopedCSVDatasetResolver(repository, scope))
     preparation = RunPreparationService(datasets, csv=CSVRunConfigurationValidator())
     execution = RunExecutionService(
@@ -74,14 +86,40 @@ def compose_csv_run(repository, scope: StorageScope, configuration_id: str, logg
     return ComposedRun(preparation, execution)
 
 
-def compose_run(source: DataSourceKind, *, repository, scope: StorageScope,
-                configuration_id: str, logger,
-                progress: RunProgressService | None = None) -> ComposedRun:
-    """Dispatch on the project's source type; SQL is not supported yet."""
+def compose_sql_run(sessions: SQLSessionRegistry, principal, config, logger, *,
+                    progress: RunProgressService | None = None) -> ComposedRun:
+    """Wire the existing SQL resolver, validator and runtime for one run.
+
+    The DataLayer is opened by ``sessions`` with ``principal``'s own credentials
+    on a copy of ``config``; ``config`` itself is not modified. Raises
+    PermissionError when the principal has not signed in to SQL.
+    """
+    if not isinstance(sessions, SQLSessionRegistry):
+        raise TypeError("SQLSessionRegistry required")
+    logger = _observed(logger, progress)
+    layer = sessions.data_layer_for(principal, config, logger)
+    datasets = DatasetApplicationService(sql=ConfiguredSQLDatasetResolver(layer, layer.config))
+    preparation = RunPreparationService(datasets, sql=SQLRunConfigurationValidator())
+    execution = RunExecutionService(preparation, sql=SQLClassifierRuntime(logger))
+    return ComposedRun(preparation, execution, configuration=layer.config)
+
+
+def compose_run(source: DataSourceKind, **arguments) -> ComposedRun:
+    """Dispatch on the project's source type.
+
+    CSV takes ``repository, scope, configuration_id, logger``; SQL takes
+    ``sessions, principal, config, logger``; both accept ``progress``.
+    """
     if not isinstance(source, DataSourceKind):
         raise TypeError("source must be a DataSourceKind")
     if source is DataSourceKind.SQL:
-        raise NotImplementedError(
-            "SQL run composition requires a session-bound SQL data layer "
-            "opened with the user's own login (design gap 8); not yet available")
-    return compose_csv_run(repository, scope, configuration_id, logger, progress=progress)
+        return compose_sql_run(**arguments)
+    return compose_csv_run(**arguments)
+
+
+def _observed(logger, progress: RunProgressService | None):
+    if progress is None:
+        return logger
+    if not isinstance(progress, RunProgressService):
+        raise TypeError("progress must be RunProgressService")
+    return ProgressObservingLogger(logger, progress)

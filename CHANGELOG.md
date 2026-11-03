@@ -1,3 +1,23 @@
+## Revision 284c - SQL runs through the user's own login (2026-11-03)
+
+- Add `src/JBGSQLSessions.py` (design gap 8): `SQLCredentials` (Windows
+  authentication or SQL login; password hidden from repr) and
+  `SQLSessionRegistry`, which verifies a sign-in by connecting, keeps the
+  credentials in process memory only, opens each run's SQL DataLayer on a copy
+  of the run's Config, and provides `authorize` for
+  `PrincipalRunAccessService(authorize_dataset=...)`. A run is authorized only
+  if its DataLayer was opened by the registry for the same, still signed-in
+  principal. Windows authentication is refused outside local mode, because it
+  connects as the server process identity.
+- `JBGRunComposition`: new `compose_sql_run` (design gap 1 for SQL);
+  `compose_run` dispatches CSV and SQL. `ComposedRun` gains `configuration`
+  (the SQL run's credential-carrying Config copy, never persisted) and
+  `sql_dataset_key()`.
+- Tests: `tests/test_revision_284c_sql_sessions.py` with a real Config and
+  DataLayer (connection and final classifier replaced). The 284a test that
+  expected SQL to be rejected now checks that SQL requires a session registry.
+- No change to the Voilà GUI, the SQL engine or stored configurations.
+
 ## Revision 284b - backend gate summary and application-layer group (2026-11-03)
 
 - `scripts/run_backend_refactor_tests.ps1`: new 16th group "Application layer
