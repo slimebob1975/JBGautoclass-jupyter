@@ -56,8 +56,9 @@ def test_run_snapshot_is_transport_neutral_and_immutable():
 
 def test_run_status_values_are_stable():
     from JBGApplicationContracts import RunStatus
+    # 285a deliberately added "interrupted" (agreed restart behaviour).
     assert {v.value for v in RunStatus} == {
-        "pending", "running", "succeeded", "failed", "cancelled"
+        "pending", "running", "succeeded", "failed", "cancelled", "interrupted"
     }
 
 

@@ -22,6 +22,8 @@ class RunStatus(str, Enum):
     SUCCEEDED = "succeeded"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    # 285a: the worker running the job stopped without finishing it.
+    INTERRUPTED = "interrupted"
 
 
 @dataclass(frozen=True)

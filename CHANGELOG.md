@@ -1,3 +1,20 @@
+## Revision 285a - durable run job store (2026-11-03)
+
+- Add `src/JBGRunJobStore.py` (design gaps 2-4, step 1 of 4): `RunJobStore`
+  keeps run jobs and bounded progress events in `jbg_run_jobs` and
+  `jbg_run_events` via SQLAlchemy Core, over a local SQLite file or (from
+  285d) the JBG metadata database on SQL Server, optionally in a schema.
+  Atomic claim by one worker, heartbeat, cooperative cancel flag, guarded
+  finish by the claiming worker, and marking of stale running jobs as
+  interrupted. Owner-checked reads treat foreign and unknown runs alike.
+- No secrets in the store: job specifications must be plain JSON and are
+  rejected if they contain a non-empty password; results must be JSON-native
+  (the existing result projection).
+- `RunStatus` gains `INTERRUPTED`; the 280v stability test is extended by
+  exactly that value.
+- `requirements-fastapi.txt`: add `sqlalchemy>=2.0,<3`.
+- Not yet used by the API or any worker; follows in 285b-285d.
+
 ## Revision 284c - SQL runs through the user's own login (2026-11-03)
 
 - Add `src/JBGSQLSessions.py` (design gap 8): `SQLCredentials` (Windows

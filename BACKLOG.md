@@ -138,6 +138,10 @@ full SQL regression acceptance remain separately unverified.
   - [x] 284c: gaps 1 and 8 for SQL - `JBGSQLSessions.py` keeps each user's
     SQL login in memory and authorizes runs only on DataLayers opened with it;
     Windows authentication in local mode only. No HTTP endpoint yet.
+  - [x] 285a: gaps 2-4, step 1 of 4 - durable job store (`JBGRunJobStore.py`,
+    SQLite file or SQL Server metadata database). Next: 285b worker process
+    per job, 285c dispatcher and restart handling, 285d API wiring and the
+    Phase 0 gate test.
 
 **Phase 4 - New web GUI (after application-layer contracts are stable).**
 

@@ -4,3 +4,4 @@ fastapi>=0.110,<1
 uvicorn>=0.27,<1
 httpx>=0.27,<1  # FastAPI TestClient HTTP tests
 fastapi-offline==1.7.7  # Bundled Swagger UI for offline /docs
+sqlalchemy>=2.0,<3  # Durable run job store (revision 285a)
