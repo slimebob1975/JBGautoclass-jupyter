@@ -266,6 +266,8 @@ Results shows one run in depth through seven sub-views, chosen by a run selector
 | Predictions | Prediktioner | Predicted-class distribution, rate type (individual / general), probability histogram; export CSV or joined CSV; for SQL, rows written and failures | `print_prediction_report`, `CSVPredictionExport`, `CSVPredictionResults` |
 | Dark Numbers | Mörkertal | Only if enabled: estimate per class with interval and validation / sensitivity outcome, clearly labelled as diagnostic | `JBGDarkNumberReporting` |
 
+**Two different error counts.** The holdout evaluation (metrics cards and confusion matrix) covers only the holdout rows. The mispredictions count and list cover all labelled rows where the cross-trained or the retrained model is wrong, so they can differ (smoke test: 3 mispredictions against 2 holdout errors). Both views say which rows they cover.
+
 **Reclassification** is the only write action in Results. SQL writes back to the classification table after an explicit confirm per row; CSV records a correction and offers a corrected-CSV download. The 40-row cap that exists today for widget payload reasons is replaced by server-side paging.
 
 **Primary action – Analyse results / Analysera resultat:** opens the comparison view for two or more runs selected here or in Run History (side-by-side metrics and confusion matrices).
@@ -437,7 +439,7 @@ The map above is the target. What exists after revision 285m3:
 | Endpoint | Since | Notes |
 | --- | --- | --- |
 | `GET /api/runs`, `GET /api/runs/{id}`, `/progress`, `/result` | 282a, 285d | Owner-bound reads on the durable job store; progress never returns message text |
-| `GET /api/runs/{id}/overview` | 285m | Status, phase (task stage while running), progress, label-free evaluation and feature importance when available |
+| `GET /api/runs/{id}/overview` | 285m | `schema_version: 2`: status; `stage` (name, `exact` or `estimated` precision, percent; the task stage while running); `results` with summary and, when available, label-free evaluation and feature importance |
 | `POST /api/runs` | 285d | Interim body: `{"source": "sql", "configuration": "<saved file name>"}` or `{"source": "csv", "project": "<name>", "configuration_id": "<saved record>"}`, from `GET /api/configurations` |
 | `POST /api/runs/{id}/cancel` | 285d | Queued runs stop at once, running runs at the next engine checkpoint |
 | `GET /api/configurations?project=` | 285d | Interim catalog of what Voilà saves; replaced by the configuration store (gap 10) |
@@ -472,7 +474,7 @@ Recommended answers:
 
 - **Gap 8:** the user's own SQL login is the authorisation. The hook required by PrincipalRunAccessService only checks that the run's SQL data layer was opened with the requesting user's own credentials in the current session; SQL Server then enforces what that user may read and write. No allowlist and no JBG role system, in line with the simplified access model.
 
-**Status after 285n.** Gaps 1-4 and 8 are closed (284a-285d, 285f): runs are composed per run, executed in worker processes from a durable job store, survive server restarts and can be cancelled; SQL access uses the user's own login. Gaps 5 and 6 are partly closed (285m-285m3: run overview, task stages, structured evaluation and feature importance). Gaps 7, 9 and 10 have their repositories (285i-285l) but no services or endpoints yet. The open items and their order are kept in `BACKLOG.md`.
+**Status after 285o.** The Phase 0 gate passed on 2026-11-04 with a real SQL training-and-prediction run through the API against the configured SQL Server. Gaps 1-4 and 8 are closed (284a-285d, 285f): runs are composed per run, executed in worker processes from a durable job store, survive server restarts and can be cancelled; SQL access uses the user's own login. Gaps 5 and 6 are partly closed (285m-285m3: run overview, task stages, structured evaluation and feature importance). Gaps 7, 9 and 10 have their repositories (285i-285l) but no services or endpoints yet. The open items and their order are kept in `BACKLOG.md`.
 
 ## Delivery phasing
 

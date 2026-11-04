@@ -169,11 +169,15 @@ full SQL regression acceptance remain separately unverified.
     stored result (gap 5, first part).
   - [x] 285n: test fixes (285c dispatcher stand-ins, deterministic 285b
     heartbeat test) and documentation catch-up for 285e-285m3.
-  - **Phase 0 status after 285n.** Done: gaps 1-4 and 8; foundations for 5-7,
-    9 and 10. Open, in suggested order:
-    1. [ ] Manual smoke test against the real SQL Server: metadata tables in
-       the configured schema, SQL sign-in for a saved configuration, one SQL
-       training run through the API. This closes the Phase 0 gate.
+  - [x] 285o: Phase 0 gate passed and recorded; overview description
+    corrected.
+  - **Phase 0 status after 285o.** Done: gaps 1-4 and 8, and the Phase 0
+    gate; foundations for 5-7, 9 and 10. Open, in suggested order:
+    1. [x] Manual smoke test against the real SQL Server (2026-11-04):
+       metadata tables in the configured schema, SQL login bound to a saved
+       configuration, one SQL training-and-prediction run through the API,
+       succeeded with evaluation and feature importance in the overview. This
+       closed the Phase 0 gate.
     2. [ ] Services and endpoints for projects, datasets and configurations on
        top of the 285i-285k repositories, with the one-source-type rule
        enforced at project level.
@@ -181,7 +185,13 @@ full SQL regression acceptance remain separately unverified.
        interim catalog (see the gap 10 item below), and registration of
        trained models in the catalog after the model file is saved.
     4. [ ] Remaining result DTOs (gap 5): spot-check leaderboard, predictions
-       and paged mispredictions.
+       and paged mispredictions. Label `mispredicted_count` clearly: it covers
+       all labelled rows where the cross-trained or the retrained model is
+       wrong, so it can differ from the errors in the holdout confusion matrix
+       (smoke test: 3 against 2).
+    5. [ ] `GET /api/configurations` should mark or omit saved SQL
+       configurations that submission refuses (placeholder values, 285h), so
+       the GUI only offers usable ones.
 - [ ] Design gap 10 follow-up: replace the interim configuration catalog
   (Voilà's `autoclassconfig_*.json` files and saved CSV records, 285d) with
   the configuration repository from 285j, so that runs can be configured

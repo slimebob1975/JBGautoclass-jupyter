@@ -1,3 +1,20 @@
+## Revision 285o - Phase 0 gate passed; documentation corrections (2026-11-04)
+
+- Record the manual Phase 0 smoke test (2026-11-04): with the metadata
+  database in the configured SQL Server schema, an SQL login bound to a saved
+  configuration, and an iris training-and-prediction run started through
+  `POST /api/runs`, the run succeeded in a worker process in about 80 s and
+  the overview returned summary, evaluation and feature importance. Windows
+  authentication was not accepted by that server; the SQL login was used.
+- Correct the 285m description of the overview response (`stage` object,
+  `schema_version: 2`), here and in the GUI design document.
+- Record two follow-ups found during the test: the configuration listing
+  offers saved SQL configurations that submission refuses (placeholder
+  values), and the Results views must label `mispredicted_count` (all
+  labelled rows, cross-trained or retrained model wrong) apart from the
+  holdout evaluation and its confusion matrix.
+- Documentation only.
+
 ## Revision 285n - test and documentation catch-up (2026-11-04)
 
 - Fix `tests/test_revision_285c_dispatcher.py`: its stand-ins for the SQL
@@ -33,11 +50,15 @@
 
 ## Revision 285m (part 1) - run overview (2026-11-04)
 
-- Add `src/JBGRunOverview.py` and `GET /api/runs/{run_id}/overview`: status,
-  coarse phase (queued, awaiting credentials, the current task stage while
-  running, or a final state), progress, and reviewed numeric summary fields.
-  Raw progress messages are never interpreted or returned. The in-memory
-  presentation service offers the same projection.
+- Add `src/JBGRunOverview.py` and `GET /api/runs/{run_id}/overview`. Since
+  the 285m2-285m3 follow-up the response has `schema_version: 2`: `status`;
+  `stage` with `name` (queued, awaiting_credentials, the current task stage
+  while running, or a final state), `precision` (`exact` for final states
+  and task stages, `estimated` otherwise) and `percent`; and `results` with
+  the reviewed summary fields plus, when available, `evaluation` and
+  `feature_importance`. Raw progress messages are never interpreted or
+  returned. The in-memory presentation service offers the same projection.
+  (Description corrected in 285o.)
 
 ## Revision 285l - model catalog (2026-11-04)
 
