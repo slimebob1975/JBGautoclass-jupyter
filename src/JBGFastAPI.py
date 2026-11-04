@@ -32,6 +32,7 @@ class SQLSignIn(BaseModel):
     method: Literal["windows", "sql"]
     username: str = ""
     password: str = ""
+    configuration: str
 
 
 def create_app(
@@ -40,7 +41,6 @@ def create_app(
     current_principal: Callable[[], AuthenticatedPrincipal],
     submission=None,
     sessions=None,
-    sql_probe_config: Callable[[], object] | None = None,
     lifespan=None,
 ) -> FastAPI:
     """Create the API with fail-closed, server-controlled identity.
@@ -104,12 +104,12 @@ def create_app(
 
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
-                                       submission, sessions, sql_probe_config)
+                                       submission, sessions)
     return app
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,
-                                   submission, sessions, sql_probe_config):
+                                   submission, sessions):
     """Endpoints that change state (285d)."""
     from JBGSavedConfigurations import UnknownConfiguration
     from JBGSQLSessions import SQLCredentials
@@ -169,7 +169,11 @@ def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,
         except (ValueError, TypeError):
             raise HTTPException(status_code=422, detail="invalid request") from None
         try:
-            sessions.sign_in(principal, credentials, sql_probe_config(), _SilentLogger())
+            config = submission.configurations.load_sql(request.configuration)
+        except UnknownConfiguration:
+            raise HTTPException(status_code=404, detail="configuration unavailable") from None
+        try:
+            sessions.sign_in(principal, credentials, config, _SilentLogger())
         except PermissionError:
             raise HTTPException(status_code=403, detail="not permitted") from None
         except Exception:

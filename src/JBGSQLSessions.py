@@ -73,6 +73,15 @@ def open_sql_data_layer(credentials: SQLCredentials, config, logger):
     return DataLayer(config=run_config, logger=logger)
 
 
+def _connection_target(config_or_connection) -> tuple[str, str, str, str]:
+    """Server-side connection identity; exclude credentials and table selections."""
+    connection = getattr(config_or_connection, "connection", config_or_connection)
+    fields = ("host", "odbc_driver", "data_catalog", "class_catalog")
+    if isinstance(connection, dict):
+        return tuple(str(connection.get(field, "")).strip().casefold() for field in fields)
+    return tuple(str(getattr(connection, field, "")).strip().casefold() for field in fields)
+
+
 def _principal_key(principal: AuthenticatedPrincipal) -> str:
     if not isinstance(principal, AuthenticatedPrincipal):
         raise PermissionError("authenticated principal required")
@@ -85,6 +94,7 @@ class SQLSessionRegistry:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._credentials: dict[str, SQLCredentials] = {}
+        self._targets: dict[str, tuple[str, str, str, str]] = {}
         # DataLayer is an unhashable dataclass, so keep weak references and
         # compare by identity.
         self._layers: dict[str, list[weakref.ref]] = {}
@@ -117,6 +127,7 @@ class SQLSessionRegistry:
         layer = self._open(credentials, config, logger)
         with self._lock:
             self._credentials[key] = credentials
+            self._targets[key] = _connection_target(config)
             self._layers[key] = []
         self._remember(key, credentials, layer)
         return layer
@@ -132,7 +143,7 @@ class SQLSessionRegistry:
             credentials = self._credentials.get(key)
         return bool(credentials and credentials.windows)
 
-    def credentials_for_owner(self, owner: str) -> SQLCredentials | None:
+    def credentials_for_owner(self, owner: str, connection=None) -> SQLCredentials | None:
         """Trusted, server-side lookup by principal key for the dispatcher (285c).
 
         Job records store only the owner's principal key. Never expose the
@@ -141,6 +152,8 @@ class SQLSessionRegistry:
         if not isinstance(owner, str) or not owner:
             return None
         with self._lock:
+            if connection is not None and self._targets.get(owner) != _connection_target(connection):
+                return None
             return self._credentials.get(owner)
 
     def sign_out(self, principal: AuthenticatedPrincipal) -> None:
@@ -148,6 +161,7 @@ class SQLSessionRegistry:
         key = _principal_key(principal)
         with self._lock:
             self._credentials.pop(key, None)
+            self._targets.pop(key, None)
             self._layers.pop(key, None)
 
     def data_layer_for(self, principal: AuthenticatedPrincipal, config, logger):
@@ -155,7 +169,8 @@ class SQLSessionRegistry:
         key = _principal_key(principal)
         with self._lock:
             credentials = self._credentials.get(key)
-        if credentials is None:
+            authorized_target = self._targets.get(key)
+        if credentials is None or authorized_target != _connection_target(config):
             raise PermissionError("SQL sign-in required")
         layer = self._open(credentials, config, logger)
         self._remember(key, credentials, layer)

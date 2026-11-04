@@ -110,7 +110,7 @@ class RunDispatcher:
                     continue                      # started, not yet claimed
                 credentials = None
                 if record.source is DataSourceKind.SQL:
-                    credentials = self._credentials(record.owner)
+                    credentials = self._credentials(record.owner, record.spec.get("configuration", {}).get("connection"))
                     if credentials is None:
                         self._store.mark_awaiting_credentials(record.run)
                         continue
@@ -119,14 +119,14 @@ class RunDispatcher:
                 capacity -= 1
             return tuple(started)
 
-    def _credentials(self, owner: str):
+    def _credentials(self, owner: str, connection=None):
         if self._sessions is None:
             return None
-        return self._sessions.credentials_for_owner(owner)
+        return self._sessions.credentials_for_owner(owner, connection)
 
     def _requeue_signed_in(self) -> None:
         for record in self._store.awaiting_credentials():
-            if self._credentials(record.owner) is not None:
+            if self._credentials(record.owner, record.spec.get("configuration", {}).get("connection")) is not None:
                 self._store.requeue(record.run)
 
     def _command(self, run: RunReference, worker_id: str) -> list[str]:

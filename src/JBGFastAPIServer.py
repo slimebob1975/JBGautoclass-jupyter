@@ -33,18 +33,12 @@ def _no_scope(principal):
     raise PermissionError("storage scope is resolved per submission")
 
 
-def _default_sql_probe_config():
-    from Config import Config
-    return Config()          # host, driver and catalogs from .env, as in Voila
-
-
 def create_server_app(*, settings: MetadataStoreSettings | None = None,
                       host: str = "127.0.0.1", subject: str = "developer",
                       configurations: SavedConfigurations | None = None,
                       csv_artifacts: Path = DEFAULT_CSV_ARTIFACTS,
                       run_logs: Path = DEFAULT_RUN_LOGS,
                       csv_model_root: Path | None = None,
-                      sql_probe_config=_default_sql_probe_config,
                       dispatcher_options: dict | None = None):
     identity = LocalIdentityProvider(IdentitySettings(AuthenticationMode.LOCAL, "development",
                                                       host), subject)
@@ -78,6 +72,6 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
 
     app = create_app(runs, current_principal=identity.current_principal,
                      submission=submission, sessions=sessions,
-                     sql_probe_config=sql_probe_config, lifespan=lifespan)
+                     lifespan=lifespan)
     app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions}
     return app

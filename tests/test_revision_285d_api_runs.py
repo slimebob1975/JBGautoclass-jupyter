@@ -92,7 +92,6 @@ def _app(tmp_path, launcher, subject="developer", **options):
             config_dir=config_dir,
             csv_storage=lambda project: local_csv_storage(project, base=tmp_path)),
         run_logs=tmp_path / "run-logs", csv_artifacts=tmp_path / "artifacts",
-        sql_probe_config=_sql_config,
         dispatcher_options={"launcher": launcher, "poll_seconds": 60, "heartbeat_seconds": 1,
                             "stale_after": timedelta(minutes=5), **options})
 
@@ -192,7 +191,7 @@ def test_sql_run_requires_sign_in_and_credentials_go_to_the_worker_pipe(tmp_path
         response = client.post("/api/runs", json={"source": "sql", "configuration": name})
         assert (response.status_code, response.json()) == (409, {"detail": "SQL sign-in required"})
         signed = client.post("/api/sql/session",
-                             json={"method": "sql", "username": "analyst", "password": "S3cret!"})
+                             json={"method": "sql", "username": "analyst", "password": "S3cret!", "configuration": name})
         assert signed.json() == {"signed_in": True, "windows": False}
         created = client.post("/api/runs", json={"source": "sql", "configuration": name})
         assert created.status_code == 201 and created.json()["status"] == "pending"
@@ -209,13 +208,16 @@ def test_sql_run_requires_sign_in_and_credentials_go_to_the_worker_pipe(tmp_path
 
 
 def test_requests_never_echo_secrets_or_accept_paths(tmp_path):
+    name = _save_sql_configuration(tmp_path)
     with TestClient(_app(tmp_path, FakeLauncher())) as client:
         # Rejected by our own check (no username) ...
-        bad = client.post("/api/sql/session", json={"method": "sql", "password": "S3cret!"})
+        bad = client.post("/api/sql/session", json={"method": "sql", "password": "S3cret!", "configuration": name})
         assert bad.status_code == 422 and "S3cret!" not in bad.text
+        assert client.post("/api/sql/session", json={"method": "windows"}).status_code == 422
+        assert client.post("/api/sql/session", json={"method": "windows", "configuration": "../x"}).status_code == 404
         # ... and by FastAPI's validation, whose default response echoes the input.
-        for body in ({"method": "sql", "username": "a", "password": ["S3cret!"]},
-                     {"method": "kerberos", "username": "a", "password": "S3cret!"}):
+        for body in ({"method": "sql", "username": "a", "password": ["S3cret!"], "configuration": name},
+                     {"method": "kerberos", "username": "a", "password": "S3cret!", "configuration": name}):
             bad = client.post("/api/sql/session", json=body)
             assert bad.status_code == 422 and "S3cret!" not in bad.text, bad.text
             assert bad.json() == {"detail": "invalid request"}
@@ -228,12 +230,13 @@ def test_requests_never_echo_secrets_or_accept_paths(tmp_path):
 
 
 def test_failed_sql_sign_in_reveals_nothing(tmp_path):
+    name = _save_sql_configuration(tmp_path)
     from SQLDataLayer import DataLayer
     with patch("pyodbc.drivers", return_value=["SQL Server"]), \
             patch.object(DataLayer, "can_connect", autospec=True, return_value=False), \
             TestClient(_app(tmp_path, FakeLauncher())) as client:
         response = client.post("/api/sql/session",
-                               json={"method": "sql", "username": "analyst", "password": "x"})
+                               json={"method": "sql", "username": "analyst", "password": "x", "configuration": name})
         assert (response.status_code, response.json()) == (401, {"detail": "SQL sign-in failed"})
         assert client.get("/api/sql/session").json() == {"signed_in": False, "windows": False}
 
@@ -241,7 +244,7 @@ def test_failed_sql_sign_in_reveals_nothing(tmp_path):
 def test_other_users_cannot_see_or_cancel_my_run(tmp_path):
     name = _save_sql_configuration(tmp_path)
     with _sql_server(), TestClient(_app(tmp_path, FakeLauncher())) as mine:
-        mine.post("/api/sql/session", json={"method": "windows"})
+        mine.post("/api/sql/session", json={"method": "windows", "configuration": name})
         run_id = mine.post("/api/runs", json={"source": "sql", "configuration": name}).json()["run_id"]
     with TestClient(_app(tmp_path, FakeLauncher(), subject="bob")) as theirs:
         for response in (theirs.get(f"/api/runs/{run_id}"),
@@ -253,7 +256,7 @@ def test_other_users_cannot_see_or_cancel_my_run(tmp_path):
 def test_queued_sql_run_waits_for_credentials_after_a_restart(tmp_path):
     name = _save_sql_configuration(tmp_path)
     with _sql_server(), TestClient(_app(tmp_path, FakeLauncher())) as before:
-        before.post("/api/sql/session", json={"method": "windows"})
+        before.post("/api/sql/session", json={"method": "windows", "configuration": name})
         run_id = before.post("/api/runs", json={"source": "sql",
                                                 "configuration": name}).json()["run_id"]
     launcher = FakeLauncher()                       # the server restarts; sessions are gone
@@ -262,7 +265,7 @@ def test_queued_sql_run_waits_for_credentials_after_a_restart(tmp_path):
         dispatcher.poll_once()
         assert after.get(f"/api/runs/{run_id}").json()["status"] == "awaiting_credentials"
         assert launcher.processes == []
-        after.post("/api/sql/session", json={"method": "windows"})       # sign in again
+        after.post("/api/sql/session", json={"method": "windows", "configuration": name})       # sign in again
         dispatcher.poll_once()
         assert len(launcher.processes) == 1 and run_id in launcher.processes[0].command
         assert json.loads(launcher.processes[0].stdin.data)["windows"] is True
@@ -353,3 +356,35 @@ class CSVRunThroughAPI285d(revision_281c.CSVApplicationEndToEnd281c):
                     break
                 time.sleep(0.2)
         self.assertTrue(list(csv_models.rglob("*.sav")), "no model saved under the CSV model root")
+
+
+def test_sql_sign_in_uses_selected_saved_connection(tmp_path):
+    from SQLDataLayer import DataLayer
+    name = _save_sql_configuration(tmp_path)
+    observed = []
+
+    def probe(layer, verbose=False):
+        observed.append((layer.config.connection.host, layer.config.connection.odbc_driver,
+                         layer.config.connection.data_catalog))
+        return True
+
+    with patch("pyodbc.drivers", return_value=["SQL Server"]), \
+            patch.object(DataLayer, "can_connect", autospec=True, side_effect=probe), \
+            TestClient(_app(tmp_path, FakeLauncher())) as client:
+        response = client.post("/api/sql/session", json={"method": "windows", "configuration": name})
+        assert response.status_code == 200, response.text
+        assert observed == [("sql.example.invalid", "SQL Server", "ExampleDb")]
+
+
+def test_sql_session_is_limited_to_verified_connection(tmp_path):
+    name = _save_sql_configuration(tmp_path)
+    second = "autoclassconfig_other_server"
+    config = _sql_config()
+    config.connection.host = "other.example.invalid"
+    config.save_to_file(filepath=tmp_path / "config" / f"{second}.json")
+    with _sql_server(), TestClient(_app(tmp_path, FakeLauncher())) as client:
+        assert client.post("/api/sql/session", json={"method": "windows", "configuration": name}).status_code == 200
+        response = client.post("/api/runs", json={"source": "sql", "configuration": second})
+        assert (response.status_code, response.json()) == (409, {"detail": "SQL sign-in required"})
+        assert client.post("/api/sql/session", json={"method": "windows", "configuration": second}).status_code == 200
+        assert client.post("/api/runs", json={"source": "sql", "configuration": second}).status_code == 201

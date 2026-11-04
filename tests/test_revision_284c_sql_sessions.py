@@ -207,3 +207,16 @@ def test_authorize_leaves_csv_runs_to_their_own_checks():
     prepared = Mock()
     prepared.dataset.source = DataSourceKind.CSV
     assert SQLSessionRegistry().authorize(_local(), prepared) is None
+
+
+def test_sql_credentials_are_not_reused_for_another_target():
+    sessions, config, me = SQLSessionRegistry(), _config(), _local()
+    other = _config()
+    other.connection.host = 'different.example.invalid'
+    with _sql_server() as attempts:
+        sessions.sign_in(me, SQLCredentials.sql_login('analyst', 'pw'), config, Mock())
+        with pytest.raises(PermissionError, match='SQL sign-in required'):
+            sessions.data_layer_for(me, other, Mock())
+    assert len(attempts) == 1
+    assert sessions.credentials_for_owner(me.principal_key, other.connection) is None
+    assert sessions.credentials_for_owner(me.principal_key, config.connection) is not None
