@@ -136,3 +136,18 @@ def open_dataset_repository(settings: MetadataStoreSettings | None = None, *,
     if create_tables:
         repository.create_tables()  # ProjectRepository must exist first.
     return repository
+
+
+def open_model_catalog(settings: MetadataStoreSettings | None = None, *,
+                       create_tables: bool = False):
+    """Open project-owned model metadata (285l), not the model binary store."""
+    from JBGModelCatalog import ModelCatalog
+    from sqlalchemy import create_engine
+    settings = metadata_store_settings() if settings is None else settings
+    if not settings.uses_sql_server:
+        settings.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    catalog = ModelCatalog(create_engine(settings.url(), pool_pre_ping=True),
+                           schema=settings.schema or None)
+    if create_tables:
+        catalog.create_tables()
+    return catalog
