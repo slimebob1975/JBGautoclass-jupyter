@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% set title = "Projects" %}
+{% block main %}
+<div class="layout-two">
+  <section>
+    <div class="card">
+      <h2>{{ _("Your projects") }}</h2>
+      {% if projects %}
+      <table class="grid">
+        <thead><tr><th>{{ _("Name") }}</th><th>{{ _("Source") }}</th><th>{{ _("Description") }}</th><th>{{ _("Modified") }}</th></tr></thead>
+        <tbody>
+        {% for item in projects %}
+          <tr class="{{ 'hl' if selected and selected.project_id == item.project_id }}">
+            <td><a href="/ui/projects?selected={{ item.project_id }}"><b>{{ item.name }}</b></a>
+              {% if active_project and active_project.project_id == item.project_id %}<span class="badge b-info">{{ _("Active") }}</span>{% endif %}</td>
+            <td><span class="badge {{ 'b-info' if item.source == 'sql' else 'b-neu' }}">{{ item.source | upper }}</span></td>
+            <td class="muted">{{ item.description | truncate(80) }}</td>
+            <td class="num">{{ item.updated_at[:10] }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">{{ _("No projects yet. Create your first project to get started.") }}</p>
+      {% endif %}
+    </div>
+
+    <form method="post" action="/ui/projects" class="panel">
+      <fieldset>
+        <legend>{{ _("New project") }}</legend>
+        <label for="new-name">{{ _("Name") }}</label>
+        <input id="new-name" name="name" required maxlength="200">
+        <label for="new-source">{{ _("Source") }}</label>
+        <select id="new-source" name="source">
+          <option value="sql">SQL</option>
+          <option value="csv">CSV</option>
+        </select>
+        <p class="hint">{{ _("The source type cannot be changed after the project has been created.") }}</p>
+        <label for="new-description">{{ _("Description") }}</label>
+        <textarea id="new-description" name="description" maxlength="4000" rows="2"></textarea>
+        <button class="btn">{{ _("Create project") }}</button>
+      </fieldset>
+    </form>
+  </section>
+
+  <aside class="card">
+    {% if selected %}
+      <h2>{{ _("Project details") }}</h2>
+      <form method="post" action="/ui/projects/{{ selected.project_id }}" class="stack">
+        <label for="edit-name">{{ _("Name") }}</label>
+        <input id="edit-name" name="name" required maxlength="200" value="{{ selected.name }}">
+        <label for="edit-description">{{ _("Description") }}</label>
+        <textarea id="edit-description" name="description" maxlength="4000" rows="3">{{ selected.description }}</textarea>
+        <dl class="meta">
+          <dt>{{ _("Source") }}</dt><dd><span class="badge {{ 'b-info' if selected.source == 'sql' else 'b-neu' }}">{{ selected.source | upper }}</span></dd>
+          <dt>{{ _("Created") }}</dt><dd>{{ selected.created_at[:10] }}</dd>
+          <dt>{{ _("Modified") }}</dt><dd>{{ selected.updated_at[:10] }}</dd>
+        </dl>
+        <button class="btn sub">{{ _("Save") }}</button>
+      </form>
+    {% else %}
+      <p class="empty">{{ _("Select a project in the list.") }}</p>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
+
+{% block actions %}
+  {% set is_open = selected and active_project and active_project.project_id == selected.project_id %}
+  <span class="hint">{{ _("This project is open.") if is_open else _("Open a project to continue with its datasets.") }}</span>
+  {% if selected and not is_open %}
+    <form method="post" action="/ui/projects/{{ selected.project_id }}/open">
+      <button class="btn act ready">{{ _("Open project") }}</button>
+    </form>
+  {% else %}
+    <button class="btn act blocked" disabled title="{{ _('Select a project in the list.') if not selected else _('This project is open.') }}">{{ _("Open project") }}</button>
+  {% endif %}
+{% endblock %}

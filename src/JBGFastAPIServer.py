@@ -32,6 +32,14 @@ DEFAULT_CSV_ARTIFACTS = ROOT / "output" / "csv_artifacts" / "objects"
 DEFAULT_RUN_LOGS = ROOT / "logs" / "runs"
 
 
+def _version_line() -> str:
+    try:
+        from JBGVersion import application_version_line
+        return application_version_line()
+    except Exception:
+        return ""
+
+
 def _no_scope(principal):
     # Reads and cancellation never need a scope; submissions bring their own.
     raise PermissionError("storage scope is resolved per submission")
@@ -94,6 +102,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                      projects=project_service,
                      datasets=DatasetService(datasets, project_service, csv_root=csv_root),
                      configurations=configuration_service,
+                     web_ui=True, version_line=_version_line(),
                      lifespan=lifespan)
     app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service}
     return app

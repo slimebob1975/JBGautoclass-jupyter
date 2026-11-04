@@ -24,7 +24,7 @@ if (-not (Test-Path -LiteralPath $Requirements)) {
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 # Install the API packages only when explicitly requested or when one is missing.
-& $PythonExecutable -c 'import fastapi, uvicorn, fastapi_offline, sqlalchemy, python_multipart' 2>$null
+& $PythonExecutable -c 'import fastapi, uvicorn, fastapi_offline, sqlalchemy, python_multipart, jinja2, babel' 2>$null
 if ($InstallDependencies -or $LASTEXITCODE -ne 0) {
     Write-Host 'Installing FastAPI dependencies into the JBG environment...' -ForegroundColor Cyan
     & $PythonExecutable -m pip install -r $Requirements
@@ -63,7 +63,8 @@ try {
     [IO.File]::WriteAllText($LoggingConfig, ($Config | ConvertTo-Json -Depth 8), (New-Object System.Text.UTF8Encoding($false)))
 
     Write-Host "Python: $PythonExecutable" -ForegroundColor DarkGray
-    Write-Host "JBG local API: http://127.0.0.1:$Port/docs" -ForegroundColor Green
+    Write-Host "JBG web interface: http://127.0.0.1:$Port/" -ForegroundColor Green
+    Write-Host "API documentation: http://127.0.0.1:$Port/docs"
     Write-Host 'Runs execute in separate worker processes (logs\runs).'
     Write-Host 'Stopping this server does not stop running jobs; cancel them through the API.'
     Write-Host "Log: $Log"

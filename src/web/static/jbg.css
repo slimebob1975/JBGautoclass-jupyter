@@ -1,0 +1,94 @@
+/* JBG web interface (287a). Tokens from the organization's existing web-app
+   stylesheet (decision 1); action colours from GUI/ButtonStates.py, used only
+   on each tab's primary action. Fluent 2 layout patterns, full page width. */
+:root {
+  --blue: #005293; --blue-hover: #003e73; --blue-disabled: #99b7d3;
+  --ink: #333; --ink2: #555; --ink3: #777;
+  --page: #f2f2f2; --panel: #fafafa; --line: #ddd; --line2: #e8e8e8;
+  --ready: #198754; --waiting: #EAB308; --blocked: #DC2626; --warning: #EA580C;
+  --ok: #2e7d32; --error: #c62828;
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: 1rem; background: var(--page); color: var(--ink);
+       font-family: "Open Sans", Arial, sans-serif; font-size: 14px; line-height: 1.45; }
+.app { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,.05);
+       overflow: hidden; min-height: calc(100vh - 2rem); display: flex; flex-direction: column; }
+a { color: var(--blue); }
+
+/* Header */
+.masthead { display: flex; align-items: center; gap: 16px; padding: 14px 24px 12px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.logo { font-family: Georgia, serif; font-size: 26px; color: #3aa0e6; letter-spacing: 1px; }
+.masthead h1 { margin: 0; color: var(--blue); font-size: 21px; font-weight: 600; line-height: 1.2; }
+.version { font-size: 12px; color: var(--ink3); }
+.masthead-right { margin-left: auto; display: flex; align-items: center; gap: 18px; font-size: 13px; }
+.user { font-style: italic; color: var(--ink2); }
+.lang { display: flex; border: 1px solid #ccc; border-radius: 4px; overflow: hidden; margin: 0; }
+.lang button { border: 0; background: #fff; color: var(--ink2); padding: 2px 10px; font: inherit; cursor: pointer; }
+.lang button.on { background: var(--blue); color: #fff; font-weight: 600; }
+
+/* Context bar */
+.context { display: flex; align-items: center; gap: 10px; padding: 8px 24px; background: var(--panel);
+           border-top: 1px solid var(--line2); border-bottom: 1px solid var(--line2); font-size: 13px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1px solid var(--line);
+        border-radius: 6px; padding: 3px 10px; }
+.chip .k { color: var(--ink3); }
+.sep { color: #aaa; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.d-ok { background: var(--ready); } .d-off { background: #bbb; }
+
+/* Tabs */
+.tabs { display: flex; gap: 2px; padding: 0 24px; border-bottom: 1px solid var(--line2); flex-wrap: wrap; }
+.tabs a, .tabs span { position: relative; padding: 12px 14px 11px; color: var(--ink2); text-decoration: none; }
+.tabs a.on { color: var(--ink); font-weight: 600; }
+.tabs a.on::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 3px;
+                    border-radius: 2px; background: var(--blue); }
+.tabs span.off { color: #aaa; cursor: not-allowed; }
+
+/* Messages */
+.message { margin: 14px 24px 0; padding: 8px 12px; border-radius: 6px; font-weight: 600; }
+.message.ok { background: #e3f3ea; color: var(--ok); }
+.message.error { background: #fbe2e2; color: var(--error); }
+
+/* Content */
+main { padding: 20px 24px; flex: 1; }
+.layout-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 420px); gap: 18px; align-items: start; }
+@media (max-width: 900px) { .layout-two { grid-template-columns: 1fr; } }
+.card { border: 1px solid var(--line2); border-radius: 8px; padding: 14px 16px; background: #fff; margin-bottom: 16px; }
+.card h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+.panel fieldset { margin: 0 0 14px; padding: 6px 14px 12px; border: 1px solid var(--line); border-radius: 6px;
+                  background: var(--panel); min-width: 0; }
+.panel legend { padding: 0 6px; font-weight: 700; }
+label { display: block; margin: 8px 0 4px; }
+input, select, textarea { width: 100%; padding: 6px 8px; font: inherit; border: 1px solid #ccc; border-radius: 4px;
+                          background: #fff; }
+.stack button, .panel button { margin-top: 12px; }
+.hint { color: var(--ink2); font-size: 12.5px; margin: 6px 0 0; }
+.muted { color: var(--ink3); }
+.empty { color: var(--ink2); margin: 6px 0; }
+.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+.grid th { text-align: left; font-weight: 600; color: var(--ink2); font-size: 12.5px; border-bottom: 1px solid var(--line);
+           padding: 6px 8px; white-space: nowrap; }
+.grid td { padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+.grid tr.hl td { background: #eef4fa; }
+.grid td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.badge { display: inline-flex; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; margin-left: 6px; }
+.b-info { background: #e2edf7; color: var(--blue); } .b-neu { background: #eee; color: #555; }
+dl.meta { display: grid; grid-template-columns: 110px 1fr; gap: 5px 14px; margin: 12px 0 0; font-size: 13px; }
+dl.meta dt { color: var(--ink3); } dl.meta dd { margin: 0; }
+
+/* Buttons: IAF blue; ButtonStates colours only on the primary action */
+.btn { display: inline-flex; align-items: center; background: var(--blue); color: #fff; border: 0; border-radius: 4px;
+       padding: 8px 16px; font: inherit; cursor: pointer; transition: background-color .2s ease, box-shadow .2s ease; }
+.btn:hover { background: var(--blue-hover); box-shadow: 0 2px 6px rgba(0,0,0,.1); }
+.btn.sub { background: #fff; color: var(--blue); border: 1px solid #c8c8c8; }
+.btn.act { font-weight: 600; padding: 9px 20px; }
+.btn.act.ready { background: var(--ready); }
+.btn.act.waiting { background: var(--waiting); color: #3a3000; }
+.btn.act.warning { background: var(--warning); }
+.btn.act.blocked, .btn:disabled { background: var(--blocked); opacity: .55; cursor: not-allowed; box-shadow: none; }
+
+/* Footer with the tab's primary action */
+.actions { display: flex; align-items: center; gap: 12px; padding: 12px 24px; border-top: 1px solid var(--line2); }
+.actions .hint { margin: 0 auto 0 0; font-size: 13px; }
+.actions form { margin: 0; }

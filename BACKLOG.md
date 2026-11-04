@@ -223,6 +223,18 @@ full SQL regression acceptance remain separately unverified.
   the existing Voilà GUI available during migration until replacement is proven.
 - [ ] Allow a future GUI to be replaced without modifying ML engine or application
   contracts. Avoid hidden GUI-specific state as a source of truth.
+- [ ] **GUI delivery Phase 1 (first visible slice)**, in the order agreed on
+  2026-11-04: interleaved, each tab as soon as its backend is ready.
+  - [x] 287a: shell (header, context bar, tab strip, SV/EN) and the Projects
+    tab; cross-site request protection for interface and API.
+  - [ ] Next: BACKLOG Phase 0 item 3 (runs from project configuration and
+    dataset, project-based SQL sign-in, model registration), then dataset
+    validation and preview, the configuration schema endpoint, and the
+    Dataset, Configuration and Run tabs.
+  - [ ] Store the language choice per user on the server (decision 6); 287a
+    keeps it in a browser cookie.
+  - [ ] Introduce htmx and Fluent web components (pinned, with integrity
+    hashes) with the first tab that needs client-side behaviour.
 - [x] **283a: web GUI design agreed (2026-11-03).** Binding reference:
   `docs/gui/JBG_web_gui_design.md`, with mockups in `docs/gui/mockups/` and
   the delivery roadmap in `docs/gui/roadmap.png`. Eight tabs (Overview,

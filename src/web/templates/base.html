@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="{{ language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JBG – {{ _(title) }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="/ui/static/jbg.css">
+</head>
+<body>
+<div class="app">
+  <header class="masthead">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">JBG</span>
+      <div>
+        <h1>{{ _("Automatic classification") }}</h1>
+        {% if version_line %}<div class="version">{{ version_line }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="masthead-right">
+      <form method="post" action="/ui/language" class="lang" aria-label="{{ _('Language') }}">
+        <input type="hidden" name="back" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+        <button name="language" value="sv" class="{{ 'on' if language == 'sv' }}" lang="sv">SV</button>
+        <button name="language" value="en" class="{{ 'on' if language == 'en' }}" lang="en">EN</button>
+      </form>
+      <span class="user">{{ _("Signed in as") }} {{ user }}</span>
+    </div>
+  </header>
+
+  <div class="context" aria-label="{{ _('Current work') }}">
+    <span class="chip"><span class="dot {{ 'd-ok' if active_project else 'd-off' }}"></span>
+      <span class="k">{{ _("Project") }}</span>
+      <b>{{ active_project.name if active_project else _("None selected") }}</b></span>
+    <span class="sep">›</span>
+    <span class="chip"><span class="dot d-off"></span><span class="k">{{ _("Dataset") }}</span><b>–</b></span>
+    <span class="sep">›</span>
+    <span class="chip"><span class="dot d-off"></span><span class="k">{{ _("Configuration") }}</span><b>–</b></span>
+    <span class="sep">›</span>
+    <span class="chip"><span class="dot d-off"></span><span class="k">{{ _("Model") }}</span><b>–</b></span>
+  </div>
+
+  <nav class="tabs" aria-label="{{ _('Main navigation') }}">
+    {% for key, label, available in tabs %}
+      {% if available %}
+        <a href="/ui/{{ key }}" class="{{ 'on' if key == current_tab }}"
+           {% if key == current_tab %}aria-current="page"{% endif %}>{{ _(label) }}</a>
+      {% else %}
+        <span class="off" aria-disabled="true" title="{{ _('Available in a later version') }}">{{ _(label) }}</span>
+      {% endif %}
+    {% endfor %}
+  </nav>
+
+  {% if message %}
+    <div class="message {{ message[0] }}" role="{{ 'alert' if message[0] == 'error' else 'status' }}">{{ _(message[1]) }}</div>
+  {% endif %}
+
+  <main>{% block main %}{% endblock %}</main>
+
+  <footer class="actions">{% block actions %}{% endblock %}</footer>
+</div>
+</body>
+</html>

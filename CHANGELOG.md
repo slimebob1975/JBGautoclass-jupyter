@@ -1,3 +1,28 @@
+## Revision 287a - web interface shell and Projects tab (2026-11-04)
+
+- GUI delivery Phase 1 starts (agreed order: interleaved, so each tab follows
+  as soon as its backend is ready). Add `src/JBGWebUI.py`, templates and
+  stylesheet in `src/web/`: the shell (header with build identity, SV/EN
+  switch and signed-in user; context bar; all eight tabs, the unavailable
+  ones shown greyed out) and a working Projects tab (list, create, rename,
+  describe, open) on the 286a project service. `/` now leads to `/ui/`;
+  `/docs` remains.
+- Locked decisions applied: server-rendered with FastAPI and Jinja2;
+  Fluent 2 layout patterns styled with the organization's stylesheet tokens;
+  full page width; ButtonStates colours only on the tab's primary action;
+  Swedish by default, English on browser preference or by choice, interface
+  texts from a Babel/gettext catalogue (`src/web/i18n/sv.po`) with a test for
+  missing translations. This slice needs no JavaScript: plain forms with
+  post/redirect/get; htmx and Fluent web components come with the first tab
+  that needs them. The language choice is kept in a cookie for now.
+- Security: state-changing requests that browsers label as coming from
+  another site (`Origin`, `Sec-Fetch-Site`) are refused with 403, for the
+  interface and the JSON API alike (cross-site request forgery). Interface
+  messages are fixed texts; names are escaped.
+- `requirements-fastapi.txt`: add `jinja2` and `babel`; the launcher checks
+  them and prints the interface address.
+- Tests: `tests/test_revision_287a_web_ui.py`.
+
 ## Revision 286c - configuration service and endpoints (2026-11-04)
 
 - Add `src/JBGConfigurationService.py` and the endpoints

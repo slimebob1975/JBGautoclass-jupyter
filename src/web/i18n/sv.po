@@ -1,0 +1,127 @@
+# Swedish translations of the JBG web interface (revision 287a).
+# Source language: English. Reviewed by the project owner (decision 6).
+# Technical terms (SQL, CSV, PCA, SMOTE, LDA, MCC, F1, ...) are never translated.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: sv\n"
+
+msgid "Automatic classification"
+msgstr "Automatisk klassificering"
+
+msgid "Signed in as"
+msgstr "Inloggad som"
+
+msgid "Language"
+msgstr "Språk"
+
+msgid "Overview"
+msgstr "Översikt"
+
+msgid "Projects"
+msgstr "Projekt"
+
+msgid "Dataset"
+msgstr "Dataset"
+
+msgid "Configuration"
+msgstr "Konfiguration"
+
+msgid "Run"
+msgstr "Körning"
+
+msgid "Results"
+msgstr "Resultat"
+
+msgid "Models"
+msgstr "Modeller"
+
+msgid "Run History"
+msgstr "Körhistorik"
+
+msgid "Project"
+msgstr "Projekt"
+
+msgid "Model"
+msgstr "Modell"
+
+msgid "None selected"
+msgstr "Inget valt"
+
+msgid "Available in a later version"
+msgstr "Kommer i en senare version"
+
+msgid "Your projects"
+msgstr "Dina projekt"
+
+msgid "Name"
+msgstr "Namn"
+
+msgid "Source"
+msgstr "Källa"
+
+msgid "Description"
+msgstr "Beskrivning"
+
+msgid "Modified"
+msgstr "Ändrat"
+
+msgid "Created"
+msgstr "Skapat"
+
+msgid "Active"
+msgstr "Aktivt"
+
+msgid "No projects yet. Create your first project to get started."
+msgstr "Inga projekt ännu. Skapa ditt första projekt för att komma igång."
+
+msgid "New project"
+msgstr "Nytt projekt"
+
+msgid "Create project"
+msgstr "Skapa projekt"
+
+msgid "Project details"
+msgstr "Projektdetaljer"
+
+msgid "Save"
+msgstr "Spara"
+
+msgid "Open project"
+msgstr "Öppna projekt"
+
+msgid "Select a project in the list."
+msgstr "Välj ett projekt i listan."
+
+msgid "The source type cannot be changed after the project has been created."
+msgstr "Datakällan kan inte ändras efter att projektet har skapats."
+
+msgid "A project with that name already exists."
+msgstr "Det finns redan ett projekt med det namnet."
+
+msgid "The input was not accepted. Check the name (1-200 characters)."
+msgstr "Uppgifterna godtogs inte. Kontrollera namnet (1-200 tecken)."
+
+msgid "The project is no longer available."
+msgstr "Projektet är inte längre tillgängligt."
+
+msgid "Project created."
+msgstr "Projektet är skapat."
+
+msgid "Changes saved."
+msgstr "Ändringarna är sparade."
+
+msgid "Project opened."
+msgstr "Projektet är öppnat."
+
+msgid "Open a project to continue with its datasets."
+msgstr "Öppna ett projekt för att fortsätta med dess dataset."
+
+msgid "This project is open."
+msgstr "Det här projektet är öppet."
+
+msgid "Main navigation"
+msgstr "Huvudnavigering"
+
+msgid "Current work"
+msgstr "Pågående arbete"

@@ -75,6 +75,8 @@ def create_app(
     projects=None,
     datasets=None,
     configurations=None,
+    web_ui: bool = False,
+    version_line: str = "",
     lifespan=None,
 ) -> FastAPI:
     """Create the API with fail-closed, server-controlled identity.
@@ -99,9 +101,27 @@ def create_app(
         # contain an SQL password. Report only that the request was invalid.
         return JSONResponse(status_code=422, content={"detail": "invalid request"})
 
+    @app.middleware("http")
+    async def refuse_cross_site_changes(request: Request, call_next):
+        # 287a: with HTML forms in the interface, another web page in the same
+        # browser could submit to this server (cross-site request forgery).
+        # Browsers label such requests; refuse every state-changing one. Clients
+        # without these headers (scripts, PowerShell, tests) are unaffected.
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            site = request.headers.get("sec-fetch-site")
+            origin = request.headers.get("origin")
+            host = request.headers.get("host", "")
+            if (site is not None and site not in ("same-origin", "none")) or (
+                    origin is not None and origin not in (f"http://{host}", f"https://{host}")):
+                return JSONResponse(status_code=403,
+                                    content={"detail": "cross-site request refused"})
+        return await call_next(request)
+
+    root_target = "/ui/" if web_ui else "/docs"
+
     @app.get("/", include_in_schema=False)
     def root():
-        return RedirectResponse(url="/docs", status_code=307)
+        return RedirectResponse(url=root_target, status_code=307)
 
     def principal_dependency() -> AuthenticatedPrincipal:
         try:
@@ -142,6 +162,12 @@ def create_app(
 
     if projects is not None:
         _add_project_endpoints(app, principal_dependency, projects)
+    if web_ui:
+        if projects is None:
+            raise TypeError("the web interface needs the project service")
+        from JBGWebUI import add_web_ui
+        add_web_ui(app, principal_dependency=principal_dependency, projects=projects,
+                   version_line=version_line)
     if datasets is not None:
         _add_dataset_endpoints(app, principal_dependency, datasets)
     if configurations is not None:
