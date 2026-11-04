@@ -91,3 +91,18 @@ def open_metadata_store(settings: MetadataStoreSettings | None = None, *,
     if create_tables:
         store.create_tables()
     return store
+
+
+def open_project_repository(settings: MetadataStoreSettings | None = None, *,
+                            create_tables: bool = False):
+    """Open project metadata using the same DB settings as durable runs (285i)."""
+    from JBGProjects import ProjectRepository
+    from sqlalchemy import create_engine
+    settings = metadata_store_settings() if settings is None else settings
+    if not settings.uses_sql_server:
+        settings.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    repository = ProjectRepository(create_engine(settings.url(), pool_pre_ping=True),
+                                   schema=settings.schema or None)
+    if create_tables:
+        repository.create_tables()
+    return repository

@@ -18,7 +18,7 @@ from pathlib import Path
 from JBGDurableRuns import DurableRunService
 from JBGFastAPI import create_app
 from JBGIdentity import AuthenticationMode, IdentitySettings, LocalIdentityProvider
-from JBGMetadataStore import MetadataStoreSettings, metadata_store_settings, open_metadata_store
+from JBGMetadataStore import MetadataStoreSettings, metadata_store_settings, open_metadata_store, open_project_repository
 from JBGRunDispatcher import RunDispatcher
 from JBGRunSubmission import RunSubmission
 from JBGSavedConfigurations import ROOT, SavedConfigurations
@@ -44,6 +44,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                                                       host), subject)
     settings = metadata_store_settings() if settings is None else settings
     store = open_metadata_store(settings)          # no connection until first use
+    projects = open_project_repository(settings)
     sessions = SQLSessionRegistry()
     options = {"heartbeat_seconds": 30.0, "stale_after": timedelta(minutes=5)}
     options.update(dispatcher_options or {})
@@ -63,15 +64,17 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
     @asynccontextmanager
     async def lifespan(app):
         store.create_tables()
+        projects.create_tables()
         dispatcher.start()
         try:
             yield
         finally:
             dispatcher.stop()
             store.close()
+            projects.close()
 
     app = create_app(runs, current_principal=identity.current_principal,
                      submission=submission, sessions=sessions,
                      lifespan=lifespan)
-    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions}
+    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects}
     return app
