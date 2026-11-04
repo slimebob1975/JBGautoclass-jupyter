@@ -167,7 +167,7 @@ Dataset connects a source, assigns a role to every column, and ends with a serve
 
 4.  **Class distribution / Klassfördelning** – bar chart of labelled rows per class, count of unlabelled (prediction) rows, imbalance ratio, and warnings for classes with too few rows for the chosen CV folds.
 
-**SQL sign-in / SQL-inloggning.** When a SQL project's Dataset tab opens, JBG probes the host with a 5-second timeout: Windows authentication as the user in local mode, Entra pass-through in server mode (Phase 4). The result is always shown, e.g. "Connected as DOMAIN\user (Windows)" or "Windows sign-in was not accepted by this server – enter SQL login". A "Use SQL login instead" link lets the user switch manually. The login fields use `autocomplete="username"` / `"current-password"` so the browser's password manager can fill them; JBG never stores them.
+**SQL sign-in / SQL-inloggning.** When a SQL project's Dataset tab opens, JBG probes the host with a 5-second timeout: Windows authentication as the user in local mode, Entra pass-through in server mode (Phase 4). The result is always shown, e.g. "Connected as DOMAIN\user (Windows)" or "Windows sign-in was not accepted by this server – enter SQL login". A "Use SQL login instead" link lets the user switch manually. The login fields use `autocomplete="username"` / `"current-password"` so the browser's password manager can fill them; JBG never stores them. Since revision 285f, a sign-in is verified against, and bound to, the server of one saved SQL configuration (host, driver, catalogs); credentials are handed to a worker only for runs with the same target.
 
 | Role | Roll | Config field | Rules shown inline |
 | --- | --- | --- | --- |
@@ -430,6 +430,21 @@ Four read-only endpoints exist in `JBGFastAPI.py`; the GUI needs about 35 more. 
 
 The static front end (HTML/CSS/JS) is served from the same FastAPI app under `/`, replacing today's redirect to `/docs`, so there is one origin and no CORS configuration.
 
+### Implementation status (285n)
+
+The map above is the target. What exists after revision 285m3:
+
+| Endpoint | Since | Notes |
+| --- | --- | --- |
+| `GET /api/runs`, `GET /api/runs/{id}`, `/progress`, `/result` | 282a, 285d | Owner-bound reads on the durable job store; progress never returns message text |
+| `GET /api/runs/{id}/overview` | 285m | Status, phase (task stage while running), progress, label-free evaluation and feature importance when available |
+| `POST /api/runs` | 285d | Interim body: `{"source": "sql", "configuration": "<saved file name>"}` or `{"source": "csv", "project": "<name>", "configuration_id": "<saved record>"}`, from `GET /api/configurations` |
+| `POST /api/runs/{id}/cancel` | 285d | Queued runs stop at once, running runs at the next engine checkpoint |
+| `GET /api/configurations?project=` | 285d | Interim catalog of what Voilà saves; replaced by the configuration store (gap 10) |
+| `GET`, `POST`, `DELETE /api/sql/session` | 285d, 285f | Sign-in names a saved SQL configuration and is bound to its server target |
+
+Interim deviations from the target, to be removed as the GUI phases proceed: runs start from Voilà's saved configurations rather than project configurations; SQL sign-in needs a saved configuration rather than the project's connection; `pause`, `resume`, `prepare`, SSE events and the per-view result endpoints do not exist yet.
+
 ## Backend gaps
 
 The service layer has the right shape, but ten gaps sit between it and this GUI; the first three block any useful Run tab and should come first.
@@ -456,6 +471,8 @@ Recommended answers:
 - **Gap 6:** add a closed `RunStage` enum emitted alongside percentages; free-text messages stay internal.
 
 - **Gap 8:** the user's own SQL login is the authorisation. The hook required by PrincipalRunAccessService only checks that the run's SQL data layer was opened with the requesting user's own credentials in the current session; SQL Server then enforces what that user may read and write. No allowlist and no JBG role system, in line with the simplified access model.
+
+**Status after 285n.** Gaps 1-4 and 8 are closed (284a-285d, 285f): runs are composed per run, executed in worker processes from a durable job store, survive server restarts and can be cancelled; SQL access uses the user's own login. Gaps 5 and 6 are partly closed (285m-285m3: run overview, task stages, structured evaluation and feature importance). Gaps 7, 9 and 10 have their repositories (285i-285l) but no services or endpoints yet. The open items and their order are kept in `BACKLOG.md`.
 
 ## Delivery phasing
 

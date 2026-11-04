@@ -153,9 +153,39 @@ full SQL regression acceptance remain separately unverified.
     main JBG environment, Phase 0 gate test (CSV through a restart; SQL
     awaiting credentials). Phase 0 is complete once a manual smoke test against
     the real SQL Server metadata database and an SQL dataset has passed.
+  - [x] 285e: every training run fits the input converter, so numeric-only
+    SQL models can be saved again (also fixes the Voilà GUI).
+  - [x] 285f: SQL sessions are bound to a saved configuration's connection
+    target; `POST /api/sql/session` names that configuration.
+  - [x] 285g-285h: worker records `SystemExit` from the engine as a failed
+    run; saved SQL configurations with placeholder values are refused before
+    submission.
+  - [x] 285i-285l: metadata repositories for projects (gap 7), versioned
+    configurations (gap 10), project datasets with roles, and the model catalog
+    (gap 9), in the metadata database. Not yet exposed through the API or used
+    by run submission.
+  - [x] 285m-285m3: run overview endpoint with task stages (gap 6 for task
+    level) and label-free structured evaluation and feature importance in the
+    stored result (gap 5, first part).
+  - [x] 285n: test fixes (285c dispatcher stand-ins, deterministic 285b
+    heartbeat test) and documentation catch-up for 285e-285m3.
+  - **Phase 0 status after 285n.** Done: gaps 1-4 and 8; foundations for 5-7,
+    9 and 10. Open, in suggested order:
+    1. [ ] Manual smoke test against the real SQL Server: metadata tables in
+       the configured schema, SQL sign-in for a saved configuration, one SQL
+       training run through the API. This closes the Phase 0 gate.
+    2. [ ] Services and endpoints for projects, datasets and configurations on
+       top of the 285i-285k repositories, with the one-source-type rule
+       enforced at project level.
+    3. [ ] Run submission from the configuration store instead of the 285d
+       interim catalog (see the gap 10 item below), and registration of
+       trained models in the catalog after the model file is saved.
+    4. [ ] Remaining result DTOs (gap 5): spot-check leaderboard, predictions
+       and paged mispredictions.
 - [ ] Design gap 10 follow-up: replace the interim configuration catalog
-  (Voila's `autoclassconfig_*.json` files and saved CSV records, 285d) with a
-  configuration store, so that runs can be configured without Voila.
+  (Voilà's `autoclassconfig_*.json` files and saved CSV records, 285d) with
+  the configuration repository from 285j, so that runs can be configured
+  without Voilà.
 
 **Phase 4 - New web GUI (after application-layer contracts are stable).**
 

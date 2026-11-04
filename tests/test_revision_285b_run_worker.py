@@ -175,19 +175,33 @@ def test_lost_ownership_and_store_errors_at_a_checkpoint(tmp_path):
     StoreProgressLogger(Mock(), broken, run, Mock(lost=False)).checkpoint()   # no raise
 
 
+def _wait_until(condition, seconds=5.0):
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        if condition():
+            return True
+        time.sleep(0.02)
+    return condition()
+
+
 def test_heartbeat_advances_and_detects_lost_ownership(tmp_path):
-    from datetime import timedelta
+    # 285n: deterministic. Marking a job stale while its heartbeat thread is
+    # writing is a race the live worker may rightly win (it is alive), so the
+    # job is taken away directly, as the dispatcher does, and the test waits
+    # for the heartbeat to notice instead of sleeping for fixed times.
+    from sqlalchemy import update
     store = _store(tmp_path)
     run = store.create("owner", DataSourceKind.CSV, {"spec_version": 1})
     store.claim(run, "worker-1")
     first = store.get(run).heartbeat_at
     with _Heartbeat(store, run, "worker-1", 0.05) as heartbeat:
-        time.sleep(0.3)
-        assert store.get(run).heartbeat_at > first
-        time.sleep(0.2)
-        store.mark_stale_interrupted(timedelta(microseconds=1))
-        time.sleep(0.3)
-        assert heartbeat.lost
+        assert _wait_until(lambda: store.get(run).heartbeat_at > first)
+        assert not heartbeat.lost
+        with store._engine.begin() as connection:
+            connection.execute(update(store._jobs).where(store._jobs.c.run_id == run.key)
+                               .values(status=RunStatus.INTERRUPTED.value))
+        assert _wait_until(lambda: heartbeat.lost)
+    store.close()
 
 
 # --- Whole jobs, in-process --------------------------------------------------------------

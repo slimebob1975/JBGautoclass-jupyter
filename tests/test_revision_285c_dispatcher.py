@@ -75,7 +75,10 @@ def _dispatcher(store, tmp_path, launcher, **options):
 
 
 def _sessions(**owners):
-    return SimpleNamespace(credentials_for_owner=lambda owner: owners.get(owner))
+    # 285f: the dispatcher also passes the job's connection target; the real
+    # registry checks it against the signed-in server (see 284c/285f tests).
+    return SimpleNamespace(
+        credentials_for_owner=lambda owner, connection=None: owners.get(owner))
 
 
 def _age_heartbeat(store, run, minutes):
@@ -159,7 +162,8 @@ def test_sql_job_waits_for_sign_in_then_runs(store, tmp_path):
     run = store.create("owner", DataSourceKind.SQL, SPEC)
     owners, launcher = {}, FakeLauncher()
     dispatcher = _dispatcher(store, tmp_path, launcher,
-                             sessions=SimpleNamespace(credentials_for_owner=owners.get))
+                             sessions=SimpleNamespace(
+                                 credentials_for_owner=lambda owner, connection=None: owners.get(owner)))
     assert dispatcher.poll_once() == ()
     assert store.get(run).status is RunStatus.AWAITING_CREDENTIALS
     owners["owner"] = SQLCredentials.windows_login()              # the user signs in again
@@ -201,7 +205,8 @@ def test_reaping_worker_exit_codes(store, tmp_path, code, claimed, signed_out, e
     run = store.create("owner", DataSourceKind.SQL, SPEC)
     owners, launcher = {"owner": SQLCredentials.windows_login()}, FakeLauncher()
     dispatcher = _dispatcher(store, tmp_path, launcher,
-                             sessions=SimpleNamespace(credentials_for_owner=owners.get))
+                             sessions=SimpleNamespace(
+                                 credentials_for_owner=lambda owner, connection=None: owners.get(owner)))
     dispatcher.poll_once()
     if claimed:
         store.claim(run, "worker")

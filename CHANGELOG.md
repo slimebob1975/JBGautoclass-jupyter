@@ -1,3 +1,97 @@
+## Revision 285n - test and documentation catch-up (2026-11-04)
+
+- Fix `tests/test_revision_285c_dispatcher.py`: its stand-ins for the SQL
+  session registry accepted only the owner, while the dispatcher has passed
+  the job's connection target as well since 285f. One test failed; two passed
+  only because their jobs carried no connection.
+- Make `test_heartbeat_advances_and_detects_lost_ownership` (285b)
+  deterministic: it raced the live heartbeat thread when marking the job
+  stale, which a heartbeating worker may rightly win, and used fixed sleeps.
+  It now takes the job away directly and waits for detection (up to 5 s).
+- Record revisions 285e-285m3 below. These entries were written in 285n from
+  the commits and the code, as the revisions themselves did not update the
+  documentation.
+- `BACKLOG.md`: Phase 0 status after 285m3. `docs/gui/JBG_web_gui_design.md`:
+  endpoint map and SQL sign-in brought in line with the implementation.
+- No change to production code or the Voilà GUI.
+
+## Revisions 285m2-285m3 - structured results in the durable run result (2026-11-04)
+
+- Add `src/JBGStructuredEvaluation.py` (285m2): an allowlisted, label-free
+  evaluation DTO (accuracy, balanced accuracy, MCC, macro and weighted
+  precision/recall/F1, confusion matrix as counts) taken from the values the
+  engine already passes to `print_prediction_report`. Class names, per-class
+  support and rows are never stored.
+- Add `src/JBGStructuredFeatureImportance.py` (285m3): aggregate permutation
+  importance per original column only.
+- `JBGTaskRunner` calls two optional logger hooks, `record_task_stage` and
+  `record_feature_importance`. Voilà's loggers do not implement them and keep
+  their exact previous output. The worker's logger records task stages as
+  `jbg_stage:<task>` progress events and adds `evaluation` and
+  `feature_importance` to the stored result.
+- Follow-up fix commit completes the persistence integration.
+
+## Revision 285m (part 1) - run overview (2026-11-04)
+
+- Add `src/JBGRunOverview.py` and `GET /api/runs/{run_id}/overview`: status,
+  coarse phase (queued, awaiting credentials, the current task stage while
+  running, or a final state), progress, and reviewed numeric summary fields.
+  Raw progress messages are never interpreted or returned. The in-memory
+  presentation service offers the same projection.
+
+## Revision 285l - model catalog (2026-11-04)
+
+- Add `src/JBGModelCatalog.py` (design gap 9): project-owned model metadata
+  (`jbg_` tables) with opaque artifact keys and a model state. Metadata only:
+  model files stay with the existing persistence layer, legacy artifacts are
+  not imported, nothing is deleted. Not yet exposed through the API.
+
+## Revision 285k - dataset repository (2026-11-04)
+
+- Add `src/JBGDatasets.py`: project-scoped dataset registrations with roles
+  (training, prediction, mixed), one active training dataset and a validation
+  state. SQL locators are catalog/table names, CSV locators opaque IDs, never
+  paths. No source I/O. Not yet exposed through the API.
+
+## Revision 285j - configuration repository (2026-11-04)
+
+- Add `src/JBGConfigurations.py` (design gap 10): owner-scoped, named and
+  versioned configuration snapshots per project, with revision history and
+  conflict detection on save. Independent of Voilà's JSON files and of
+  credentials. Run submission still uses the 285d interim catalog.
+
+## Revision 285i - project repository (2026-11-04)
+
+- Add `src/JBGProjects.py` (design gap 7): persistent, owner-scoped projects
+  with unique names per owner and a source type fixed at creation. Nothing is
+  deleted through this repository. `JBGMetadataStore` opens projects,
+  configurations, datasets and the model catalog in the same metadata
+  database as the run jobs; the server creates their tables at start.
+
+## Revisions 285g-285h - worker failure handling and SQL preflight (2026-11-04)
+
+- Worker: the engine's `abort_cleanly` ends with `sys.exit`, which escaped
+  the 285b error handling and left the job running until its heartbeat
+  expired. `SystemExit` is now recorded as a failed run (type only).
+- Add `validate_saved_sql_run_config` (285h): a saved SQL configuration with
+  a missing or placeholder host, catalog, table or (for training) class
+  column, such as Voilà's `N/A`, is refused before a DataLayer is opened. The
+  message names the field only, never the value.
+
+## Revision 285f - SQL sessions bound to saved configurations (2026-11-04)
+
+- `POST /api/sql/session` now names a saved SQL configuration; the login is
+  verified against that configuration's server and bound to its connection
+  target (host, driver, catalogs). The dispatcher hands credentials to a
+  worker only for jobs with the same target.
+
+## Revision 285e - fitted input converter for numeric SQL training (2026-11-04)
+
+- Every training run now fits the input converter. Numeric-only SQL models
+  could not be saved since model compatibility metadata requires a fitted
+  converter ("Fitted input converter is unavailable"); CSV already had this
+  rule. Prediction-only runs are unchanged. Affects the Voilà GUI as a fix.
+
 ## Revision 285d - durable runs through the FastAPI server (2026-11-04)
 
 - Add `src/JBGFastAPIServer.py` (design gaps 2-4, step 4 of 4): the local API
