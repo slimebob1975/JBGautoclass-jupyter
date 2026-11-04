@@ -109,6 +109,32 @@ class StoreProgressLogger:
         self._store = store
         self._run = run
         self._heartbeat = heartbeat
+        self.evaluation = None
+
+    def record_task_stage(self, name):
+        from JBGStructuredEvaluation import TASK_STAGES
+        if not isinstance(name, str) or name not in TASK_STAGES:
+            return
+        try:
+            self._store.record_progress(self._run, "jbg_stage:" + name)
+        except Exception as error:
+            print(f"[JBGRunWorker] stage not recorded: {type(error).__name__}", file=sys.stderr)
+        self.checkpoint()
+
+    def print_prediction_report(self, *, accuracy_score, confusion_matrix,
+                                class_labels, classification_matrix, sample_rates):
+        # The existing logger still owns presentation; this receives the exact
+        # already-computed evaluation rather than re-parsing its text output.
+        result = self._logger.print_prediction_report(
+            accuracy_score=accuracy_score, confusion_matrix=confusion_matrix,
+            class_labels=class_labels, classification_matrix=classification_matrix,
+            sample_rates=sample_rates)
+        from JBGStructuredEvaluation import evaluation_from_report
+        self.evaluation = evaluation_from_report(
+            accuracy_score=accuracy_score, confusion_matrix=confusion_matrix,
+            class_labels=class_labels, classification_matrix=classification_matrix,
+            sample_rates=sample_rates)
+        return result
 
     def checkpoint(self) -> None:
         if self._heartbeat.lost:
@@ -226,8 +252,10 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
             traceback.print_exc(file=sys.stderr)     # worker log only, never the store
             store.finish(run, worker_id, RunStatus.FAILED, error_type=type(error).__name__)
             return EXIT_FINISHED
-        store.finish(run, worker_id, RunStatus.SUCCEEDED,
-                     result=project_classifier_result(result))
+        projected = project_classifier_result(result)
+        if observed.evaluation is not None:
+            projected["evaluation"] = observed.evaluation
+        store.finish(run, worker_id, RunStatus.SUCCEEDED, result=projected)
         return EXIT_FINISHED
 
 

@@ -197,6 +197,11 @@ class TaskRunner:
         params = {}
         early_exit = False
         for function_name in tasks:
+            # Optional, transport-neutral stage observation. Legacy loggers do not
+            # implement this hook and retain exactly their previous behaviour.
+            record_stage = getattr(self.logger, "record_task_stage", None)
+            if callable(record_stage):
+                record_stage(function_name)
             func = getattr(self, function_name + "__task")
             try:
                 params = func(**params)

@@ -45,6 +45,18 @@ def project_run_overview(run_id: str, status: RunStatus, events,
         phase = "preparing" if percent is None or percent == 0 else (
             "finalizing" if percent >= 0.9 else "executing")
 
+    # Exact running task markers are emitted by the task runner's optional
+    # stage hook. Other progress messages must never be interpreted as tasks.
+    from JBGStructuredEvaluation import TASK_STAGES
+    if status is RunStatus.RUNNING:
+        for event in reversed(tuple(events)):
+            message = event.message
+            if isinstance(message, str) and message.startswith("jbg_stage:"):
+                task = message[len("jbg_stage:"):]
+                if task in TASK_STAGES:
+                    phase = task
+                    break
+
     summary = None
     if status is RunStatus.SUCCEEDED and isinstance(result, dict):
         # Deliberately copy only reviewed numeric fields, never arbitrary keys.
@@ -54,8 +66,15 @@ def project_run_overview(run_id: str, status: RunStatus, events,
                 value = result.get(field)
                 summary[field] = value if (type(value) is int and value >= 0) else None
 
-    return {"schema_version": 1, "run_id": run_id, "status": status.value,
-            "stage": {"name": phase, "precision": "estimated" if status is RunStatus.RUNNING
-                      else "exact", "percent": percent},
-            "results": {"available": status is RunStatus.SUCCEEDED,
-                        "summary": summary}}
+    evaluation = None
+    if status is RunStatus.SUCCEEDED and isinstance(result, dict):
+        from JBGStructuredEvaluation import sanitize_stored_evaluation
+        evaluation = sanitize_stored_evaluation(result.get("evaluation"))
+    results = {"available": status is RunStatus.SUCCEEDED, "summary": summary}
+    if evaluation is not None:
+        results["evaluation"] = evaluation
+    return {"schema_version": 2, "run_id": run_id, "status": status.value,
+            "stage": {"name": phase, "precision": "exact" if status is not RunStatus.RUNNING
+                      or phase in TASK_STAGES
+                      else "estimated", "percent": percent},
+            "results": results}
