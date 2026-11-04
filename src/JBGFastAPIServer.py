@@ -18,7 +18,7 @@ from pathlib import Path
 from JBGDurableRuns import DurableRunService
 from JBGFastAPI import create_app
 from JBGIdentity import AuthenticationMode, IdentitySettings, LocalIdentityProvider
-from JBGMetadataStore import MetadataStoreSettings, metadata_store_settings, open_metadata_store, open_project_repository, open_configuration_repository
+from JBGMetadataStore import MetadataStoreSettings, metadata_store_settings, open_metadata_store, open_project_repository, open_configuration_repository, open_dataset_repository
 from JBGRunDispatcher import RunDispatcher
 from JBGRunSubmission import RunSubmission
 from JBGSavedConfigurations import ROOT, SavedConfigurations
@@ -46,6 +46,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
     store = open_metadata_store(settings)          # no connection until first use
     projects = open_project_repository(settings)
     saved_configs = open_configuration_repository(settings)
+    datasets = open_dataset_repository(settings)
     sessions = SQLSessionRegistry()
     options = {"heartbeat_seconds": 30.0, "stale_after": timedelta(minutes=5)}
     options.update(dispatcher_options or {})
@@ -67,6 +68,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
         store.create_tables()
         projects.create_tables()
         saved_configs.create_tables()
+        datasets.create_tables()
         dispatcher.start()
         try:
             yield
@@ -75,9 +77,10 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
             store.close()
             projects.close()
             saved_configs.close()
+            datasets.close()
 
     app = create_app(runs, current_principal=identity.current_principal,
                      submission=submission, sessions=sessions,
                      lifespan=lifespan)
-    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs}
+    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets}
     return app
