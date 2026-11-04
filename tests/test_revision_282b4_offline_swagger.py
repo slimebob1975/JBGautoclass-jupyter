@@ -55,5 +55,7 @@ def test_launcher_reinstalls_new_offline_dependency():
     root = Path(__file__).resolve().parents[1]
     script = (root / 'scripts' / 'start_fastapi_local.ps1').read_text(encoding='utf-8')
     requirements = (root / 'requirements-fastapi.txt').read_text(encoding='utf-8')
-    assert '.jbg_fastapi_requirements_282b4_installed' in script
+    # 285d: no dedicated venv any more; the launcher installs the API packages
+    # into the JBG environment whenever one of them cannot be imported.
+    assert 'import fastapi, uvicorn, fastapi_offline, sqlalchemy' in script
     assert 'fastapi-offline==1.7.7' in requirements

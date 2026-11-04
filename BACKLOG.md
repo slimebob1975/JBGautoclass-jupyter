@@ -148,6 +148,14 @@ full SQL regression acceptance remain separately unverified.
   - [x] 285c: dispatcher (`JBGRunDispatcher.py`) with restart handling
     (interrupted, awaiting credentials) and `DurableRunService`. Next: 285d
     FastAPI wiring, metadata database on SQL Server, Phase 0 gate test.
+  - [x] 285d: FastAPI server with durable runs (`JBGFastAPIServer.py`), run
+    and SQL session endpoints, metadata database from `.env`, launcher in the
+    main JBG environment, Phase 0 gate test (CSV through a restart; SQL
+    awaiting credentials). Phase 0 is complete once a manual smoke test against
+    the real SQL Server metadata database and an SQL dataset has passed.
+- [ ] Design gap 10 follow-up: replace the interim configuration catalog
+  (Voila's `autoclassconfig_*.json` files and saved CSV records, 285d) with a
+  configuration store, so that runs can be configured without Voila.
 
 **Phase 4 - New web GUI (after application-layer contracts are stable).**
 

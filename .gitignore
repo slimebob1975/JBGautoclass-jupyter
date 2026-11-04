@@ -33,3 +33,6 @@ output/csv_artifacts/
 
 # Backend gate logs and summaries (scripts/run_backend_refactor_tests.ps1)
 test-results/
+
+# Local durable run job store (285d; SQLite when no SQL Server is configured)
+output/run_jobs/

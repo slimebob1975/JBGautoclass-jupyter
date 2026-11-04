@@ -1,3 +1,34 @@
+## Revision 285d - durable runs through the FastAPI server (2026-11-04)
+
+- Add `src/JBGFastAPIServer.py` (design gaps 2-4, step 4 of 4): the local API
+  server with durable runs, started by `scripts/start_fastapi_local.ps1` as
+  `uvicorn --factory JBGFastAPIServer:create_server_app`. Creating tables and
+  starting the dispatcher happen at server start, not on import.
+  `JBGFastAPILocal` (282b) stays as the read-only in-memory composition.
+- New endpoints: `GET/POST /api/runs`, `POST /api/runs/{id}/cancel`,
+  `GET /api/configurations`, `GET/POST/DELETE /api/sql/session`. Existing
+  read endpoints use the durable store. Validation errors no longer echo the
+  request (FastAPI's default 422 body would repeat a submitted SQL password).
+- Runs start from what Voila already saves (interim until design gap 10):
+  SQL `autoclassconfig_*.json` files by name, and CSV saved configuration
+  records by project and ID, rebuilt with Voila's own
+  `prepare_csv_gui_training_config` (`JBGSavedConfigurations.py`,
+  `JBGRunSubmission.py`). Clients never send paths or settings.
+- Add `src/JBGMetadataStore.py`: `JBG_METADATA_DB_*` settings in `.env` select
+  the SQL Server metadata database (same Encrypt/TrustServerCertificate
+  options as JBG's SQL connections); without a host, a local SQLite file in
+  `output/run_jobs/` (now in `.gitignore`). Workers read the same settings
+  (`--store-from-env`), so no password appears in a command line.
+- Launcher: no dedicated venv any more. The server and its workers use the
+  main JBG environment (`-PythonExecutable`, default `python`, as the gate);
+  `requirements-fastapi.txt` is installed only when an API package is
+  missing. The 282b4 launcher test now checks that import test.
+- Tests: `tests/test_revision_285d_api_runs.py`, including the Phase 0 gate
+  run: a CSV run started through the API completes in a worker after the
+  server restarts; a queued SQL run waits for credentials after a restart
+  and runs once the user signs in again.
+- No change to the Voilà GUI.
+
 ## Revision 285c - dispatcher, restart handling and durable run service (2026-11-04)
 
 - Add `src/JBGRunDispatcher.py` (design gaps 2-4, step 3 of 4): starts one

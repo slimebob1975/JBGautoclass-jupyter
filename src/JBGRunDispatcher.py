@@ -55,7 +55,8 @@ def worker_environment(base: dict | None = None) -> dict:
 class RunDispatcher:
     """Turns pending job records into worker processes."""
 
-    def __init__(self, store: RunJobStore, *, store_url: str, store_schema: str | None = None,
+    def __init__(self, store: RunJobStore, *, store_url: str | None = None,
+                 store_from_env: bool = False, store_schema: str | None = None,
                  log_dir: Path, sessions=None, artifacts: Path | None = None,
                  script_path: Path | None = None, max_workers: int = 1,
                  poll_seconds: float = 5.0, heartbeat_seconds: float = 30.0,
@@ -68,8 +69,11 @@ class RunDispatcher:
             raise ValueError("max_workers must be a positive integer")
         if stale_after <= timedelta(seconds=heartbeat_seconds * 2):
             raise ValueError("stale_after must exceed two heartbeat intervals")
+        if bool(store_url) == bool(store_from_env):
+            raise ValueError("give either store_url (no secrets) or store_from_env")
         self._store = store
         self._store_url = store_url
+        self._store_from_env = store_from_env
         self._store_schema = store_schema
         self._log_dir = Path(log_dir)
         self._sessions = sessions
@@ -126,11 +130,13 @@ class RunDispatcher:
                 self._store.requeue(record.run)
 
     def _command(self, run: RunReference, worker_id: str) -> list[str]:
-        command = [self._python, "-m", "JBGRunWorker", "--store-url", self._store_url,
+        store = (["--store-from-env"] if self._store_from_env
+                 else ["--store-url", self._store_url])
+        command = [self._python, "-m", "JBGRunWorker", *store,
                    "--run", run.key, "--worker-id", worker_id,
                    "--heartbeat-seconds", str(self._heartbeat_seconds),
                    "--log-dir", str(self._log_dir)]
-        if self._store_schema:
+        if self._store_schema and not self._store_from_env:
             command += ["--store-schema", self._store_schema]
         if self._artifacts is not None:
             command += ["--artifacts", str(self._artifacts)]

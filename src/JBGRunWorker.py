@@ -1,6 +1,9 @@
 """Run one stored job in its own process (revision 285b).
 
-    python -m JBGRunWorker --store-url URL --run RUN_ID --worker-id ID [options]
+    python -m JBGRunWorker (--store-url URL | --store-from-env) --run RUN_ID --worker-id ID
+
+With --store-from-env (285d) the worker reads the metadata database settings
+from the repository's .env itself, so no password is passed on a command line.
 
 The dispatcher (285c) starts one worker per job, after authorizing the run in
 the web process. For SQL jobs it writes the user's credentials as one JSON line
@@ -222,7 +225,10 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="JBGRunWorker", description=__doc__.splitlines()[0])
-    parser.add_argument("--store-url", required=True, help="SQLAlchemy URL of the job store")
+    store_source = parser.add_mutually_exclusive_group(required=True)
+    store_source.add_argument("--store-url", help="SQLAlchemy URL without secrets (e.g. SQLite)")
+    store_source.add_argument("--store-from-env", action="store_true",
+                              help="Read JBG_METADATA_DB_* settings from .env (285d)")
     parser.add_argument("--store-schema", default=None)
     parser.add_argument("--run", required=True)
     parser.add_argument("--worker-id", required=True)
@@ -234,7 +240,11 @@ def main(argv=None) -> int:
     parser.add_argument("--heartbeat-seconds", type=float, default=30.0)
     args = parser.parse_args(argv)
     try:
-        store = RunJobStore(args.store_url, schema=args.store_schema)
+        if args.store_from_env:
+            from JBGMetadataStore import open_metadata_store
+            store = open_metadata_store()
+        else:
+            store = RunJobStore(args.store_url, schema=args.store_schema)
         credentials = read_credentials(sys.stdin)
         return run_job(store, RunReference(args.run), args.worker_id, credentials=credentials,
                        artifacts=args.artifacts, script_path=args.script_path,

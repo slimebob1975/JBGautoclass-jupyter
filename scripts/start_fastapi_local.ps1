@@ -1,11 +1,10 @@
-# Revision 282b3: local FastAPI launcher, modeled on start_local_service.ps1.
-# Creates a dedicated venv on first run. Subsequent starts work offline.
+# Revision 285d: local FastAPI server with durable runs, in the main JBG environment.
+# Revision 282b3 created a dedicated venv; runs now need the full JBG engine, so the
+# server and its worker processes use the same Python as Voila and the test gate.
 # Example: & .\scripts\start_fastapi_local.ps1 -Port 8000
 [CmdletBinding()]
 param(
-    [string]$BasePython = 'C:\Users\Grro\AppData\Local\Programs\Python\Python313\python.exe',
-    [string]$TempDir = 'C:\temp',
-    [string]$VenvName = 'jbg_fastapi_venv',
+    [string]$PythonExecutable = 'python',
     [ValidateRange(1, 65535)][int]$Port = 8000,
     [switch]$InstallDependencies
 )
@@ -15,10 +14,6 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $Src = Join-Path $Root 'src'
 $Requirements = Join-Path $Root 'requirements-fastapi.txt'
 $LogDir = Join-Path $Root 'logs'
-$VenvDir = Join-Path $TempDir $VenvName
-$Py = Join-Path $VenvDir 'Scripts\python.exe'
-$Uvicorn = Join-Path $VenvDir 'Scripts\uvicorn.exe'
-$InstalledMarker = Join-Path $VenvDir '.jbg_fastapi_requirements_282b4_installed'
 $Stamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
 $Log = Join-Path $LogDir "jbg-fastapi_$Stamp.log"
 $LoggingConfig = Join-Path $LogDir "jbg-fastapi_logging_$Stamp.json"
@@ -26,34 +21,27 @@ $LoggingConfig = Join-Path $LogDir "jbg-fastapi_logging_$Stamp.json"
 if (-not (Test-Path -LiteralPath $Requirements)) {
     throw "Missing requirements file: $Requirements"
 }
-New-Item -ItemType Directory -Force -Path $TempDir, $LogDir | Out-Null
+New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
-if (-not (Test-Path -LiteralPath $Py)) {
-    Write-Host "Creating JBG FastAPI venv: $VenvDir" -ForegroundColor Yellow
-    & $BasePython -m venv $VenvDir
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $Py)) {
-        throw 'Virtual environment creation failed'
-    }
-}
-
-# Install on first use or when explicitly requested. No network needed later.
-if ($InstallDependencies -or -not (Test-Path -LiteralPath $InstalledMarker)) {
-    Write-Host 'Installing FastAPI dependencies in dedicated venv...' -ForegroundColor Cyan
-    & $Py -m pip install -r $Requirements
+# Install the API packages only when explicitly requested or when one is missing.
+& $PythonExecutable -c 'import fastapi, uvicorn, fastapi_offline, sqlalchemy' 2>$null
+if ($InstallDependencies -or $LASTEXITCODE -ne 0) {
+    Write-Host 'Installing FastAPI dependencies into the JBG environment...' -ForegroundColor Cyan
+    & $PythonExecutable -m pip install -r $Requirements
     if ($LASTEXITCODE -ne 0) { throw 'FastAPI dependency installation failed' }
-    # The marker is written only after a successful installation.
-    Set-Content -LiteralPath $InstalledMarker -Value 'installed' -Encoding ASCII
 }
 
-# The module lives in src; set PYTHONPATH before import validation.
+# The modules live in src; set PYTHONPATH before import validation.
 $PreviousPythonPath = $env:PYTHONPATH
 $PreviousUtf8 = $env:PYTHONUTF8
 $PreviousIoEncoding = $env:PYTHONIOENCODING
+$PreviousHashSeed = $env:PYTHONHASHSEED
 try {
     $env:PYTHONPATH = if ($PreviousPythonPath) { "$Src$([IO.Path]::PathSeparator)$PreviousPythonPath" } else { $Src }
     $env:PYTHONUTF8 = '1'
     $env:PYTHONIOENCODING = 'utf-8'
-    & $Py -c 'import fastapi, uvicorn, JBGFastAPILocal'
+    $env:PYTHONHASHSEED = '0'
+    & $PythonExecutable -c 'import fastapi, uvicorn, sqlalchemy, JBGFastAPIServer'
     if ($LASTEXITCODE -ne 0) { throw 'FastAPI app imports failed' }
 
     # Uvicorn normally logs INFO on stderr. Configure console + file handlers
@@ -74,15 +62,16 @@ try {
     }
     [IO.File]::WriteAllText($LoggingConfig, ($Config | ConvertTo-Json -Depth 8), (New-Object System.Text.UTF8Encoding($false)))
 
-    Write-Host "Python: $Py" -ForegroundColor DarkGray
+    Write-Host "Python: $PythonExecutable" -ForegroundColor DarkGray
     Write-Host "JBG local API: http://127.0.0.1:$Port/docs" -ForegroundColor Green
-    Write-Host 'Read-only API; no training jobs are available until write APIs are implemented.'
+    Write-Host 'Runs execute in separate worker processes (logs\runs).'
+    Write-Host 'Stopping this server does not stop running jobs; cancel them through the API.'
     Write-Host "Log: $Log"
     Write-Host 'Stop with Ctrl+C.'
 
     Push-Location $Root
     try {
-        & $Uvicorn 'JBGFastAPILocal:app' --app-dir $Src --host '127.0.0.1' --port $Port --log-config $LoggingConfig
+        & $PythonExecutable -m uvicorn 'JBGFastAPIServer:create_server_app' --factory --app-dir $Src --host '127.0.0.1' --port $Port --log-config $LoggingConfig
         if ($LASTEXITCODE -ne 0) { throw "Uvicorn exited with code $LASTEXITCODE" }
     }
     finally { Pop-Location }
@@ -91,5 +80,6 @@ finally {
     $env:PYTHONPATH = $PreviousPythonPath
     $env:PYTHONUTF8 = $PreviousUtf8
     $env:PYTHONIOENCODING = $PreviousIoEncoding
+    $env:PYTHONHASHSEED = $PreviousHashSeed
     Remove-Item -LiteralPath $LoggingConfig -ErrorAction SilentlyContinue
 }
