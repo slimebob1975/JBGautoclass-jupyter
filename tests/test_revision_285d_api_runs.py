@@ -63,6 +63,7 @@ def _sql_config(name="demo"):
     config.connection.host = "sql.example.invalid"
     config.connection.data_catalog = "ExampleDb"
     config.connection.data_table = "dbo.Cases"
+    config.connection.class_column = "class"
     config.mail.notification_email = ""
     return config
 
@@ -181,6 +182,41 @@ def test_sql_catalog_offers_only_listed_names(tmp_path):
     for bad in ("notes", "../config/" + name, name + ".json", "", None):
         with pytest.raises(UnknownConfiguration):
             catalog.load_sql(bad)
+
+
+def test_invalid_saved_sql_configuration_is_rejected_before_session_or_job(tmp_path):
+    """A legacy N/A table must fail synchronously, not in the worker."""
+    name = "autoclassconfig_invalid_sql"
+    config = _sql_config()
+    config.connection.data_catalog = ""
+    config.connection.data_table = "N/A"
+    (tmp_path / "config").mkdir(exist_ok=True)
+    config.save_to_file(filepath=tmp_path / "config" / f"{name}.json")
+    launcher = FakeLauncher()
+    with TestClient(_app(tmp_path, launcher)) as client:
+        # Structural rejection happens before authentication or SQL I/O.
+        bad = client.post("/api/runs", json={"source": "sql", "configuration": name})
+        assert bad.status_code == 422
+        assert bad.json() == {"detail": "SQL configuration invalid: data_catalog is missing or a placeholder"}
+        assert "sql.example.invalid" not in bad.text
+        assert client.get("/api/runs").json() == []
+        assert launcher.processes == []
+
+
+def test_saved_sql_preflight_rejects_placeholder_table_and_missing_class(tmp_path):
+    from JBGRunSubmission import InvalidSavedSQLConfiguration, validate_saved_sql_run_config
+    config = _sql_config()
+    validate_saved_sql_run_config(config)
+    config.connection.data_table = " N/A "
+    with pytest.raises(InvalidSavedSQLConfiguration, match="data_table"):
+        validate_saved_sql_run_config(config)
+    config.connection.data_table = "dbo.Cases"
+    config.mode.train = True
+    config.connection.class_column = ""
+    with pytest.raises(InvalidSavedSQLConfiguration, match="class_column"):
+        validate_saved_sql_run_config(config)
+    config.connection.class_column = "class"
+    validate_saved_sql_run_config(config)
 
 
 # --- HTTP API -------------------------------------------------------------------------------

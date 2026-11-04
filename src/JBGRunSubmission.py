@@ -29,6 +29,37 @@ _SQL_SCOPE = StorageScope("00000000-0000-4000-8000-000000000000",
                           "00000000-0000-4000-8000-000000000000")
 
 
+class InvalidSavedSQLConfiguration(ValueError):
+    """A saved SQL configuration cannot be submitted as a run.
+
+    Messages name only the invalid field; never echo SQL connection details.
+    """
+
+
+def validate_saved_sql_run_config(config) -> None:
+    """Reject incomplete Voila SQL settings before opening a run DataLayer.
+
+    This is a deliberately narrow preflight, not a replacement for backend
+    configuration validation or SQL Server schema/permission checks.
+    """
+    connection = config.connection
+    # Voila can persist incomplete widget values. In particular, 'N/A' is a
+    # placeholder, not a valid SQL table. Do not include supplied values in
+    # error messages: they may include internal server information.
+    for field in ("host", "data_catalog", "data_table"):
+        value = getattr(connection, field, None)
+        if (not isinstance(value, str) or
+                value.strip().casefold() in ("", "n/a", "na", "none", "null")):
+            raise InvalidSavedSQLConfiguration(
+                f"SQL configuration invalid: {field} is missing or a placeholder")
+    if config.should_train() or config.should_display_mispredicted():
+        value = getattr(connection, "class_column", None)
+        if (not isinstance(value, str) or
+                value.strip().casefold() in ("", "n/a", "na", "none", "null")):
+            raise InvalidSavedSQLConfiguration(
+                "SQL configuration invalid: class_column is missing or a placeholder")
+
+
 class _QuietLogger:
     """Preparation in the web process logs nothing; training logs in the worker."""
 
@@ -61,6 +92,7 @@ class RunSubmission:
     def submit_sql(self, principal, configuration_name: str) -> dict:
         """PermissionError without SQL sign-in; UnknownConfiguration for unknown names."""
         config = self._configurations.load_sql(configuration_name)
+        validate_saved_sql_run_config(config)
         composed = compose_sql_run(self._sessions, principal, config, _QuietLogger())
         prepared = composed.preparation.prepare(
             DatasetReference(DataSourceKind.SQL, composed.sql_dataset_key()),
