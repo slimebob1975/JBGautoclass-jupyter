@@ -120,6 +120,13 @@ class DurableRunService:
             return {"run_id": run.key, "available": False, "summary": None}
         return {"run_id": run.key, "available": True, "summary": record.result}
 
+    def overview(self, principal: str, run: RunReference) -> dict[str, Any]:
+        """Safe, versioned GUI overview; authorization precedes progress reads."""
+        from JBGRunOverview import project_run_overview
+        record = self._owned(principal, run)
+        return project_run_overview(run.key, record.status, self._store.progress(run),
+                                    record.result)
+
     def cancel(self, principal: str, run: RunReference) -> dict[str, Any]:
         """Queued jobs stop at once; a running job stops at its next checkpoint."""
         self._owned(principal, run)

@@ -83,6 +83,17 @@ class RunAPIPresentationService:
         return [{"run_id": run.key, "timestamp": event.timestamp.isoformat(),
                  "percent": event.percent} for event in events]
 
+    def overview(self, principal: str, run: RunReference) -> dict[str, Any]:
+        """Use the same overview projection for in-memory application runs."""
+        from JBGRunOverview import project_run_overview
+        with self._lock:
+            self._authorized(principal, run)
+            snapshot = self._jobs.snapshot(run)
+            events = self._jobs.progress_history(run)
+            raw = self._jobs.result(run) if snapshot.status is RunStatus.SUCCEEDED else None
+        summary = project_classifier_result(raw) if raw is not None else None
+        return project_run_overview(run.key, snapshot.status, events, summary)
+
     def result(self, principal: str, run: RunReference) -> dict[str, Any]:
         with self._lock:
             self._authorized(principal, run)
