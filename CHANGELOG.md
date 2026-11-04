@@ -1,3 +1,16 @@
+## Revision 286a - project service and endpoints (2026-11-04)
+
+- Add `src/JBGProjectService.py` and `GET`/`POST /api/projects`,
+  `GET`/`PATCH /api/projects/{project_id}` on the 285i repository: create,
+  list, read, rename and describe projects. The source type is fixed at
+  creation and ignored in updates; responses never contain the owner; unknown
+  and other users' projects both give 404; duplicate names (per owner,
+  ignoring case) give 409. No deletion until a cascade policy exists.
+- Agreed for 286a-286c (BACKLOG item 2): projects are identified by their
+  stable ID, the name is for display; CSV storage for API projects will be
+  keyed by project ID (286b), separate from Voilà's name-based storage.
+- Tests: `tests/test_revision_286a_projects_api.py`.
+
 ## Revision 285o - Phase 0 gate passed; documentation corrections (2026-11-04)
 
 - Record the manual Phase 0 smoke test (2026-11-04): with the metadata

@@ -444,6 +444,7 @@ The map above is the target. What exists after revision 285m3:
 | `POST /api/runs/{id}/cancel` | 285d | Queued runs stop at once, running runs at the next engine checkpoint |
 | `GET /api/configurations?project=` | 285d | Interim catalog of what Voilà saves; replaced by the configuration store (gap 10) |
 | `GET`, `POST`, `DELETE /api/sql/session` | 285d, 285f | Sign-in names a saved SQL configuration and is bound to its server target |
+| `GET`, `POST /api/projects`, `GET`, `PATCH /api/projects/{id}` | 286a | Create, list, read, rename; source type fixed at creation; no deletion yet |
 
 Interim deviations from the target, to be removed as the GUI phases proceed: runs start from Voilà's saved configurations rather than project configurations; SQL sign-in needs a saved configuration rather than the project's connection; `pause`, `resume`, `prepare`, SSE events and the per-view result endpoints do not exist yet.
 

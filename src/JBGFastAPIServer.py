@@ -20,6 +20,7 @@ from JBGFastAPI import create_app
 from JBGIdentity import AuthenticationMode, IdentitySettings, LocalIdentityProvider
 from JBGMetadataStore import MetadataStoreSettings, metadata_store_settings, open_metadata_store, open_project_repository, open_configuration_repository, open_dataset_repository, open_model_catalog
 from JBGRunDispatcher import RunDispatcher
+from JBGProjectService import ProjectService
 from JBGRunSubmission import RunSubmission
 from JBGSavedConfigurations import ROOT, SavedConfigurations
 from JBGSQLSessions import SQLSessionRegistry
@@ -84,6 +85,6 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
 
     app = create_app(runs, current_principal=identity.current_principal,
                      submission=submission, sessions=sessions,
-                     lifespan=lifespan)
+                     projects=ProjectService(projects), lifespan=lifespan)
     app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models}
     return app

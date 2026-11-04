@@ -179,8 +179,20 @@ full SQL regression acceptance remain separately unverified.
        succeeded with evaluation and feature importance in the overview. This
        closed the Phase 0 gate.
     2. [ ] Services and endpoints for projects, datasets and configurations on
-       top of the 285i-285k repositories, with the one-source-type rule
-       enforced at project level.
+       top of the 285i-285k repositories (the one-source-type rule is already
+       enforced by the dataset repository). Agreed 2026-11-04: projects are
+       identified by stable ID, the name is for display; CSV storage for API
+       projects is keyed by project ID, separate from Voilà's name-based
+       storage (no import yet); no deletion in this series; dataset
+       validation and project-based SQL sign-in come later; the server owns
+       host, driver, credentials, model paths, SMTP server, source kind and
+       data location in configurations, and validates every configuration
+       with the existing `Config` loader before storing it.
+       - [x] 286a: project service and endpoints.
+       - [ ] 286b: dataset service and endpoints, including CSV upload into
+         the project's storage (`python-multipart`).
+       - [ ] 286c: configuration service and endpoints with server-owned
+         fields and `expected_version` conflict handling.
     3. [ ] Run submission from the configuration store instead of the 285d
        interim catalog (see the gap 10 item below), and registration of
        trained models in the catalog after the model file is saved.

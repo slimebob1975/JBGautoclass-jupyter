@@ -28,6 +28,18 @@ class RunRequest(BaseModel):
     configuration_id: Optional[str] = None     # CSV: saved configuration record
 
 
+class ProjectCreate(BaseModel):
+    """286a: a new project; its source type can never change afterwards."""
+    name: str
+    source: Literal["sql", "csv"]
+    description: str = ""
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class SQLSignIn(BaseModel):
     method: Literal["windows", "sql"]
     username: str = ""
@@ -41,6 +53,7 @@ def create_app(
     current_principal: Callable[[], AuthenticatedPrincipal],
     submission=None,
     sessions=None,
+    projects=None,
     lifespan=None,
 ) -> FastAPI:
     """Create the API with fail-closed, server-controlled identity.
@@ -106,10 +119,49 @@ def create_app(
     def result(run_id: str, principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return read_owned(presentation.result_details, run_id, principal)
 
+    if projects is not None:
+        _add_project_endpoints(app, principal_dependency, projects)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
                                        submission, sessions)
     return app
+
+
+def _add_project_endpoints(app, principal_dependency, projects):
+    """Projects (286a). No deletion until a cascade policy exists."""
+    from JBGProjectService import ProjectConflict, ProjectUnavailable
+
+    def call(action, *args, **kwargs):
+        try:
+            return action(*args, **kwargs)
+        except ProjectUnavailable:
+            raise HTTPException(status_code=404, detail="project unavailable") from None
+        except ProjectConflict:
+            raise HTTPException(status_code=409, detail="project name already exists") from None
+        except (ValueError, TypeError) as error:
+            # Repository messages are fixed texts (e.g. length limits), never input.
+            raise HTTPException(status_code=422, detail=str(error)) from None
+
+    @app.get("/api/projects")
+    def list_projects(principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(projects.list, principal.principal_key)
+
+    @app.post("/api/projects", status_code=201)
+    def create_project(request: ProjectCreate = Body(...),
+                       principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(projects.create, principal.principal_key, name=request.name,
+                    source=request.source, description=request.description)
+
+    @app.get("/api/projects/{project_id}")
+    def get_project(project_id: str,
+                    principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(projects.get, principal.principal_key, project_id)
+
+    @app.patch("/api/projects/{project_id}")
+    def update_project(project_id: str, request: ProjectUpdate = Body(...),
+                       principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(projects.update, principal.principal_key, project_id,
+                    name=request.name, description=request.description)
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,
