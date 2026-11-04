@@ -73,6 +73,11 @@ def project_run_overview(run_id: str, status: RunStatus, events,
     results = {"available": status is RunStatus.SUCCEEDED, "summary": summary}
     if evaluation is not None:
         results["evaluation"] = evaluation
+    if status is RunStatus.SUCCEEDED and isinstance(result, dict):
+        from JBGStructuredFeatureImportance import sanitize_stored_feature_importance
+        importance = sanitize_stored_feature_importance(result.get("feature_importance"))
+        if importance is not None:
+            results["feature_importance"] = importance
     return {"schema_version": 2, "run_id": run_id, "status": status.value,
             "stage": {"name": phase, "precision": "exact" if status is not RunStatus.RUNNING
                       or phase in TASK_STAGES

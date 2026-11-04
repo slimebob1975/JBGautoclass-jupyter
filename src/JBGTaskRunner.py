@@ -428,6 +428,11 @@ class TaskRunner:
                 "Interpretation": "Mean baseline-minus-permuted score; std is repeat variation, not a confidence interval",
                 "Limitations": "Model-dependent; correlated inputs can mask importance; not causal or automatic feature selection",
             }
+            # Optional structured observation for the durable FastAPI run result.
+            # A legacy Voila logger has no hook and retains its existing output.
+            record_importance = getattr(self.logger, "record_feature_importance", None)
+            if callable(record_importance):
+                record_importance(report)
             Helpers.save_matrix_as_csv(report.table, summary_path)
             Helpers.save_matrix_as_csv(pd.DataFrame.from_dict(details, orient="index", columns=["Value"]), details_path)
             self.logger.display_matrix(

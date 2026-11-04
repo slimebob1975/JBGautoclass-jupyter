@@ -110,6 +110,7 @@ class StoreProgressLogger:
         self._run = run
         self._heartbeat = heartbeat
         self.evaluation = None
+        self.feature_importance = None
 
     def record_task_stage(self, name):
         from JBGStructuredEvaluation import TASK_STAGES
@@ -135,6 +136,11 @@ class StoreProgressLogger:
             class_labels=class_labels, classification_matrix=classification_matrix,
             sample_rates=sample_rates)
         return result
+
+    def record_feature_importance(self, report):
+        from JBGStructuredFeatureImportance import feature_importance_from_report
+        self.feature_importance = feature_importance_from_report(report)
+        self.checkpoint()
 
     def checkpoint(self) -> None:
         if self._heartbeat.lost:
@@ -255,6 +261,8 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
         projected = project_classifier_result(result)
         if observed.evaluation is not None:
             projected["evaluation"] = observed.evaluation
+        if observed.feature_importance is not None:
+            projected["feature_importance"] = observed.feature_importance
         store.finish(run, worker_id, RunStatus.SUCCEEDED, result=projected)
         return EXIT_FINISHED
 
