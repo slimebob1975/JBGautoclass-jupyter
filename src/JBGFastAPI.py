@@ -98,6 +98,10 @@ def create_app(
     def progress(run_id: str, principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return read_owned(presentation.progress, run_id, principal)
 
+    @app.get("/api/runs/{run_id}/overview")
+    def overview(run_id: str, principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return read_owned(presentation.overview, run_id, principal)
+
     @app.get("/api/runs/{run_id}/result")
     def result(run_id: str, principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return read_owned(presentation.result_details, run_id, principal)
