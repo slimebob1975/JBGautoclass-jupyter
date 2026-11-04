@@ -29,8 +29,14 @@ class CSVNumericConverterGate259c(unittest.TestCase):
         self.assertLess(tasks.index('separate_dataset'), tasks.index('convert_to_numbers'))
         self.assertLess(tasks.index('convert_to_numbers'), tasks.index('train_model'))
 
-    def test_sql_numeric_training_keeps_existing_sequence(self):
-        self.assertNotIn('convert_to_numbers', production_get_tasks()(config('sql', True)))
+    def test_numeric_only_sql_training_fits_converter_before_train(self):
+        tasks = production_get_tasks()(config('sql', True))
+        self.assertEqual(tasks.count('convert_to_numbers'), 1)
+        self.assertLess(tasks.index('separate_dataset'), tasks.index('convert_to_numbers'))
+        self.assertLess(tasks.index('convert_to_numbers'), tasks.index('train_model'))
+
+    def test_numeric_sql_prediction_sequence_is_unchanged(self):
+        self.assertNotIn('convert_to_numbers', production_get_tasks()(config('sql', False)))
 
     def test_text_training_keeps_single_converter(self):
         for kind in ('sql', 'csv'):

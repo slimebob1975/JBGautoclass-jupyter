@@ -568,12 +568,10 @@ def get_tasks(config: Config, regression_suite: bool = False) -> list:
         "separate_dataset"
     ]
 
-    # CSV artifacts require a fitted input-schema converter even when every
-    # predictor is numeric. SQL retains its historical text-only conversion.
-    if config.get_text_column_names() or (
-        getattr(getattr(config, "data_source", None), "kind", "sql") == "csv"
-        and config.should_train()
-    ):
+    # All newly trained model artifacts require a fitted input-schema converter,
+    # including numeric-only SQL models. Text-bearing prediction runs still
+    # require conversion as before.
+    if config.should_train() or config.get_text_column_names():
         tasks.append("convert_to_numbers")
 
     if config.should_train():
