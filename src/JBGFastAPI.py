@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Callable, Literal, Optional
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi_offline import FastAPIOffline
@@ -40,6 +40,14 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
 
 
+class SQLDatasetCreate(BaseModel):
+    """286b: an SQL dataset names a catalog and table; never a host or login."""
+    name: str
+    role: Literal["training", "prediction", "mixed"]
+    catalog: str
+    table: str
+
+
 class SQLSignIn(BaseModel):
     method: Literal["windows", "sql"]
     username: str = ""
@@ -54,6 +62,7 @@ def create_app(
     submission=None,
     sessions=None,
     projects=None,
+    datasets=None,
     lifespan=None,
 ) -> FastAPI:
     """Create the API with fail-closed, server-controlled identity.
@@ -121,6 +130,8 @@ def create_app(
 
     if projects is not None:
         _add_project_endpoints(app, principal_dependency, projects)
+    if datasets is not None:
+        _add_dataset_endpoints(app, principal_dependency, datasets)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
                                        submission, sessions)
@@ -162,6 +173,67 @@ def _add_project_endpoints(app, principal_dependency, projects):
                        principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return call(projects.update, principal.principal_key, project_id,
                     name=request.name, description=request.description)
+
+
+def _add_dataset_endpoints(app, principal_dependency, datasets):
+    """Datasets of a project (286b). No deletion and no validation yet."""
+    from JBGDatasetService import (DatasetConflict, DatasetUnavailable, UploadTooLarge,
+                                   WrongSourceType)
+    from JBGProjectService import ProjectUnavailable
+
+    def call(action, *args, **kwargs):
+        try:
+            return action(*args, **kwargs)
+        except ProjectUnavailable:
+            raise HTTPException(status_code=404, detail="project unavailable") from None
+        except DatasetUnavailable:
+            raise HTTPException(status_code=404, detail="dataset unavailable") from None
+        except DatasetConflict:
+            raise HTTPException(status_code=409, detail="dataset name already exists") from None
+        except UploadTooLarge:
+            raise HTTPException(status_code=413, detail="CSV file exceeds 25 MB") from None
+        except WrongSourceType as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        except (ValueError, TypeError) as error:
+            # Fixed texts from the repository and the CSV structure check.
+            raise HTTPException(status_code=422, detail=str(error)) from None
+
+    @app.get("/api/projects/{project_id}/datasets")
+    def list_datasets(project_id: str,
+                      principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(datasets.list, principal.principal_key, project_id)
+
+    @app.post("/api/projects/{project_id}/datasets", status_code=201)
+    def create_sql_dataset(project_id: str, request: SQLDatasetCreate = Body(...),
+                           principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(datasets.create_sql, principal.principal_key, project_id,
+                    name=request.name, role=request.role, catalog=request.catalog,
+                    table=request.table)
+
+    @app.post("/api/projects/{project_id}/datasets/csv", status_code=201)
+    def upload_csv_dataset(project_id: str, file: UploadFile = File(...),
+                           name: str = Form(...),
+                           role: Literal["training", "prediction", "mixed"] = Form(...),
+                           delimiter: Optional[Literal[",", ";", "\t", "|"]] = Form(None),
+                           encoding: Literal["utf-8-sig", "utf-8", "cp1252", "latin-1"]
+                           = Form("utf-8-sig"),
+                           principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        try:
+            return call(datasets.upload_csv, principal.principal_key, project_id, name=name,
+                        role=role, stream=file.file, filename=file.filename,
+                        delimiter=delimiter, encoding=encoding)
+        finally:
+            file.file.close()
+
+    @app.get("/api/projects/{project_id}/datasets/{dataset_id}")
+    def get_dataset(project_id: str, dataset_id: str,
+                    principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(datasets.get, principal.principal_key, project_id, dataset_id)
+
+    @app.post("/api/projects/{project_id}/datasets/{dataset_id}/activate")
+    def activate_dataset(project_id: str, dataset_id: str,
+                         principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(datasets.activate, principal.principal_key, project_id, dataset_id)
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,

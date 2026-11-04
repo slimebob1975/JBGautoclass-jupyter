@@ -189,8 +189,10 @@ full SQL regression acceptance remain separately unverified.
        data location in configurations, and validates every configuration
        with the existing `Config` loader before storing it.
        - [x] 286a: project service and endpoints.
-       - [ ] 286b: dataset service and endpoints, including CSV upload into
-         the project's storage (`python-multipart`).
+       - [x] 286b: dataset service and endpoints, including CSV upload into
+         the project's storage (`python-multipart`). Uploads are checked for
+         structure only; column roles are checked with configurations and
+         dataset validation.
        - [ ] 286c: configuration service and endpoints with server-owned
          fields and `expected_version` conflict handling.
     3. [ ] Run submission from the configuration store instead of the 285d

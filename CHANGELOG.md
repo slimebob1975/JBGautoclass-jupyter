@@ -1,3 +1,29 @@
+## Revision 286b - dataset service and endpoints with CSV upload (2026-11-04)
+
+- Add `src/JBGDatasetService.py` and the endpoints
+  `GET`/`POST /api/projects/{id}/datasets` (SQL: catalog and table),
+  `POST /api/projects/{id}/datasets/csv` (file upload),
+  `GET /api/projects/{id}/datasets/{dataset_id}` and
+  `POST .../{dataset_id}/activate`. A dataset follows its project's source
+  type (409 otherwise); one dataset per project is active for training;
+  prediction-only datasets cannot be activated. New datasets are
+  "unverified": validation and deletion follow later.
+- Add `src/JBGProjectStorage.py`: CSV storage for API projects keyed by the
+  installation identity and the project's stable ID, as agreed. It shares the
+  physical root with Voilà's name-based storage but never the scope, so
+  renaming a project changes nothing and neither side sees the other's data.
+- CSV upload follows the agreed Dataset flow: the file is stored after the
+  same structure check and in the same format as Voilà's registration (25 MB
+  limit, read in chunks, delimiter detected as in Voilà's panel or given
+  explicitly); column roles are chosen and checked later. A failed or
+  duplicate upload leaves no file behind. Client file names are display text
+  only. Voilà's `register_csv_dataset` is unchanged.
+- `Storage/LocalCSVScope.py`: `local_tenant_id` extracted from
+  `local_csv_scope`, behaviour unchanged.
+- `requirements-fastapi.txt`: add `python-multipart`; the launcher's import
+  check includes it.
+- Tests: `tests/test_revision_286b_datasets_api.py`.
+
 ## Revision 286a - project service and endpoints (2026-11-04)
 
 - Add `src/JBGProjectService.py` and `GET`/`POST /api/projects`,

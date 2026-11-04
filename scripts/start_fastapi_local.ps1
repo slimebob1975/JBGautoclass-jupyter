@@ -24,7 +24,7 @@ if (-not (Test-Path -LiteralPath $Requirements)) {
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 # Install the API packages only when explicitly requested or when one is missing.
-& $PythonExecutable -c 'import fastapi, uvicorn, fastapi_offline, sqlalchemy' 2>$null
+& $PythonExecutable -c 'import fastapi, uvicorn, fastapi_offline, sqlalchemy, python_multipart' 2>$null
 if ($InstallDependencies -or $LASTEXITCODE -ne 0) {
     Write-Host 'Installing FastAPI dependencies into the JBG environment...' -ForegroundColor Cyan
     & $PythonExecutable -m pip install -r $Requirements

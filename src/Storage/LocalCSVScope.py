@@ -7,10 +7,11 @@ from uuid import UUID, uuid4
 from Storage.ArtifactContract import StorageScope
 
 
-def local_csv_scope(root, project):
-    """Reuse a local installation identity while keeping project names off disk."""
-    if not isinstance(project, str) or not project.strip():
-        raise ValueError("Select a project before registering CSV data")
+def local_tenant_id(root):
+    """The local installation identity (UUIDv4) stored under ``root``.
+
+    286b: shared by the Voilà scope below and the API's project-ID scopes.
+    """
     base = Path(root)
     base.mkdir(parents=True, exist_ok=True)
     marker = base / ".local-tenant-id"
@@ -28,6 +29,14 @@ def local_csv_scope(root, project):
             raise ValueError
     except (OSError, ValueError):
         raise ValueError("Invalid local storage configuration") from None
+    return tenant
+
+
+def local_csv_scope(root, project):
+    """Reuse a local installation identity while keeping project names off disk."""
+    if not isinstance(project, str) or not project.strip():
+        raise ValueError("Select a project before registering CSV data")
+    tenant = local_tenant_id(root)
     digest = hashlib.sha256(tenant.bytes + project.strip().encode("utf-8")).digest()[:16]
     # Deterministic opaque UUIDv4-shaped project key; not a credential.
     project_id = UUID(bytes=digest, version=4)
