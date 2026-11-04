@@ -446,6 +446,7 @@ The map above is the target. What exists after revision 285m3:
 | `GET`, `POST`, `DELETE /api/sql/session` | 285d, 285f | Sign-in names a saved SQL configuration and is bound to its server target |
 | `GET`, `POST /api/projects`, `GET`, `PATCH /api/projects/{id}` | 286a | Create, list, read, rename; source type fixed at creation; no deletion yet |
 | `GET`, `POST /api/projects/{id}/datasets`, `POST .../datasets/csv`, `GET .../datasets/{dataset}`, `POST .../{dataset}/activate` | 286b | SQL datasets by catalog and table; CSV upload (25 MB, structure check) into storage keyed by project ID; one active training dataset; validation and deletion later |
+| `GET`, `POST /api/projects/{id}/configurations`, `GET`, `PUT .../configurations/{configuration}` | 286c | User view of the settings; server-owned fields ignored; validated with the `Config` loader; `expected_version` on save (409 on conflict); no data location (added per run) |
 
 Interim deviations from the target, to be removed as the GUI phases proceed: runs start from Voilà's saved configurations rather than project configurations; SQL sign-in needs a saved configuration rather than the project's connection; `pause`, `resume`, `prepare`, SSE events and the per-view result endpoints do not exist yet.
 

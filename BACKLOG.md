@@ -178,7 +178,7 @@ full SQL regression acceptance remain separately unverified.
        configuration, one SQL training-and-prediction run through the API,
        succeeded with evaluation and feature importance in the overview. This
        closed the Phase 0 gate.
-    2. [ ] Services and endpoints for projects, datasets and configurations on
+    2. [x] Services and endpoints for projects, datasets and configurations on
        top of the 285i-285k repositories (the one-source-type rule is already
        enforced by the dataset repository). Agreed 2026-11-04: projects are
        identified by stable ID, the name is for display; CSV storage for API
@@ -193,8 +193,9 @@ full SQL regression acceptance remain separately unverified.
          the project's storage (`python-multipart`). Uploads are checked for
          structure only; column roles are checked with configurations and
          dataset validation.
-       - [ ] 286c: configuration service and endpoints with server-owned
-         fields and `expected_version` conflict handling.
+       - [x] 286c: configuration service and endpoints with server-owned
+         fields and `expected_version` conflict handling. Clients see a user
+         view; configurations carry no data location (added per run).
     3. [ ] Run submission from the configuration store instead of the 285d
        interim catalog (see the gap 10 item below), and registration of
        trained models in the catalog after the model file is saved.

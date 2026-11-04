@@ -48,6 +48,17 @@ class SQLDatasetCreate(BaseModel):
     table: str
 
 
+class ConfigurationCreate(BaseModel):
+    """286c: a named configuration; settings is a partial user view (see service)."""
+    name: str
+    settings: dict = {}
+
+
+class ConfigurationSave(BaseModel):
+    settings: dict
+    expected_version: int
+
+
 class SQLSignIn(BaseModel):
     method: Literal["windows", "sql"]
     username: str = ""
@@ -63,6 +74,7 @@ def create_app(
     sessions=None,
     projects=None,
     datasets=None,
+    configurations=None,
     lifespan=None,
 ) -> FastAPI:
     """Create the API with fail-closed, server-controlled identity.
@@ -132,6 +144,8 @@ def create_app(
         _add_project_endpoints(app, principal_dependency, projects)
     if datasets is not None:
         _add_dataset_endpoints(app, principal_dependency, datasets)
+    if configurations is not None:
+        _add_configuration_endpoints(app, principal_dependency, configurations)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
                                        submission, sessions)
@@ -234,6 +248,60 @@ def _add_dataset_endpoints(app, principal_dependency, datasets):
     def activate_dataset(project_id: str, dataset_id: str,
                          principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return call(datasets.activate, principal.principal_key, project_id, dataset_id)
+
+
+def _add_configuration_endpoints(app, principal_dependency, configurations):
+    """Project configurations (286c). No deletion yet."""
+    from JBGConfigurationService import (ConfigurationChanged, ConfigurationNameConflict,
+                                         ConfigurationUnavailable, InvalidConfiguration)
+    from JBGProjectService import ProjectUnavailable
+
+    def call(action, *args, **kwargs):
+        try:
+            return action(*args, **kwargs)
+        except ProjectUnavailable:
+            raise HTTPException(status_code=404, detail="project unavailable") from None
+        except ConfigurationUnavailable:
+            raise HTTPException(status_code=404, detail="configuration unavailable") from None
+        except ConfigurationNameConflict:
+            raise HTTPException(status_code=409,
+                                detail="configuration name already exists") from None
+        except ConfigurationChanged:
+            raise HTTPException(status_code=409,
+                                detail="configuration changed; reload before saving") from None
+        except InvalidConfiguration as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        except (ValueError, TypeError) as error:
+            # Fixed repository texts (name length, version, size limits).
+            raise HTTPException(status_code=422, detail=str(error)) from None
+
+    base = "/api/projects/{project_id}/configurations"
+
+    @app.get(base)
+    def list_configurations(project_id: str,
+                            principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(configurations.list, principal.principal_key, project_id)
+
+    @app.post(base, status_code=201)
+    def create_configuration(project_id: str, request: ConfigurationCreate = Body(...),
+                             principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(configurations.create, principal.principal_key, project_id,
+                    name=request.name, settings=request.settings)
+
+    @app.get(base + "/{configuration_id}")
+    def get_configuration(project_id: str, configuration_id: str,
+                          version: Optional[int] = None,
+                          principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(configurations.get, principal.principal_key, project_id,
+                    configuration_id, version)
+
+    @app.put(base + "/{configuration_id}")
+    def save_configuration(project_id: str, configuration_id: str,
+                           request: ConfigurationSave = Body(...),
+                           principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(configurations.save, principal.principal_key, project_id,
+                    configuration_id, settings=request.settings,
+                    expected_version=request.expected_version)
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,

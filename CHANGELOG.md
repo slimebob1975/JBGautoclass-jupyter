@@ -1,3 +1,22 @@
+## Revision 286c - configuration service and endpoints (2026-11-04)
+
+- Add `src/JBGConfigurationService.py` and the endpoints
+  `GET`/`POST /api/projects/{id}/configurations` and
+  `GET`/`PUT /api/projects/{id}/configurations/{configuration_id}` (optional
+  `?version=`) on the 285j repository.
+- As agreed, the server owns the SQL host, ODBC driver, credentials, data
+  location, model path and name, SMTP server, source type and the internal
+  name (the project's stable ID): a client cannot set them and sending them
+  changes nothing. Unknown sections or keys are refused.
+- Every configuration is validated with the existing `Config` loader before
+  it is stored; invalid settings give 422 "configuration is invalid" without
+  echoing values. CSV configurations are validated with a placeholder dataset
+  reference that is never stored: a run adds the dataset (BACKLOG item 3).
+- Clients see and send a user view (sections without server-owned keys); on
+  save, keys that are not sent keep their current values. Saving needs
+  `expected_version`; a newer version gives 409.
+- Tests: `tests/test_revision_286c_configurations_api.py`.
+
 ## Revision 286b - dataset service and endpoints with CSV upload (2026-11-04)
 
 - Add `src/JBGDatasetService.py` and the endpoints

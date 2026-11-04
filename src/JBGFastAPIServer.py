@@ -22,6 +22,7 @@ from JBGMetadataStore import MetadataStoreSettings, metadata_store_settings, ope
 from JBGRunDispatcher import RunDispatcher
 from JBGProjectService import ProjectService
 from JBGDatasetService import DatasetService
+from JBGConfigurationService import ConfigurationService
 from JBGProjectStorage import DEFAULT_CSV_ROOT
 from JBGRunSubmission import RunSubmission
 from JBGSavedConfigurations import ROOT, SavedConfigurations
@@ -68,6 +69,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                                **submission_options)
     runs = DurableRunService(store, scope_for=_no_scope)
     project_service = ProjectService(projects)
+    configuration_service = ConfigurationService(saved_configs, project_service)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -91,6 +93,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                      submission=submission, sessions=sessions,
                      projects=project_service,
                      datasets=DatasetService(datasets, project_service, csv_root=csv_root),
+                     configurations=configuration_service,
                      lifespan=lifespan)
-    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models}
+    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service}
     return app
