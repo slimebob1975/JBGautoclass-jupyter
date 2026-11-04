@@ -31,6 +31,8 @@ $SummaryFile = Join-Path $LogDirectory "backend_refactor_$($Stamp)_summary.txt"
 
 $PreviousPythonPath = $env:PYTHONPATH
 $PreviousPythonHashSeed = $env:PYTHONHASHSEED
+$PreviousPythonIoEncoding = $env:PYTHONIOENCODING
+$PreviousOutputEncoding = $null
 
 $Failed = @()
 $Passed = @()
@@ -234,6 +236,17 @@ try {
     $env:PYTHONPATH = Join-Path $Root 'src'
     $env:PYTHONHASHSEED = '0'
 
+    # 285c: Python writes UTF-8 and PowerShell reads UTF-8, so Swedish
+    # characters in messages (e.g. Windows errors) are not garbled in the log.
+    $env:PYTHONIOENCODING = 'utf-8'
+    try {
+        $PreviousOutputEncoding = [Console]::OutputEncoding
+        [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    }
+    catch {
+        $PreviousOutputEncoding = $null
+    }
+
     Push-Location $Root
 
     try {
@@ -380,5 +393,16 @@ finally {
     }
     else {
         $env:PYTHONHASHSEED = $PreviousPythonHashSeed
+    }
+
+    if ($null -eq $PreviousPythonIoEncoding) {
+        Remove-Item Env:PYTHONIOENCODING -ErrorAction SilentlyContinue
+    }
+    else {
+        $env:PYTHONIOENCODING = $PreviousPythonIoEncoding
+    }
+
+    if ($null -ne $PreviousOutputEncoding) {
+        try { [Console]::OutputEncoding = $PreviousOutputEncoding } catch { }
     }
 }

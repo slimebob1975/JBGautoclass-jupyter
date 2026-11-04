@@ -145,6 +145,9 @@ full SQL regression acceptance remain separately unverified.
   - [x] 285b: worker process per job (`JBGRunWorker.py`) with store-backed
     progress, heartbeat and cooperative cancellation. Also fixes the
     command-line logger crash on current configurations.
+  - [x] 285c: dispatcher (`JBGRunDispatcher.py`) with restart handling
+    (interrupted, awaiting credentials) and `DurableRunService`. Next: 285d
+    FastAPI wiring, metadata database on SQL Server, Phase 0 gate test.
 
 **Phase 4 - New web GUI (after application-layer contracts are stable).**
 

@@ -1,3 +1,30 @@
+## Revision 285c - dispatcher, restart handling and durable run service (2026-11-04)
+
+- Add `src/JBGRunDispatcher.py` (design gaps 2-4, step 3 of 4): starts one
+  `JBGRunWorker` process per pending job, up to `max_workers` jobs in progress
+  (default 1, counting jobs still running from before a restart). Each run
+  gets its own UTF-8 log file. SQL credentials go only to the worker's stdin.
+  Workers are detached from the server's console and process group, so
+  stopping the server does not stop a running job; cancel it instead.
+  On every poll: reap finished workers, mark jobs with a stopped heartbeat as
+  interrupted, requeue SQL jobs once their owner has signed in again, and
+  mark workers that crashed before claiming as failed (no restart loop).
+- Add `src/JBGDurableRuns.py`: `DurableRunService`, the durable counterpart
+  of the in-memory presentation and access services: the same authorization
+  on submit (CSV scope, SQL session) and the same response shapes for status,
+  progress (no messages), result and result details, plus `cancel` and
+  `list_runs`. The stored specification is derived from the prepared run.
+- `RunStatus` gains `AWAITING_CREDENTIALS`; the 280v stability test is
+  extended by that value. `RunJobStore` gains `running`,
+  `awaiting_credentials`, `mark_awaiting_credentials`, `requeue` and
+  `fail_unstarted`; cancelling a job awaiting credentials ends it at once.
+  `SQLSessionRegistry.credentials_for_owner` serves the dispatcher.
+- Gate script: Python output is UTF-8 and read as UTF-8, so Swedish
+  characters (e.g. in Windows error messages) are no longer garbled.
+- Tests: `tests/test_revision_285c_dispatcher.py`, including a real worker
+  process started by the dispatcher for a submitted CSV run.
+- Not yet used by the FastAPI app; follows in 285d. No change to the Voilà GUI.
+
 ## Revision 285b - worker process per job (2026-11-03)
 
 - Add `src/JBGRunWorker.py` (design gaps 2-4, step 2 of 4), runnable as

@@ -24,6 +24,8 @@ class RunStatus(str, Enum):
     CANCELLED = "cancelled"
     # 285a: the worker running the job stopped without finishing it.
     INTERRUPTED = "interrupted"
+    # 285c: an SQL job waits until its owner signs in to SQL again.
+    AWAITING_CREDENTIALS = "awaiting_credentials"
 
 
 @dataclass(frozen=True)

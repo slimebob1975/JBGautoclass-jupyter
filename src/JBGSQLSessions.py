@@ -132,6 +132,17 @@ class SQLSessionRegistry:
             credentials = self._credentials.get(key)
         return bool(credentials and credentials.windows)
 
+    def credentials_for_owner(self, owner: str) -> SQLCredentials | None:
+        """Trusted, server-side lookup by principal key for the dispatcher (285c).
+
+        Job records store only the owner's principal key. Never expose the
+        returned credentials outside the dispatcher's worker pipe.
+        """
+        if not isinstance(owner, str) or not owner:
+            return None
+        with self._lock:
+            return self._credentials.get(owner)
+
     def sign_out(self, principal: AuthenticatedPrincipal) -> None:
         """Forget the credentials; runs not yet executed then fail authorization."""
         key = _principal_key(principal)

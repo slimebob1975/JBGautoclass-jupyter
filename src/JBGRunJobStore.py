@@ -189,13 +189,25 @@ class RunJobStore:
                 .order_by(self._jobs.c.created_at.desc()).limit(limit)).all()
         return tuple(self._row_to_record(row) for row in rows)
 
+    def _with_status(self, status: RunStatus, limit: int | None) -> tuple[JobRecord, ...]:
+        query = (select(self._jobs).where(self._jobs.c.status == status.value)
+                 .order_by(self._jobs.c.created_at))
+        if limit is not None:
+            query = query.limit(limit)
+        with self._engine.connect() as connection:
+            rows = connection.execute(query).all()
+        return tuple(self._row_to_record(row) for row in rows)
+
     def pending(self, limit: int = 10) -> tuple[JobRecord, ...]:
         """Oldest pending jobs first, for the dispatcher."""
-        with self._engine.connect() as connection:
-            rows = connection.execute(
-                select(self._jobs).where(self._jobs.c.status == RunStatus.PENDING.value)
-                .order_by(self._jobs.c.created_at).limit(limit)).all()
-        return tuple(self._row_to_record(row) for row in rows)
+        return self._with_status(RunStatus.PENDING, limit)
+
+    def awaiting_credentials(self) -> tuple[JobRecord, ...]:
+        return self._with_status(RunStatus.AWAITING_CREDENTIALS, None)
+
+    def running(self) -> tuple[JobRecord, ...]:
+        """All running jobs, including those of workers started before a restart."""
+        return self._with_status(RunStatus.RUNNING, None)
 
     # --- Lifecycle -----------------------------------------------------------------
 
@@ -212,6 +224,32 @@ class RunJobStore:
                 .values(status=RunStatus.RUNNING.value, worker_id=worker_id,
                         started_at=now, heartbeat_at=now)).rowcount
         return changed == 1
+
+    def _move(self, run: RunReference, source: RunStatus, target: RunStatus,
+              **values) -> bool:
+        with self._engine.begin() as connection:
+            changed = connection.execute(
+                update(self._jobs)
+                .where(self._jobs.c.run_id == run.key, self._jobs.c.status == source.value)
+                .values(status=target.value, **values)).rowcount
+        return changed == 1
+
+    def mark_awaiting_credentials(self, run: RunReference) -> bool:
+        """Pending SQL job whose owner has no SQL session (285c)."""
+        if self.get(run).source is not DataSourceKind.SQL:
+            raise ValueError("only SQL jobs await credentials")
+        return self._move(run, RunStatus.PENDING, RunStatus.AWAITING_CREDENTIALS)
+
+    def requeue(self, run: RunReference) -> bool:
+        """Back to pending once the owner has signed in to SQL again."""
+        return self._move(run, RunStatus.AWAITING_CREDENTIALS, RunStatus.PENDING)
+
+    def fail_unstarted(self, run: RunReference, error_type: str) -> bool:
+        """A worker exited before claiming its pending job (e.g. could not start)."""
+        if not isinstance(error_type, str) or not error_type or len(error_type) > 128:
+            raise ValueError("error_type must be a short string")
+        return self._move(run, RunStatus.PENDING, RunStatus.FAILED,
+                          finished_at=_now(), error_type=error_type)
 
     def heartbeat(self, run: RunReference, worker_id: str) -> bool:
         """Refresh the heartbeat; False if this worker no longer runs the job."""
@@ -234,7 +272,8 @@ class RunJobStore:
         return bool(value)
 
     def request_cancel(self, run: RunReference) -> RunStatus:
-        """Pending jobs are cancelled at once; running jobs get a cooperative flag.
+        """Queued jobs (pending or awaiting credentials) are cancelled at once;
+        running jobs get a cooperative flag.
 
         Returns the job's status after the request; finished jobs are unchanged.
         """
@@ -243,7 +282,8 @@ class RunJobStore:
             connection.execute(
                 update(self._jobs)
                 .where(self._jobs.c.run_id == run.key,
-                       self._jobs.c.status == RunStatus.PENDING.value)
+                       self._jobs.c.status.in_([RunStatus.PENDING.value,
+                                                RunStatus.AWAITING_CREDENTIALS.value]))
                 .values(status=RunStatus.CANCELLED.value, cancel_requested=True,
                         finished_at=now))
             connection.execute(
