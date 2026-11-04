@@ -112,6 +112,7 @@ def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,
                                    submission, sessions):
     """Endpoints that change state (285d)."""
     from JBGSavedConfigurations import UnknownConfiguration
+    from JBGRunSubmission import InvalidSavedSQLConfiguration
     from JBGSQLSessions import SQLCredentials
 
     @app.get("/api/runs")
@@ -131,6 +132,8 @@ def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,
             return submission.submit_csv(principal, request.project, request.configuration_id)
         except UnknownConfiguration:
             raise HTTPException(status_code=404, detail="configuration unavailable") from None
+        except InvalidSavedSQLConfiguration as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
         except PermissionError as error:
             if str(error) == "SQL sign-in required":
                 raise HTTPException(status_code=409, detail="SQL sign-in required") from None

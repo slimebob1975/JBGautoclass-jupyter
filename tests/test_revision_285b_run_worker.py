@@ -225,6 +225,30 @@ def test_failure_records_only_the_error_type(tmp_path):
     assert record.result is None
 
 
+def test_legacy_sys_exit_fails_immediately_without_persisting_exit_message(tmp_path):
+    store = _store(tmp_path)
+    run = store.create("owner", DataSourceKind.CSV, {"spec_version": 1})
+    secret = "sensitive database diagnostic must remain in the worker log"
+    with patch("JBGRunWorker._config_from_spec", side_effect=SystemExit(secret)):
+        code = run_job(store, run, "worker-1", logger=Mock())
+    assert code == EXIT_FINISHED
+    record = store.get(run)
+    assert record.status is RunStatus.FAILED
+    assert record.error_type == "SystemExit"
+    assert record.finished_at is not None
+    assert record.result is None
+    assert secret not in str(record)
+
+
+def test_keyboard_interrupt_is_not_reclassified_as_engine_failure(tmp_path):
+    store = _store(tmp_path)
+    run = store.create("owner", DataSourceKind.CSV, {"spec_version": 1})
+    with patch("JBGRunWorker._config_from_spec", side_effect=KeyboardInterrupt):
+        with pytest.raises(KeyboardInterrupt):
+            run_job(store, run, "worker-1", logger=Mock())
+    assert store.get(run).status is RunStatus.RUNNING
+
+
 # --- Native engine -------------------------------------------------------------------------
 
 # Import the module, not the class, so pytest does not collect 281c's tests here.

@@ -214,6 +214,14 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
         except RunCancelled:
             store.finish(run, worker_id, RunStatus.CANCELLED)
             return EXIT_FINISHED
+        except SystemExit:
+            # Legacy logger.abort_cleanly() calls sys.exit(). This is an engine
+            # failure, not a dead worker: record it now instead of leaving the
+            # run RUNNING until its heartbeat expires. Never persist exit text,
+            # which may include SQL or data-source details.
+            traceback.print_exc(file=sys.stderr)
+            store.finish(run, worker_id, RunStatus.FAILED, error_type="SystemExit")
+            return EXIT_FINISHED
         except Exception as error:
             traceback.print_exc(file=sys.stderr)     # worker log only, never the store
             store.finish(run, worker_id, RunStatus.FAILED, error_type=type(error).__name__)
