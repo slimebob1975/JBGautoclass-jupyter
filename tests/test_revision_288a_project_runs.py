@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from JBGApplicationContracts import RunReference  # noqa: E402
 from JBGFastAPIServer import create_server_app  # noqa: E402
 from JBGMetadataStore import MetadataStoreSettings  # noqa: E402
+from JBGSQLServer import SQLServerSettings  # noqa: E402
 
 MISSING = "00000000-0000-4000-8000-000000000000"
 CSV = ("row_id;f1;f2;target\n1;5.1;1.4;a\n2;7.0;4.7;b\n3;6.3;6.0;a\n4;4.9;1.4;b\n").encode()
@@ -41,7 +42,8 @@ def _client(tmp_path, subject="developer", launcher=None, **dispatcher):
     return TestClient(create_server_app(
         settings=MetadataStoreSettings(sqlite_path=tmp_path / "jobs.sqlite"), subject=subject,
         run_logs=tmp_path / "run-logs", csv_root=tmp_path / "csv",
-        model_root=tmp_path / "models", dispatcher_options=options))
+        model_root=tmp_path / "models", sql_server=SQLServerSettings(),
+        dispatcher_options=options))
 
 
 def _setup(client, *, roles=ROLES, data=CSV, role="training", activate=True):
@@ -144,7 +146,8 @@ def test_a_second_run_on_the_same_dataset_starts(tmp_path):
             assert response.status_code == 201, response.text
 
 
-def test_sql_projects_wait_for_288b(tmp_path):
+def test_sql_projects_need_sql_server_settings(tmp_path):
+    # 288a refused all SQL projects; since 288b they need the server's SQL settings.
     with _client(tmp_path) as client:
         project = client.post("/api/projects", json={"name": "S", "source": "sql"}).json()["project_id"]
         configuration = client.post(f"/api/projects/{project}/configurations",
@@ -152,7 +155,7 @@ def test_sql_projects_wait_for_288b(tmp_path):
         response = client.post(f"/api/projects/{project}/runs",
                                json={"configuration_id": configuration})
         assert (response.status_code, response.json()) == (
-            409, {"detail": "runs for SQL projects are not available yet"})
+            409, {"detail": "no SQL Server is configured on this server"})
 
 
 def test_unknown_or_foreign_references(tmp_path):

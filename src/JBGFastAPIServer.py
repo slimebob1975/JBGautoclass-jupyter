@@ -24,6 +24,7 @@ from JBGProjectService import ProjectService
 from JBGDatasetService import DatasetService
 from JBGConfigurationService import ConfigurationService
 from JBGProjectRuns import DEFAULT_MODEL_ROOT, ProjectRunService
+from JBGSQLServer import SQLServerSettings, sql_server_settings
 from JBGProjectStorage import DEFAULT_CSV_ROOT
 from JBGRunSubmission import RunSubmission
 from JBGSavedConfigurations import ROOT, SavedConfigurations
@@ -54,10 +55,12 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                       csv_model_root: Path | None = None,
                       csv_root: Path = DEFAULT_CSV_ROOT,
                       model_root: Path = DEFAULT_MODEL_ROOT,
+                      sql_server: SQLServerSettings | None = None,
                       dispatcher_options: dict | None = None):
     identity = LocalIdentityProvider(IdentitySettings(AuthenticationMode.LOCAL, "development",
                                                       host), subject)
     settings = metadata_store_settings() if settings is None else settings
+    sql_server = sql_server_settings() if sql_server is None else sql_server
     # Workers must read CSV uploads from the same storage the API writes to.
     csv_artifacts = Path(csv_root) / "objects" if csv_artifacts is None else csv_artifacts
     store = open_metadata_store(settings)          # no connection until first use
@@ -109,7 +112,9 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                      project_runs=ProjectRunService(
                          store, projects=project_service, datasets=datasets,
                          configurations=configuration_service, on_submit=dispatcher.wake,
-                         csv_root=csv_root, model_root=model_root),
+                         csv_root=csv_root, model_root=model_root,
+                         sessions=sessions, sql_server=sql_server),
+                     sql_server=sql_server,
                      web_ui=True, version_line=_version_line(),
                      lifespan=lifespan)
     app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service}

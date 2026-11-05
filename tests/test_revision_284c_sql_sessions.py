@@ -220,3 +220,15 @@ def test_sql_credentials_are_not_reused_for_another_target():
     assert len(attempts) == 1
     assert sessions.credentials_for_owner(me.principal_key, other.connection) is None
     assert sessions.credentials_for_owner(me.principal_key, config.connection) is not None
+
+
+def test_one_sign_in_serves_all_catalogs_on_the_same_server():
+    # 288b (decision 2): bound to host and driver; SQL Server decides catalogs.
+    sessions, config, me = SQLSessionRegistry(), _config(), _local()
+    elsewhere = _config()
+    elsewhere.connection.data_catalog = 'OtherDb'
+    elsewhere.connection.class_catalog = 'ResultsDb'
+    with _sql_server():
+        sessions.sign_in(me, SQLCredentials.sql_login('analyst', 'pw'), config, Mock())
+        sessions.data_layer_for(me, elsewhere, Mock())
+    assert sessions.credentials_for_owner(me.principal_key, elsewhere.connection) is not None

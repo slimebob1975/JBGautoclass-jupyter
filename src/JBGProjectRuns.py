@@ -10,10 +10,11 @@ Agreed 2026-11-04 (BACKLOG Phase 0 item 3):
 4. Training runs only (train-and-predict included); prediction-only runs need
    a chosen saved model and follow with the Models tab.
 
-288a covers CSV projects; SQL projects follow in 288b. The CSV path builds the
-run exactly as Voilà does at training start (``prepare_csv_gui_training_config``),
-which is also where the configuration's column roles are checked against the
-dataset.
+The CSV path (288a) builds the run exactly as Voilà does at training start
+(``prepare_csv_gui_training_config``) and checks the column roles against the
+file. The SQL path (288b) takes host and driver from the server's settings
+(decision 2: one sign-in per server) and catalog and table from the dataset;
+it needs the user's SQL sign-in for that server.
 """
 from __future__ import annotations
 
@@ -60,7 +61,8 @@ class ProjectRunService:
     def __init__(self, store: RunJobStore, *, projects: ProjectService,
                  datasets: DatasetRepository, configurations, on_submit=None,
                  csv_root: Path = DEFAULT_CSV_ROOT,
-                 model_root: Path = DEFAULT_MODEL_ROOT) -> None:
+                 model_root: Path = DEFAULT_MODEL_ROOT,
+                 sessions=None, sql_server=None) -> None:
         self._store = store
         self._projects = projects
         self._datasets = datasets
@@ -68,6 +70,8 @@ class ProjectRunService:
         self._on_submit = on_submit
         self._csv_root = Path(csv_root)
         self._model_root = Path(model_root)
+        self._sessions = sessions
+        self._sql_server = sql_server
 
     def _dataset(self, owner: str, project_id: str, dataset_id: str | None):
         if dataset_id is None:
@@ -86,8 +90,10 @@ class ProjectRunService:
                version: int | None = None, dataset_id: str | None = None) -> dict:
         owner = principal.principal_key
         project = self._projects.require(owner, project_id)
-        if project.source is not DataSourceKind.CSV:
-            raise RunRequestRefused("runs for SQL projects are not available yet")
+        if project.source is DataSourceKind.SQL and (
+                self._sql_server is None or not self._sql_server.configured
+                or self._sessions is None):
+            raise RunRequestRefused("no SQL Server is configured on this server")
         configuration = self._configurations.stored_configuration(
             owner, project_id, configuration_id, version)
         settings = configuration.settings
@@ -98,6 +104,47 @@ class ProjectRunService:
         if dataset.role is DatasetRole.PREDICTION:
             raise RunRequestRefused("a training run needs a training or mixed dataset")
 
+        # Decision 3: one model file per training run, outside Voilà's folders.
+        model_id = str(uuid4())
+        model_folder = self._model_root / project.project_id
+        metadata = {"project_id": project.project_id,
+                    "configuration_id": configuration.configuration_id,
+                    "configuration_version": configuration.version,
+                    "dataset_id": dataset.dataset_id, "model_id": model_id}
+        if project.source is DataSourceKind.SQL:
+            return self._submit_sql(principal, settings, dataset, model_folder, model_id,
+                                    metadata)
+        return self._submit_csv(principal, project, settings, dataset, model_folder,
+                                model_id, metadata)
+
+    def _submit_sql(self, principal, settings, dataset, model_folder, model_id, metadata):
+        from JBGRunComposition import compose_sql_run
+        from JBGRunSubmission import _SQL_SCOPE, validate_saved_sql_run_config
+        config = _load_config(settings)
+        self._sql_server.apply_to(config)
+        config.connection.data_catalog = dataset.catalog
+        config.connection.data_table = dataset.table
+        try:
+            validate_saved_sql_run_config(config)
+        except ValueError as error:
+            # Fixed text naming the field only (285h), never its value.
+            raise RunDoesNotMatchDataset(str(error)) from None
+        model_folder.mkdir(parents=True, exist_ok=True)
+        config.io.model_path = str(model_folder)
+        config.io.model_name = model_id
+        # Opens the run's DataLayer with the user's own login for this server;
+        # PermissionError("SQL sign-in required") without one.
+        composed = compose_sql_run(self._sessions, principal, config, _QuietLogger())
+        prepared = composed.preparation.prepare(
+            DatasetReference(DataSourceKind.SQL, composed.sql_dataset_key()),
+            RunConfiguration(DataSourceKind.SQL, composed.configuration))
+        service = DurableRunService(self._store, scope_for=lambda principal: _SQL_SCOPE,
+                                    authorize_dataset=self._sessions.authorize,
+                                    on_submit=self._on_submit)
+        return service.submit(principal, prepared, run_metadata=metadata)
+
+    def _submit_csv(self, principal, project, settings, dataset, model_folder, model_id,
+                    metadata):
         repository, scope = project_csv_storage(project.project_id, root=self._csv_root)
         artifact_id = dataset.registration_id
         csv_format = csv_upload_format(repository, scope, artifact_id)
@@ -130,9 +177,6 @@ class ProjectRunService:
             raise RunDoesNotMatchDataset("the configuration's column roles do not fit "
                                          "the dataset") from None
 
-        # Decision 3: one model file per training run, outside Voilà's folders.
-        model_id = str(uuid4())
-        model_folder = self._model_root / project.project_id
         model_folder.mkdir(parents=True, exist_ok=True)
         runtime.io.model_path = str(model_folder)
         runtime.io.model_name = model_id
@@ -145,11 +189,7 @@ class ProjectRunService:
         service = DurableRunService(self._store, scope_for=lambda principal: scope,
                                     on_submit=self._on_submit)
         return service.submit(principal, prepared, configuration_id=record.configuration_id,
-                              run_metadata={"project_id": project.project_id,
-                                            "configuration_id": configuration.configuration_id,
-                                            "configuration_version": configuration.version,
-                                            "dataset_id": dataset.dataset_id,
-                                            "model_id": model_id})
+                              run_metadata=metadata)
 
 
 def _upload_dataset_id(repository, scope, artifact_id: str) -> str:

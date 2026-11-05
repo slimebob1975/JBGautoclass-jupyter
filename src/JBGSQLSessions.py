@@ -73,10 +73,16 @@ def open_sql_data_layer(credentials: SQLCredentials, config, logger):
     return DataLayer(config=run_config, logger=logger)
 
 
-def _connection_target(config_or_connection) -> tuple[str, str, str, str]:
-    """Server-side connection identity; exclude credentials and table selections."""
+def _connection_target(config_or_connection) -> tuple[str, str]:
+    """The SQL Server a login is bound to: host and driver (288b, decision 2).
+
+    285f also bound the catalogs. A login is a server login, and SQL Server
+    itself decides which catalogs it may use, so binding catalogs added no
+    protection; one sign-in now serves all SQL projects on the same server.
+    Credentials are still never handed out for a different server.
+    """
     connection = getattr(config_or_connection, "connection", config_or_connection)
-    fields = ("host", "odbc_driver", "data_catalog", "class_catalog")
+    fields = ("host", "odbc_driver")
     if isinstance(connection, dict):
         return tuple(str(connection.get(field, "")).strip().casefold() for field in fields)
     return tuple(str(getattr(connection, field, "")).strip().casefold() for field in fields)
@@ -94,7 +100,7 @@ class SQLSessionRegistry:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._credentials: dict[str, SQLCredentials] = {}
-        self._targets: dict[str, tuple[str, str, str, str]] = {}
+        self._targets: dict[str, tuple[str, str]] = {}
         # DataLayer is an unhashable dataclass, so keep weak references and
         # compare by identity.
         self._layers: dict[str, list[weakref.ref]] = {}

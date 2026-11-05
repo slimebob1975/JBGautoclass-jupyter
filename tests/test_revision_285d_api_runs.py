@@ -23,6 +23,7 @@ from JBGApplicationContracts import RunReference, RunStatus  # noqa: E402
 from JBGRunComposition import local_csv_storage  # noqa: E402
 from JBGFastAPIServer import create_server_app  # noqa: E402
 from JBGMetadataStore import MetadataStoreSettings, metadata_store_settings, open_metadata_store  # noqa: E402
+from JBGSQLServer import SQLServerSettings  # noqa: E402
 from JBGRunDispatcher import RunDispatcher  # noqa: E402
 from JBGSavedConfigurations import SavedConfigurations, UnknownConfiguration  # noqa: E402
 
@@ -93,6 +94,8 @@ def _app(tmp_path, launcher, subject="developer", **options):
             config_dir=config_dir,
             csv_storage=lambda project: local_csv_storage(project, base=tmp_path)),
         run_logs=tmp_path / "run-logs", csv_artifacts=tmp_path / "artifacts",
+        # 288b: never the SQL settings of the local .env.
+        sql_server=SQLServerSettings(),
         dispatcher_options={"launcher": launcher, "poll_seconds": 60, "heartbeat_seconds": 1,
                             "stale_after": timedelta(minutes=5), **options})
 
@@ -249,7 +252,10 @@ def test_requests_never_echo_secrets_or_accept_paths(tmp_path):
         # Rejected by our own check (no username) ...
         bad = client.post("/api/sql/session", json={"method": "sql", "password": "S3cret!", "configuration": name})
         assert bad.status_code == 422 and "S3cret!" not in bad.text
-        assert client.post("/api/sql/session", json={"method": "windows"}).status_code == 422
+        # 288b: without a configuration name, sign-in uses the server's SQL
+        # settings (decision 2); this test server has none.
+        assert client.post("/api/sql/session", json={"method": "windows"}).json() == {
+            "detail": "no SQL Server is configured on this server"}
         assert client.post("/api/sql/session", json={"method": "windows", "configuration": "../x"}).status_code == 404
         # ... and by FastAPI's validation, whose default response echoes the input.
         for body in ({"method": "sql", "username": "a", "password": ["S3cret!"], "configuration": name},

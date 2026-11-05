@@ -205,7 +205,8 @@ full SQL regression acceptance remain separately unverified.
        `output/models/<project-id>/`; training runs only until the Models tab.
        - [x] 288a: CSV project runs, CSV format in the upload manifest, column
          roles checked against the file.
-       - [ ] 288b: SQL project runs and SQL sign-in per server.
+       - [x] 288b: SQL project runs and SQL sign-in per server (host and
+         driver from the server's `.env` settings).
        - [ ] 288c: model registration in the catalog and
          `GET /api/projects/{id}/models`.
        - [ ] Later: per-project model retention (design decision 3), since

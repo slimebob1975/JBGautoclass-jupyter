@@ -1,3 +1,28 @@
+## Revision 288b - runs from SQL projects; SQL sign-in per server (2026-11-05)
+
+- `POST /api/projects/{id}/runs` now also starts SQL project runs: host and
+  driver come from the server's settings, catalog and table from the
+  dataset, and an empty prediction table defaults to the server's
+  classification catalog and table. The 285h preflight applies; the run's
+  DataLayer is opened with the user's own login when the run is submitted, so
+  a missing sign-in gives 409 "SQL sign-in required" at once. One model file
+  per run, as for CSV.
+- Add `src/JBGSQLServer.py`: the server's SQL settings from `.env`
+  (`DEFAULT_HOST`, `DEFAULT_ODBC_DRIVER`, `DEFAULT_DATA_CATALOG` for the
+  sign-in probe, `DEFAULT_CLASSIFICATION_CATALOG`/`_TABLE`), the keys the
+  Voilà GUI already uses.
+- SQL sign-in per server (decision 2): `POST /api/sql/session` without a
+  configuration name signs in to the server's SQL Server; sessions are bound
+  to host and driver instead of host, driver and catalogs (285f), so one
+  sign-in serves all SQL projects on that server. Credentials still never go
+  to a worker for another server. The interim catalog may still name a saved
+  Voilà configuration.
+- Tests: `tests/test_revision_288b_sql_project_runs.py`; 284c gains a test
+  for catalogs on the same server; the 285d test that required a
+  configuration name for sign-in and the 288a test for refused SQL projects
+  now check the new behaviour; test servers no longer read SQL settings from
+  the local `.env`.
+
 ## Revision 288a2 - gate split: native end-to-end runs as their own group (2026-11-05)
 
 - `tests/conftest.py` marks every test that builds on the shared 281c CSV

@@ -68,10 +68,12 @@ class ProjectRunRequest(BaseModel):
 
 
 class SQLSignIn(BaseModel):
+    """Sign in to the server's SQL Server (288b), or, for the interim catalog,
+    to the server of a saved Voilà configuration."""
     method: Literal["windows", "sql"]
     username: str = ""
     password: str = ""
-    configuration: str
+    configuration: Optional[str] = None
 
 
 def create_app(
@@ -84,6 +86,7 @@ def create_app(
     datasets=None,
     configurations=None,
     project_runs=None,
+    sql_server=None,
     web_ui: bool = False,
     version_line: str = "",
     lifespan=None,
@@ -185,7 +188,7 @@ def create_app(
         _add_project_run_endpoints(app, principal_dependency, project_runs)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
-                                       submission, sessions)
+                                       submission, sessions, sql_server)
     return app
 
 
@@ -363,6 +366,10 @@ def _add_project_run_endpoints(app, principal_dependency, project_runs):
             raise HTTPException(status_code=404, detail="dataset unavailable") from None
         except RunRequestRefused as error:
             raise HTTPException(status_code=409, detail=str(error)) from None
+        except PermissionError as error:
+            if str(error) == "SQL sign-in required":
+                raise HTTPException(status_code=409, detail="SQL sign-in required") from None
+            raise HTTPException(status_code=403, detail="not permitted") from None
         except RunDoesNotMatchDataset as error:
             raise HTTPException(status_code=422, detail=str(error)) from None
         except (ValueError, TypeError, KeyError, OSError):
@@ -371,7 +378,7 @@ def _add_project_run_endpoints(app, principal_dependency, project_runs):
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,
-                                   submission, sessions):
+                                   submission, sessions, sql_server=None):
     """Endpoints that change state (285d)."""
     from JBGSavedConfigurations import UnknownConfiguration
     from JBGRunSubmission import InvalidSavedSQLConfiguration
@@ -433,10 +440,17 @@ def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,
                            else SQLCredentials.sql_login(request.username, request.password))
         except (ValueError, TypeError):
             raise HTTPException(status_code=422, detail="invalid request") from None
-        try:
-            config = submission.configurations.load_sql(request.configuration)
-        except UnknownConfiguration:
-            raise HTTPException(status_code=404, detail="configuration unavailable") from None
+        if request.configuration is None:
+            # 288b: the server's own SQL Server, for all SQL projects on it.
+            if sql_server is None or not sql_server.configured:
+                raise HTTPException(status_code=409,
+                                    detail="no SQL Server is configured on this server") from None
+            config = sql_server.probe_config()
+        else:
+            try:
+                config = submission.configurations.load_sql(request.configuration)
+            except UnknownConfiguration:
+                raise HTTPException(status_code=404, detail="configuration unavailable") from None
         try:
             sessions.sign_in(principal, credentials, config, _SilentLogger())
         except PermissionError:

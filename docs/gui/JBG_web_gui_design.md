@@ -167,7 +167,7 @@ Dataset connects a source, assigns a role to every column, and ends with a serve
 
 4.  **Class distribution / Klassfördelning** – bar chart of labelled rows per class, count of unlabelled (prediction) rows, imbalance ratio, and warnings for classes with too few rows for the chosen CV folds.
 
-**SQL sign-in / SQL-inloggning.** When a SQL project's Dataset tab opens, JBG probes the host with a 5-second timeout: Windows authentication as the user in local mode, Entra pass-through in server mode (Phase 4). The result is always shown, e.g. "Connected as DOMAIN\user (Windows)" or "Windows sign-in was not accepted by this server – enter SQL login". A "Use SQL login instead" link lets the user switch manually. The login fields use `autocomplete="username"` / `"current-password"` so the browser's password manager can fill them; JBG never stores them. Since revision 285f, a sign-in is verified against, and bound to, the server of one saved SQL configuration (host, driver, catalogs); credentials are handed to a worker only for runs with the same target.
+**SQL sign-in / SQL-inloggning.** When a SQL project's Dataset tab opens, JBG probes the host with a 5-second timeout: Windows authentication as the user in local mode, Entra pass-through in server mode (Phase 4). The result is always shown, e.g. "Connected as DOMAIN\user (Windows)" or "Windows sign-in was not accepted by this server – enter SQL login". A "Use SQL login instead" link lets the user switch manually. The login fields use `autocomplete="username"` / `"current-password"` so the browser's password manager can fill them; JBG never stores them. Since revision 288b, a sign-in is verified against, and bound to, the server's SQL Server (host and driver from the server settings) and serves all SQL projects on it; SQL Server decides which catalogs the login may use. Credentials are handed to a worker only for runs on the same server.
 
 | Role | Roll | Config field | Rules shown inline |
 | --- | --- | --- | --- |
@@ -443,14 +443,14 @@ The map above is the target. What exists after revision 285m3:
 | `POST /api/runs` | 285d | Interim body: `{"source": "sql", "configuration": "<saved file name>"}` or `{"source": "csv", "project": "<name>", "configuration_id": "<saved record>"}`, from `GET /api/configurations` |
 | `POST /api/runs/{id}/cancel` | 285d | Queued runs stop at once, running runs at the next engine checkpoint |
 | `GET /api/configurations?project=` | 285d | Interim catalog of what Voilà saves; replaced by the configuration store (gap 10) |
-| `GET`, `POST`, `DELETE /api/sql/session` | 285d, 285f | Sign-in names a saved SQL configuration and is bound to its server target |
+| `GET`, `POST`, `DELETE /api/sql/session` | 285d, 285f, 288b | Sign-in to the server's SQL Server (host and driver from its settings), valid for all SQL projects on it; the interim catalog may still name a saved Voilà configuration |
 | `GET`, `POST /api/projects`, `GET`, `PATCH /api/projects/{id}` | 286a | Create, list, read, rename; source type fixed at creation; no deletion yet |
 | `GET`, `POST /api/projects/{id}/datasets`, `POST .../datasets/csv`, `GET .../datasets/{dataset}`, `POST .../{dataset}/activate` | 286b | SQL datasets by catalog and table; CSV upload (25 MB, structure check) into storage keyed by project ID; one active training dataset; validation and deletion later |
 | `GET`, `POST /api/projects/{id}/configurations`, `GET`, `PUT .../configurations/{configuration}` | 286c | User view of the settings; server-owned fields ignored; validated with the `Config` loader; `expected_version` on save (409 on conflict); no data location (added per run) |
 | `/ui/` (web interface) | 287a | Shell and Projects tab, server-rendered; Swedish by default; other tabs follow their backends |
-| `POST /api/projects/{id}/runs` | 288a | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV projects (SQL in 288b) |
+| `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 
-Interim deviations from the target, to be removed as the GUI phases proceed: runs start from Voilà's saved configurations rather than project configurations; SQL sign-in needs a saved configuration rather than the project's connection; `pause`, `resume`, `prepare`, SSE events and the per-view result endpoints do not exist yet.
+Interim deviations from the target, to be removed as the GUI phases proceed: the 285d endpoints still start runs from Voilà's saved configurations next to the project runs; `pause`, `resume`, `prepare`, SSE events and the per-view result endpoints do not exist yet.
 
 ## Backend gaps
 
