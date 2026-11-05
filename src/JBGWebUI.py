@@ -95,7 +95,9 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         except ProjectUnavailable:
             return None
 
-    available = {"projects"} | ({"dataset"} if datasets is not None else set())
+    available = ({"projects"} | ({"dataset"} if datasets is not None else set())
+                 | ({"configuration"} if configurations is not None and datasets is not None
+                    else set()))
     tabs = tuple((key, label, key in available) for key, label, _ in TABS)
 
     def active_dataset(owner: str, project):
@@ -108,6 +110,16 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
             return None
         return next((d for d in items if d["active_training"]), None)
 
+    def active_configuration(request: Request, owner: str, project):
+        """The configuration chosen on the Configuration tab (292a), for the context bar."""
+        configuration_id = request.cookies.get("jbg_configuration")
+        if configurations is None or project is None or not configuration_id:
+            return None
+        try:
+            return configurations.get(owner, project["project_id"], configuration_id)
+        except Exception:
+            return None
+
     def render(request: Request, principal, template: str, tab: str, status_code: int = 200,
                **context):
         language = request_language(request)
@@ -119,6 +131,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                 "current_tab": tab, "user": principal.subject, "version_line": version_line,
                 "active_project": project,
                 "active_dataset": active_dataset(principal.principal_key, project),
+                "active_configuration": active_configuration(request, principal.principal_key,
+                                                             project),
                 "message": message}
         base.update(context)
         return templates.TemplateResponse(request, template, base, status_code=status_code)
@@ -129,6 +143,12 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                         redirect=_redirect, active_project=active_project, datasets=datasets,
                         inspection=inspection, configurations=configurations,
                         sessions=sessions, sql_server=sql_server)
+    if configurations is not None and datasets is not None:
+        from JBGWebUIConfigurations import add_configuration_tab
+        add_configuration_tab(app, principal_dependency=principal_dependency, render=render,
+                              redirect=_redirect, active_project=active_project,
+                              configurations=configurations, datasets=datasets,
+                              inspection=inspection)
 
     @app.get("/ui", include_in_schema=False)
     @app.get("/ui/", include_in_schema=False)

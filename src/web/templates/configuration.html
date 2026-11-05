@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% set title = "Configuration" %}
+
+{% macro control(f, values, columns, errors) %}
+  {% set section, name = f.key.split(".", 1) %}
+  {% set value = values[section][name] if values and section in values else none %}
+  {% set id = "f-" ~ f.key | replace(".", "-") %}
+  {% set error = errors.get(f.key) %}
+  <div class="field{{ ' has-error' if error }}">
+  {% if f.kind == "boolean" %}
+    <label class="check"><input type="checkbox" id="{{ id }}" name="f:{{ f.key }}" {{ 'checked' if value }}> {{ f.label }}</label>
+  {% elif f.kind == "multi_choice" %}
+    <fieldset class="choices"><legend>{{ f.label }}</legend>
+      {% for option in f.options %}
+        <label class="check"><input type="checkbox" name="f:{{ f.key }}" value="{{ option.value }}" {{ 'checked' if value and option.value in value }}> {{ option.label }}</label>
+      {% endfor %}
+    </fieldset>
+  {% elif f.kind == "columns" and columns %}
+    <fieldset class="choices"><legend>{{ f.label }}</legend>
+      {% for column in columns %}
+        <label class="check"><input type="checkbox" name="f:{{ f.key }}" value="{{ column }}" {{ 'checked' if value and column in value }}> {{ column }}</label>
+      {% endfor %}
+    </fieldset>
+  {% else %}
+    <label for="{{ id }}">{{ f.label }}</label>
+    {% if f.kind == "choice" %}
+      <select id="{{ id }}" name="f:{{ f.key }}">
+        {% for option in f.options %}<option value="{{ option.value }}" {{ 'selected' if option.value == value }}>{{ option.label }}</option>{% endfor %}
+      </select>
+    {% elif f.kind == "column" and columns %}
+      <select id="{{ id }}" name="f:{{ f.key }}">
+        <option value="">–</option>
+        {% for column in columns %}<option value="{{ column }}" {{ 'selected' if column == value }}>{{ column }}</option>{% endfor %}
+      </select>
+    {% elif f.kind in ("columns", "integer_list") %}
+      <input id="{{ id }}" name="f:{{ f.key }}" value="{{ value | join(', ') if value else '' }}">
+    {% else %}
+      <input id="{{ id }}" name="f:{{ f.key }}" value="{{ value if value is not none else '' }}"
+             {% if f.kind in ("integer", "number") %}inputmode="decimal"{% endif %}>
+    {% endif %}
+  {% endif %}
+  {% if f.help %}<p class="hint">{{ f.help }}</p>{% endif %}
+  {% if error %}<p class="field-error">{{ _(field_error_texts[error]) }}</p>{% endif %}
+  </div>
+{% endmacro %}
+
+{% block main %}
+{% if no_project %}
+  <div class="card"><p class="empty">{{ _("Open a project in the Projects tab first.") }}
+    <a href="/ui/projects">{{ _("Projects") }}</a></p></div>
+{% else %}
+<div class="layout-two">
+  <section>
+    <div class="card">
+      <h2>{{ _("Configurations") }}</h2>
+      {% if items %}
+      <table class="grid">
+        <thead><tr><th>{{ _("Name") }}</th><th>{{ _("Version") }}</th><th>{{ _("Modified") }}</th></tr></thead>
+        <tbody>
+        {% for item in items %}
+          <tr class="{{ 'hl' if selected and selected.configuration_id == item.configuration_id }}">
+            <td><a href="/ui/configuration?configuration={{ item.configuration_id }}"><b>{{ item.name }}</b></a></td>
+            <td class="num">{{ item.version }}</td><td class="num">{{ item.updated_at[:10] }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">{{ _("No configurations yet. Create one below.") }}</p>
+      {% endif %}
+    </div>
+    <form method="post" action="/ui/configuration" class="panel">
+      <fieldset>
+        <legend>{{ _("New configuration") }}</legend>
+        <label for="new-config">{{ _("Name") }}</label>
+        <input id="new-config" name="name" required maxlength="200">
+        <p class="hint">{{ _("Starts with the default settings.") }}</p>
+        <button class="btn">{{ _("Create configuration") }}</button>
+      </fieldset>
+    </form>
+  </section>
+
+  <aside class="card wide">
+  {% if selected and schema %}
+    <h2>{{ selected.name }} <span class="badge b-neu">{{ _("Version") }} {{ selected.version }}</span></h2>
+    {% if form_message == "fields" %}<p class="message error">{{ _("Some values were not accepted. See the marked fields.") }}</p>
+    {% elif form_message == "invalid" %}<p class="message error">{{ _("The configuration was not accepted. Check the settings and save again.") }}</p>
+    {% elif form_message == "changed" %}<p class="message error">{{ _("Someone saved a newer version.") }}
+      <a href="/ui/configuration?configuration={{ selected.configuration_id }}">{{ _("Load the latest version") }}</a></p>{% endif %}
+    {% if columns is none %}<p class="hint">{{ _("Column names appear as lists when the active training dataset can be read (for SQL: sign in on the Dataset tab).") }}</p>{% endif %}
+
+    <form id="config-form" method="post" action="/ui/configuration/{{ selected.configuration_id }}">
+      <input type="hidden" name="expected_version" value="{{ selected.version }}">
+      {% for group in schema.groups %}
+        {% set fields = schema.fields | selectattr("group", "equalto", group.key) | list %}
+        {% set has_error = fields | selectattr("key", "in", field_errors.keys() | list) | list %}
+        <details class="group" {{ 'open' if loop.first or has_error }}>
+          <summary>{{ group.label }}</summary>
+          {% for f in fields if not f.advanced and not f.subgroup and f.kind != "parameters" %}{{ control(f, values, columns, field_errors) }}{% endfor %}
+          {% set sub = fields | selectattr("subgroup") | list %}
+          {% if sub %}
+            <details class="subgroup"><summary>{{ sub[0].subgroup }}</summary>
+              {% for f in sub %}{{ control(f, values, columns, field_errors) }}{% endfor %}
+            </details>
+          {% endif %}
+          {% if group.key == "algorithms" %}
+            {% set chosen = values["mode"]["algorithm"] or [] %}
+            {% set parameters = values["mode"]["model_parameters"] or {} %}
+            {% for algorithm in chosen if algorithm in schema.model_parameters %}
+              <details class="subgroup"><summary>{{ _("Settings for") }} {{ algorithm }}</summary>
+                {% for p in schema.model_parameters[algorithm] %}
+                  {% set key = "p:" ~ algorithm ~ ":" ~ p.name %}
+                  {% set current = parameters.get(algorithm, {}).get(p.name) %}
+                  <div class="field{{ ' has-error' if field_errors.get(key) }}">
+                  <label for="{{ key }}">{{ p.label }}</label>
+                  {% if p.kind == "choice" %}
+                    <select id="{{ key }}" name="{{ key }}">
+                      <option value="">{{ _("Default") }} ({{ p.default }})</option>
+                      {% for option in p.options %}<option value="{{ option }}" {{ 'selected' if current is not none and option == current }}>{{ option }}</option>{% endfor %}
+                    </select>
+                  {% else %}
+                    <input id="{{ key }}" name="{{ key }}" inputmode="decimal"
+                           value="{{ current if current is not none else '' }}" placeholder="{{ p.default }}">
+                    <p class="hint">{{ p.minimum }} – {{ p.maximum }}</p>
+                  {% endif %}
+                  {% if field_errors.get(key) %}<p class="field-error">{{ _(field_error_texts[field_errors[key]]) }}</p>{% endif %}
+                  </div>
+                {% endfor %}
+              </details>
+            {% endfor %}
+            <p class="hint">{{ _("Settings for newly ticked algorithms appear after saving.") }}</p>
+          {% endif %}
+          {% set advanced = fields | selectattr("advanced") | rejectattr("subgroup") | list %}
+          {% if advanced %}
+            <details class="subgroup"><summary>{{ _("Advanced settings") }}</summary>
+              {% for f in advanced %}{{ control(f, values, columns, field_errors) }}{% endfor %}
+            </details>
+          {% endif %}
+        </details>
+      {% endfor %}
+    </form>
+  {% else %}
+    <p class="empty">{{ _("Select a configuration in the list.") }}</p>
+  {% endif %}
+  </aside>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block actions %}
+  <span class="hint">{{ _("Saving creates a new version; earlier versions are kept.") if selected else _("Select a configuration in the list.") }}</span>
+  {% if selected and schema %}
+    <button class="btn act ready" form="config-form">{{ _("Save configuration") }}</button>
+  {% else %}
+    <button class="btn act blocked" disabled>{{ _("Save configuration") }}</button>
+  {% endif %}
+{% endblock %}

@@ -112,3 +112,17 @@ dl.meta dt { color: var(--ink3); } dl.meta dd { margin: 0; }
 form.inline { display: flex; align-items: end; gap: 10px; margin-bottom: 10px; }
 form.inline label { margin: 0 0 6px; } form.inline select { width: auto; min-width: 180px; }
 h3 { font-size: 14px; margin: 16px 0 6px; }
+
+/* 292a: Configuration tab */
+details.group { border: 1px solid var(--line); border-radius: 6px; background: var(--panel); margin: 0 0 10px; padding: 0 14px; }
+details.group > summary { cursor: pointer; font-weight: 700; padding: 10px 0; }
+details.group[open] { padding-bottom: 12px; }
+details.subgroup { border-top: 1px solid var(--line2); margin-top: 10px; padding-top: 4px; }
+details.subgroup > summary { cursor: pointer; font-weight: 600; color: var(--ink2); padding: 6px 0; }
+.field { margin: 6px 0 10px; max-width: 520px; }
+.field label.check, fieldset.choices label.check { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-weight: normal; }
+.field label.check input, fieldset.choices input { width: auto; }
+fieldset.choices { border: 0; padding: 0; margin: 0; columns: 2 220px; }
+fieldset.choices legend { font-weight: 600; margin-bottom: 4px; column-span: all; }
+.field.has-error input, .field.has-error select { border-color: var(--error); }
+.field-error { color: var(--error); font-size: 12.5px; margin: 4px 0 0; }

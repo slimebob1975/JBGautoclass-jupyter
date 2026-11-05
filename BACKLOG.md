@@ -252,8 +252,11 @@ full SQL regression acceptance remain separately unverified.
     derived from code where possible, labels in Swedish and English.
   - [x] 291a: Dataset tab (datasets, CSV upload, SQL registration and
     sign-in, preview, profile, classes, validation). No JavaScript needed.
-  - [ ] Next: the Configuration tab (forms generated from 290a), then the Run
-    tab (start a run, follow its progress; likely the first use of htmx).
+  - [x] 292a: Configuration tab, forms generated from the 290a schema, with
+    field-level errors and the version check. No JavaScript needed.
+  - [ ] Next: the Run tab (start a run from the active configuration and
+    dataset, follow its progress; likely the first use of htmx). That
+    completes GUI Phase 1.
   - [ ] Interface details noted on 2026-11-05: show the Windows user name in
     local mode instead of the fixed "developer"; use the JBG logo image from
     `GUI/assets/logo.png` in the header.

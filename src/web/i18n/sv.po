@@ -758,3 +758,94 @@ msgstr "Tal"
 
 msgid "Text"
 msgstr "Text"
+
+# 292a: Configuration tab.
+msgid "A configuration with that name already exists."
+msgstr "Det finns redan en konfiguration med det namnet."
+
+msgid "A value is required."
+msgstr "Ett värde krävs."
+
+msgid "Advanced settings"
+msgstr "Avancerade inställningar"
+
+msgid "Choose one of the options."
+msgstr "Välj ett av alternativen."
+
+msgid "Column names appear as lists when the active training dataset can be read (for SQL: sign in on the Dataset tab)."
+msgstr "Kolumnnamn visas som listor när det aktiva träningsdatasetet kan läsas (för SQL: logga in under fliken Dataset)."
+
+msgid "Configuration created."
+msgstr "Konfigurationen är skapad."
+
+msgid "Configuration saved."
+msgstr "Konfigurationen är sparad."
+
+msgid "Configuration selected."
+msgstr "Konfigurationen är vald."
+
+msgid "Configurations"
+msgstr "Konfigurationer"
+
+msgid "Create configuration"
+msgstr "Skapa konfiguration"
+
+msgid "Default"
+msgstr "Standard"
+
+msgid "Enter a number."
+msgstr "Ange ett tal."
+
+msgid "Enter a whole number."
+msgstr "Ange ett heltal."
+
+msgid "Enter whole numbers separated by commas."
+msgstr "Ange heltal åtskilda med kommatecken."
+
+msgid "Load the latest version"
+msgstr "Hämta den senaste versionen"
+
+msgid "New configuration"
+msgstr "Ny konfiguration"
+
+msgid "No configurations yet. Create one below."
+msgstr "Inga konfigurationer ännu. Skapa en nedan."
+
+msgid "Save configuration"
+msgstr "Spara konfiguration"
+
+msgid "Saving creates a new version; earlier versions are kept."
+msgstr "Att spara skapar en ny version; tidigare versioner sparas."
+
+msgid "Select a configuration in the list."
+msgstr "Välj en konfiguration i listan."
+
+msgid "Settings for"
+msgstr "Inställningar för"
+
+msgid "Settings for newly ticked algorithms appear after saving."
+msgstr "Inställningar för nyligen valda algoritmer visas när du har sparat."
+
+msgid "Some values were not accepted. See the marked fields."
+msgstr "Några värden godtogs inte. Se de markerade fälten."
+
+msgid "Someone saved a newer version."
+msgstr "Någon har sparat en nyare version."
+
+msgid "Starts with the default settings."
+msgstr "Börjar med standardinställningarna."
+
+msgid "The configuration is no longer available."
+msgstr "Konfigurationen är inte längre tillgänglig."
+
+msgid "The configuration was not accepted. Check the settings and save again."
+msgstr "Konfigurationen godtogs inte. Kontrollera inställningarna och spara igen."
+
+msgid "The name was not accepted (1-200 characters)."
+msgstr "Namnet godtogs inte (1-200 tecken)."
+
+msgid "The value is outside the allowed range."
+msgstr "Värdet ligger utanför det tillåtna intervallet."
+
+msgid "Version"
+msgstr "Version"

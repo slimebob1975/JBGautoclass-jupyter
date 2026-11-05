@@ -37,7 +37,8 @@
     <span class="chip"><span class="dot {{ {'valid': 'd-ok', 'invalid': 'd-block'}.get(ds_state, 'd-off') }}"></span>
       <span class="k">{{ _("Dataset") }}</span><b>{{ active_dataset.name if active_dataset else "–" }}</b></span>
     <span class="sep">›</span>
-    <span class="chip"><span class="dot d-off"></span><span class="k">{{ _("Configuration") }}</span><b>–</b></span>
+    <span class="chip"><span class="dot {{ 'd-ok' if active_configuration else 'd-off' }}"></span>
+      <span class="k">{{ _("Configuration") }}</span><b>{{ (active_configuration.name ~ " v" ~ active_configuration.version) if active_configuration else "–" }}</b></span>
     <span class="sep">›</span>
     <span class="chip"><span class="dot d-off"></span><span class="k">{{ _("Model") }}</span><b>–</b></span>
   </div>

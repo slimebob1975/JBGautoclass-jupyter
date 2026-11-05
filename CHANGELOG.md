@@ -1,3 +1,24 @@
+## Revision 292a - Configuration tab (2026-11-05)
+
+- Add the Configuration tab (`src/JBGWebUIConfigurations.py`,
+  `src/web/templates/configuration.html`), generated from the 290a schema:
+  the project's configurations with version; creating one (default settings);
+  every group as a collapsible section, advanced fields and the feature
+  investigation in further collapsible parts; checkbox lists for multiple
+  choices; column roles as lists from the active training dataset (typed
+  names when it cannot be read); settings for the algorithms selected in the
+  saved version. "Save configuration" is the primary action; the context bar
+  shows the selected configuration and its version.
+- Form values are converted by the schema's kinds: an unticked box is "off",
+  empty numbers are "no value" only where allowed, decimal commas are
+  accepted, ranges and options are checked. Errors are shown on the field;
+  a configuration the Config loader refuses is shown again with the entries
+  kept. Saving uses the 286c version check: a newer version is never
+  overwritten, and the tab offers to load it.
+- Still no JavaScript. About 30 Swedish texts added; the 287a tab test
+  expects the Configuration tab to be available.
+- Tests: `tests/test_revision_292a_configuration_tab.py`.
+
 ## Revision 291a - Dataset tab (2026-11-05)
 
 - Add the Dataset tab (`src/JBGWebUIDatasets.py`, `src/web/templates/dataset.html`)
