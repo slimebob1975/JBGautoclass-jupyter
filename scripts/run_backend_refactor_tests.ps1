@@ -2,6 +2,10 @@
 # Backend-only refactoring gate for JBG AutoClassification 0.19.1+.
 # Place this file under scripts/ in the repository.
 #
+# Revision 288a2: tests that train a real model (marked "native" automatically in
+# tests/conftest.py) run as their own group 17; -Quick skips that group for fast
+# runs during development. Run the full gate before every commit.
+#
 # Revision 284b: adds the application-layer group (all tests/test_revision_NNN*.py
 # with NNN >= 280) and prints a per-group summary table at the end, which is also
 # written to a separate *_summary.txt file next to the full log.
@@ -9,6 +13,7 @@
 param(
     [string]$PythonExecutable = 'python',
     [switch]$FullRegression,
+    [switch]$Quick,
     [string]$LogDirectory = ''
 )
 
@@ -216,12 +221,12 @@ function Write-GateSummary {
         $Report.Add("Tests in parsed groups: $($Sum.Tests) run, $($Sum.Passed) passed, " +
                     "$($Sum.Failed) failed or errors, $($Sum.Skipped) skipped")
     }
-    $Unparsed = @($Results | Where-Object { $null -eq $_.Tests -and $_.Status -ne 'MISSING' })
+    $Unparsed = @($Results | Where-Object { $null -eq $_.Tests -and $_.Status -notin @('MISSING', 'SKIP') })
     foreach ($Result in $Unparsed) {
         $Report.Add("Note: no test report found for '$($Result.Group)'; see the full log.")
     }
 
-    foreach ($Result in @($Results | Where-Object { $_.Status -ne 'PASS' })) {
+    foreach ($Result in @($Results | Where-Object { $_.Status -notin @('PASS', 'SKIP') })) {
         $Report.Add("")
         $Report.Add("--- $($Result.Status): $($Result.Group) (last lines) ---")
         foreach ($Line in $Result.Tail) { $Report.Add($Line) }
@@ -336,7 +341,21 @@ try {
         else {
             Invoke-TestGroup `
                 -Name "Application layer (revisions 280+, $($ApplicationTests.Count) files)" `
-                -TestArguments (@('-m', 'pytest', '-q') + $ApplicationTests)
+                -TestArguments (@('-m', 'pytest', '-q', '-m', 'not native') + $ApplicationTests)
+
+            $NativeName = 'Native end-to-end runs (revisions 280+)'
+            if ($Quick) {
+                "`n=== $NativeName ===`nSKIP: quick mode" | Tee-Object -FilePath $Log -Append
+                Add-Result -Name $NativeName -Status 'SKIP' -Counts (Get-TestCounts -Lines @()) `
+                    -Seconds 0 -Tail @()
+            }
+            else {
+                # pytest exits with code 5 if no native test is found: a broken
+                # classification fails the gate instead of passing silently.
+                Invoke-TestGroup `
+                    -Name $NativeName `
+                    -TestArguments (@('-m', 'pytest', '-q', '-m', 'native') + $ApplicationTests)
+            }
         }
 
         if ($FullRegression) {
@@ -356,7 +375,8 @@ try {
         "`n=== SUMMARY ===" |
             Tee-Object -FilePath $Log -Append
 
-        "Passed groups: $($Passed.Count); Failed groups: $($Failed.Count)" |
+        $SkippedNote = if ($Quick) { '; Skipped groups: 1 (quick mode)' } else { '' }
+        "Passed groups: $($Passed.Count); Failed groups: $($Failed.Count)$SkippedNote" |
             Tee-Object -FilePath $Log -Append
 
         foreach ($Failure in $Failed) {
@@ -374,7 +394,13 @@ try {
             throw 'Backend refactor gate FAILED. See log above.'
         }
 
-        Write-Host 'Backend refactor gate PASSED.'
+        if ($Quick) {
+            Write-Host 'Backend refactor gate PASSED in QUICK MODE (native end-to-end runs skipped).'
+            Write-Host 'Run the full gate before committing.'
+        }
+        else {
+            Write-Host 'Backend refactor gate PASSED.'
+        }
     }
     finally {
         Pop-Location

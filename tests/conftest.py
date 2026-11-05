@@ -479,3 +479,20 @@ def default_model() -> Model:
     
     return Model(text_converter=None, preprocess=preprocess, reduction=reduction, algorithm=algorithm, pipeline=None, n_features_out=4)
         
+
+
+# 288a2: tests that train a real model are marked "native" automatically. They
+# all build on the shared 281c CSV fixture, so new end-to-end tests are
+# classified without anyone having to remember a marker. The gate runs them
+# as their own group, which `-Quick` skips during development.
+NATIVE_FIXTURE_CLASS = "CSVApplicationEndToEnd281c"
+
+
+def is_native_test_class(cls) -> bool:
+    return any(base.__name__ == NATIVE_FIXTURE_CLASS for base in getattr(cls, "__mro__", ()))
+
+
+def pytest_collection_modifyitems(config, items):
+    for item in items:
+        if is_native_test_class(getattr(item, "cls", None)):
+            item.add_marker(pytest.mark.native)

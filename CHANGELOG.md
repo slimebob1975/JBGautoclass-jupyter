@@ -1,3 +1,19 @@
+## Revision 288a2 - gate split: native end-to-end runs as their own group (2026-11-05)
+
+- `tests/conftest.py` marks every test that builds on the shared 281c CSV
+  fixture (and so trains a real model) as `native`; the marker is registered
+  in `pyproject.toml`. New end-to-end tests are classified automatically.
+- `scripts/run_backend_refactor_tests.ps1`: the application-layer group runs
+  `-m "not native"`; new group 17 "Native end-to-end runs (revisions 280+)"
+  runs `-m native`. The full gate runs the same tests as before (17 groups).
+- New switch `-Quick` skips group 17 for fast runs during development; the
+  summary reports it as skipped and ends with "QUICK MODE ... Run the full
+  gate before committing". The full gate remains the check before every
+  commit.
+- If no native test is found, pytest exits with code 5 and the gate fails,
+  so a broken classification cannot pass silently.
+- Tests: `tests/test_revision_288a2_gate_split.py`.
+
 ## Revision 288a - runs from a CSV project's configuration and dataset (2026-11-04)
 
 - Add `src/JBGProjectRuns.py` and `POST /api/projects/{id}/runs` with

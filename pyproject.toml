@@ -7,3 +7,8 @@ pythonpath = [
 filterwarnings = [
     "ignore::UserWarning"
 ]
+
+# 288a2: set automatically in tests/conftest.py; gate group 17, skipped by -Quick.
+markers = [
+    "native: trains a real model in the same process or a worker process",
+]
