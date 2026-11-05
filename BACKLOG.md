@@ -196,7 +196,7 @@ full SQL regression acceptance remain separately unverified.
        - [x] 286c: configuration service and endpoints with server-owned
          fields and `expected_version` conflict handling. Clients see a user
          view; configurations carry no data location (added per run).
-    3. [ ] Run submission from the configuration store instead of the 285d
+    3. [x] Run submission from the configuration store instead of the 285d
        interim catalog (see the gap 10 item below), and registration of
        trained models in the catalog after the model file is saved. Agreed
        2026-11-04: requests name configuration (optional version) and dataset
@@ -207,7 +207,7 @@ full SQL regression acceptance remain separately unverified.
          roles checked against the file.
        - [x] 288b: SQL project runs and SQL sign-in per server (host and
          driver from the server's `.env` settings).
-       - [ ] 288c: model registration in the catalog and
+       - [x] 288c: model registration in the catalog and
          `GET /api/projects/{id}/models`.
        - [ ] Later: per-project model retention (design decision 3), since
          every training run now keeps its own model file.
@@ -239,10 +239,13 @@ full SQL regression acceptance remain separately unverified.
   2026-11-04: interleaved, each tab as soon as its backend is ready.
   - [x] 287a: shell (header, context bar, tab strip, SV/EN) and the Projects
     tab; cross-site request protection for interface and API.
-  - [ ] Next: BACKLOG Phase 0 item 3 (runs from project configuration and
-    dataset, project-based SQL sign-in, model registration), then dataset
-    validation and preview, the configuration schema endpoint, and the
-    Dataset, Configuration and Run tabs.
+  - [x] BACKLOG Phase 0 item 3 (288a-288c): runs from project
+    configuration and dataset, SQL sign-in per server, model registration.
+  - [ ] Next: dataset validation and preview, the configuration schema
+    endpoint, and the Dataset, Configuration and Run tabs.
+  - [ ] Interface details noted on 2026-11-05: show the Windows user name in
+    local mode instead of the fixed "developer"; use the JBG logo image from
+    `GUI/assets/logo.png` in the header.
   - [ ] Store the language choice per user on the server (decision 6); 287a
     keeps it in a browser cookie.
   - [ ] Introduce htmx and Fluent web components (pinned, with integrity

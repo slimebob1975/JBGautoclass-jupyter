@@ -1,3 +1,22 @@
+## Revision 288c - models of project runs in the catalog (2026-11-05)
+
+- The worker registers the model of every succeeded project run in the model
+  catalog (285l) right after recording the success, and marks it
+  "available" once the model file is confirmed. Name: configuration name,
+  version and the start of the run ID (unique per project). Runs that are not
+  project runs, failed runs and runs without a model file register nothing.
+  A catalog failure is logged; the run stays succeeded and its model file is
+  kept.
+- Add `src/JBGModelService.py` and `GET /api/projects/{id}/models`,
+  `GET /api/projects/{id}/models/{model_id}`: name, state, source, run and
+  dataset; never file paths or artifact keys. Owner-bound like all project
+  endpoints.
+- `RunJobStore` exposes its engine and schema for repositories in the same
+  metadata database; project runs record the configuration name.
+- Tests: `tests/test_revision_288c_model_catalog.py`; the native 288a test
+  now also checks that the worker registered its model. Completes BACKLOG
+  item 3.
+
 ## Revision 288b - runs from SQL projects; SQL sign-in per server (2026-11-05)
 
 - `POST /api/projects/{id}/runs` now also starts SQL project runs: host and

@@ -110,6 +110,7 @@ class ProjectRunService:
         metadata = {"project_id": project.project_id,
                     "configuration_id": configuration.configuration_id,
                     "configuration_version": configuration.version,
+                    "configuration_name": configuration.name,
                     "dataset_id": dataset.dataset_id, "model_id": model_id}
         if project.source is DataSourceKind.SQL:
             return self._submit_sql(principal, settings, dataset, model_folder, model_id,

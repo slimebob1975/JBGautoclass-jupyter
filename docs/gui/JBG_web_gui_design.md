@@ -449,6 +449,7 @@ The map above is the target. What exists after revision 285m3:
 | `GET`, `POST /api/projects/{id}/configurations`, `GET`, `PUT .../configurations/{configuration}` | 286c | User view of the settings; server-owned fields ignored; validated with the `Config` loader; `expected_version` on save (409 on conflict); no data location (added per run) |
 | `/ui/` (web interface) | 287a | Shell and Projects tab, server-rendered; Swedish by default; other tabs follow their backends |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
+| `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |
 
 Interim deviations from the target, to be removed as the GUI phases proceed: the 285d endpoints still start runs from Voilà's saved configurations next to the project runs; `pause`, `resume`, `prepare`, SSE events and the per-view result endpoints do not exist yet.
 

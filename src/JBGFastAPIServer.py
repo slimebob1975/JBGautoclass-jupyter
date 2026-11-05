@@ -25,6 +25,7 @@ from JBGDatasetService import DatasetService
 from JBGConfigurationService import ConfigurationService
 from JBGProjectRuns import DEFAULT_MODEL_ROOT, ProjectRunService
 from JBGSQLServer import SQLServerSettings, sql_server_settings
+from JBGModelService import ModelService
 from JBGProjectStorage import DEFAULT_CSV_ROOT
 from JBGRunSubmission import RunSubmission
 from JBGSavedConfigurations import ROOT, SavedConfigurations
@@ -115,6 +116,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                          csv_root=csv_root, model_root=model_root,
                          sessions=sessions, sql_server=sql_server),
                      sql_server=sql_server,
+                     models=ModelService(models, project_service),
                      web_ui=True, version_line=_version_line(),
                      lifespan=lifespan)
     app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service}

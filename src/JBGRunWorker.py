@@ -264,7 +264,39 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
         if observed.feature_importance is not None:
             projected["feature_importance"] = observed.feature_importance
         store.finish(run, worker_id, RunStatus.SUCCEEDED, result=projected)
+        register_trained_model(store, record, run_config)
         return EXIT_FINISHED
+
+
+def register_trained_model(store: RunJobStore, record, run_config) -> bool:
+    """Record a project run's model in the catalog (288c); True if registered.
+
+    Only project runs (``spec["project_run"]``) whose model file exists. The
+    catalog accepts only succeeded runs, so this runs after ``finish``. A
+    failure is logged but never turns the succeeded run into a failure: the
+    model file is kept and can be registered later.
+    """
+    project_run = record.spec.get("project_run")
+    if not isinstance(project_run, dict):
+        return False
+    try:
+        model_file = Path(run_config.get_model_filename())
+        if not model_file.is_file():
+            print("[JBGRunWorker] no model file to register", file=sys.stderr)
+            return False
+        from JBGModelCatalog import ModelCatalog, ModelState
+        catalog = ModelCatalog(store.engine, schema=store.schema)
+        label = str(project_run.get("configuration_name") or "Model")[:150]
+        name = f"{label} v{project_run.get('configuration_version', '?')} · {record.run.key[:8]}"
+        entry = catalog.register(record.owner, project_run["project_id"], name,
+                                 project_run["model_id"], dataset_id=project_run.get("dataset_id"),
+                                 run_id=record.run.key)
+        catalog.set_state(record.owner, project_run["project_id"], entry.model_id,
+                          ModelState.AVAILABLE)
+        return True
+    except Exception as error:
+        print(f"[JBGRunWorker] model not registered: {type(error).__name__}", file=sys.stderr)
+        return False
 
 
 def main(argv=None) -> int:

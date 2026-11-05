@@ -86,6 +86,7 @@ def create_app(
     datasets=None,
     configurations=None,
     project_runs=None,
+    models=None,
     sql_server=None,
     web_ui: bool = False,
     version_line: str = "",
@@ -186,6 +187,8 @@ def create_app(
         _add_configuration_endpoints(app, principal_dependency, configurations)
     if project_runs is not None:
         _add_project_run_endpoints(app, principal_dependency, project_runs)
+    if models is not None:
+        _add_model_endpoints(app, principal_dependency, models)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
                                        submission, sessions, sql_server)
@@ -375,6 +378,30 @@ def _add_project_run_endpoints(app, principal_dependency, project_runs):
         except (ValueError, TypeError, KeyError, OSError):
             # Configuration, dataset or storage problem; details stay server-side.
             raise HTTPException(status_code=422, detail="the run cannot be started") from None
+
+
+def _add_model_endpoints(app, principal_dependency, models):
+    """Models registered by project runs (288c), for the Models tab."""
+    from JBGModelService import ModelUnavailable
+    from JBGProjectService import ProjectUnavailable
+
+    def call(action, *args):
+        try:
+            return action(*args)
+        except ProjectUnavailable:
+            raise HTTPException(status_code=404, detail="project unavailable") from None
+        except ModelUnavailable:
+            raise HTTPException(status_code=404, detail="model unavailable") from None
+
+    @app.get("/api/projects/{project_id}/models")
+    def list_models(project_id: str,
+                    principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(models.list, principal.principal_key, project_id)
+
+    @app.get("/api/projects/{project_id}/models/{model_id}")
+    def get_model(project_id: str, model_id: str,
+                  principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(models.get, principal.principal_key, project_id, model_id)
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,

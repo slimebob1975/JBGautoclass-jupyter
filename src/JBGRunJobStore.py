@@ -119,6 +119,16 @@ class RunJobStore:
         self._engine = engine
         self._max_events = max_events
         self._metadata, self._jobs, self._events = _metadata(schema)
+        self._schema = schema
+
+    @property
+    def engine(self) -> Engine:
+        """The store's engine, for repositories in the same metadata database (288c)."""
+        return self._engine
+
+    @property
+    def schema(self) -> str | None:
+        return self._schema
 
     @classmethod
     def sqlite(cls, path, **options) -> "RunJobStore":
