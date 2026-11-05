@@ -172,6 +172,8 @@ def test_every_interface_text_has_a_swedish_translation():
     texts |= {text for _, text in JBGWebUIDatasets.MESSAGES.values()}
     texts |= set(JBGWebUIDatasets.READ_ERRORS.values())
     texts |= {text for _, passed, failed in CHECKS for text in (passed, failed)}
+    from JBGDatasetInspection import COMPATIBILITY_CHECK            # 293a
+    texts |= set(COMPATIBILITY_CHECK[1:])
     for labels in re.findall(r"\{% set \w+_labels = (\{[^}]+\}) %\}",
                              (SRC / "web" / "templates" / "dataset.html").read_text(encoding="utf-8")):
         texts |= set(re.findall(r'"[a-z]+": "([^"]+)"', labels))

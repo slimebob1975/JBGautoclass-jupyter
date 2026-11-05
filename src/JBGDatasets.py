@@ -12,7 +12,7 @@ from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (Boolean, Column, DateTime, ForeignKeyConstraint, Index,
-                        MetaData, String, Table, UniqueConstraint, create_engine,
+                        MetaData, String, Table, Text, UniqueConstraint, create_engine,
                         insert, select, update)
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
@@ -145,6 +145,15 @@ class DatasetRepository:
             UniqueConstraint("project_id", "name_key", name="uq_jbg_dataset_project_name"),
             Index("ix_jbg_dataset_project", "project_id", "updated_at"),
         )
+        # 293a: one role per column for training and mixed datasets (a new
+        # table, so existing databases only gain it; nothing is altered).
+        self._roles = Table(
+            "jbg_dataset_roles", self._metadata,
+            Column("dataset_id", String(36), primary_key=True),
+            Column("roles_json", Text, nullable=False),
+            Column("updated_at", DateTime(timezone=True), nullable=False),
+            ForeignKeyConstraint(["dataset_id"], ["jbg_datasets.dataset_id"]),
+        )
         # Database-level safeguard against concurrent activation requests.
         Index("uq_jbg_active_training_project", self._datasets.c.project_id,
               unique=True,
@@ -155,7 +164,7 @@ class DatasetRepository:
         from sqlalchemy import inspect
         if not inspect(self._engine).has_table("jbg_projects", schema=self._metadata.schema):
             raise RuntimeError("initialize ProjectRepository before datasets")
-        self._metadata.create_all(self._engine, tables=[self._datasets])
+        self._metadata.create_all(self._engine, tables=[self._datasets, self._roles])
 
     def close(self):
         self._engine.dispose()
@@ -235,6 +244,37 @@ class DatasetRepository:
                 self._datasets.c.dataset_id == dataset_id).values(
                 active_training=True, updated_at=now))
         return self.get_owned(owner, project_id, dataset_id)
+
+    def get_roles(self, owner, project_id, dataset_id):
+        """The dataset's column roles (293a), or None when none are set."""
+        from JBGDatasetRoles import DatasetRoles
+        owner = _text(owner, "owner", 256)
+        with self._engine.connect() as connection:
+            self._owned_row(connection, owner, project_id, dataset_id)
+            row = connection.execute(select(self._roles.c.roles_json).where(
+                self._roles.c.dataset_id == dataset_id)).first()
+        return None if row is None else DatasetRoles.from_json(row[0])
+
+    def set_roles(self, owner, project_id, dataset_id, roles):
+        """Store roles for a training or mixed dataset; resets its validation."""
+        from JBGDatasetRoles import DatasetRoles
+        if not isinstance(roles, DatasetRoles):
+            raise TypeError("DatasetRoles required")
+        owner = _text(owner, "owner", 256)
+        now = datetime.now(timezone.utc)
+        with self._engine.begin() as connection:
+            row = self._owned_row(connection, owner, project_id, dataset_id)
+            if row.role == DatasetRole.PREDICTION.value:
+                raise ValueError("prediction datasets use the roles of the training dataset")
+            values = {"roles_json": roles.to_json(), "updated_at": now}
+            changed = connection.execute(update(self._roles).where(
+                self._roles.c.dataset_id == dataset_id).values(**values)).rowcount
+            if not changed:
+                connection.execute(insert(self._roles).values(dataset_id=dataset_id, **values))
+            connection.execute(update(self._datasets).where(
+                self._datasets.c.dataset_id == dataset_id).values(
+                validation_state=DatasetValidationState.UNVERIFIED.value, updated_at=now))
+        return self.get_roles(owner, project_id, dataset_id)
 
     def set_validation(self, owner, project_id, dataset_id, state: DatasetValidationState):
         """Record a result obtained by a separate validation service.

@@ -103,6 +103,11 @@ class ProjectRunService:
         dataset = self._dataset(owner, project_id, dataset_id)
         if dataset.role is DatasetRole.PREDICTION:
             raise RunRequestRefused("a training run needs a training or mixed dataset")
+        # 293a (decision A): the column roles come from the dataset.
+        roles = self._datasets.get_roles(owner, project_id, dataset.dataset_id)
+        if roles is None:
+            raise RunRequestRefused(
+                "the dataset has no column roles; set them on the Dataset tab first")
 
         # Decision 3: one model file per training run, outside Voilà's folders.
         model_id = str(uuid4())
@@ -114,14 +119,16 @@ class ProjectRunService:
                     "dataset_id": dataset.dataset_id, "model_id": model_id}
         if project.source is DataSourceKind.SQL:
             return self._submit_sql(principal, settings, dataset, model_folder, model_id,
-                                    metadata)
+                                    metadata, roles)
         return self._submit_csv(principal, project, settings, dataset, model_folder,
-                                model_id, metadata)
+                                model_id, metadata, roles)
 
-    def _submit_sql(self, principal, settings, dataset, model_folder, model_id, metadata):
+    def _submit_sql(self, principal, settings, dataset, model_folder, model_id, metadata,
+                    roles):
         from JBGRunComposition import compose_sql_run
         from JBGRunSubmission import _SQL_SCOPE, validate_saved_sql_run_config
         config = _load_config(settings)
+        roles.apply_to(config)
         self._sql_server.apply_to(config)
         config.connection.data_catalog = dataset.catalog
         config.connection.data_table = dataset.table
@@ -145,13 +152,14 @@ class ProjectRunService:
         return service.submit(principal, prepared, run_metadata=metadata)
 
     def _submit_csv(self, principal, project, settings, dataset, model_folder, model_id,
-                    metadata):
+                    metadata, roles):
         repository, scope = project_csv_storage(project.project_id, root=self._csv_root)
         artifact_id = dataset.registration_id
         csv_format = csv_upload_format(repository, scope, artifact_id)
         base = _load_config(dict(settings, data_source=dict(
             settings["data_source"], kind="csv", artifact_id=artifact_id,
             dataset_id=_upload_dataset_id(repository, scope, artifact_id), **csv_format)))
+        roles.apply_to(base)
         connection = base.connection
         text_columns = tuple(connection.data_text_columns)
         data_columns = tuple(c for c in connection.data_numerical_columns
@@ -175,8 +183,7 @@ class ProjectRunService:
                     mispredicted=bool(base.mode.mispredicted))
         except (ValueError, TypeError, KeyError):
             # Missing or wrongly typed columns; details stay server-side.
-            raise RunDoesNotMatchDataset("the configuration's column roles do not fit "
-                                         "the dataset") from None
+            raise RunDoesNotMatchDataset("the column roles do not fit the dataset") from None
 
         model_folder.mkdir(parents=True, exist_ok=True)
         runtime.io.model_path = str(model_folder)

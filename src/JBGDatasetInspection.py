@@ -40,6 +40,10 @@ CHECKS = (
      "A numeric feature column contains values that are not numbers."),
 )
 ROLE_CHECKS = ("id_column", "class_column", "feature_columns", "feature_types")
+# 293a: prediction datasets are checked against the active training dataset.
+COMPATIBILITY_CHECK = ("compatible_structure",
+                       "The columns are compatible with the training dataset.",
+                       "Columns of the training dataset are missing or have another kind.")
 
 
 # 289b (agreed 2026-11-05): exact up to EXACT_LIMIT rows; above it SQL tables
@@ -110,6 +114,9 @@ class _CSVFacts:
         return [{"name": c, "type": "text" if c in self._schema.text_feature_candidates
                  else "number"} for c in self.columns]
 
+    def kinds(self):
+        return {c["name"]: c["type"] for c in self.column_types()}
+
     def first_rows(self):
         with self._path.open("r", encoding=self._format["encoding"], newline="") as stream:
             reader = csv.reader(stream, delimiter=self._format["delimiter"])
@@ -168,6 +175,10 @@ class _SQLFacts:
 
     def column_types(self):
         return [{"name": c, "type": str(t)} for c, t in self._types.items()]
+
+    def kinds(self):
+        return {c: "number" if str(t).lower() in NUMERIC_SQL_TYPES else "text"
+                for c, t in self._types.items()}
 
     def first_rows(self):
         columns = ", ".join(_quote(c) for c in self.columns)       # real columns only
@@ -297,20 +308,101 @@ class DatasetInspectionService:
 
     # --- Validation -----------------------------------------------------------------
 
-    def validate(self, principal, project_id: str, dataset_id: str, *,
-                 configuration_id: str | None = None, version: int | None = None) -> dict:
+    # --- SQL catalogs and tables for the Dataset tab's lists (293a) --------------------
+
+    def _server_layer(self, principal, catalog: str | None = None):
+        if self._sql_server is None or not self._sql_server.configured or self._sessions is None:
+            from JBGProjectRuns import RunRequestRefused
+            raise RunRequestRefused("no SQL Server is configured on this server")
+        config = self._sql_server.probe_config()
+        if catalog is not None:
+            from JBGDatasets import _plain_sql_names
+            _plain_sql_names(catalog, "schema.table")         # the catalog must be plain
+            config.connection.data_catalog = catalog
+        # PermissionError("SQL sign-in required") without the user's sign-in.
+        return self._sessions.data_layer_for(principal, config, _QuietLogger())
+
+    def sql_catalogs(self, principal) -> dict:
+        """Catalogs the user's login can open, and the server's default catalog."""
+        layer = self._server_layer(principal)
+        catalogs = [name for name in layer.get_catalogs_as_options() if name]
+        return {"catalogs": catalogs, "default": self._sql_server.probe_catalog or None}
+
+    def sql_tables(self, principal, catalog: str) -> dict:
+        """Tables (schema.table) of ``catalog`` that the user's login can see."""
+        layer = self._server_layer(principal, catalog)
+        return {"catalog": catalog, "tables": [name for name in layer.get_tables_as_options() if name]}
+
+    # --- Roles and compatibility (293a) -----------------------------------------------
+
+    def _active_training(self, owner, project_id, excluding=None):
+        """The project's active training dataset and its roles, if both exist."""
+        for item in self._datasets.list_for_project(owner, project_id):
+            if item.active_training and item.dataset_id != excluding:
+                roles = self._datasets.get_roles(owner, project_id, item.dataset_id)
+                return (item, roles) if roles is not None else (None, None)
+        return None, None
+
+    def kinds(self, principal, project, dataset) -> dict:
+        return self._with_facts(principal, project, dataset, lambda facts: facts.kinds())
+
+    def check_candidate(self, principal, project_id: str, candidate) -> None:
+        """Before registering a prediction dataset: it must be compatible with the
+        active training dataset (when that has roles). Raises IncompatibleDataset."""
+        from JBGDatasetRoles import check_compatible
+        owner = principal.principal_key
+        project = self._projects.require(owner, project_id)
+        training, roles = self._active_training(owner, project_id)
+        if training is None:
+            return
+        check_compatible(roles, self.kinds(principal, project, training),
+                         self.kinds(principal, project, candidate))
+
+    def get_roles(self, principal, project_id: str, dataset_id: str):
+        owner = principal.principal_key
+        self._dataset(owner, project_id, dataset_id)
+        roles = self._datasets.get_roles(owner, project_id, dataset_id)
+        return None if roles is None else roles.as_mapping()
+
+    def set_roles(self, principal, project_id: str, dataset_id: str, mapping) -> dict:
+        """Check the roles against the dataset's real columns, then store them."""
+        from JBGDatasetRoles import DatasetRoles
         owner = principal.principal_key
         project, dataset = self._dataset(owner, project_id, dataset_id)
-        roles = None
-        if configuration_id is not None:
-            settings = self._configurations.stored_configuration(
-                owner, project_id, configuration_id, version).settings["connection"]
-            text = list(settings.get("data_text_columns") or [])
-            numeric = [c for c in settings.get("data_numerical_columns") or [] if c not in text]
-            roles = {"id": settings.get("id_column", ""), "class": settings.get("class_column", ""),
-                     "numeric": numeric, "text": text}
+        if dataset.role is DatasetRole.PREDICTION:
+            raise ValueError("prediction datasets use the roles of the training dataset")
+        roles = DatasetRoles.from_mapping(mapping)
+        columns = self._with_facts(principal, project, dataset, lambda facts: list(facts.columns))
+        roles.check(columns, require_class=True)
+        return self._datasets.set_roles(owner, project_id, dataset_id, roles).as_mapping()
 
-        outcome = {code: None for code, _, _ in CHECKS}
+    # --- Validation -----------------------------------------------------------------
+
+    def validate(self, principal, project_id: str, dataset_id: str) -> dict:
+        """The same check list for SQL and CSV. Training and mixed datasets are
+        checked with their own roles (if set); prediction datasets against the
+        active training dataset."""
+        from JBGDatasetRoles import IncompatibleDataset, check_compatible
+        owner = principal.principal_key
+        project, dataset = self._dataset(owner, project_id, dataset_id)
+        roles, compatibility = None, None
+        if dataset.role is DatasetRole.PREDICTION:
+            training, training_roles = self._active_training(owner, project_id, dataset_id)
+            if training is not None:
+                try:
+                    compatibility = (training_roles, self.kinds(principal, project, training))
+                except (PermissionError, LookupError):
+                    raise
+                except Exception:
+                    compatibility = (training_roles, None)
+        else:
+            stored = self._datasets.get_roles(owner, project_id, dataset_id)
+            if stored is not None:
+                text = stored.by_role("text") + stored.by_role("categorical")
+                roles = {"id": stored.id_column, "class": stored.class_column,
+                         "numeric": stored.by_role("numeric"), "text": text}
+
+        outcome = {code: None for code, _, _ in CHECKS + (COMPATIBILITY_CHECK,)}
 
         def run_checks(facts):
             outcome["source_reachable"] = True              # the source answered
@@ -318,6 +410,15 @@ class DatasetInspectionService:
             if not facts.columns:
                 return
             outcome["has_rows"] = facts.rows > 0
+            if compatibility is not None and outcome["has_rows"]:
+                training_roles, training_kinds = compatibility
+                try:
+                    if training_kinds is None:
+                        raise IncompatibleDataset()
+                    check_compatible(training_roles, training_kinds, facts.kinds())
+                    outcome["compatible_structure"] = True
+                except IncompatibleDataset:
+                    outcome["compatible_structure"] = False
             if roles is None or not outcome["has_rows"]:
                 return
             columns = set(facts.columns)
@@ -350,9 +451,9 @@ class DatasetInspectionService:
                         break
 
         checks, valid = [], True
-        for code, passed_text, failed_text in CHECKS:
-            if code in ROLE_CHECKS and roles is None:
-                continue
+        shown = CHECKS[:3] + ((COMPATIBILITY_CHECK,) if compatibility is not None else ()) \
+            + (CHECKS[3:] if roles is not None else ())
+        for code, passed_text, failed_text in shown:
             result = outcome[code]
             if result is None:
                 checks.append({"code": code, "status": "skipped", "message": None})
@@ -364,7 +465,8 @@ class DatasetInspectionService:
         state = DatasetValidationState.VALID if valid else DatasetValidationState.INVALID
         self._datasets.set_validation(owner, project_id, dataset_id, state)
         return {"dataset_id": dataset_id, "validation_state": state.value,
-                "configuration_id": configuration_id, "checks": checks}
+                "roles_checked": roles is not None,
+                "compatibility_checked": compatibility is not None, "checks": checks}
 
     # --- Preview ----------------------------------------------------------------------
 

@@ -103,13 +103,7 @@
       </form>
       {% endif %}
 
-      <form id="validate-form" method="post" action="/ui/dataset/{{ selected.dataset_id }}/validate" class="stack">
-        <label for="validate-config">{{ _("Check the column roles of") }}</label>
-        <select id="validate-config" name="configuration_id">
-          <option value="">{{ _("Only the dataset itself") }}</option>
-          {% for item in configurations %}<option value="{{ item.configuration_id }}">{{ item.name }}</option>{% endfor %}
-        </select>
-      </form>
+      <form id="validate-form" method="post" action="/ui/dataset/{{ selected.dataset_id }}/validate"></form>
 
       {% if validation %}
         <h3>{{ _("Validation") }}</h3>

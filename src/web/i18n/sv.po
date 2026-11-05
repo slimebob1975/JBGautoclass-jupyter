@@ -849,3 +849,16 @@ msgstr "Värdet ligger utanför det tillåtna intervallet."
 
 msgid "Version"
 msgstr "Version"
+
+# 293a: dataset roles and compatibility.
+msgid "The columns are compatible with the training dataset."
+msgstr "Kolumnerna är kompatibla med träningsdatasetet."
+
+msgid "Columns of the training dataset are missing or have another kind."
+msgstr "Kolumner från träningsdatasetet saknas eller har en annan typ."
+
+msgid "The dataset is not compatible with the training dataset."
+msgstr "Datasetet är inte kompatibelt med träningsdatasetet."
+
+msgid "Sign in to SQL Server first."
+msgstr "Logga in på SQL Server först."

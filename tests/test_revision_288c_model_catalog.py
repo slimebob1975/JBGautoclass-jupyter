@@ -43,6 +43,9 @@ def _queued_run(client):
                           data={"name": "Data", "role": "training"},
                           files={"file": ("data.csv", CSV, "text/csv")}).json()["dataset_id"]
     client.post(f"/api/projects/{project}/datasets/{dataset}/activate")
+    # 293a: the roles belong to the dataset (decision A).
+    from jbg_test_roles import store_roles
+    store_roles(client, project, dataset, ROLES)
     configuration = client.post(f"/api/projects/{project}/configurations",
                                 json={"name": "Standard", "settings": ROLES}).json()["configuration_id"]
     run = client.post(f"/api/projects/{project}/runs",

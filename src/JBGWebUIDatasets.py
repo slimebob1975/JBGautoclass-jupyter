@@ -27,6 +27,8 @@ MESSAGES = {
     "signin_failed": ("error", "SQL sign-in failed."),
     "no_sql_server": ("error", "No SQL Server is configured on this server."),
     "unavailable": ("error", "The dataset is no longer available."),
+    "incompatible": ("error", "The dataset is not compatible with the training dataset."),
+    "signin_needed": ("error", "Sign in to SQL Server first."),
 }
 READ_ERRORS = {
     "signin_required": "Sign in to SQL Server to read this dataset.",
@@ -44,6 +46,7 @@ class _QuietLogger:
 def add_dataset_tab(app, *, principal_dependency, render, redirect, active_project,
                     datasets, inspection, configurations, sessions, sql_server) -> None:
     from JBGDatasetInspection import DatasetTooLarge, DatasetUnreadable
+    from JBGDatasetRoles import IncompatibleDataset
     from JBGDatasetService import (DatasetConflict, DatasetUnavailable, UploadTooLarge,
                                    WrongSourceType)
     from JBGProjectRuns import RunRequestRefused
@@ -119,11 +122,14 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
             if pid is None:
                 return redirect("/ui/dataset")
             created = datasets.upload_csv(principal.principal_key, pid, name=name, role=role,
-                                          stream=file.file, filename=file.filename)
+                                          stream=file.file, filename=file.filename,
+                                          principal=principal)
         except UploadTooLarge:
             return redirect("/ui/dataset", message="too_large")
         except DatasetConflict:
             return redirect("/ui/dataset", message="duplicate")
+        except IncompatibleDataset:
+            return redirect("/ui/dataset", message="incompatible")
         except (WrongSourceType, ValueError, TypeError, ProjectUnavailable):
             return redirect("/ui/dataset", message="bad_csv")
         finally:
@@ -139,9 +145,15 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
             return redirect("/ui/dataset")
         try:
             created = datasets.create_sql(principal.principal_key, pid, name=name, role=role,
-                                          catalog=catalog, table=table)
+                                          catalog=catalog, table=table, principal=principal)
         except DatasetConflict:
             return redirect("/ui/dataset", message="duplicate")
+        except IncompatibleDataset:
+            return redirect("/ui/dataset", message="incompatible")
+        except PermissionError:
+            return redirect("/ui/dataset", message="signin_needed")
+        except RunRequestRefused:
+            return redirect("/ui/dataset", message="no_sql_server")
         except (WrongSourceType, ValueError, TypeError, ProjectUnavailable):
             return redirect("/ui/dataset", message="bad_sql")
         return redirect("/ui/dataset", dataset=created["dataset_id"], message="added")
@@ -161,13 +173,12 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
 
     @app.post("/ui/dataset/{dataset_id}/validate", response_class=HTMLResponse,
               include_in_schema=False)
-    def validate(request: Request, dataset_id: str, configuration_id: str = Form(""),
-                 principal=Depends(principal_dependency)):
+    def validate(request: Request, dataset_id: str, principal=Depends(principal_dependency)):
         pid = project_id(request, principal)
         if pid is None:
             return redirect("/ui/dataset")
-        result, error = read(inspection.validate, principal, pid, dataset_id,
-                             configuration_id=configuration_id or None)
+        # 293a: the dataset's own roles; prediction datasets against training.
+        result, error = read(inspection.validate, principal, pid, dataset_id)
         if error is not None:
             if error == "unreadable":
                 return redirect("/ui/dataset", message="unavailable")

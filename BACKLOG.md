@@ -254,9 +254,21 @@ full SQL regression acceptance remain separately unverified.
     sign-in, preview, profile, classes, validation). No JavaScript needed.
   - [x] 292a: Configuration tab, forms generated from the 290a schema, with
     field-level errors and the version check. No JavaScript needed.
-  - [ ] Next: the Run tab (start a run from the active configuration and
-    dataset, follow its progress; likely the first use of htmx). That
-    completes GUI Phase 1.
+  - [x] 293a: column roles belong to the training dataset (decision A,
+    agreed 2026-11-05); compatibility rule for prediction datasets; SQL
+    catalog and table lists.
+  - [ ] 293a2: configurable categorical limit (engine; default 30, Voilà
+    unchanged). Today hard-coded in JBGTransformers, JBGHandler (twice),
+    JBGModelCompatibility, JBGFeatureProfiles and JBGFeatureSearchService.
+    Stored on the dataset with its roles; model compatibility must record
+    the limit actually used.
+  - [ ] 293b: Dataset tab: catalog and table lists, roles table (one role per
+    column, ignored columns derived), categorical limit with the distinct
+    count per text column, only compatible tables offered for prediction.
+  - [ ] 293c: Configuration tab: roles removed, essentials first, "All"
+    choices for scalers, reductions, sampling and algorithms.
+  - [ ] Then: the Run tab (start a run, follow its progress; likely the first
+    use of htmx). That completes GUI Phase 1.
   - [ ] Interface details noted on 2026-11-05: show the Windows user name in
     local mode instead of the fixed "developer"; use the JBG logo image from
     `GUI/assets/logo.png` in the header.

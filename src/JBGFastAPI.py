@@ -67,10 +67,9 @@ class ProjectRunRequest(BaseModel):
     dataset_id: Optional[str] = None
 
 
-class DatasetValidationRequest(BaseModel):
-    """289a: optionally check the column roles of a configuration (version)."""
-    configuration_id: Optional[str] = None
-    version: Optional[int] = None
+class DatasetRolesRequest(BaseModel):
+    """293a: one role per column (id, class, numeric, text, categorical, ignored)."""
+    columns: dict
 
 
 class SQLSignIn(BaseModel):
@@ -245,8 +244,10 @@ def _add_project_endpoints(app, principal_dependency, projects):
 
 def _add_dataset_endpoints(app, principal_dependency, datasets):
     """Datasets of a project (286b). No deletion and no validation yet."""
+    from JBGDatasetRoles import IncompatibleDataset
     from JBGDatasetService import (DatasetConflict, DatasetUnavailable, UploadTooLarge,
                                    WrongSourceType)
+    from JBGProjectRuns import RunRequestRefused
     from JBGProjectService import ProjectUnavailable
 
     def call(action, *args, **kwargs):
@@ -262,6 +263,17 @@ def _add_dataset_endpoints(app, principal_dependency, datasets):
             raise HTTPException(status_code=413, detail="CSV file exceeds 25 MB") from None
         except WrongSourceType as error:
             raise HTTPException(status_code=409, detail=str(error)) from None
+        except IncompatibleDataset as error:
+            # The owner's own column names, to say what is missing.
+            raise HTTPException(status_code=409, detail={
+                "message": str(error), "missing_columns": list(error.missing),
+                "different_kind": list(error.different)}) from None
+        except PermissionError as error:
+            if str(error) == "SQL sign-in required":
+                raise HTTPException(status_code=409, detail="SQL sign-in required") from None
+            raise HTTPException(status_code=403, detail="not permitted") from None
+        except RunRequestRefused as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
         except (ValueError, TypeError) as error:
             # Fixed texts from the repository and the CSV structure check.
             raise HTTPException(status_code=422, detail=str(error)) from None
@@ -276,7 +288,7 @@ def _add_dataset_endpoints(app, principal_dependency, datasets):
                            principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return call(datasets.create_sql, principal.principal_key, project_id,
                     name=request.name, role=request.role, catalog=request.catalog,
-                    table=request.table)
+                    table=request.table, principal=principal)
 
     @app.post("/api/projects/{project_id}/datasets/csv", status_code=201)
     def upload_csv_dataset(project_id: str, file: UploadFile = File(...),
@@ -289,7 +301,7 @@ def _add_dataset_endpoints(app, principal_dependency, datasets):
         try:
             return call(datasets.upload_csv, principal.principal_key, project_id, name=name,
                         role=role, stream=file.file, filename=file.filename,
-                        delimiter=delimiter, encoding=encoding)
+                        delimiter=delimiter, encoding=encoding, principal=principal)
         finally:
             file.file.close()
 
@@ -457,15 +469,39 @@ def _add_dataset_inspection_endpoints(app, principal_dependency, inspection):
             raise HTTPException(status_code=404, detail="column unavailable") from None
         except (DatasetUnreadable, DatasetTooLarge) as error:
             raise HTTPException(status_code=422, detail=str(error)) from None
+        except (ValueError, TypeError) as error:
+            # 293a: fixed texts from the role checks and plain-name rule.
+            raise HTTPException(status_code=422, detail=str(error)) from None
 
     base = "/api/projects/{project_id}/datasets/{dataset_id}"
 
     @app.post(base + "/validate")
     def validate_dataset(project_id: str, dataset_id: str,
-                         request: DatasetValidationRequest = Body(DatasetValidationRequest()),
                          principal: AuthenticatedPrincipal = Depends(principal_dependency)):
-        return call(inspection.validate, principal, project_id, dataset_id,
-                    configuration_id=request.configuration_id, version=request.version)
+        # 293a: the dataset's own roles (or, for prediction datasets, the active
+        # training dataset's) replace the 289a choice of a configuration.
+        return call(inspection.validate, principal, project_id, dataset_id)
+
+    @app.get(base + "/roles")
+    def get_roles(project_id: str, dataset_id: str,
+                  principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return {"dataset_id": dataset_id,
+                "columns": call(inspection.get_roles, principal, project_id, dataset_id)}
+
+    @app.put(base + "/roles")
+    def set_roles(project_id: str, dataset_id: str, request: DatasetRolesRequest = Body(...),
+                  principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return {"dataset_id": dataset_id,
+                "columns": call(inspection.set_roles, principal, project_id, dataset_id,
+                                request.columns)}
+
+    @app.get("/api/sql/catalogs")
+    def sql_catalogs(principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(inspection.sql_catalogs, principal)
+
+    @app.get("/api/sql/tables")
+    def sql_tables(catalog: str, principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(inspection.sql_tables, principal, catalog)
 
     @app.get(base + "/preview")
     def preview_dataset(project_id: str, dataset_id: str,

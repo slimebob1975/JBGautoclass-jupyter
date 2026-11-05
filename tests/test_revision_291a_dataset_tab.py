@@ -99,16 +99,17 @@ def test_validation_shows_the_check_list_and_updates_the_status(tmp_path):
     with _client(tmp_path) as client:
         project = _open_project(client, "csv")
         dataset = _dataset_id(_upload(client))
-        page = client.post(f"/ui/dataset/{dataset}/validate", data={"configuration_id": ""}).text
+        page = client.post(f"/ui/dataset/{dataset}/validate").text
         for text in ("Datakällan kan nås.", "Data kunde läsas.", "Datasetet innehåller rader."):
             assert text in page
         assert client.get(f"/api/projects/{project}/datasets/{dataset}").json()[
             "validation_state"] == "valid"
-        configuration = client.post(f"/api/projects/{project}/configurations", json={
-            "name": "C", "settings": {"connection": {"id_column": "id", "class_column": "nope",
-                                                     "data_numerical_columns": ["sepal"]}}}).json()
-        page = client.post(f"/ui/dataset/{dataset}/validate",
-                           data={"configuration_id": configuration["configuration_id"]}).text
+        # 293a: roles belong to the dataset; deliberately wrong ones, stored
+        # directly, show up as failed checks.
+        from jbg_test_roles import store_roles
+        store_roles(client, project, dataset, {"connection": {
+            "id_column": "id", "class_column": "nope", "data_numerical_columns": ["sepal"]}})
+        page = client.post(f"/ui/dataset/{dataset}/validate").text
         assert "Klasskolumnen saknas" in page and "ID-kolumnen finns och är unik." in page
 
 

@@ -76,6 +76,9 @@ def _setup(client, roles=ROLES, catalog="DataDb"):
         "name": "Ärenden 2025", "role": "training", "catalog": catalog,
         "table": "dbo.Cases"}).json()["dataset_id"]
     client.post(f"/api/projects/{project}/datasets/{dataset}/activate")
+    # 293a: the roles belong to the dataset (decision A).
+    from jbg_test_roles import store_roles
+    store_roles(client, project, dataset, roles)
     configuration = client.post(f"/api/projects/{project}/configurations",
                                 json={"name": "Standard", "settings": roles})
     assert configuration.status_code == 201, configuration.text

@@ -92,8 +92,14 @@ def _validate(client, project, dataset, layer=None, configuration=None):
     if layer is not None:
         sessions.data_layer_for = lambda principal, config, logger: layer
     try:
-        body = {"configuration_id": configuration} if configuration else {}
-        return client.post(f"/api/projects/{project}/datasets/{dataset}/validate", json=body)
+        if configuration:
+            # 293a: the roles belong to the dataset; take them from the
+            # configuration this test was written with.
+            from jbg_test_roles import store_roles
+            settings = client.get(f"/api/projects/{project}/configurations/{configuration}"
+                                  ).json()["settings"]
+            store_roles(client, project, dataset, settings)
+        return client.post(f"/api/projects/{project}/datasets/{dataset}/validate")
     finally:
         sessions.data_layer_for = original
 
@@ -122,7 +128,9 @@ def test_dataset_only_validation(tmp_path):
     ({"id_column": "species"}, ["id_column", "class_column"]),
     ({"class_column": "missing"}, ["class_column"]),
     ({"class_column": "id", "id_column": "id"}, ["class_column"]),
-    ({"data_numerical_columns": ["sepal", "id"]}, ["feature_columns"]),
+    # 293a: one role per column makes "ID also a feature" impossible; a
+    # missing feature column still fails the same check.
+    ({"data_numerical_columns": ["sepal", "nope"]}, ["feature_columns"]),
     ({"data_numerical_columns": ["sepal", "note"], "data_text_columns": []}, ["feature_types"]),
 ])
 def test_csv_and_sql_give_the_same_check_list(tmp_path, change, failing):
@@ -147,8 +155,12 @@ def test_csv_and_sql_give_the_same_check_list(tmp_path, change, failing):
 def test_prediction_datasets_need_no_classes(tmp_path):
     rows = [row[:3] + [None, row[4]] for row in ROWS]
     with _client(tmp_path) as client:
-        project, dataset, configuration = _project(client, "sql", role="prediction")
-        response = _validate(client, project, dataset, FakeLayer(rows=rows), configuration)
+        # 293a: prediction datasets have no roles of their own; without a
+        # training dataset with roles only the basic checks apply.
+        project, dataset, _ = _project(client, "sql", role="prediction")
+        response = _validate(client, project, dataset, FakeLayer(rows=rows))
+        assert [c["code"] for c in response.json()["checks"]] == [
+            "source_reachable", "source_readable", "has_rows"]
         assert response.json()["validation_state"] == "valid", response.json()
 
 
@@ -215,9 +227,6 @@ def test_other_users_and_unknown_references(tmp_path):
     with _client(tmp_path) as mine:
         project, dataset, _ = _project(mine, "csv")
         assert mine.post(f"/api/projects/{project}/datasets/{MISSING}/validate", json={}).status_code == 404
-        unknown_config = mine.post(f"/api/projects/{project}/datasets/{dataset}/validate",
-                                   json={"configuration_id": MISSING})
-        assert unknown_config.json() == {"detail": "configuration unavailable"}
     with _client(tmp_path, subject="bob") as theirs:
         for response in (theirs.post(f"/api/projects/{project}/datasets/{dataset}/validate", json={}),
                          theirs.get(f"/api/projects/{project}/datasets/{dataset}/preview")):

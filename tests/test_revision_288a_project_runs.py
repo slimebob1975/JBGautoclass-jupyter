@@ -53,6 +53,10 @@ def _setup(client, *, roles=ROLES, data=CSV, role="training", activate=True):
                           files={"file": ("data.csv", data, "text/csv")}).json()["dataset_id"]
     if activate:
         client.post(f"/api/projects/{project}/datasets/{dataset}/activate")
+    if role != "prediction":
+        # 293a: the roles belong to the dataset (decision A).
+        from jbg_test_roles import store_roles
+        store_roles(client, project, dataset, roles)
     configuration = client.post(f"/api/projects/{project}/configurations",
                                 json={"name": "Standard", "settings": roles}).json()
     return project, dataset, configuration["configuration_id"]
@@ -104,8 +108,8 @@ def test_a_pinned_version_is_used(tmp_path):
 @pytest.mark.parametrize("case, status, detail", [
     ("no active dataset", 409, "the project has no active training dataset"),
     ("prediction dataset", 409, "a training run needs a training or mixed dataset"),
-    ("wrong column", 422, "the configuration's column roles do not fit the dataset"),
-    ("non-unique id column", 422, "the configuration's column roles do not fit the dataset"),
+    ("wrong column", 422, "the column roles do not fit the dataset"),
+    ("non-unique id column", 422, "the column roles do not fit the dataset"),
 ])
 def test_runs_that_cannot_start_are_refused_with_fixed_messages(tmp_path, case, status, detail):
     roles = {"connection": dict(ROLES["connection"])}

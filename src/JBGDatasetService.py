@@ -61,7 +61,7 @@ def _role(value: str) -> DatasetRole:
 
 class DatasetService:
     def __init__(self, repository: DatasetRepository, projects: ProjectService, *,
-                 csv_root: Path = DEFAULT_CSV_ROOT) -> None:
+                 csv_root: Path = DEFAULT_CSV_ROOT, compatibility=None) -> None:
         if not isinstance(repository, DatasetRepository):
             raise TypeError("DatasetRepository required")
         if not isinstance(projects, ProjectService):
@@ -69,6 +69,8 @@ class DatasetService:
         self._repository = repository
         self._projects = projects
         self._csv_root = Path(csv_root)
+        # 293a: check(principal, project_id, candidate) for prediction datasets.
+        self._compatibility = compatibility
 
     def _project(self, owner: str, project_id: str, source: DataSourceKind | None = None):
         project = self._projects.require(owner, project_id)
@@ -87,9 +89,23 @@ class DatasetService:
         except KeyError:
             raise DatasetUnavailable("dataset unavailable") from None
 
+    def _check_prediction(self, principal, project_id, role, candidate) -> None:
+        """293a: a prediction dataset must fit the active training dataset."""
+        if role is DatasetRole.PREDICTION and self._compatibility is not None \
+                and principal is not None:
+            self._compatibility(principal, project_id, candidate)
+
     def create_sql(self, owner: str, project_id: str, *, name: str, role: str,
-                   catalog: str, table: str) -> dict[str, Any]:
+                   catalog: str, table: str, principal=None) -> dict[str, Any]:
+        from types import SimpleNamespace
         self._project(owner, project_id, DataSourceKind.SQL)
+        role_value = _role(role)
+        if role_value is DatasetRole.PREDICTION:
+            # Names are checked by the repository before anything is read.
+            from JBGDatasets import _plain_sql_names
+            _plain_sql_names(catalog, table)
+        self._check_prediction(principal, project_id, role_value, SimpleNamespace(
+            source=DataSourceKind.SQL, catalog=catalog, table=table, registration_id=None))
         try:
             dataset = self._repository.create(owner, project_id, name, _role(role),
                                               catalog=catalog, table=table)
@@ -100,7 +116,7 @@ class DatasetService:
     def upload_csv(self, owner: str, project_id: str, *, name: str, role: str,
                    stream: BinaryIO, filename: str | None = None,
                    delimiter: str | None = None,
-                   encoding: str = "utf-8-sig") -> dict[str, Any]:
+                   encoding: str = "utf-8-sig", principal=None) -> dict[str, Any]:
         """Store an uploaded CSV in the project's storage and register it."""
         project = self._project(owner, project_id, DataSourceKind.CSV)
         role = _role(role)
@@ -118,6 +134,10 @@ class DatasetService:
             upload = register_csv_upload(repository, scope, path, delimiter=delimiter,
                                          encoding=encoding, original_name=filename)
         try:
+            from types import SimpleNamespace
+            self._check_prediction(principal, project_id, role, SimpleNamespace(
+                source=DataSourceKind.CSV, catalog=None, table=None,
+                registration_id=upload.artifact_id))
             dataset = self._repository.create(owner, project_id, name, role,
                                               registration_id=upload.artifact_id)
         except BaseException as error:

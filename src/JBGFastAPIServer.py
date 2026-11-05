@@ -87,6 +87,9 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
     runs = DurableRunService(store, scope_for=_no_scope)
     project_service = ProjectService(projects)
     configuration_service = ConfigurationService(saved_configs, project_service)
+    inspection = DatasetInspectionService(datasets, project_service, configuration_service,
+                                          sessions=sessions, sql_server=sql_server,
+                                          csv_root=csv_root)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -109,7 +112,8 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
     app = create_app(runs, current_principal=identity.current_principal,
                      submission=submission, sessions=sessions,
                      projects=project_service,
-                     datasets=DatasetService(datasets, project_service, csv_root=csv_root),
+                     datasets=DatasetService(datasets, project_service, csv_root=csv_root,
+                                             compatibility=inspection.check_candidate),
                      configurations=configuration_service,
                      project_runs=ProjectRunService(
                          store, projects=project_service, datasets=datasets,
@@ -118,10 +122,9 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                          sessions=sessions, sql_server=sql_server),
                      sql_server=sql_server,
                      models=ModelService(models, project_service),
-                     dataset_inspection=DatasetInspectionService(
-                         datasets, project_service, configuration_service,
-                         sessions=sessions, sql_server=sql_server, csv_root=csv_root),
+                     dataset_inspection=inspection,
                      web_ui=True, version_line=_version_line(),
                      lifespan=lifespan)
-    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service}
+    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service,
+                     "datasets": datasets}
     return app

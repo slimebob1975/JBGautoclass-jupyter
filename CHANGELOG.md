@@ -1,3 +1,34 @@
+## Revision 293a - column roles belong to the training dataset (2026-11-05)
+
+- Agreed 2026-11-05 (decision A): column roles belong to the training dataset;
+  configurations hold only the machine-learning settings and can be reused
+  across datasets. Add `src/JBGDatasetRoles.py`: one role per column (`id`,
+  `class`, `numeric`, `text`, `categorical`, `ignored`; columns without a role
+  are ignored), so a column can no longer have two roles. `categorical` maps
+  to the engine as a text column that is always categorised
+  (`data_text_columns` and `mode.category_text_columns`).
+- `JBGDatasets`: new table `jbg_dataset_roles` (existing tables untouched);
+  `GET`/`PUT /api/projects/{id}/datasets/{dataset_id}/roles` check the roles
+  against the dataset's real columns and reset its validation. Prediction
+  datasets have no roles of their own.
+- Runs take the roles from their dataset and are refused (409) when it has
+  none; roles still stored in configurations are no longer used.
+- Prediction datasets must be compatible with the project's active training
+  dataset (agreed: the ID and feature columns must exist, numeric features
+  must stay numeric, the class column may be missing, other columns are
+  allowed), for SQL and CSV alike. Checked before registration (a refused
+  CSV upload leaves no file) and as `compatible_structure` in validation.
+  Validation no longer takes a configuration (289a); training and mixed
+  datasets are checked with their own roles.
+- `GET /api/sql/catalogs` and `GET /api/sql/tables?catalog=` list what the
+  user's login can see, for the Dataset tab's lists in 293b.
+- The Dataset tab (291a) explains incompatible datasets and a missing SQL
+  sign-in; its configuration choice for validation is removed.
+- Tests: `tests/test_revision_293a_dataset_roles.py`; tests of 288a-288c,
+  289a and 291a now store roles on the dataset (helper
+  `tests/jbg_test_roles.py`). One 289a case ("ID also a feature") is replaced
+  by a missing feature column, since one role per column rules it out.
+
 ## Revision 292a - Configuration tab (2026-11-05)
 
 - Add the Configuration tab (`src/JBGWebUIConfigurations.py`,
