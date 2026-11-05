@@ -1,3 +1,26 @@
+## Revision 288a - runs from a CSV project's configuration and dataset (2026-11-04)
+
+- Add `src/JBGProjectRuns.py` and `POST /api/projects/{id}/runs` with
+  `{configuration_id, version?, dataset_id?}` (agreed 2026-11-04): the latest
+  configuration version and the project's active training dataset by default.
+  The stored job records project, configuration version, dataset and model
+  (`project_run`), for reproducibility and the later Run History.
+- One model file per training run, `output/models/<project-id>/<model-id>.sav`
+  (now in `.gitignore`), separate from Voilà's model folders. Training runs
+  only (train-and-predict included); prediction-only runs follow with the
+  Models tab. CSV projects in this revision; SQL projects in 288b.
+- The run is built as Voilà builds it at training start
+  (`prepare_csv_gui_training_config`). The column roles, not checked at upload
+  (286b), are now checked against the stored file with Voilà's
+  `validate_csv_column_roles`; a mismatch gives 422 with a fixed message.
+- CSV uploads now record their delimiter and encoding in the upload manifest;
+  for earlier uploads the format is detected from the file.
+- `DurableRunService.submit` accepts run metadata; `ConfigurationService`
+  offers the stored record with its version. The server derives the workers'
+  CSV root from `csv_root`, so API and workers always use the same storage.
+- Tests: `tests/test_revision_288a_project_runs.py`, including a real worker
+  training a project's model.
+
 ## Revision 287a - web interface shell and Projects tab (2026-11-04)
 
 - GUI delivery Phase 1 starts (agreed order: interleaved, so each tab follows

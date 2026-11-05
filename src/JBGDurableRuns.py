@@ -61,7 +61,8 @@ class DurableRunService:
         return scope
 
     def submit(self, principal: AuthenticatedPrincipal, prepared: PreparedRun, *,
-               configuration_id: str | None = None) -> dict[str, Any]:
+               configuration_id: str | None = None,
+               run_metadata: dict | None = None) -> dict[str, Any]:
         """Authorize, store and queue a prepared run.
 
         CSV runs name their saved column-role configuration (``configuration_id``,
@@ -79,6 +80,10 @@ class DurableRunService:
                                   configuration_id=configuration_id)
         else:
             spec = build_job_spec(source, config)
+        if run_metadata is not None:
+            # 288a: which project, configuration version, dataset and model a
+            # project run uses. Plain JSON; the store refuses secrets.
+            spec["project_run"] = dict(run_metadata)
         run = self._store.create(principal.principal_key, source, spec)
         if self._on_submit is not None:
             self._on_submit()

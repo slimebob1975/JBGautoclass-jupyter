@@ -36,3 +36,6 @@ test-results/
 
 # Local durable run job store (285d; SQLite when no SQL Server is configured)
 output/run_jobs/
+
+# Model files of API project runs (288a; one per training run)
+output/models/

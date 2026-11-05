@@ -167,6 +167,16 @@ class ConfigurationService:
         except KeyError:
             raise ConfigurationUnavailable("configuration unavailable") from None
 
+    def stored_configuration(self, owner: str, project_id: str, configuration_id: str,
+                             version: int | None = None) -> Configuration:
+        """The stored record (settings and version number), for run submission."""
+        self._projects.require(owner, project_id)
+        try:
+            return self._repository.get_owned(owner, project_id, configuration_id,
+                                              version=version)
+        except KeyError:
+            raise ConfigurationUnavailable("configuration unavailable") from None
+
     def create(self, owner: str, project_id: str, *, name: str,
                settings: dict) -> dict[str, Any]:
         project = self._projects.require(owner, project_id)

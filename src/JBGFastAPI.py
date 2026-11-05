@@ -59,6 +59,14 @@ class ConfigurationSave(BaseModel):
     expected_version: int
 
 
+class ProjectRunRequest(BaseModel):
+    """288a: a run from a project configuration (default: latest version) and a
+    dataset (default: the project's active training dataset)."""
+    configuration_id: str
+    version: Optional[int] = None
+    dataset_id: Optional[str] = None
+
+
 class SQLSignIn(BaseModel):
     method: Literal["windows", "sql"]
     username: str = ""
@@ -75,6 +83,7 @@ def create_app(
     projects=None,
     datasets=None,
     configurations=None,
+    project_runs=None,
     web_ui: bool = False,
     version_line: str = "",
     lifespan=None,
@@ -172,6 +181,8 @@ def create_app(
         _add_dataset_endpoints(app, principal_dependency, datasets)
     if configurations is not None:
         _add_configuration_endpoints(app, principal_dependency, configurations)
+    if project_runs is not None:
+        _add_project_run_endpoints(app, principal_dependency, project_runs)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
                                        submission, sessions)
@@ -328,6 +339,35 @@ def _add_configuration_endpoints(app, principal_dependency, configurations):
         return call(configurations.save, principal.principal_key, project_id,
                     configuration_id, settings=request.settings,
                     expected_version=request.expected_version)
+
+
+def _add_project_run_endpoints(app, principal_dependency, project_runs):
+    """Runs from a project's configuration and dataset (288a)."""
+    from JBGConfigurationService import ConfigurationUnavailable
+    from JBGDatasetService import DatasetUnavailable
+    from JBGProjectRuns import RunDoesNotMatchDataset, RunRequestRefused
+    from JBGProjectService import ProjectUnavailable
+
+    @app.post("/api/projects/{project_id}/runs", status_code=201)
+    def start_project_run(project_id: str, request: ProjectRunRequest = Body(...),
+                          principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        try:
+            return project_runs.submit(principal, project_id,
+                                       configuration_id=request.configuration_id,
+                                       version=request.version, dataset_id=request.dataset_id)
+        except ProjectUnavailable:
+            raise HTTPException(status_code=404, detail="project unavailable") from None
+        except ConfigurationUnavailable:
+            raise HTTPException(status_code=404, detail="configuration unavailable") from None
+        except DatasetUnavailable:
+            raise HTTPException(status_code=404, detail="dataset unavailable") from None
+        except RunRequestRefused as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        except RunDoesNotMatchDataset as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        except (ValueError, TypeError, KeyError, OSError):
+            # Configuration, dataset or storage problem; details stay server-side.
+            raise HTTPException(status_code=422, detail="the run cannot be started") from None
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,

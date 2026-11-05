@@ -198,7 +198,18 @@ full SQL regression acceptance remain separately unverified.
          view; configurations carry no data location (added per run).
     3. [ ] Run submission from the configuration store instead of the 285d
        interim catalog (see the gap 10 item below), and registration of
-       trained models in the catalog after the model file is saved.
+       trained models in the catalog after the model file is saved. Agreed
+       2026-11-04: requests name configuration (optional version) and dataset
+       (default: active training dataset); SQL sign-in per server instead of
+       per Voilà configuration; one model file per training run under
+       `output/models/<project-id>/`; training runs only until the Models tab.
+       - [x] 288a: CSV project runs, CSV format in the upload manifest, column
+         roles checked against the file.
+       - [ ] 288b: SQL project runs and SQL sign-in per server.
+       - [ ] 288c: model registration in the catalog and
+         `GET /api/projects/{id}/models`.
+       - [ ] Later: per-project model retention (design decision 3), since
+         every training run now keeps its own model file.
     4. [ ] Remaining result DTOs (gap 5): spot-check leaderboard, predictions
        and paged mispredictions. Label `mispredicted_count` clearly: it covers
        all labelled rows where the cross-trained or the retrained model is
