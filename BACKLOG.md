@@ -248,8 +248,9 @@ full SQL regression acceptance remain separately unverified.
     Agreed 2026-11-05: exact up to a size threshold; above it an estimate
     from `TABLESAMPLE` (SQL tables; marked as estimated with the sample
     size), exact with a time limit for views.
-  - [ ] Next: the configuration schema endpoint, then the Dataset,
-    Configuration and Run tabs.
+  - [x] 290a: configuration schema endpoint (`GET /api/config/schema`),
+    derived from code where possible, labels in Swedish and English.
+  - [ ] Next: the Dataset, Configuration and Run tabs on top of 286b-290a.
   - [ ] Interface details noted on 2026-11-05: show the Windows user name in
     local mode instead of the fixed "developer"; use the JBG logo image from
     `GUI/assets/logo.png` in the header.

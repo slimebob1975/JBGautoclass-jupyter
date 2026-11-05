@@ -125,3 +125,380 @@ msgstr "Huvudnavigering"
 
 msgid "Current work"
 msgstr "Pågående arbete"
+
+# 290a: configuration schema (groups, fields, options, algorithm settings).
+# Technical terms keep their names (e.g. alpha, C, CatBoost, N-gram).
+msgid "Advanced"
+msgstr "Avancerat"
+
+msgid "Algorithm settings"
+msgstr "Algoritminställningar"
+
+msgid "Algorithms"
+msgstr "Algoritmer"
+
+msgid "Alpha"
+msgstr "Alpha"
+
+msgid "Assisted search"
+msgstr "Assisterad sökning"
+
+msgid "Between 2 and 30 classes."
+msgstr "Mellan 2 och 30 klasser."
+
+msgid "Boosting estimators"
+msgstr "Antal boosting-estimatorer"
+
+msgid "Boosting iterations"
+msgstr "Boosting-iterationer"
+
+msgid "CatBoost: class weighting"
+msgstr "CatBoost: klassviktning"
+
+msgid "CatBoost: iterations"
+msgstr "CatBoost: iterationer"
+
+msgid "Categorical text columns"
+msgstr "Kategoriska textkolumner"
+
+msgid "Categorize text columns"
+msgstr "Kategorisera textkolumner"
+
+msgid "Class column"
+msgstr "Klasskolumn"
+
+msgid "Class weighting"
+msgstr "Klassviktning"
+
+msgid "Column roles"
+msgstr "Kolumnroller"
+
+msgid "Comma-separated column names that are never used as features."
+msgstr "Kommaseparerade kolumnnamn som aldrig används som variabler."
+
+msgid "Covariance regularization"
+msgstr "Regularisering av kovarians"
+
+msgid "Dark Numbers"
+msgstr "Mörkertal"
+
+msgid "Debug mode"
+msgstr "Felsökningsläge"
+
+msgid "Decision policy"
+msgstr "Beslutsregel"
+
+msgid "Default (most likely class)"
+msgstr "Standard (mest sannolika klass)"
+
+msgid "Detailed log"
+msgstr "Detaljerad logg"
+
+msgid "Dimensionality reduction"
+msgstr "Dimensionsreduktion"
+
+msgid "Empty reads all rows."
+msgstr "Tomt läser alla rader."
+
+msgid "Empty selects automatically."
+msgstr "Tomt väljer automatiskt."
+
+msgid "Empty uses the server's default (schema.table)."
+msgstr "Tomt använder serverns standard (schema.tabell)."
+
+msgid "Empty uses the server's default."
+msgstr "Tomt använder serverns standard."
+
+msgid "Encrypt text features"
+msgstr "Kryptera textvariabler"
+
+msgid "Ensemble estimators"
+msgstr "Antal estimatorer i ensemblen"
+
+msgid "Estimate Dark Numbers"
+msgstr "Skatta mörkertal"
+
+msgid "Excluded columns"
+msgstr "Uteslutna kolumner"
+
+msgid "Experimental fallback"
+msgstr "Experimentell reservmetod"
+
+msgid "Feature importance"
+msgstr "Variabelbetydelse"
+
+msgid "Feature importance repeats"
+msgstr "Upprepningar för variabelbetydelse"
+
+msgid "Feature investigation"
+msgstr "Variabelundersökning"
+
+msgid "Feature modelling"
+msgstr "Variabelmodellering"
+
+msgid "Feature selection mode"
+msgstr "Läge för variabelurval"
+
+msgid "Filter stop words"
+msgstr "Filtrera stoppord"
+
+msgid "Fixed probability threshold"
+msgstr "Fast sannolikhetströskel"
+
+msgid "Flip fraction"
+msgstr "Andel att vända"
+
+msgid "Group column"
+msgstr "Gruppkolumn"
+
+msgid "Groups kept apart"
+msgstr "Grupper hålls isär"
+
+msgid "Holdout share"
+msgstr "Andel testdata"
+
+msgid "Holdout split"
+msgstr "Uppdelning av testdata"
+
+msgid "ID column"
+msgstr "ID-kolumn"
+
+msgid "Inner folds"
+msgstr "Inre veck"
+
+msgid "Inverse regularization (C)"
+msgstr "Invers regularisering (C)"
+
+msgid "Iterations"
+msgstr "Iterationer"
+
+msgid "Keep groups apart in cross-validation"
+msgstr "Håll grupper isär vid korsvalidering"
+
+msgid "Learning rate"
+msgstr "Inlärningstakt"
+
+msgid "Linear: inverse regularization (C)"
+msgstr "Linjär: invers regularisering (C)"
+
+msgid "Linear: maximum iterations"
+msgstr "Linjär: max antal iterationer"
+
+msgid "Manual"
+msgstr "Manuellt"
+
+msgid "Maximum evaluations"
+msgstr "Max antal utvärderingar"
+
+msgid "Maximum iterations"
+msgstr "Max antal iterationer"
+
+msgid "Method"
+msgstr "Metod"
+
+msgid "Minimum gain"
+msgstr "Minsta förbättring"
+
+msgid "Minimum samples per leaf"
+msgstr "Minsta antal rader per löv"
+
+msgid "Model type"
+msgstr "Modelltyp"
+
+msgid "N-grams"
+msgstr "N-gram"
+
+msgid "Neighbor radius"
+msgstr "Grannradie"
+
+msgid "Neighbor weighting"
+msgstr "Viktning av grannar"
+
+msgid "Neighbors"
+msgstr "Grannar"
+
+msgid "Non-linear: alpha"
+msgstr "Icke-linjär: alpha"
+
+msgid "Non-linear: hidden layers"
+msgstr "Icke-linjär: dolda lager"
+
+msgid "Non-linear: learning rate"
+msgstr "Icke-linjär: inlärningstakt"
+
+msgid "Non-linear: maximum iterations"
+msgstr "Icke-linjär: max antal iterationer"
+
+msgid "None"
+msgstr "Ingen"
+
+msgid "Notification e-mail"
+msgstr "E-post för avisering"
+
+msgid "Number of features"
+msgstr "Antal variabler"
+
+msgid "Numeric feature columns"
+msgstr "Numeriska variabelkolumner"
+
+msgid "Optimizer restarts"
+msgstr "Omstarter av optimeraren"
+
+msgid "Out-of-fold benchmark"
+msgstr "Out-of-fold-jämförelse"
+
+msgid "Outer folds"
+msgstr "Yttre veck"
+
+msgid "Oversampling"
+msgstr "Översampling"
+
+msgid "Oversampling (single, legacy)"
+msgstr "Översampling (enskild, äldre)"
+
+msgid "Oversampling methods"
+msgstr "Översamplingsmetoder"
+
+msgid "Pass on metadata"
+msgstr "Skicka vidare metadata"
+
+msgid "Predict unlabelled rows"
+msgstr "Prediktera rader utan klass"
+
+msgid "Prediction catalog"
+msgstr "Katalog för prediktioner"
+
+msgid "Prediction table"
+msgstr "Tabell för prediktioner"
+
+msgid "Predictions"
+msgstr "Prediktioner"
+
+msgid "Preprocessing"
+msgstr "Förbehandling"
+
+msgid "Probability threshold"
+msgstr "Sannolikhetströskel"
+
+msgid "Reduction"
+msgstr "Reduktion"
+
+msgid "Refinement rounds"
+msgstr "Förfiningsrundor"
+
+msgid "Regularization alpha"
+msgstr "Regulariserings-alpha"
+
+msgid "Reuse a saved result"
+msgstr "Återanvänd ett sparat resultat"
+
+msgid "Row limit"
+msgstr "Radgräns"
+
+msgid "Rows of one group stay together when data is split."
+msgstr "Rader i samma grupp hålls ihop när data delas upp."
+
+msgid "Run type"
+msgstr "Körningstyp"
+
+msgid "Sampling"
+msgstr "Sampling"
+
+msgid "Saved feature profile"
+msgstr "Sparad variabelprofil"
+
+msgid "Scaler"
+msgstr "Skalning"
+
+msgid "Scalers"
+msgstr "Skalningar"
+
+msgid "Scoring metric"
+msgstr "Utvärderingsmått"
+
+msgid "Search preset"
+msgstr "Förinställning för sökning"
+
+msgid "Settings per selected algorithm; empty uses the defaults."
+msgstr "Inställningar per vald algoritm; tomt använder standardvärdena."
+
+msgid "Share of rows kept for testing."
+msgstr "Andel rader som sparas för test."
+
+msgid "Show mispredictions"
+msgstr "Visa felklassificeringar"
+
+msgid "Smoothing alpha"
+msgstr "Utjämnings-alpha"
+
+msgid "Solver"
+msgstr "Lösare"
+
+msgid "Split criterion"
+msgstr "Delningskriterium"
+
+msgid "Stratified rows"
+msgstr "Stratifierade rader"
+
+msgid "Subset sizes"
+msgstr "Delmängdsstorlekar"
+
+msgid "Target class"
+msgstr "Målklass"
+
+msgid "Text feature columns"
+msgstr "Textvariabelkolumner"
+
+msgid "Threshold diagnostics"
+msgstr "Tröskeldiagnostik"
+
+msgid "Top sets"
+msgstr "Bästa uppsättningar"
+
+msgid "Train a model"
+msgstr "Träna en modell"
+
+msgid "Tree depth"
+msgstr "Träddjup"
+
+msgid "Tree: class weighting"
+msgstr "Träd: klassviktning"
+
+msgid "Tree: estimator"
+msgstr "Träd: estimator"
+
+msgid "Tree: maximum depth"
+msgstr "Träd: max djup"
+
+msgid "Tree: minimum samples per leaf"
+msgstr "Träd: minsta antal rader per löv"
+
+msgid "Tree: number of trees"
+msgstr "Träd: antal träd"
+
+msgid "Tree: positive threshold"
+msgstr "Träd: tröskel för positiv klass"
+
+msgid "Trees"
+msgstr "Träd"
+
+msgid "Trials"
+msgstr "Försök"
+
+msgid "Undersampling (single, legacy)"
+msgstr "Undersampling (enskild, äldre)"
+
+msgid "Undersampling methods"
+msgstr "Undersamplingsmetoder"
+
+msgid "Unique and never empty."
+msgstr "Unik och aldrig tom."
+
+msgid "Used with the fixed decision policy (binary classes)."
+msgstr "Används med fast beslutsregel (två klasser)."
+
+msgid "Validation & decision"
+msgstr "Validering & beslut"
+
+msgid "Variance smoothing"
+msgstr "Variansutjämning"

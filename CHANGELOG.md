@@ -1,3 +1,23 @@
+## Revision 290a - configuration schema for generated forms (2026-11-05)
+
+- Add `src/JBGConfigSchema.py` and `GET /api/config/schema?source=sql|csv`
+  (optional `language`, else the interface's choice): every user-owned
+  setting (76) with group, kind, default, options, limits and labels, plus
+  the per-algorithm settings. The Configuration tab will generate its forms
+  from it, so new algorithms appear without front-end changes.
+- As agreed 2026-11-05: option values are derived from code (JBGMeta code
+  lists, the Dark Numbers enums, `JBGModelSettings.REGISTRY`, the
+  feature-search presets). Ten choice fields whose values Config or the run
+  checks inline are declared in the module; tests check them against that
+  code, so `Config.py` is unchanged. Groups, labels and help texts are kept
+  in one table; a test fails when a configuration field has no entry.
+- Labels follow the user's language; technical option names (algorithms,
+  methods, SMOTE, PCA, ...) are never translated. 125 Swedish texts added to
+  `src/web/i18n/sv.po`. The schema guides the form only; the Config loader
+  still validates every save.
+- Tests: `tests/test_revision_290a_config_schema.py`, including saving a
+  configuration built only from the schema's fields and defaults.
+
 ## Revision 289b - column profile and class distribution; plain SQL names (2026-11-05)
 
 - `GET .../datasets/{id}/profile` (per column: type, missing values and

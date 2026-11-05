@@ -327,6 +327,21 @@ def _add_configuration_endpoints(app, principal_dependency, configurations):
             # Fixed repository texts (name length, version, size limits).
             raise HTTPException(status_code=422, detail=str(error)) from None
 
+    @app.get("/api/config/schema")
+    def configuration_schema(request: Request, source: Literal["sql", "csv"],
+                             language: Optional[Literal["sv", "en"]] = None,
+                             principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        """290a: user-owned settings with groups, kinds, defaults, options and
+        labels in the user's language; the Configuration tab generates its forms
+        from it. Technical option names are never translated."""
+        from JBGConfigSchema import configuration_schema as build_schema
+        from JBGConfigurationService import _server_template
+        from JBGWebUI import request_language, translator
+        chosen = language or request_language(request)
+        schema = build_schema(source, translator(chosen), _server_template())
+        schema["language"] = chosen
+        return schema
+
     base = "/api/projects/{project_id}/configurations"
 
     @app.get(base)
