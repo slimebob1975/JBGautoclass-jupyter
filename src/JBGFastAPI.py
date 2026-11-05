@@ -67,6 +67,12 @@ class ProjectRunRequest(BaseModel):
     dataset_id: Optional[str] = None
 
 
+class DatasetValidationRequest(BaseModel):
+    """289a: optionally check the column roles of a configuration (version)."""
+    configuration_id: Optional[str] = None
+    version: Optional[int] = None
+
+
 class SQLSignIn(BaseModel):
     """Sign in to the server's SQL Server (288b), or, for the interim catalog,
     to the server of a saved Voilà configuration."""
@@ -87,6 +93,7 @@ def create_app(
     configurations=None,
     project_runs=None,
     models=None,
+    dataset_inspection=None,
     sql_server=None,
     web_ui: bool = False,
     version_line: str = "",
@@ -189,6 +196,8 @@ def create_app(
         _add_project_run_endpoints(app, principal_dependency, project_runs)
     if models is not None:
         _add_model_endpoints(app, principal_dependency, models)
+    if dataset_inspection is not None:
+        _add_dataset_inspection_endpoints(app, principal_dependency, dataset_inspection)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
                                        submission, sessions, sql_server)
@@ -402,6 +411,47 @@ def _add_model_endpoints(app, principal_dependency, models):
     def get_model(project_id: str, model_id: str,
                   principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return call(models.get, principal.principal_key, project_id, model_id)
+
+
+def _add_dataset_inspection_endpoints(app, principal_dependency, inspection):
+    """Dataset validation and preview, the same for SQL and CSV (289a)."""
+    from JBGConfigurationService import ConfigurationUnavailable
+    from JBGDatasetInspection import DatasetUnreadable
+    from JBGDatasetService import DatasetUnavailable
+    from JBGProjectRuns import RunRequestRefused
+    from JBGProjectService import ProjectUnavailable
+
+    def call(action, *args, **kwargs):
+        try:
+            return action(*args, **kwargs)
+        except ProjectUnavailable:
+            raise HTTPException(status_code=404, detail="project unavailable") from None
+        except DatasetUnavailable:
+            raise HTTPException(status_code=404, detail="dataset unavailable") from None
+        except ConfigurationUnavailable:
+            raise HTTPException(status_code=404, detail="configuration unavailable") from None
+        except RunRequestRefused as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        except PermissionError as error:
+            if str(error) == "SQL sign-in required":
+                raise HTTPException(status_code=409, detail="SQL sign-in required") from None
+            raise HTTPException(status_code=403, detail="not permitted") from None
+        except DatasetUnreadable as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+
+    base = "/api/projects/{project_id}/datasets/{dataset_id}"
+
+    @app.post(base + "/validate")
+    def validate_dataset(project_id: str, dataset_id: str,
+                         request: DatasetValidationRequest = Body(DatasetValidationRequest()),
+                         principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(inspection.validate, principal, project_id, dataset_id,
+                    configuration_id=request.configuration_id, version=request.version)
+
+    @app.get(base + "/preview")
+    def preview_dataset(project_id: str, dataset_id: str,
+                        principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(inspection.preview, principal, project_id, dataset_id)
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,

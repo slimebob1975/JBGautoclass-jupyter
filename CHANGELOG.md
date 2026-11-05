@@ -1,3 +1,24 @@
+## Revision 289a - dataset validation and preview, the same for SQL and CSV (2026-11-05)
+
+- Add `src/JBGDatasetInspection.py` and
+  `POST /api/projects/{id}/datasets/{dataset_id}/validate` and
+  `GET .../preview`. Agreed 2026-11-05: one check list with the same codes
+  and fixed texts for both sources (`source_reachable`, `source_readable`,
+  `has_rows`, and with an optional configuration `id_column`,
+  `class_column`, `feature_columns`, `feature_types`), so the Dataset tab
+  shows SQL and CSV identically. Checks after a failure are "skipped". The
+  result sets the dataset's validation state to valid or invalid. Prediction
+  datasets need a class column but no classes.
+- Preview: columns with types, row count and the first 50 rows, unsorted
+  (SQL `TOP 50`). Values go to the owner only; they are never stored, logged
+  or cached. SQL queries use only the table's real columns, quoted.
+- SQL access uses the user's sign-in for the server (409 without it); source
+  errors become failed checks with fixed texts, never driver messages.
+- Runs do not require a validated dataset (they check the roles at start);
+  the state guides the interface.
+- Tests: `tests/test_revision_289a_dataset_validation.py`, including identical
+  check lists for equivalent CSV and SQL data.
+
 ## Revision 288c - models of project runs in the catalog (2026-11-05)
 
 - The worker registers the model of every succeeded project run in the model

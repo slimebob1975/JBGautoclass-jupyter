@@ -241,8 +241,14 @@ full SQL regression acceptance remain separately unverified.
     tab; cross-site request protection for interface and API.
   - [x] BACKLOG Phase 0 item 3 (288a-288c): runs from project
     configuration and dataset, SQL sign-in per server, model registration.
-  - [ ] Next: dataset validation and preview, the configuration schema
-    endpoint, and the Dataset, Configuration and Run tabs.
+  - [x] 289a: dataset validation (same check list for SQL and CSV, optional
+    role check against a configuration) and preview (first 50 rows).
+  - [ ] 289b: column profile and class distribution, computed on demand.
+    Agreed 2026-11-05: exact up to a size threshold; above it an estimate
+    from `TABLESAMPLE` (SQL tables; marked as estimated with the sample
+    size), exact with a time limit for views.
+  - [ ] Next: the configuration schema endpoint, then the Dataset,
+    Configuration and Run tabs.
   - [ ] Interface details noted on 2026-11-05: show the Windows user name in
     local mode instead of the fixed "developer"; use the JBG logo image from
     `GUI/assets/logo.png` in the header.
