@@ -448,6 +448,7 @@ The map above is the target. What exists after revision 285m3:
 | `GET`, `POST /api/projects/{id}/datasets`, `POST .../datasets/csv`, `GET .../datasets/{dataset}`, `POST .../{dataset}/activate` | 286b | SQL datasets by catalog and table; CSV upload (25 MB, structure check) into storage keyed by project ID; one active training dataset; validation and deletion later |
 | `GET`, `POST /api/projects/{id}/configurations`, `GET`, `PUT .../configurations/{configuration}` | 286c | User view of the settings; server-owned fields ignored; validated with the `Config` loader; `expected_version` on save (409 on conflict); no data location (added per run) |
 | `/ui/` (web interface) | 287a | Shell and Projects tab, server-rendered; Swedish by default; other tabs follow their backends |
+| `/ui/dataset` (Dataset tab) | 291a | Datasets, CSV upload, SQL registration and sign-in, preview, profile, classes and validation; plain forms, no JavaScript |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |
 | `POST .../datasets/{dataset}/validate`, `GET .../datasets/{dataset}/preview` | 289a | The same check list for SQL and CSV, optionally with a configuration's roles; preview of the first 50 rows; SQL needs the sign-in |

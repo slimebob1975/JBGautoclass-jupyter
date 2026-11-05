@@ -71,10 +71,12 @@ def test_language_switch_never_redirects_elsewhere(tmp_path, back):
 def test_unavailable_tabs_are_shown_but_not_linked(tmp_path):
     with _client(tmp_path) as client:
         page = client.get("/ui/projects").text
-    for label in ("Översikt", "Dataset", "Konfiguration", "Körning", "Resultat", "Modeller",
+    # 291a made the Dataset tab available; the rest follow their backends.
+    for label in ("Översikt", "Konfiguration", "Körning", "Resultat", "Modeller",
                   "Körhistorik"):
         assert re.search(rf'<span class="off" aria-disabled="true"[^>]*>{label}</span>', page), label
     assert '<a href="/ui/projects" class="on"' in page
+    assert '<a href="/ui/dataset"' in page
 
 
 # --- Projects tab -----------------------------------------------------------------------------
@@ -165,6 +167,18 @@ def test_every_interface_text_has_a_swedish_translation():
         texts |= set(re.findall(r"_\('([^']+)'\)", source))
         texts |= set(re.findall(r'\{% set title = "([^"]+)" %\}', source))
     texts |= {label for _, label, _ in TABS} | {text for _, text in MESSAGES.values()}
-    swedish = translator("sv")
-    missing = sorted(text for text in texts if swedish(text) == text and text != "Dataset")
+    # 291a: the Dataset tab's messages, label maps and the dataset check list.
+    import JBGWebUIDatasets
+    from JBGDatasetInspection import CHECKS
+    texts |= {text for _, text in JBGWebUIDatasets.MESSAGES.values()}
+    texts |= set(JBGWebUIDatasets.READ_ERRORS.values())
+    texts |= {text for _, passed, failed in CHECKS for text in (passed, failed)}
+    for labels in re.findall(r"\{% set \w+_labels = (\{[^}]+\}) %\}",
+                             (SRC / "web" / "templates" / "dataset.html").read_text(encoding="utf-8")):
+        texts |= set(re.findall(r'"[a-z]+": "([^"]+)"', labels))
+    texts |= {"Preview", "Profile", "Classes"}
+    # An entry must exist; words spelled the same in Swedish (e.g. "Status",
+    # "SQL Server", "Dataset") are recorded as such in the catalogue.
+    import JBGWebUI
+    missing = sorted(text for text in texts if text not in JBGWebUI._CATALOGS["sv"])
     assert not missing, missing

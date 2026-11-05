@@ -187,7 +187,9 @@ def create_app(
             raise TypeError("the web interface needs the project service")
         from JBGWebUI import add_web_ui
         add_web_ui(app, principal_dependency=principal_dependency, projects=projects,
-                   version_line=version_line)
+                   version_line=version_line, datasets=datasets,
+                   inspection=dataset_inspection, configurations=configurations,
+                   sessions=sessions, sql_server=sql_server)
     if datasets is not None:
         _add_dataset_endpoints(app, principal_dependency, datasets)
     if configurations is not None:

@@ -250,7 +250,10 @@ full SQL regression acceptance remain separately unverified.
     size), exact with a time limit for views.
   - [x] 290a: configuration schema endpoint (`GET /api/config/schema`),
     derived from code where possible, labels in Swedish and English.
-  - [ ] Next: the Dataset, Configuration and Run tabs on top of 286b-290a.
+  - [x] 291a: Dataset tab (datasets, CSV upload, SQL registration and
+    sign-in, preview, profile, classes, validation). No JavaScript needed.
+  - [ ] Next: the Configuration tab (forms generated from 290a), then the Run
+    tab (start a run, follow its progress; likely the first use of htmx).
   - [ ] Interface details noted on 2026-11-05: show the Windows user name in
     local mode instead of the fixed "developer"; use the JBG logo image from
     `GUI/assets/logo.png` in the header.

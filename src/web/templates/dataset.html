@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% set title = "Dataset" %}
+{% set role_labels = {"training": "Training", "prediction": "Prediction", "mixed": "Mixed"} %}
+{% set state_labels = {"valid": "Valid", "invalid": "Invalid", "unverified": "Not validated"} %}
+{# CSV column kinds are words; SQL type names (nvarchar, ...) stay as they are. #}
+{% set type_labels = {"number": "Number", "text": "Text"} %}
+{% block main %}
+{% if no_project %}
+  <div class="card"><p class="empty">{{ _("Open a project in the Projects tab first.") }}
+    <a href="/ui/projects">{{ _("Projects") }}</a></p></div>
+{% else %}
+<div class="layout-two">
+  <section>
+    <div class="card">
+      <h2>{{ _("Datasets") }}</h2>
+      {% if datasets %}
+      <table class="grid">
+        <thead><tr><th>{{ _("Name") }}</th><th>{{ _("Role") }}</th><th>{{ _("Status") }}</th></tr></thead>
+        <tbody>
+        {% for item in datasets %}
+          <tr class="{{ 'hl' if selected and selected.dataset_id == item.dataset_id }}">
+            <td><a href="/ui/dataset?dataset={{ item.dataset_id }}"><b>{{ item.name }}</b></a>
+              {% if item.active_training %}<span class="badge b-info">{{ _("Active for training") }}</span>{% endif %}</td>
+            <td>{{ _(role_labels[item.role]) }}</td>
+            <td><span class="badge {{ 'b-ok' if item.validation_state == 'valid' else ('b-fail' if item.validation_state == 'invalid' else 'b-neu') }}">{{ _(state_labels[item.validation_state]) }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">{{ _("No datasets yet. Add one below.") }}</p>
+      {% endif %}
+    </div>
+
+    {% if active_project.source == "csv" %}
+    <form method="post" action="/ui/dataset/csv" enctype="multipart/form-data" class="panel">
+      <fieldset>
+        <legend>{{ _("Add a CSV file") }}</legend>
+        <label for="csv-file">{{ _("File") }}</label>
+        <input id="csv-file" type="file" name="file" accept=".csv,text/csv" required>
+        <p class="hint">{{ _("At most 25 MB, with a header row. The delimiter is detected automatically.") }}</p>
+        <label for="csv-name">{{ _("Name") }}</label>
+        <input id="csv-name" name="name" required maxlength="200">
+        <label for="csv-role">{{ _("Role") }}</label>
+        <select id="csv-role" name="role">
+          {% for value, label in role_labels.items() %}<option value="{{ value }}">{{ _(label) }}</option>{% endfor %}
+        </select>
+        <button class="btn">{{ _("Upload") }}</button>
+      </fieldset>
+    </form>
+    {% else %}
+    <div class="panel"><fieldset>
+      <legend>{{ _("SQL Server") }}</legend>
+      {% if not sql.configured %}
+        <p class="hint">{{ _("No SQL Server is configured on this server.") }}</p>
+      {% elif sql.signed_in %}
+        <p>{{ _("Signed in") }}{% if sql.windows %} ({{ _("Windows authentication") }}){% endif %}</p>
+        <form method="post" action="/ui/sql/session/sign-out"><button class="btn sub">{{ _("Sign out") }}</button></form>
+      {% else %}
+        <p class="hint">{{ _("Not signed in") }}</p>
+        <form method="post" action="/ui/sql/session" class="stack">
+          <input type="hidden" name="back" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+          <label for="sql-user">{{ _("User name") }}</label>
+          <input id="sql-user" name="username" autocomplete="username">
+          <label for="sql-password">{{ _("Password") }}</label>
+          <input id="sql-password" name="password" type="password" autocomplete="current-password">
+          <button class="btn" name="method" value="sql">{{ _("Sign in") }}</button>
+          <button class="btn sub" name="method" value="windows">{{ _("Windows authentication") }}</button>
+        </form>
+      {% endif %}
+    </fieldset></div>
+
+    <form method="post" action="/ui/dataset/sql" class="panel">
+      <fieldset>
+        <legend>{{ _("Add a SQL table") }}</legend>
+        <label for="sql-name">{{ _("Name") }}</label>
+        <input id="sql-name" name="name" required maxlength="200">
+        <label for="sql-catalog">{{ _("Catalog") }}</label>
+        <input id="sql-catalog" name="catalog" required maxlength="200">
+        <label for="sql-table">{{ _("Table (schema.table)") }}</label>
+        <input id="sql-table" name="table" required maxlength="200">
+        <label for="sql-role">{{ _("Role") }}</label>
+        <select id="sql-role" name="role">
+          {% for value, label in role_labels.items() %}<option value="{{ value }}">{{ _(label) }}</option>{% endfor %}
+        </select>
+        <button class="btn">{{ _("Register") }}</button>
+      </fieldset>
+    </form>
+    {% endif %}
+  </section>
+
+  <aside class="card wide">
+    {% if selected %}
+      <h2>{{ selected.name }} <span class="badge b-neu">{{ selected.source | upper }}</span></h2>
+      <dl class="meta">
+        <dt>{{ _("Role") }}</dt><dd>{{ _(role_labels[selected.role]) }}</dd>
+        <dt>{{ _("Status") }}</dt><dd>{{ _(state_labels[selected.validation_state]) }}</dd>
+        {% if selected.source == "sql" %}<dt>{{ _("Table") }}</dt><dd>{{ selected.catalog }} · {{ selected.table }}</dd>{% endif %}
+      </dl>
+      {% if not selected.active_training and selected.role != "prediction" %}
+      <form method="post" action="/ui/dataset/{{ selected.dataset_id }}/activate">
+        <button class="btn sub">{{ _("Activate for training") }}</button>
+      </form>
+      {% endif %}
+
+      <form id="validate-form" method="post" action="/ui/dataset/{{ selected.dataset_id }}/validate" class="stack">
+        <label for="validate-config">{{ _("Check the column roles of") }}</label>
+        <select id="validate-config" name="configuration_id">
+          <option value="">{{ _("Only the dataset itself") }}</option>
+          {% for item in configurations %}<option value="{{ item.configuration_id }}">{{ item.name }}</option>{% endfor %}
+        </select>
+      </form>
+
+      {% if validation %}
+        <h3>{{ _("Validation") }}</h3>
+        {% if validation.error %}
+          <p class="message error">{{ _(read_errors[validation.error]) }}</p>
+        {% else %}
+          <ul class="checks">
+          {% for check in validation.checks %}
+            <li class="check-{{ check.status }}">
+              <span class="mark">{{ {"passed": "✓", "failed": "✗", "skipped": "–"}[check.status] }}</span>
+              {{ _(check.message) if check.message else _("Skipped") }}
+            </li>
+          {% endfor %}
+          </ul>
+        {% endif %}
+      {% else %}
+        <nav class="subtabs" aria-label="{{ _('Dataset') }}">
+          {% for key, label in (("preview", "Preview"), ("profile", "Profile"), ("classes", "Classes")) %}
+            <a href="/ui/dataset?dataset={{ selected.dataset_id }}&view={{ key }}" class="{{ 'on' if view == key }}">{{ _(label) }}</a>
+          {% endfor %}
+        </nav>
+        {% if read_error %}
+          <p class="message error">{{ _(read_errors[read_error]) }}</p>
+        {% elif view == "preview" and data %}
+          <p class="hint">{{ _("Showing the first rows of") }} {{ data.row_count }} {{ _("rows") }}.</p>
+          <div class="scroll"><table class="grid">
+            <thead><tr>{% for c in data.columns %}<th>{{ c.name }}<br><span class="muted">{{ _(type_labels[c.type]) if c.type in type_labels else c.type }}</span></th>{% endfor %}</tr></thead>
+            <tbody>{% for row in data.rows %}<tr>{% for value in row %}<td>{{ value if value is not none else "" }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+          </table></div>
+        {% elif view == "profile" and data %}
+          <p class="hint">{% if data.basis.method == "exact" %}{{ _("Exact, all rows.") }}{% else %}{{ _("Estimated from a sample of") }} {{ data.basis.rows_used }} {{ _("rows") }}.{% endif %}</p>
+          <div class="scroll"><table class="grid">
+            <thead><tr><th>{{ _("Column") }}</th><th>{{ _("Type") }}</th><th>{{ _("Missing") }}</th><th>{{ _("Distinct values") }}</th></tr></thead>
+            <tbody>{% for c in data.columns %}<tr><td>{{ c.name }}</td><td class="muted">{{ _(type_labels[c.type]) if c.type in type_labels else c.type }}</td>
+              <td class="num">{{ "%.1f" | format((c.missing_share or 0) * 100) }} %</td>
+              <td class="num">{{ c.distinct if c.distinct is not none else "–" }}</td></tr>{% endfor %}</tbody>
+          </table></div>
+        {% elif view == "classes" %}
+          <form method="get" action="/ui/dataset" class="inline">
+            <input type="hidden" name="dataset" value="{{ selected.dataset_id }}">
+            <input type="hidden" name="view" value="classes">
+            <label for="class-column">{{ _("Column") }}</label>
+            <select id="class-column" name="column">
+              {% for name in column_names or [] %}<option value="{{ name }}" {{ 'selected' if name == column }}>{{ name }}</option>{% endfor %}
+            </select>
+            <button class="btn sub">{{ _("Show") }}</button>
+          </form>
+          {% if data %}
+            {% if data.basis.method != "exact" %}<p class="hint">{{ _("Estimated from a sample of") }} {{ data.basis.rows_used }} {{ _("rows") }}.</p>{% endif %}
+            <table class="grid">
+              <thead><tr><th>{{ _("Class") }}</th><th>{{ _("Count") }}</th><th>{{ _("Share") }}</th></tr></thead>
+              <tbody>{% for c in data.classes %}<tr><td>{{ c.value }}</td><td class="num">{{ c.count }}</td>
+                <td class="num">{{ "%.1f" | format((c.share or 0) * 100) }} %</td></tr>{% endfor %}</tbody>
+            </table>
+            <p class="hint">{{ _("Rows without a class") }}: {{ data.missing }}{% if data.more_classes %}. {{ _("More classes exist than are shown.") }}{% endif %}</p>
+          {% endif %}
+        {% endif %}
+      {% endif %}
+    {% else %}
+      <p class="empty">{{ _("Select a dataset in the list.") }}</p>
+    {% endif %}
+  </aside>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block actions %}
+  <span class="hint">{{ _("Validate the selected dataset.") if selected else _("Select a dataset in the list.") }}</span>
+  {% if selected %}
+    <button class="btn act ready" form="validate-form">{{ _("Validate dataset") }}</button>
+  {% else %}
+    <button class="btn act blocked" disabled>{{ _("Validate dataset") }}</button>
+  {% endif %}
+{% endblock %}

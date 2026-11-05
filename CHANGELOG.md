@@ -1,3 +1,24 @@
+## Revision 291a - Dataset tab (2026-11-05)
+
+- Add the Dataset tab (`src/JBGWebUIDatasets.py`, `src/web/templates/dataset.html`)
+  on the services of 286b and 289a-289b: the project's datasets with role,
+  status and the active training dataset; CSV upload or SQL table
+  registration depending on the project; SQL sign-in for the server
+  (Windows authentication or SQL login); Preview, Profile and Classes views;
+  validation with an optional configuration, showing the same check list for
+  SQL and CSV. "Validate dataset" is the tab's primary action. The context
+  bar shows the active training dataset and its status.
+- Still no JavaScript: plain forms (post/redirect/get; validation shows its
+  check list directly) and views in the address, so each view can be
+  bookmarked. Messages are fixed codes; input, passwords and driver messages
+  are never echoed; the return address after sign-in must be an interface
+  path.
+- About 80 Swedish texts added. The 287a translation test now checks that
+  every text has a catalogue entry (words spelled the same in Swedish, such
+  as "Status", are recorded as such) and covers the Dataset tab; the 287a tab
+  test expects the Dataset tab to be available.
+- Tests: `tests/test_revision_291a_dataset_tab.py`.
+
 ## Revision 290a - configuration schema for generated forms (2026-11-05)
 
 - Add `src/JBGConfigSchema.py` and `GET /api/config/schema?source=sql|csv`

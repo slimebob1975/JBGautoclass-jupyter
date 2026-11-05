@@ -33,7 +33,9 @@
       <span class="k">{{ _("Project") }}</span>
       <b>{{ active_project.name if active_project else _("None selected") }}</b></span>
     <span class="sep">›</span>
-    <span class="chip"><span class="dot d-off"></span><span class="k">{{ _("Dataset") }}</span><b>–</b></span>
+    {% set ds_state = active_dataset.validation_state if active_dataset else "" %}
+    <span class="chip"><span class="dot {{ {'valid': 'd-ok', 'invalid': 'd-block'}.get(ds_state, 'd-off') }}"></span>
+      <span class="k">{{ _("Dataset") }}</span><b>{{ active_dataset.name if active_dataset else "–" }}</b></span>
     <span class="sep">›</span>
     <span class="chip"><span class="dot d-off"></span><span class="k">{{ _("Configuration") }}</span><b>–</b></span>
     <span class="sep">›</span>

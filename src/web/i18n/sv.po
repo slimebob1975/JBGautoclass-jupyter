@@ -502,3 +502,259 @@ msgstr "Validering & beslut"
 
 msgid "Variance smoothing"
 msgstr "Variansutjämning"
+
+# 291a: Dataset tab and dataset check list.
+msgid "A dataset with that name already exists."
+msgstr "Det finns redan ett dataset med det namnet."
+
+msgid "A feature column is missing, repeated, or is the ID or class column."
+msgstr "En variabelkolumn saknas, förekommer flera gånger eller är ID- eller klasskolumnen."
+
+msgid "A numeric feature column contains values that are not numbers."
+msgstr "En numerisk variabelkolumn innehåller värden som inte är tal."
+
+msgid "Activate for training"
+msgstr "Aktivera för träning"
+
+msgid "Active for training"
+msgstr "Aktivt för träning"
+
+msgid "Add a CSV file"
+msgstr "Lägg till en CSV-fil"
+
+msgid "Add a SQL table"
+msgstr "Lägg till en SQL-tabell"
+
+msgid "At most 25 MB, with a header row. The delimiter is detected automatically."
+msgstr "Högst 25 MB, med rubrikrad. Avgränsaren upptäcks automatiskt."
+
+msgid "Catalog"
+msgstr "Katalog"
+
+msgid "Check the column roles of"
+msgstr "Kontrollera kolumnrollerna i"
+
+msgid "Class"
+msgstr "Klass"
+
+msgid "Classes"
+msgstr "Klasser"
+
+msgid "Column"
+msgstr "Kolumn"
+
+msgid "Count"
+msgstr "Antal"
+
+msgid "Dataset activated for training."
+msgstr "Datasetet är aktiverat för träning."
+
+msgid "Dataset added."
+msgstr "Datasetet är tillagt."
+
+msgid "Datasets"
+msgstr "Dataset"
+
+msgid "Distinct values"
+msgstr "Unika värden"
+
+msgid "Estimated from a sample of"
+msgstr "Uppskattat från ett urval på"
+
+msgid "Exact, all rows."
+msgstr "Exakt, alla rader."
+
+msgid "File"
+msgstr "Fil"
+
+msgid "Invalid"
+msgstr "Ogiltigt"
+
+msgid "Missing"
+msgstr "Saknas"
+
+msgid "Mixed"
+msgstr "Blandad"
+
+msgid "More classes exist than are shown."
+msgstr "Det finns fler klasser än de som visas."
+
+msgid "No SQL Server is configured on this server."
+msgstr "Ingen SQL Server är konfigurerad på den här servern."
+
+msgid "No datasets yet. Add one below."
+msgstr "Inga dataset ännu. Lägg till ett nedan."
+
+msgid "Not signed in"
+msgstr "Inte inloggad"
+
+msgid "Not validated"
+msgstr "Inte validerat"
+
+msgid "Numeric feature columns contain numbers only."
+msgstr "Numeriska variabelkolumner innehåller bara tal."
+
+msgid "Only the dataset itself"
+msgstr "Bara själva datasetet"
+
+msgid "Open a project in the Projects tab first."
+msgstr "Öppna först ett projekt under fliken Projekt."
+
+msgid "Password"
+msgstr "Lösenord"
+
+msgid "Prediction"
+msgstr "Prediktion"
+
+msgid "Preview"
+msgstr "Förhandsgranskning"
+
+msgid "Profile"
+msgstr "Profil"
+
+msgid "Register"
+msgstr "Registrera"
+
+msgid "Role"
+msgstr "Roll"
+
+msgid "Rows without a class"
+msgstr "Rader utan klass"
+
+msgid "SQL Server"
+msgstr "SQL Server"
+
+msgid "SQL sign-in failed."
+msgstr "SQL-inloggningen misslyckades."
+
+msgid "Select a dataset in the list."
+msgstr "Välj ett dataset i listan."
+
+msgid "Share"
+msgstr "Andel"
+
+msgid "Show"
+msgstr "Visa"
+
+msgid "Showing the first rows of"
+msgstr "Visar de första raderna av"
+
+msgid "Sign in"
+msgstr "Logga in"
+
+msgid "Sign in to SQL Server to read this dataset."
+msgstr "Logga in på SQL Server för att läsa datasetet."
+
+msgid "Sign out"
+msgstr "Logga ut"
+
+msgid "Signed in"
+msgstr "Inloggad"
+
+msgid "Signed in to SQL Server."
+msgstr "Inloggad på SQL Server."
+
+msgid "Signed out of SQL Server."
+msgstr "Utloggad från SQL Server."
+
+msgid "Skipped"
+msgstr "Hoppades över"
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Table"
+msgstr "Tabell"
+
+msgid "Table (schema.table)"
+msgstr "Tabell (schema.tabell)"
+
+msgid "The ID column exists and is unique."
+msgstr "ID-kolumnen finns och är unik."
+
+msgid "The ID column is missing, has empty values or repeats values."
+msgstr "ID-kolumnen saknas, har tomma värden eller upprepade värden."
+
+msgid "The class column exists and has between 2 and 30 classes."
+msgstr "Klasskolumnen finns och har mellan 2 och 30 klasser."
+
+msgid "The class column is missing, is the ID column or does not have between 2 and 30 classes."
+msgstr "Klasskolumnen saknas, är ID-kolumnen eller har inte mellan 2 och 30 klasser."
+
+msgid "The data could be read."
+msgstr "Data kunde läsas."
+
+msgid "The data could not be read."
+msgstr "Data kunde inte läsas."
+
+msgid "The data source can be reached."
+msgstr "Datakällan kan nås."
+
+msgid "The data source could not be reached."
+msgstr "Datakällan kunde inte nås."
+
+msgid "The dataset contains no rows."
+msgstr "Datasetet innehåller inga rader."
+
+msgid "The dataset contains rows."
+msgstr "Datasetet innehåller rader."
+
+msgid "The dataset could not be read."
+msgstr "Datasetet kunde inte läsas."
+
+msgid "The dataset is no longer available."
+msgstr "Datasetet är inte längre tillgängligt."
+
+msgid "The feature columns exist and do not overlap with ID or class."
+msgstr "Variabelkolumnerna finns och överlappar inte ID- eller klasskolumnen."
+
+msgid "The file is larger than 25 MB."
+msgstr "Filen är större än 25 MB."
+
+msgid "The file was not accepted. Check that it is a CSV file with a header row."
+msgstr "Filen godtogs inte. Kontrollera att det är en CSV-fil med rubrikrad."
+
+msgid "The input was not accepted. Check the name, catalog and table (schema.table)."
+msgstr "Uppgifterna godtogs inte. Kontrollera namn, katalog och tabell (schema.tabell)."
+
+msgid "The table is too large for a quick profile."
+msgstr "Tabellen är för stor för en snabb profil."
+
+msgid "This dataset cannot be used for training."
+msgstr "Det här datasetet kan inte användas för träning."
+
+msgid "Training"
+msgstr "Träning"
+
+msgid "Type"
+msgstr "Typ"
+
+msgid "Upload"
+msgstr "Ladda upp"
+
+msgid "User name"
+msgstr "Användarnamn"
+
+msgid "Valid"
+msgstr "Giltigt"
+
+msgid "Validate dataset"
+msgstr "Validera dataset"
+
+msgid "Validate the selected dataset."
+msgstr "Validera det valda datasetet."
+
+msgid "Validation"
+msgstr "Validering"
+
+msgid "Windows authentication"
+msgstr "Windows-autentisering"
+
+msgid "rows"
+msgstr "rader"
+
+msgid "Number"
+msgstr "Tal"
+
+msgid "Text"
+msgstr "Text"

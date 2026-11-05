@@ -70,11 +70,17 @@ def request_language(request: Request) -> str:
 
 def _redirect(path: str, **query) -> RedirectResponse:
     query = {key: value for key, value in query.items() if value}
-    return RedirectResponse(path + ("?" + urlencode(query) if query else ""), status_code=303)
+    separator = "&" if "?" in path else "?"
+    return RedirectResponse(path + (separator + urlencode(query) if query else ""), status_code=303)
 
 
-def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: str = "") -> None:
-    """Mount the interface under /ui on ``app``."""
+def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: str = "",
+               datasets=None, inspection=None, configurations=None, sessions=None,
+               sql_server=None) -> None:
+    """Mount the interface under /ui on ``app``.
+
+    The Dataset tab (291a) is mounted when its services are given.
+    """
     from JBGProjectService import ProjectConflict, ProjectUnavailable
 
     templates = Jinja2Templates(directory=str(WEB / "templates"))
@@ -89,16 +95,40 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         except ProjectUnavailable:
             return None
 
-    def render(request: Request, principal, template: str, tab: str, **context):
+    available = {"projects"} | ({"dataset"} if datasets is not None else set())
+    tabs = tuple((key, label, key in available) for key, label, _ in TABS)
+
+    def active_dataset(owner: str, project):
+        """The project's active training dataset, for the context bar."""
+        if datasets is None or project is None:
+            return None
+        try:
+            items = datasets.list(owner, project["project_id"])
+        except Exception:
+            return None
+        return next((d for d in items if d["active_training"]), None)
+
+    def render(request: Request, principal, template: str, tab: str, status_code: int = 200,
+               **context):
         language = request_language(request)
         _ = translator(language)
-        message = MESSAGES.get(request.query_params.get("message", ""))
-        base = {"request": request, "_": _, "language": language, "tabs": TABS,
+        code = request.query_params.get("message", "")
+        message = context.pop("tab_messages", {}).get(code) or MESSAGES.get(code)
+        project = active_project(request, principal.principal_key)
+        base = {"request": request, "_": _, "language": language, "tabs": tabs,
                 "current_tab": tab, "user": principal.subject, "version_line": version_line,
-                "active_project": active_project(request, principal.principal_key),
+                "active_project": project,
+                "active_dataset": active_dataset(principal.principal_key, project),
                 "message": message}
         base.update(context)
-        return templates.TemplateResponse(request, template, base)
+        return templates.TemplateResponse(request, template, base, status_code=status_code)
+
+    if datasets is not None:
+        from JBGWebUIDatasets import add_dataset_tab
+        add_dataset_tab(app, principal_dependency=principal_dependency, render=render,
+                        redirect=_redirect, active_project=active_project, datasets=datasets,
+                        inspection=inspection, configurations=configurations,
+                        sessions=sessions, sql_server=sql_server)
 
     @app.get("/ui", include_in_schema=False)
     @app.get("/ui/", include_in_schema=False)
