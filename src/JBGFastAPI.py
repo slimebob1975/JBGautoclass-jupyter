@@ -416,7 +416,7 @@ def _add_model_endpoints(app, principal_dependency, models):
 def _add_dataset_inspection_endpoints(app, principal_dependency, inspection):
     """Dataset validation and preview, the same for SQL and CSV (289a)."""
     from JBGConfigurationService import ConfigurationUnavailable
-    from JBGDatasetInspection import DatasetUnreadable
+    from JBGDatasetInspection import ColumnUnavailable, DatasetTooLarge, DatasetUnreadable
     from JBGDatasetService import DatasetUnavailable
     from JBGProjectRuns import RunRequestRefused
     from JBGProjectService import ProjectUnavailable
@@ -436,7 +436,9 @@ def _add_dataset_inspection_endpoints(app, principal_dependency, inspection):
             if str(error) == "SQL sign-in required":
                 raise HTTPException(status_code=409, detail="SQL sign-in required") from None
             raise HTTPException(status_code=403, detail="not permitted") from None
-        except DatasetUnreadable as error:
+        except ColumnUnavailable:
+            raise HTTPException(status_code=404, detail="column unavailable") from None
+        except (DatasetUnreadable, DatasetTooLarge) as error:
             raise HTTPException(status_code=422, detail=str(error)) from None
 
     base = "/api/projects/{project_id}/datasets/{dataset_id}"
@@ -452,6 +454,16 @@ def _add_dataset_inspection_endpoints(app, principal_dependency, inspection):
     def preview_dataset(project_id: str, dataset_id: str,
                         principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return call(inspection.preview, principal, project_id, dataset_id)
+
+    @app.get(base + "/profile")
+    def profile_dataset(project_id: str, dataset_id: str,
+                        principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(inspection.profile, principal, project_id, dataset_id)
+
+    @app.get(base + "/class-distribution")
+    def class_distribution(project_id: str, dataset_id: str, column: str,
+                           principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(inspection.class_distribution, principal, project_id, dataset_id, column)
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,

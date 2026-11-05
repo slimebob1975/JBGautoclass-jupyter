@@ -42,8 +42,30 @@ CHECKS = (
 ROLE_CHECKS = ("id_column", "class_column", "feature_columns", "feature_types")
 
 
+# 289b (agreed 2026-11-05): exact up to EXACT_LIMIT rows; above it SQL tables
+# are sampled with TABLESAMPLE to about SAMPLE_TARGET rows and the result is
+# marked as estimated. Views cannot be sampled and are computed exactly. Every
+# profile query has a time limit.
+EXACT_LIMIT = 1_000_000
+SAMPLE_TARGET = 100_000
+QUERY_SECONDS = 60
+MAX_CLASSES = 100
+_TEXT_SQL_TYPES = frozenset({"char", "nchar", "varchar", "nvarchar", "text", "ntext"})
+_NO_DISTINCT_SQL_TYPES = frozenset({"image", "binary", "varbinary", "xml", "geography",
+                                    "geometry", "hierarchyid", "sql_variant", "timestamp",
+                                    "rowversion"})
+
+
 class DatasetUnreadable(ValueError):
     """The preview could not be read (fixed message)."""
+
+
+class DatasetTooLarge(ValueError):
+    """A profile query exceeded its time limit (fixed message)."""
+
+
+class ColumnUnavailable(LookupError):
+    """The requested column does not exist in the dataset."""
 
 
 def _quote(name: str) -> str:
@@ -94,6 +116,37 @@ class _CSVFacts:
             next(reader, None)
             return [list(row) for _, row in zip(range(PREVIEW_ROWS), reader)]
 
+    def _all_rows(self):
+        # Uploads are at most 25 MB: always exact.
+        with self._path.open("r", encoding=self._format["encoding"], newline="") as stream:
+            reader = csv.reader(stream, delimiter=self._format["delimiter"])
+            next(reader, None)
+            return [row for row in reader]
+
+    def basis(self):
+        return {"method": "exact", "total_rows": self.rows, "rows_used": self.rows}
+
+    def profile(self):
+        rows, result = self._all_rows(), []
+        for index, column in enumerate(self.columns):
+            values = [row[index].strip() if index < len(row) else "" for row in rows]
+            present = [v for v in values if v]
+            result.append({"name": column, "type": "text" if column in
+                           self._schema.text_feature_candidates else "number",
+                           "missing": len(values) - len(present),
+                           "distinct": len(set(present))})
+        return result
+
+    def classes(self, column):
+        index = self.columns.index(column)
+        counts = {}
+        for row in self._all_rows():
+            value = row[index].strip() if index < len(row) else ""
+            counts[value] = counts.get(value, 0) + 1
+        missing = counts.pop("", 0)
+        ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+        return ordered, missing
+
 
 class _SQLFacts:
     def __init__(self, layer, catalog: str, table: str):
@@ -120,6 +173,69 @@ class _SQLFacts:
         columns = ", ".join(_quote(c) for c in self.columns)       # real columns only
         query = f"SELECT TOP({PREVIEW_ROWS}) {columns} FROM {_table(self._catalog, self._table)}"
         return [list(row) for row in self._layer.get_data_list_from_query(query)]
+
+    def _query(self, sql: str) -> list:
+        """Run ``sql`` with a time limit, through the existing SQL helper."""
+        helper = self._layer.get_connection()
+        try:
+            helper.Connection = helper.connect()
+            helper.Connection.timeout = QUERY_SECONDS      # pyodbc query time limit
+            return helper.get_data_from_query(sql)
+        except Exception as error:
+            helper.disconnect()
+            if "HYT00" in str(error) or "timeout" in str(error).lower():
+                raise DatasetTooLarge("the table is too large for a quick profile") from None
+            raise
+
+    def _is_view(self) -> bool:
+        schema, name = self._table.split(".")
+        literal = lambda text: "N'" + text.replace("'", "''") + "'"
+        rows = self._query(f"SELECT TABLE_TYPE FROM {_quote(self._catalog)}.INFORMATION_SCHEMA.TABLES "
+                           f"WHERE TABLE_SCHEMA = {literal(schema)} AND TABLE_NAME = {literal(name)}")
+        return bool(rows) and str(rows[0][0]).upper() == "VIEW"
+
+    def basis(self):
+        if self.rows <= EXACT_LIMIT or self._is_view():
+            self._sample = ""
+            return {"method": "exact", "total_rows": self.rows}
+        percent = max(0.0001, min(100.0, 100.0 * SAMPLE_TARGET / self.rows))
+        self._sample = f" TABLESAMPLE SYSTEM ({percent:.4f} PERCENT)"
+        return {"method": "tablesample", "total_rows": self.rows, "percent": round(percent, 4)}
+
+    def _source(self):
+        return _table(self._catalog, self._table) + getattr(self, "_sample", "")
+
+    def _expressions(self, column):
+        kind = str(self._types.get(column, "")).lower()
+        quoted = _quote(column)
+        value = f"CONVERT(NVARCHAR(4000), {quoted})" if kind in _TEXT_SQL_TYPES else quoted
+        missing = (f"{quoted} IS NULL OR {value} = N''" if kind in _TEXT_SQL_TYPES
+                   else f"{quoted} IS NULL")
+        distinct = None if kind in _NO_DISTINCT_SQL_TYPES else value
+        return value, missing, distinct
+
+    def profile(self):
+        parts = ["COUNT(*)"]
+        for column in self.columns:
+            _, missing, distinct = self._expressions(column)
+            parts.append(f"SUM(CASE WHEN {missing} THEN 1 ELSE 0 END)")
+            parts.append(f"COUNT(DISTINCT {distinct})" if distinct else "NULL")
+        row = self._query(f"SELECT {', '.join(parts)} FROM {self._source()}")[0]
+        self.rows_used = int(row[0])
+        return [{"name": column, "type": str(self._types[column]),
+                 "missing": int(row[1 + 2 * i] or 0),
+                 "distinct": None if row[2 + 2 * i] is None else int(row[2 + 2 * i])}
+                for i, column in enumerate(self.columns)]
+
+    def classes(self, column):
+        value, missing, _ = self._expressions(column)
+        totals = self._query(f"SELECT COUNT(*), SUM(CASE WHEN {missing} THEN 1 ELSE 0 END) "
+                             f"FROM {self._source()}")[0]
+        self.rows_used = int(totals[0])
+        rows = self._query(f"SELECT TOP({MAX_CLASSES + 1}) {value} AS class_value, COUNT(*) AS n "
+                           f"FROM {self._source()} WHERE NOT ({missing}) "
+                           f"GROUP BY {value} ORDER BY COUNT(*) DESC, {value}")
+        return [(str(r[0]), int(r[1])) for r in rows], int(totals[1] or 0)
 
 
 class _QuietLogger:
@@ -271,3 +387,49 @@ class DatasetInspectionService:
             if isinstance(error, RunRequestRefused):
                 raise
             raise DatasetUnreadable("the dataset could not be read") from None
+
+    # --- Profile and class distribution (289b) -------------------------------------
+
+    def _summary(self, principal, project_id, dataset_id, compute):
+        owner = principal.principal_key
+        project, dataset = self._dataset(owner, project_id, dataset_id)
+
+        def run(facts):
+            if not facts.columns:
+                raise DatasetUnreadable("the dataset could not be read")
+            basis = facts.basis()
+            result = compute(facts)
+            basis["rows_used"] = getattr(facts, "rows_used", basis.get("rows_used"))
+            return basis, result
+        try:
+            return self._with_facts(principal, project, dataset, run)
+        except (PermissionError, LookupError, DatasetUnreadable, DatasetTooLarge):
+            raise
+        except Exception as error:
+            from JBGProjectRuns import RunRequestRefused
+            if isinstance(error, RunRequestRefused):
+                raise
+            raise DatasetUnreadable("the dataset could not be read") from None
+
+    def profile(self, principal, project_id: str, dataset_id: str) -> dict[str, Any]:
+        basis, columns = self._summary(principal, project_id, dataset_id,
+                                       lambda facts: facts.profile())
+        used = basis.get("rows_used") or 0
+        for column in columns:
+            column["missing_share"] = round(column["missing"] / used, 6) if used else None
+        return {"dataset_id": dataset_id, "basis": basis, "columns": columns}
+
+    def class_distribution(self, principal, project_id: str, dataset_id: str,
+                           column: str) -> dict[str, Any]:
+        def compute(facts):
+            if column not in facts.columns:
+                raise ColumnUnavailable("column unavailable")
+            return facts.classes(column)
+        basis, (ordered, missing) = self._summary(principal, project_id, dataset_id, compute)
+        used = basis.get("rows_used") or 0
+        classes = [{"value": value, "count": count,
+                    "share": round(count / used, 6) if used else None}
+                   for value, count in ordered[:MAX_CLASSES]]
+        return {"dataset_id": dataset_id, "column": column, "basis": basis,
+                "classes": classes, "more_classes": len(ordered) > MAX_CLASSES,
+                "missing": missing}

@@ -48,6 +48,25 @@ def _utc(value):
     return value
 
 
+_UNSAFE_SQL_TEXT = ("'", '"', "[", "]", ";", "--", "/*", "*/", "\x00", "\n", "\r", "\t")
+
+
+def _plain_sql_names(catalog: str, table: str) -> None:
+    """289b: catalog and table must be plain names; the table as schema.table.
+
+    The Voilà GUI only offers names from the database's own table list. The
+    API accepts typed names, and existing DataLayer queries insert them as
+    string literals, so quotes, brackets, statement separators, comment
+    markers and control characters are refused outright.
+    """
+    for value in (catalog, table):
+        if any(unsafe in value for unsafe in _UNSAFE_SQL_TEXT):
+            raise ValueError("SQL catalog and table must be plain names")
+    parts = table.split(".")
+    if len(parts) != 2 or not all(part.strip() == part and part for part in parts):
+        raise ValueError("SQL table must be given as schema.table")
+
+
 def _locator(source, *, catalog=None, table=None, registration_id=None):
     if source is DataSourceKind.SQL:
         if registration_id is not None:
@@ -55,6 +74,7 @@ def _locator(source, *, catalog=None, table=None, registration_id=None):
         catalog, table = _text(catalog, "SQL catalog"), _text(table, "SQL table")
         if catalog.casefold() in {"n/a", "none", "null"} or table.casefold() in {"n/a", "none", "null"}:
             raise ValueError("SQL locator must not be a placeholder")
+        _plain_sql_names(catalog, table)
         return catalog, table, None
     if source is DataSourceKind.CSV:
         if catalog is not None or table is not None:

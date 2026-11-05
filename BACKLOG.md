@@ -243,7 +243,8 @@ full SQL regression acceptance remain separately unverified.
     configuration and dataset, SQL sign-in per server, model registration.
   - [x] 289a: dataset validation (same check list for SQL and CSV, optional
     role check against a configuration) and preview (first 50 rows).
-  - [ ] 289b: column profile and class distribution, computed on demand.
+  - [x] 289b: column profile and class distribution, computed on demand;
+    SQL dataset names restricted to plain names.
     Agreed 2026-11-05: exact up to a size threshold; above it an estimate
     from `TABLESAMPLE` (SQL tables; marked as estimated with the sample
     size), exact with a time limit for views.

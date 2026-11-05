@@ -1,3 +1,23 @@
+## Revision 289b - column profile and class distribution; plain SQL names (2026-11-05)
+
+- `GET .../datasets/{id}/profile` (per column: type, missing values and
+  share, distinct values) and `GET .../datasets/{id}/class-distribution?column=`
+  (rows per class, up to 100 classes plus a "more classes" flag, and rows
+  without a class). Exact results are the same for CSV and SQL.
+- As agreed 2026-11-05: exact up to one million rows; larger SQL tables are
+  sampled with `TABLESAMPLE SYSTEM` to about 100,000 rows and the response
+  says so (`basis.method`, `percent`, `rows_used`). Views cannot be sampled
+  and are computed exactly. Every profile query has a 60-second time limit,
+  set on the connection without changing the shared SQL helper; exceeding it
+  gives 422 with a fixed text. CSV uploads (at most 25 MB) are always exact.
+- Fix (286b/289a): SQL dataset catalog and table names must be plain names,
+  the table as `schema.table`; quotes, brackets, semicolons, comment markers
+  and control characters are refused in `JBGDatasets`. Existing DataLayer
+  queries insert these names as string literals; the Voilà GUI only ever
+  offered names from the database's own list, but the API accepts typed
+  names. Queries ran under the user's own login, so no rights could be gained.
+- Tests: `tests/test_revision_289b_dataset_profile.py`.
+
 ## Revision 289a - dataset validation and preview, the same for SQL and CSV (2026-11-05)
 
 - Add `src/JBGDatasetInspection.py` and

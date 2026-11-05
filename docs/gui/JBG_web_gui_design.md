@@ -451,6 +451,7 @@ The map above is the target. What exists after revision 285m3:
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |
 | `POST .../datasets/{dataset}/validate`, `GET .../datasets/{dataset}/preview` | 289a | The same check list for SQL and CSV, optionally with a configuration's roles; preview of the first 50 rows; SQL needs the sign-in |
+| `GET .../datasets/{dataset}/profile`, `GET .../datasets/{dataset}/class-distribution` | 289b | Missing values and distinct counts per column; classes with counts and shares; exact up to one million rows, sampled (and marked) above; 60-second limit |
 
 Interim deviations from the target, to be removed as the GUI phases proceed: the 285d endpoints still start runs from Voilà's saved configurations next to the project runs; `pause`, `resume`, `prepare`, SSE events and the per-view result endpoints do not exist yet.
 
