@@ -5,6 +5,12 @@
 {# CSV column kinds are words; SQL type names (nvarchar, ...) stay as they are. #}
 {% set type_labels = {"number": "Number", "text": "Text"} %}
 {% block main %}
+{% if incompatible %}
+  <div class="message error" role="alert">{{ _("The dataset is not compatible with the training dataset.") }}
+    {% if incompatible.missing %}<br>{{ _("Missing columns") }}: {{ incompatible.missing | join(", ") }}{% endif %}
+    {% if incompatible.different %}<br>{{ _("Numeric in the training dataset, not numeric here") }}: {{ incompatible.different | join(", ") }}{% endif %}
+  </div>
+{% endif %}
 {% if no_project %}
   <div class="card"><p class="empty">{{ _("Open a project in the Projects tab first.") }}
     <a href="/ui/projects">{{ _("Projects") }}</a></p></div>
@@ -70,22 +76,43 @@
       {% endif %}
     </fieldset></div>
 
-    <form method="post" action="/ui/dataset/sql" class="panel">
-      <fieldset>
-        <legend>{{ _("Add a SQL table") }}</legend>
-        <label for="sql-name">{{ _("Name") }}</label>
-        <input id="sql-name" name="name" required maxlength="200">
-        <label for="sql-catalog">{{ _("Catalog") }}</label>
-        <input id="sql-catalog" name="catalog" required maxlength="200">
-        <label for="sql-table">{{ _("Table (schema.table)") }}</label>
-        <input id="sql-table" name="table" required maxlength="200">
-        <label for="sql-role">{{ _("Role") }}</label>
-        <select id="sql-role" name="role">
-          {% for value, label in role_labels.items() %}<option value="{{ value }}">{{ _(label) }}</option>{% endfor %}
-        </select>
-        <button class="btn">{{ _("Register") }}</button>
-      </fieldset>
-    </form>
+    <div class="panel"><fieldset>
+      <legend>{{ _("Add a SQL table") }}</legend>
+      {% if not catalogs %}
+        <p class="hint">{{ _("Sign in to SQL Server to choose a catalog and a table.") }}</p>
+      {% else %}
+        <form method="get" action="/ui/dataset" class="stack">
+          {% if selected %}<input type="hidden" name="dataset" value="{{ selected.dataset_id }}">{% endif %}
+          <label for="sql-catalog">{{ _("Catalog") }}</label>
+          <select id="sql-catalog" name="catalog">
+            {% for name in catalogs %}<option value="{{ name }}" {{ 'selected' if name == catalog }}>{{ name }}</option>{% endfor %}
+          </select>
+          <label for="sql-add-role">{{ _("Role") }}</label>
+          <select id="sql-add-role" name="add_role">
+            {% for value, label in role_labels.items() %}<option value="{{ value }}" {{ 'selected' if value == add_role }}>{{ _(label) }}</option>{% endfor %}
+          </select>
+          <button class="btn sub">{{ _("Show tables") }}</button>
+        </form>
+        {% if table_choice %}
+          {% if table_choice.tables %}
+          <form method="post" action="/ui/dataset/sql" class="stack">
+            <input type="hidden" name="catalog" value="{{ catalog }}">
+            <input type="hidden" name="role" value="{{ add_role }}">
+            <label for="sql-table">{{ _("Table") }}</label>
+            <select id="sql-table" name="table">
+              {% for name in table_choice.tables %}<option value="{{ name }}">{{ name }}</option>{% endfor %}
+            </select>
+            {% if table_choice.filtered %}<p class="hint">{{ _("Only tables compatible with the training dataset are shown.") }}</p>{% endif %}
+            <label for="sql-name">{{ _("Name") }}</label>
+            <input id="sql-name" name="name" required maxlength="200">
+            <button class="btn">{{ _("Register") }}</button>
+          </form>
+          {% else %}
+            <p class="hint">{{ _("No suitable tables in this catalog.") }}</p>
+          {% endif %}
+        {% endif %}
+      {% endif %}
+    </fieldset></div>
     {% endif %}
   </section>
 
@@ -121,7 +148,7 @@
         {% endif %}
       {% else %}
         <nav class="subtabs" aria-label="{{ _('Dataset') }}">
-          {% for key, label in (("preview", "Preview"), ("profile", "Profile"), ("classes", "Classes")) %}
+          {% for key, label in (("preview", "Preview"), ("profile", "Profile"), ("classes", "Classes"), ("roles", "Column roles")) %}
             <a href="/ui/dataset?dataset={{ selected.dataset_id }}&view={{ key }}" class="{{ 'on' if view == key }}">{{ _(label) }}</a>
           {% endfor %}
         </nav>
@@ -141,6 +168,39 @@
               <td class="num">{{ "%.1f" | format((c.missing_share or 0) * 100) }} %</td>
               <td class="num">{{ c.distinct if c.distinct is not none else "–" }}</td></tr>{% endfor %}</tbody>
           </table></div>
+        {% elif view == "roles" %}
+          {% if selected.role == "prediction" %}
+            <p class="hint">{{ _("Prediction datasets use the column roles of the training dataset.") }}</p>
+          {% elif data %}
+            {% if roles_error %}<p class="message error">{{ _(roles_error) }}</p>{% endif %}
+            {% if not roles_stored and not roles_error %}<p class="hint">{{ _("No column roles yet. Columns without a role are ignored.") }}</p>{% endif %}
+            <form method="post" action="/ui/dataset/{{ selected.dataset_id }}/roles" id="roles-form">
+              <div class="field">
+                <label for="categorical-limit">{{ _("Categorical limit") }}</label>
+                <input id="categorical-limit" name="categorical_limit" value="{{ categorical_limit }}" inputmode="numeric">
+                <p class="hint">{{ _("Text columns with at most this many distinct values are categorised; other text columns are treated as free text. Categorical columns are always categorised.") }}</p>
+              </div>
+              <div class="scroll"><table class="grid">
+                <thead><tr><th>{{ _("Column") }}</th><th>{{ _("Type") }}</th><th>{{ _("Distinct values") }}</th><th>{{ _("Role") }}</th><th>{{ _("Treated as") }}</th></tr></thead>
+                <tbody>
+                {% for c in data.columns %}
+                  {% set current = roles.get(c.name, "ignored") %}
+                  <tr><td>{{ c.name }}</td>
+                    <td class="muted">{{ _(type_labels[c.type]) if c.type in type_labels else c.type }}</td>
+                    <td class="num">{{ c.distinct if c.distinct is not none else "–" }}</td>
+                    <td><select name="role:{{ c.name }}" aria-label="{{ _('Role') }} {{ c.name }}">
+                      {% for value, label in role_choices %}<option value="{{ value }}" {{ 'selected' if value == current }}>{{ _(label) }}</option>{% endfor %}
+                    </select></td>
+                    <td class="muted">{% if current == "categorical" %}{{ _("Categorised (always)") }}
+                      {% elif current == "text" and c.distinct is not none and c.distinct <= categorical_limit | int %}{{ _("Categorised (at most the limit)") }}
+                      {% elif current == "text" %}{{ _("Free text") }}
+                      {% elif current == "ignored" %}{{ _("Not used") }}{% else %}–{% endif %}</td></tr>
+                {% endfor %}
+                </tbody>
+              </table></div>
+              <button class="btn">{{ _("Save column roles") }}</button>
+            </form>
+          {% endif %}
         {% elif view == "classes" %}
           <form method="get" action="/ui/dataset" class="inline">
             <input type="hidden" name="dataset" value="{{ selected.dataset_id }}">

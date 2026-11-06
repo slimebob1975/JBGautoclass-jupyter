@@ -333,6 +333,37 @@ class DatasetInspectionService:
         layer = self._server_layer(principal, catalog)
         return {"catalog": catalog, "tables": [name for name in layer.get_tables_as_options() if name]}
 
+    def table_choices(self, principal, project_id: str, catalog: str, role: str) -> dict:
+        """293b: the catalog's tables for the Dataset tab. For a prediction dataset
+        only tables compatible with the active training dataset are offered; all
+        tables' columns come from one INFORMATION_SCHEMA query."""
+        from JBGDatasetRoles import IncompatibleDataset, check_compatible
+        tables = self.sql_tables(principal, catalog)["tables"]
+        owner = principal.principal_key
+        project = self._projects.require(owner, project_id)
+        if role != DatasetRole.PREDICTION.value:
+            return {"tables": tables, "filtered": False}
+        training, roles = self._active_training(owner, project_id)
+        if training is None:
+            return {"tables": tables, "filtered": False}
+        training_kinds = self.kinds(principal, project, training)
+        layer = self._server_layer(principal, catalog)
+        rows = layer.get_data_list_from_query(
+            f"SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE "
+            f"FROM {_quote(catalog)}.INFORMATION_SCHEMA.COLUMNS")
+        columns = {}
+        for schema, table, column, data_type in rows:
+            kind = "number" if str(data_type).lower() in NUMERIC_SQL_TYPES else "text"
+            columns.setdefault(f"{schema}.{table}", {})[column] = kind
+        compatible = []
+        for name in tables:
+            try:
+                check_compatible(roles, training_kinds, columns.get(name, {}))
+                compatible.append(name)
+            except IncompatibleDataset:
+                continue
+        return {"tables": compatible, "filtered": True}
+
     # --- Roles and compatibility (293a) -----------------------------------------------
 
     def _active_training(self, owner, project_id, excluding=None):

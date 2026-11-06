@@ -263,7 +263,7 @@ full SQL regression acceptance remain separately unverified.
     JBGModelCompatibility, JBGFeatureProfiles and JBGFeatureSearchService.
     Stored on the dataset with its roles; model compatibility must record
     the limit actually used.
-  - [ ] 293b: Dataset tab: catalog and table lists, roles table (one role per
+  - [x] 293b: Dataset tab: catalog and table lists, roles table (one role per
     column, ignored columns derived), categorical limit with the distinct
     count per text column, only compatible tables offered for prediction.
   - [ ] 293c: Configuration tab: roles removed, essentials first, "All"

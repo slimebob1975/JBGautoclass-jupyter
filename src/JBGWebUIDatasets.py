@@ -12,7 +12,19 @@ from __future__ import annotations
 from fastapi import Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse
 
-VIEWS = ("preview", "profile", "classes")
+VIEWS = ("preview", "profile", "classes", "roles")
+ROLE_CHOICES = (("id", "ID column"), ("class", "Class column"), ("numeric", "Numeric feature"),
+                ("text", "Text feature"), ("categorical", "Categorical feature"),
+                ("ignored", "Ignored"))
+# Fixed texts from JBGDatasetRoles, shown on the roles view when saving fails.
+ROLE_ERRORS = (
+    "a column with a role does not exist in the dataset",
+    "exactly one column must be the ID column",
+    "exactly one column must be the class column",
+    "at least one column must be a feature",
+    "the categorical limit must be a whole number between 2 and 1000",
+    "unknown column role",
+)
 
 MESSAGES = {
     "added": ("ok", "Dataset added."),
@@ -29,6 +41,7 @@ MESSAGES = {
     "unavailable": ("error", "The dataset is no longer available."),
     "incompatible": ("error", "The dataset is not compatible with the training dataset."),
     "signin_needed": ("error", "Sign in to SQL Server first."),
+    "roles_saved": ("ok", "Column roles saved. Validate the dataset again."),
 }
 READ_ERRORS = {
     "signin_required": "Sign in to SQL Server to read this dataset.",
@@ -65,15 +78,24 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
         except (DatasetUnreadable, LookupError, ValueError):
             return None, "unreadable"
 
+    def optional(action, *args):
+        """Lists are an aid: any failure shows the form without them (293b)."""
+        try:
+            return action(*args)
+        except Exception:
+            return None
+
     def page(request, principal, *, dataset="", view="preview", column="", validation=None,
-             status_code=200):
+             status_code=200, incompatible=None, roles_error=None, roles_draft=None):
         owner = principal.principal_key
         project = active_project(request, owner)
         context = {"no_project": project is None, "datasets": [], "selected": None,
                    "view": view if view in VIEWS else "preview", "column": column,
                    "validation": validation, "configurations": [], "data": None,
                    "read_error": None, "read_errors": READ_ERRORS, "sql": None,
-                   "tab_messages": MESSAGES}
+                   "tab_messages": MESSAGES, "incompatible": incompatible,
+                   "role_choices": ROLE_CHOICES, "roles_error": roles_error,
+                   "catalogs": None, "catalog": "", "add_role": "training", "table_choice": None}
         if project is not None:
             pid = project["project_id"]
             try:
@@ -88,6 +110,18 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                 context["sql"] = {"configured": bool(sql_server and sql_server.configured),
                                   "signed_in": sessions.is_signed_in(principal),
                                   "windows": sessions.uses_windows_authentication(principal)}
+                if context["sql"]["signed_in"]:
+                    # 293b: catalogs and tables come from the user's login.
+                    listed = optional(inspection.sql_catalogs, principal)
+                    if listed:
+                        context["catalogs"] = listed["catalogs"]
+                        chosen = request.query_params.get("catalog") or listed["default"] or ""
+                        context["catalog"] = chosen if chosen in listed["catalogs"] else ""
+                    role = request.query_params.get("add_role", "training")
+                    context["add_role"] = role if role in ("training", "prediction", "mixed") else "training"
+                    if context["catalog"]:
+                        context["table_choice"] = optional(inspection.table_choices, principal,
+                                                           pid, context["catalog"], context["add_role"])
             if selected is not None and validation is None:
                 v = context["view"]
                 if v == "preview":
@@ -96,6 +130,15 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                 elif v == "profile":
                     context["data"], context["read_error"] = read(
                         inspection.profile, principal, pid, dataset)
+                elif v == "roles":
+                    if selected["role"] != "prediction":
+                        profile, context["read_error"] = read(inspection.profile, principal, pid, dataset)
+                        stored, _ = read(inspection.get_roles, principal, pid, dataset)
+                        context["data"] = profile
+                        context["roles"] = roles_draft or (stored.as_mapping() if stored else {})
+                        context["roles_stored"] = stored is not None
+                        context["categorical_limit"] = (roles_draft or {}).get(
+                            "__limit__", stored.categorical_limit if stored else 30)
                 else:
                     columns, context["read_error"] = read(inspection.preview, principal, pid, dataset)
                     context["column_names"] = [c["name"] for c in columns["columns"]] if columns else []
@@ -128,8 +171,9 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
             return redirect("/ui/dataset", message="too_large")
         except DatasetConflict:
             return redirect("/ui/dataset", message="duplicate")
-        except IncompatibleDataset:
-            return redirect("/ui/dataset", message="incompatible")
+        except IncompatibleDataset as error:
+            # Shown directly, naming the owner's own missing columns.
+            return page(request, principal, incompatible=error, status_code=409)
         except (WrongSourceType, ValueError, TypeError, ProjectUnavailable):
             return redirect("/ui/dataset", message="bad_csv")
         finally:
@@ -148,8 +192,8 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                                           catalog=catalog, table=table, principal=principal)
         except DatasetConflict:
             return redirect("/ui/dataset", message="duplicate")
-        except IncompatibleDataset:
-            return redirect("/ui/dataset", message="incompatible")
+        except IncompatibleDataset as error:
+            return page(request, principal, incompatible=error, status_code=409)
         except PermissionError:
             return redirect("/ui/dataset", message="signin_needed")
         except RunRequestRefused:
@@ -186,6 +230,33 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                         validation={"error": error})
         # Shown directly (post and render): the check list is not stored.
         return page(request, principal, dataset=dataset_id, validation=result)
+
+    @app.post("/ui/dataset/{dataset_id}/roles", response_class=HTMLResponse,
+              include_in_schema=False)
+    async def save_roles(request: Request, dataset_id: str,
+                         principal=Depends(principal_dependency)):
+        pid = project_id(request, principal)
+        if pid is None:
+            return redirect("/ui/dataset")
+        form = await request.form()
+        mapping = {key[5:]: value for key, value in form.multi_items()
+                   if key.startswith("role:") and value != "ignored"}
+        try:
+            limit = int(str(form.get("categorical_limit", "30")).strip())
+        except ValueError:
+            limit = 0                                       # refused below with a fixed text
+        try:
+            inspection.set_roles(principal, pid, dataset_id, mapping, limit)
+        except (DatasetUnavailable, ProjectUnavailable):
+            return redirect("/ui/dataset", message="unavailable")
+        except PermissionError:
+            return redirect("/ui/dataset", dataset=dataset_id, view="roles", message="signin_needed")
+        except ValueError as error:
+            draft = dict(mapping, __limit__=limit)
+            message = str(error) if str(error) in ROLE_ERRORS else "unknown column role"
+            return page(request, principal, dataset=dataset_id, view="roles",
+                        roles_error=message, roles_draft=draft, status_code=422)
+        return redirect("/ui/dataset", dataset=dataset_id, view="roles", message="roles_saved")
 
     @app.post("/ui/sql/session", include_in_schema=False)
     def sign_in(request: Request, method: str = Form("sql"), username: str = Form(""),

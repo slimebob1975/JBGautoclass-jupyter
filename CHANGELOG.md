@@ -1,3 +1,25 @@
+## Revision 293b - Dataset tab: SQL lists, column roles, compatibility (2026-11-06)
+
+- SQL tables are chosen from lists instead of typed (agreed 2026-11-05): after
+  sign-in, the catalogs the login can see (the server's `.env` catalog
+  pre-selected), then the catalog's tables. Two plain steps ("Show tables",
+  then register), no JavaScript. If listing fails, the tab stays usable and
+  shows a hint instead of the lists.
+- For a prediction dataset only tables compatible with the active training
+  dataset are offered (the 293a rule), checked from one
+  `INFORMATION_SCHEMA.COLUMNS` query for the whole catalog.
+- New "Column roles" view for training and mixed datasets: one role per
+  column (ID, class, numeric, text, categorical, ignored), the distinct-value
+  count per column, the categorical limit (293a2), and how each column is
+  treated: categorised always (categorical), categorised at or below the
+  limit or free text (text), or not used (ignored, the default for columns
+  without a role). Refused roles show a fixed message and keep the choices.
+  Prediction datasets show that they use the training dataset's roles.
+- An incompatible prediction dataset (CSV upload or SQL table) is reported
+  with the missing columns and the numeric columns of another kind.
+- About 30 Swedish texts added.
+- Tests: `tests/test_revision_293b_dataset_tab_roles.py`.
+
 ## Revision 293a2 - configurable categorical limit (2026-11-05)
 
 - Text columns with at most N distinct values are categorised; N was a fixed

@@ -862,3 +862,85 @@ msgstr "Datasetet är inte kompatibelt med träningsdatasetet."
 
 msgid "Sign in to SQL Server first."
 msgstr "Logga in på SQL Server först."
+
+# 293b: Dataset tab lists and column roles.
+msgid "Categorical feature"
+msgstr "Kategorisk variabel"
+
+msgid "Categorical limit"
+msgstr "Gräns för kategorisering"
+
+msgid "Categorised (always)"
+msgstr "Kategoriseras (alltid)"
+
+msgid "Categorised (at most the limit)"
+msgstr "Kategoriseras (högst gränsen)"
+
+msgid "Column roles saved. Validate the dataset again."
+msgstr "Kolumnrollerna är sparade. Validera datasetet igen."
+
+msgid "Free text"
+msgstr "Fritext"
+
+msgid "Ignored"
+msgstr "Ignoreras"
+
+msgid "Missing columns"
+msgstr "Saknade kolumner"
+
+msgid "No column roles yet. Columns without a role are ignored."
+msgstr "Inga kolumnroller ännu. Kolumner utan roll ignoreras."
+
+msgid "No suitable tables in this catalog."
+msgstr "Inga passande tabeller i den här katalogen."
+
+msgid "Not used"
+msgstr "Används inte"
+
+msgid "Numeric feature"
+msgstr "Numerisk variabel"
+
+msgid "Numeric in the training dataset, not numeric here"
+msgstr "Numeriska i träningsdatasetet, inte numeriska här"
+
+msgid "Only tables compatible with the training dataset are shown."
+msgstr "Bara tabeller som är kompatibla med träningsdatasetet visas."
+
+msgid "Prediction datasets use the column roles of the training dataset."
+msgstr "Prediktionsdataset använder träningsdatasetets kolumnroller."
+
+msgid "Save column roles"
+msgstr "Spara kolumnroller"
+
+msgid "Show tables"
+msgstr "Visa tabeller"
+
+msgid "Sign in to SQL Server to choose a catalog and a table."
+msgstr "Logga in på SQL Server för att välja katalog och tabell."
+
+msgid "Text columns with at most this many distinct values are categorised; other text columns are treated as free text. Categorical columns are always categorised."
+msgstr "Textkolumner med högst så här många unika värden kategoriseras; andra textkolumner behandlas som fritext. Kategoriska kolumner kategoriseras alltid."
+
+msgid "Text feature"
+msgstr "Textvariabel"
+
+msgid "Treated as"
+msgstr "Behandlas som"
+
+msgid "a column with a role does not exist in the dataset"
+msgstr "En kolumn med en roll finns inte i datasetet."
+
+msgid "at least one column must be a feature"
+msgstr "Minst en kolumn måste vara en variabel."
+
+msgid "exactly one column must be the ID column"
+msgstr "Exakt en kolumn måste vara ID-kolumn."
+
+msgid "exactly one column must be the class column"
+msgstr "Exakt en kolumn måste vara klasskolumn."
+
+msgid "the categorical limit must be a whole number between 2 and 1000"
+msgstr "Gränsen för kategorisering måste vara ett heltal mellan 2 och 1000."
+
+msgid "unknown column role"
+msgstr "Okänd kolumnroll."
