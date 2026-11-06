@@ -190,7 +190,9 @@ def create_app(
         add_web_ui(app, principal_dependency=principal_dependency, projects=projects,
                    version_line=version_line, datasets=datasets,
                    inspection=dataset_inspection, configurations=configurations,
-                   sessions=sessions, sql_server=sql_server)
+                   sessions=sessions, sql_server=sql_server,
+                   runs=presentation if hasattr(presentation, "list_project_runs") else None,
+                   project_runs=project_runs)
     if datasets is not None:
         _add_dataset_endpoints(app, principal_dependency, datasets)
     if configurations is not None:

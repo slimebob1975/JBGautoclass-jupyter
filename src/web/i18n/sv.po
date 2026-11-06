@@ -976,3 +976,172 @@ msgstr "bara rimligt för mycket små dataset"
 
 msgid "Column roles are set on the Dataset tab."
 msgstr "Kolumnroller anges under fliken Dataset."
+
+# 294a: Run tab.
+msgid "A configuration is selected."
+msgstr "En konfiguration är vald."
+
+msgid "Accuracy"
+msgstr "Träffsäkerhet"
+
+msgid "An active training dataset is chosen."
+msgstr "Ett aktivt träningsdataset är valt."
+
+msgid "Balanced accuracy"
+msgstr "Balanserad träffsäkerhet"
+
+msgid "Before the run"
+msgstr "Före körningen"
+
+msgid "Cancel the run"
+msgstr "Avbryt körningen"
+
+msgid "Cancelled"
+msgstr "Avbruten"
+
+msgid "Cancelling the run."
+msgstr "Körningen avbryts."
+
+msgid "Confusion matrix"
+msgstr "Förväxlingsmatris"
+
+msgid "Converting text and categories"
+msgstr "Omvandlar text och kategorier"
+
+msgid "Evaluating"
+msgstr "Utvärderar"
+
+msgid "Evaluation on the holdout data"
+msgstr "Utvärdering på testdata"
+
+msgid "Failed"
+msgstr "Misslyckades"
+
+msgid "Fetching data"
+msgstr "Hämtar data"
+
+msgid "Finding mispredictions"
+msgstr "Letar felklassificeringar"
+
+msgid "Finished"
+msgstr "Klar"
+
+msgid "Finishing"
+msgstr "Avslutar"
+
+msgid "Interrupted"
+msgstr "Avbröts oväntat"
+
+msgid "Loading the dataset"
+msgstr "Läser in datasetet"
+
+msgid "Loading the model"
+msgstr "Läser in modellen"
+
+msgid "Mispredicted rows (all labelled rows)"
+msgstr "Felklassificerade rader (alla rader med klass)"
+
+msgid "Most important features"
+msgstr "Viktigaste variablerna"
+
+msgid "No active training dataset (Dataset tab)."
+msgstr "Inget aktivt träningsdataset (fliken Dataset)."
+
+msgid "No configuration is selected (Configuration tab)."
+msgstr "Ingen konfiguration är vald (fliken Konfiguration)."
+
+msgid "No runs yet."
+msgstr "Inga körningar ännu."
+
+msgid "Not everything is ready yet."
+msgstr "Allt är inte klart ännu."
+
+msgid "Not signed in to SQL Server (Dataset tab)."
+msgstr "Inte inloggad på SQL Server (fliken Dataset)."
+
+msgid "Predicting"
+msgstr "Predikterar"
+
+msgid "Preparing"
+msgstr "Förbereder"
+
+msgid "Queued"
+msgstr "I kö"
+
+msgid "Rows: actual class; columns: predicted class."
+msgstr "Rader: verklig klass; kolumner: predikterad klass."
+
+msgid "Running"
+msgstr "Körs"
+
+msgid "Runs in this project"
+msgstr "Körningar i projektet"
+
+msgid "Sending the notification"
+msgstr "Skickar aviseringen"
+
+msgid "Splitting the data"
+msgstr "Delar upp data"
+
+msgid "Start a run, or select one in the list."
+msgstr "Starta en körning eller välj en i listan."
+
+msgid "Start run"
+msgstr "Starta körning"
+
+msgid "Started"
+msgstr "Startad"
+
+msgid "Starts a training run with the active dataset and the selected configuration."
+msgstr "Startar en träningskörning med det aktiva datasetet och den valda konfigurationen."
+
+msgid "The column roles do not fit the dataset."
+msgstr "Kolumnrollerna passar inte datasetet."
+
+msgid "The configuration does not train a model."
+msgstr "Konfigurationen tränar ingen modell."
+
+msgid "The configuration trains a model."
+msgstr "Konfigurationen tränar en modell."
+
+msgid "The dataset has column roles."
+msgstr "Datasetet har kolumnroller."
+
+msgid "The dataset has no column roles (Dataset tab)."
+msgstr "Datasetet saknar kolumnroller (fliken Dataset)."
+
+msgid "The dataset has not been validated yet."
+msgstr "Datasetet är inte validerat ännu."
+
+msgid "The dataset is validated."
+msgstr "Datasetet är validerat."
+
+msgid "The page updates itself while the run is in progress."
+msgstr "Sidan uppdateras av sig själv medan körningen pågår."
+
+msgid "The run could not be started. Check the list above."
+msgstr "Körningen kunde inte startas. Se listan ovan."
+
+msgid "The run did not finish successfully."
+msgstr "Körningen avslutades inte som den skulle."
+
+msgid "The run has started."
+msgstr "Körningen har startat."
+
+msgid "The run is no longer available."
+msgstr "Körningen är inte längre tillgänglig."
+
+msgid "Training and comparing models"
+msgstr "Tränar och jämför modeller"
+
+msgid "Training the final model"
+msgstr "Tränar den slutliga modellen"
+
+msgid "Waiting for SQL sign-in"
+msgstr "Väntar på SQL-inloggning"
+
+msgid "The configuration only trains (CSV)."
+msgstr "Konfigurationen tränar bara (CSV)."
+
+msgid "CSV runs cannot also predict: untick “Predict unlabelled rows” (Configuration tab)."
+msgstr "CSV-körningar kan inte samtidigt prediktera: avmarkera ”Prediktera rader utan klass” (fliken Konfiguration)."

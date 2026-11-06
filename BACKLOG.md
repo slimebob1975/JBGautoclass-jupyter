@@ -271,8 +271,13 @@ full SQL regression acceptance remain separately unverified.
     decimal commas in Swedish.
   - [x] 293c: Configuration tab: roles removed, essentials first, "All"
     choices for scalers, reductions, sampling and algorithms.
-  - [ ] Then: the Run tab (start a run, follow its progress; likely the first
-    use of htmx). That completes GUI Phase 1.
+  - [x] 294a: the Run tab (preflight, start, live progress with plain
+    JavaScript polling instead of htmx, cancel, results summary). GUI
+    Phase 1 is complete (Projects, Dataset, Configuration, Run).
+- [ ] **GUI delivery Phase 2:** Results (leaderboard, metrics, confusion
+  matrix with class names for the owner, feature importance, mispredictions,
+  predictions), Models (catalog, model card, prediction runs from a saved
+  model) and the remaining result DTOs (BACKLOG Phase 0 item 4).
   - [ ] Interface details noted on 2026-11-05: show the Windows user name in
     local mode instead of the fixed "developer"; use the JBG logo image from
     `GUI/assets/logo.png` in the header.

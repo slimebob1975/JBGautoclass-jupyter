@@ -137,3 +137,13 @@ fieldset.choices label.all { border-bottom: 1px solid var(--line2); padding-bott
 details.more { margin-top: 14px; }
 details.more > summary { cursor: pointer; font-weight: 700; color: var(--blue); padding: 8px 0; }
 .combinations.warn b { color: var(--warning); }
+
+/* 294a: Run tab */
+.run-stage { font-size: 16px; margin: 6px 0 8px; }
+.progress { height: 10px; background: #e8e8e8; border-radius: 5px; overflow: hidden; margin-bottom: 10px; }
+.progress .bar { height: 100%; background: var(--blue); transition: width .6s ease; }
+.check-warning .mark { color: var(--warning); }
+dl.metrics { grid-template-columns: 170px 1fr; }
+table.matrix td.diag { background: #e3f3ea; font-weight: 600; }
+table.importance td.bar-cell { width: 70%; }
+table.importance .bar { height: 10px; background: var(--blue); border-radius: 3px; }

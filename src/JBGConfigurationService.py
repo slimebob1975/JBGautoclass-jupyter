@@ -193,7 +193,12 @@ class ConfigurationService:
     def create(self, owner: str, project_id: str, *, name: str,
                settings: dict) -> dict[str, Any]:
         project = self._projects.require(owner, project_id)
-        stored = _normalized(_merge(_server_template(), settings), project)
+        template = _server_template()
+        if project.source is DataSourceKind.CSV:
+            # 294a: CSV training runs cannot also predict, so CSV
+            # configurations start with prediction switched off.
+            template["mode"]["predict"] = False
+        stored = _normalized(_merge(template, settings), project)
         try:
             created = self._repository.create(owner, project_id, name, stored)
         except DuplicateConfigurationName:

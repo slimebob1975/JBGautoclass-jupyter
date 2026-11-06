@@ -100,6 +100,10 @@ class ProjectRunService:
         if not settings["mode"].get("train"):
             raise RunRequestRefused(
                 "prediction-only runs need a saved model and are not available yet")
+        if project.source is DataSourceKind.CSV and settings["mode"].get("predict"):
+            # 294a: the engine's CSV training path is train-only
+            # (Storage.CSVTrainingApplication); refuse before a worker starts.
+            raise RunRequestRefused("CSV training runs cannot also predict")
         dataset = self._dataset(owner, project_id, dataset_id)
         if dataset.role is DatasetRole.PREDICTION:
             raise RunRequestRefused("a training run needs a training or mixed dataset")

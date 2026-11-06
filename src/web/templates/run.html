@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% set title = "Run" %}
+{% block main %}
+{% if no_project %}
+  <div class="card"><p class="empty">{{ _("Open a project in the Projects tab first.") }}
+    <a href="/ui/projects">{{ _("Projects") }}</a></p></div>
+{% else %}
+{% set ns = namespace(labels={}) %}
+{% for key, label in stages.items() %}{% set _ignored = ns.labels.update({key: _(label)}) %}{% endfor %}
+<div class="layout-two run-layout">
+  <section>
+    <div class="card">
+      <h2>{{ _("Before the run") }}</h2>
+      <ul class="checks">
+      {% for check in checks %}
+        <li class="check-{{ 'passed' if check.passed else ('failed' if check.blocking else 'warning') }}">
+          <span class="mark">{{ "✓" if check.passed else ("✗" if check.blocking else "!") }}</span>{{ _(check.message) }}
+        </li>
+      {% endfor %}
+      </ul>
+      {% if configuration %}<p class="hint">{{ _("Configuration") }}: <b>{{ configuration.name }}</b> v{{ configuration.version }}</p>{% endif %}
+    </div>
+    <div class="card">
+      <h2>{{ _("Runs in this project") }}</h2>
+      {% if recent %}
+      <table class="grid">
+        <thead><tr><th>{{ _("Started") }}</th><th>{{ _("Configuration") }}</th><th>{{ _("Status") }}</th></tr></thead>
+        <tbody>
+        {% for item in recent %}
+          <tr class="{{ 'hl' if item.run_id == selected_run }}">
+            <td class="num"><a href="/ui/run?run={{ item.run_id }}">{{ item.created_at | localtime }}</a></td>
+            <td>{{ item.configuration_name or "–" }}{% if item.configuration_version %} v{{ item.configuration_version }}{% endif %}</td>
+            <td><span class="badge {{ 'b-ok' if item.status == 'succeeded' else ('b-fail' if item.status in ('failed', 'interrupted') else 'b-neu') }}">{{ _(stages.get(item.status, item.status)) }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">{{ _("No runs yet.") }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <aside class="card wide">
+  {% if overview %}
+    {% set stage = overview.stage %}
+    {% set finished = overview.status in terminal %}
+    <div {% if not finished %}data-run-poll="{{ overview.run_id }}" data-terminal="{{ terminal | list | tojson | forceescape }}" data-stage-labels="{{ ns.labels | tojson | forceescape }}"{% endif %}>
+      <h2>{{ _("Run") }} <span class="muted">{{ overview.run_id[:8] }}</span></h2>
+      <p class="run-stage"><b data-run-stage>{{ ns.labels.get(stage.name, stage.name) }}</b></p>
+      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+           aria-valuenow="{{ ((stage.percent or 0) * 100) | round | int }}">
+        <div class="bar" data-run-bar style="width: {{ ((stage.percent or 0) * 100) | round | int }}%"></div>
+      </div>
+      {% if not finished %}
+        <p class="hint">{{ _("The page updates itself while the run is in progress.") }}</p>
+        <form method="post" action="/ui/run/{{ overview.run_id }}/cancel"><button class="btn sub">{{ _("Cancel the run") }}</button></form>
+      {% endif %}
+    </div>
+    {% set results = overview.results %}
+    {% if finished and results and results.available %}
+      {% set ev = results.evaluation %}
+      {% if ev %}
+        <h3>{{ _("Evaluation on the holdout data") }}</h3>
+        <dl class="meta metrics">
+          <dt>{{ _("Accuracy") }}</dt><dd>{{ (ev.accuracy * 100) | pct(language) }}</dd>
+          <dt>{{ _("Balanced accuracy") }}</dt><dd>{{ (ev.balanced_accuracy * 100) | pct(language) }}</dd>
+          <dt>MCC</dt><dd>{{ "%.3f" | format(ev.mcc) | replace(".", "," if language == "sv" else ".") }}</dd>
+          <dt>F1 (macro)</dt><dd>{{ "%.3f" | format(ev.f1_macro) | replace(".", "," if language == "sv" else ".") }}</dd>
+        </dl>
+        {% if ev.confusion_matrix %}
+          <h3>{{ _("Confusion matrix") }}</h3>
+          <p class="hint">{{ _("Rows: actual class; columns: predicted class.") }}</p>
+          <div class="scroll"><table class="grid matrix">
+            <thead><tr><th></th>{% for _c in ev.confusion_matrix %}<th class="num">{{ loop.index }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for row in ev.confusion_matrix %}{% set i = loop.index %}<tr><th class="num">{{ i }}</th>
+              {% for value in row %}<td class="num{{ ' diag' if loop.index == i }}">{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+          </table></div>
+        {% endif %}
+      {% endif %}
+      {% set fi = results.feature_importance %}
+      {% if fi and fi.features %}
+        {% set top = fi.features[:10] %}
+        {% set largest = top | map(attribute="mean_score_decrease") | max %}
+        <h3>{{ _("Most important features") }}</h3>
+        <table class="grid importance">
+          <tbody>{% for f in top %}<tr><td>{{ f.name }}</td>
+            <td class="bar-cell"><div class="bar" style="width: {{ ((f.mean_score_decrease / largest * 100) if largest and largest > 0 else 0) | round | int }}%"></div></td></tr>{% endfor %}</tbody>
+        </table>
+      {% endif %}
+      {% if results.summary %}
+        <p class="hint">{{ _("Classes") }}: {{ results.summary.class_count }} · {{ _("Mispredicted rows (all labelled rows)") }}: {{ results.summary.mispredicted_count }}</p>
+      {% endif %}
+    {% elif finished and overview.status != "succeeded" %}
+      <p class="message error">{{ _("The run did not finish successfully.") }}</p>
+    {% endif %}
+  {% else %}
+    <p class="empty">{{ _("Start a run, or select one in the list.") }}</p>
+  {% endif %}
+  </aside>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block actions %}
+  <span class="hint">{{ _("Starts a training run with the active dataset and the selected configuration.") }}</span>
+  {% if ready %}
+    <form method="post" action="/ui/run"><button class="btn act ready">{{ _("Start run") }}</button></form>
+  {% else %}
+    <button class="btn act blocked" disabled title="{{ _('Not everything is ready yet.') }}">{{ _("Start run") }}</button>
+  {% endif %}
+{% endblock %}

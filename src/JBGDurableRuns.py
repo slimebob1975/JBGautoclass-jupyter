@@ -138,6 +138,25 @@ class DurableRunService:
         self._store.request_cancel(run)
         return self._snapshot(self._store.get(run))
 
+    def list_project_runs(self, principal: str, project_id: str,
+                          limit: int = 20) -> list[dict[str, Any]]:
+        """294a: the owner's runs of one project (newest first), for the Run tab."""
+        if not isinstance(principal, str) or not principal.strip():
+            raise PermissionError("authentication required")
+        runs = []
+        for record in self._store.list_for_owner(principal, 200):
+            meta = record.spec.get("project_run") if isinstance(record.spec, dict) else None
+            if not isinstance(meta, dict) or meta.get("project_id") != project_id:
+                continue
+            runs.append(dict(self._snapshot(record),
+                             created_at=record.created_at.isoformat(),
+                             finished_at=record.finished_at.isoformat() if record.finished_at else None,
+                             configuration_name=meta.get("configuration_name"),
+                             configuration_version=meta.get("configuration_version")))
+            if len(runs) >= limit:
+                break
+        return runs
+
     def list_runs(self, principal: str, limit: int = 50) -> list[dict[str, Any]]:
         if not isinstance(principal, str) or not principal.strip():
             raise PermissionError("authentication required")

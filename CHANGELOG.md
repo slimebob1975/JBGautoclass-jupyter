@@ -1,3 +1,26 @@
+## Revision 294a - Run tab; GUI phase 1 complete (2026-11-06)
+
+- Add the Run tab (`src/JBGWebUIRun.py`, `src/web/templates/run.html`): a
+  preflight check list (active training dataset, its column roles, a
+  selected configuration, a training configuration, for CSV a train-only
+  configuration, for SQL the sign-in; "validated" is advisory only, as
+  agreed for 289a); "Start run" is the primary action and stays blocked until
+  every required check passes. The project's runs are listed (times in local
+  time) and the selected run shows its stage with a progress bar, a cancel
+  button while it is in progress, and when finished its key figures,
+  confusion matrix and most important features.
+- `jbg.js` polls the run's overview every three seconds while it is in
+  progress (stage in the user's language, progress bar) and reloads the page
+  when the run has ended. Without JavaScript a reload shows the same.
+- Fix (288a): the engine's CSV training path is train-only, so a CSV run
+  whose configuration also predicts failed in the worker. It is now refused
+  before it starts ("CSV training runs cannot also predict"), the preflight
+  list shows it, and new configurations in CSV projects start with
+  prediction switched off. SQL projects keep train-and-predict.
+- `DurableRunService.list_project_runs` lists the owner's runs of a project.
+- About 50 Swedish texts. The 287a tab test expects the Run tab.
+- Tests: `tests/test_revision_294a_run_tab.py`.
+
 ## Revision 293c - Configuration tab: ALL choices, essentials first, roles out (2026-11-06)
 
 - "ALL" in the engine (agreed 2026-11-06): in `algorithm`, `preprocessor`,

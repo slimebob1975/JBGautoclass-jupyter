@@ -39,7 +39,34 @@
     target.textContent = String(total);
   }
 
+  /* 294a: follow a run. Polls the run's overview every few seconds and
+     reloads the page once the run has ended, so the server renders results. */
+  function followRun(panel) {
+    var runId = panel.getAttribute("data-run-poll");
+    var labels = JSON.parse(panel.getAttribute("data-stage-labels") || "{}");
+    var terminal = JSON.parse(panel.getAttribute("data-terminal") || "[]");
+    function tick() {
+      fetch("/api/runs/" + encodeURIComponent(runId) + "/overview", { credentials: "same-origin" })
+        .then(function (response) { return response.ok ? response.json() : null; })
+        .then(function (overview) {
+          if (!overview) { setTimeout(tick, 5000); return; }
+          if (terminal.indexOf(overview.status) >= 0) { window.location.reload(); return; }
+          var stage = overview.stage || {};
+          var label = panel.querySelector("[data-run-stage]");
+          if (label) { label.textContent = labels[stage.name] || stage.name || ""; }
+          var bar = panel.querySelector("[data-run-bar]");
+          if (bar && typeof stage.percent === "number") {
+            bar.style.width = Math.round(stage.percent * 100) + "%";
+          }
+          setTimeout(tick, 3000);
+        })
+        .catch(function () { setTimeout(tick, 5000); });
+    }
+    setTimeout(tick, 3000);
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll("[data-all-group]").forEach(wireAllGroup);
+    document.querySelectorAll("[data-run-poll]").forEach(followRun);
   });
 })();
