@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% set title = "Results" %}
+{% block main %}
+{% if no_project %}
+  <div class="card"><p class="empty">{{ _("Open a project in the Projects tab first.") }}
+    <a href="/ui/projects">{{ _("Projects") }}</a></p></div>
+{% else %}
+<div class="layout-two run-layout">
+  <section>
+    <div class="card">
+      <h2>{{ _("Finished runs") }}</h2>
+      {% if finished %}
+      <table class="grid">
+        <thead><tr><th>{{ _("Started") }}</th><th>{{ _("Configuration") }}</th></tr></thead>
+        <tbody>
+        {% for item in finished %}
+          <tr class="{{ 'hl' if item.run_id == selected_run }}">
+            <td class="num"><a href="/ui/results?run={{ item.run_id }}">{{ item.created_at | localtime }}</a></td>
+            <td>{{ item.configuration_name or "–" }}{% if item.configuration_version %} v{{ item.configuration_version }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">{{ _("No finished runs yet.") }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <aside class="card wide">
+  {% if selected_run and overview %}
+    <h2>{{ _("Run") }} <span class="muted">{{ selected_run[:8] }}</span></h2>
+    <nav class="subtabs" aria-label="{{ _('Results') }}">
+      {% for key, label in views %}
+        <a href="/ui/results?run={{ selected_run }}&view={{ key }}" class="{{ 'on' if view == key }}">{{ _(label) }}</a>
+      {% endfor %}
+    </nav>
+    {% set results = overview.results %}
+    {% if view == "overview" %}
+      {% set ev = results.evaluation if results else none %}
+      {% if ev %}
+        <h3>{{ _("Evaluation on the holdout data") }}</h3>
+        <dl class="meta metrics">
+          <dt>{{ _("Accuracy") }}</dt><dd>{{ (ev.accuracy * 100) | pct(language) }}</dd>
+          <dt>{{ _("Balanced accuracy") }}</dt><dd>{{ (ev.balanced_accuracy * 100) | pct(language) }}</dd>
+          <dt>MCC</dt><dd>{{ ev.mcc | num(language) }}</dd>
+          <dt>F1 (macro)</dt><dd>{{ ev.f1_macro | num(language) }}</dd>
+          <dt>F1 ({{ _("weighted") }})</dt><dd>{{ ev.f1_weighted | num(language) }}</dd>
+        </dl>
+        {% if ev.confusion_matrix %}
+          {% set named = labels and labels | length == ev.confusion_matrix | length %}
+          <h3>{{ _("Confusion matrix") }}</h3>
+          <p class="hint">{{ _("Rows: actual class; columns: predicted class.") }}</p>
+          <div class="scroll"><table class="grid matrix">
+            <thead><tr><th></th>{% for _c in ev.confusion_matrix %}<th class="num">{{ labels[loop.index0] if named else loop.index }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for row in ev.confusion_matrix %}{% set i = loop.index %}<tr><th>{{ labels[i - 1] if named else i }}</th>
+              {% for value in row %}<td class="num{{ ' diag' if loop.index == i }}">{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+          </table></div>
+        {% endif %}
+      {% endif %}
+      {% set fi = results.feature_importance if results else none %}
+      {% if fi and fi.features %}
+        {% set top = fi.features[:10] %}
+        {% set largest = top | map(attribute="mean_score_decrease") | max %}
+        <h3>{{ _("Most important features") }}</h3>
+        <table class="grid importance">
+          <tbody>{% for f in top %}<tr><td>{{ f.name }}</td>
+            <td class="bar-cell"><div class="bar" style="width: {{ ((f.mean_score_decrease / largest * 100) if largest and largest > 0 else 0) | round | int }}%"></div></td></tr>{% endfor %}</tbody>
+        </table>
+      {% endif %}
+      {% if results and results.summary %}
+        <p class="hint">{{ _("Classes") }}: {{ results.summary.class_count }} · {{ _("Mispredicted rows (all labelled rows)") }}: {{ results.summary.mispredicted_count }}</p>
+      {% endif %}
+    {% elif detail_missing and has_folder %}
+      <p class="hint">{{ _("Nothing to show for this run (for example no mispredicted rows).") }}</p>
+    {% elif detail_missing %}
+      <p class="hint">{{ _("These details are kept for runs made after this update; earlier runs did not keep them.") }}</p>
+    {% elif detail %}
+      {% if view == "mispredictions" %}<p class="hint">{{ _("All labelled rows where the cross-trained or the final model is wrong.") }}</p>{% endif %}
+      <p class="hint">{{ detail.total_rows }} {{ _("rows") }}</p>
+      <div class="scroll"><table class="grid">
+        <thead><tr>{% for c in detail.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in detail.rows %}<tr>{% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table></div>
+      {% set pages = ((detail.total_rows + detail.page_size - 1) // detail.page_size) %}
+      {% if pages > 1 %}
+        <nav class="pager">
+          {% if detail.page > 1 %}<a href="/ui/results?run={{ selected_run }}&view={{ view }}&page={{ detail.page - 1 }}">‹ {{ _("Previous") }}</a>{% endif %}
+          <span>{{ _("Page") }} {{ detail.page }} / {{ pages }}</span>
+          {% if detail.page < pages %}<a href="/ui/results?run={{ selected_run }}&view={{ view }}&page={{ detail.page + 1 }}">{{ _("Next") }} ›</a>{% endif %}
+        </nav>
+      {% endif %}
+    {% endif %}
+  {% else %}
+    <p class="empty">{{ _("Select a finished run in the list.") }}</p>
+  {% endif %}
+  </aside>
+</div>
+{% endif %}
+{% endblock %}
+{% block actions %}<span class="hint">{{ _("Results of the project's finished runs.") }}</span>{% endblock %}

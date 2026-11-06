@@ -59,6 +59,7 @@ class RunDispatcher:
                  store_from_env: bool = False, store_schema: str | None = None,
                  log_dir: Path, sessions=None, artifacts: Path | None = None,
                  script_path: Path | None = None, max_workers: int = 1,
+                 results_root: Path | None = None,
                  poll_seconds: float = 5.0, heartbeat_seconds: float = 30.0,
                  stale_after: timedelta = timedelta(minutes=5),
                  python: str = sys.executable,
@@ -79,6 +80,7 @@ class RunDispatcher:
         self._sessions = sessions
         self._artifacts = artifacts
         self._script_path = script_path
+        self._results_root = results_root
         self._max_workers = max_workers
         self._poll_seconds = poll_seconds
         self._heartbeat_seconds = heartbeat_seconds
@@ -142,6 +144,8 @@ class RunDispatcher:
             command += ["--artifacts", str(self._artifacts)]
         if self._script_path is not None:
             command += ["--script-path", str(self._script_path)]
+        if self._results_root is not None:
+            command += ["--results-root", str(self._results_root)]
         return command
 
     def _launch(self, run: RunReference, credentials) -> None:

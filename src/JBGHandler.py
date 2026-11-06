@@ -2350,6 +2350,13 @@ class PredictionsHandler:
             if not callable(publish):
                 raise RuntimeError("CSV misprediction result sink is unavailable")
             publish(self.X_mispredicted)
+            # 295a: a run with its own output folder (API project runs, served
+            # to its owner only) also keeps the table there, like SQL runs, so
+            # the Results tab can show it. Voilà CSV runs have no such folder
+            # and write nothing outside their scoped storage, as before.
+            if getattr(self.handler.config, "output_path", None) is not None:
+                Helpers.save_matrix_as_csv(self.X_mispredicted, misplaced_filepath,
+                                           self.handler.config.get_id_column_name())
             return
 
         ids = ', '.join([str(id) for id in self.X_most_mispredicted.index.tolist()])

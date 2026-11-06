@@ -27,6 +27,7 @@ from JBGProjectRuns import DEFAULT_MODEL_ROOT, ProjectRunService
 from JBGSQLServer import SQLServerSettings, sql_server_settings
 from JBGModelService import ModelService
 from JBGDatasetInspection import DatasetInspectionService
+from JBGRunResults import DEFAULT_RESULTS_ROOT, RunResultsService
 from JBGProjectStorage import DEFAULT_CSV_ROOT
 from JBGRunSubmission import RunSubmission
 from JBGSavedConfigurations import ROOT, SavedConfigurations
@@ -57,6 +58,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                       csv_model_root: Path | None = None,
                       csv_root: Path = DEFAULT_CSV_ROOT,
                       model_root: Path = DEFAULT_MODEL_ROOT,
+                      results_root: Path = DEFAULT_RESULTS_ROOT,
                       sql_server: SQLServerSettings | None = None,
                       dispatcher_options: dict | None = None):
     identity = LocalIdentityProvider(IdentitySettings(AuthenticationMode.LOCAL, "development",
@@ -71,7 +73,8 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
     datasets = open_dataset_repository(settings)
     models = open_model_catalog(settings)
     sessions = SQLSessionRegistry()
-    options = {"heartbeat_seconds": 30.0, "stale_after": timedelta(minutes=5)}
+    options = {"heartbeat_seconds": 30.0, "stale_after": timedelta(minutes=5),
+               "results_root": results_root}            # 295a: per-run folders
     options.update(dispatcher_options or {})
     if settings.uses_sql_server:
         options["store_from_env"] = True
@@ -123,6 +126,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                      sql_server=sql_server,
                      models=ModelService(models, project_service),
                      dataset_inspection=inspection,
+                     run_results=RunResultsService(store, results_root=results_root),
                      web_ui=True, version_line=_version_line(),
                      lifespan=lifespan)
     app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service,

@@ -309,7 +309,7 @@ def run_real_dataset_comparison(
 
 
 def save_validation_outputs(config: Config, paired: pd.DataFrame, summaries: dict) -> tuple[Path, Path]:
-    output_dir = Path(config.script_path) / "output" / "csvs"
+    output_dir = Path(getattr(config, "output_path", None) or config.script_path) / "output" / "csvs"
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     stem = f"dark_number_perturbed_same_model_robustness_{_safe_slug(config.io.model_name)}_{timestamp}"

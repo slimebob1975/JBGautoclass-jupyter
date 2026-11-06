@@ -1,3 +1,32 @@
+## Revision 295a - per-run result folders and the Results tab (2026-11-06)
+
+- Agreed 2026-11-06: every project run writes its outputs into its own folder,
+  `output/runs/<project-id>/<run-id>/` (now in `.gitignore`). Before, the
+  engine named its CSV outputs per configuration, so each run of a project
+  overwrote the previous run's details. `Config.output_path` (runtime only,
+  never saved; default `script_path`, so the Voilà GUI is unchanged) is used
+  by `get_output_filepath` and the Dark Numbers runners; `script_path` still
+  locates resources such as the prediction table script. The worker sets the
+  folder for project runs (`--results-root`) and records the class names
+  there (`class_labels.json`).
+- Class names and row values stay in the run's folder and are served to the
+  run's owner only (`GET /api/runs/{id}/details/{kind}` for `leaderboard`,
+  `mispredictions` and `feature_importance`, paged; `GET
+  /api/runs/{id}/class-labels`); the summary in the metadata database stays
+  free of them. Add `src/JBGRunResults.py`.
+- Engine: a CSV run with its own output folder also keeps its mispredictions
+  table there, as SQL runs do; the private artifact is stored as before, and
+  Voilà CSV runs (no such folder) write nothing outside their scoped storage.
+- Results tab (`src/JBGWebUIResults.py`, `results.html`): the project's
+  finished runs; per run an overview (key figures, confusion matrix with
+  class names, most important features) and the model comparison,
+  mispredictions (paged) and feature importance tables. Runs from before this
+  revision say that they kept no details; a run without a table (e.g. no
+  mispredictions) says there is nothing to show. The Run tab links to it.
+- Tests: `tests/test_revision_295a_results.py`; the native 288a test checks
+  the run folder, class names and leaderboard; the 287a tab test expects the
+  Results tab.
+
 ## Revision 294a2 - close the open project (2026-11-06)
 
 - "Close project" in the Projects tab (for the open project) and as a small

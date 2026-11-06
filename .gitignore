@@ -39,3 +39,6 @@ output/run_jobs/
 
 # Model files of API project runs (288a; one per training run)
 output/models/
+
+# Per-run result folders of API project runs (295a; class names and row values)
+output/runs/

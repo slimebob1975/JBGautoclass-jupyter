@@ -70,6 +70,19 @@ def request_language(request: Request) -> str:
     return "en" if first.startswith("en") else DEFAULT_LANGUAGE
 
 
+def _number_text(value, language: str = "sv") -> str:
+    """295a: numbers in tables; decimal comma in Swedish, at most four
+    significant digits for fractions; anything else as text."""
+    if isinstance(value, bool) or value is None:
+        return "" if value is None else str(value)
+    if isinstance(value, int) or (isinstance(value, float) and value.is_integer() and abs(value) < 1e15):
+        return str(int(value))
+    if isinstance(value, float):
+        text = f"{value:.4g}"
+        return text.replace(".", ",") if language == "sv" else text
+    return str(value)
+
+
 def _local_time(iso: str) -> str:
     """294a: stored times are UTC; show them in the server's local time zone
     (in local mode the user's own)."""
@@ -88,7 +101,7 @@ def _redirect(path: str, **query) -> RedirectResponse:
 
 def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: str = "",
                datasets=None, inspection=None, configurations=None, sessions=None,
-               sql_server=None, runs=None, project_runs=None) -> None:
+               sql_server=None, runs=None, project_runs=None, results=None) -> None:
     """Mount the interface under /ui on ``app``.
 
     The Dataset tab (291a) is mounted when its services are given.
@@ -98,6 +111,7 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
     templates = Jinja2Templates(directory=str(WEB / "templates"))
     # 293b2: shares with a decimal comma in Swedish, a point in English.
     templates.env.filters["localtime"] = _local_time            # 294a
+    templates.env.filters["num"] = _number_text                  # 295a
     templates.env.filters["pct"] = lambda value, language="sv": (
         f"{float(value or 0):.1f}".replace(".", "," if language == "sv" else ".") + " %")
     app.mount("/ui/static", StaticFiles(directory=str(WEB / "static")), name="ui-static")
@@ -114,7 +128,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
     available = ({"projects"} | ({"dataset"} if datasets is not None else set())
                  | ({"configuration"} if configurations is not None and datasets is not None
                     else set())
-                 | ({"run"} if project_runs is not None and runs is not None else set()))
+                 | ({"run"} if project_runs is not None and runs is not None else set())
+                 | ({"results"} if results is not None and runs is not None else set()))
     tabs = tuple((key, label, key in available) for key, label, _ in TABS)
 
     def active_dataset(owner: str, project):
@@ -160,6 +175,10 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                         redirect=_redirect, active_project=active_project, datasets=datasets,
                         inspection=inspection, configurations=configurations,
                         sessions=sessions, sql_server=sql_server)
+    if results is not None and runs is not None:
+        from JBGWebUIResults import add_results_tab
+        add_results_tab(app, principal_dependency=principal_dependency, render=render,
+                        active_project=active_project, runs=runs, results=results)
     if project_runs is not None and runs is not None:
         from JBGWebUIRun import add_run_tab
         add_run_tab(app, principal_dependency=principal_dependency, render=render,

@@ -778,6 +778,10 @@ class Config:
     name: str = "iris"
     config_path: Path = None
     script_path: Path = None
+    # 295a: where generated CSV outputs go; runtime only (never saved in a
+    # configuration file). None means script_path, so the Voilà GUI is
+    # unchanged; API project runs give each run its own folder.
+    output_path: Path = None
     _filename: str = None
     save: bool = False
     
@@ -840,9 +844,9 @@ class Config:
     def get_output_filepath(self, type: str, pwd: Path = None) -> str:
         """ Simplifies the path/names of generated CSV output files. """
         if pwd is None:
-            pwd = self.script_path
+            pwd = self.output_path if self.output_path is not None else self.script_path
 
-        output_path = pwd / Path("output") / Path("csvs")
+        output_path = Path(pwd) / Path("output") / Path("csvs")
 
         return output_path / Path(self.get_filename(type))
     

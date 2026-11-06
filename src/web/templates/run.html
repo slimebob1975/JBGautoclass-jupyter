@@ -91,6 +91,7 @@
       {% if results.summary %}
         <p class="hint">{{ _("Classes") }}: {{ results.summary.class_count }} · {{ _("Mispredicted rows (all labelled rows)") }}: {{ results.summary.mispredicted_count }}</p>
       {% endif %}
+      <p><a href="/ui/results?run={{ overview.run_id }}">{{ _("All results of this run") }} ›</a></p>
     {% elif finished and overview.status != "succeeded" %}
       <p class="message error">{{ _("The run did not finish successfully.") }}</p>
     {% endif %}

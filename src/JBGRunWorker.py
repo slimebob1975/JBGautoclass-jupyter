@@ -106,6 +106,7 @@ class StoreProgressLogger:
 
     def __init__(self, logger, store: RunJobStore, run: RunReference, heartbeat: "_Heartbeat"):
         self._logger = logger
+        self.results_folder = None          # 295a: set by run_job for project runs
         self._store = store
         self._run = run
         self._heartbeat = heartbeat
@@ -135,6 +136,14 @@ class StoreProgressLogger:
             accuracy_score=accuracy_score, confusion_matrix=confusion_matrix,
             class_labels=class_labels, classification_matrix=classification_matrix,
             sample_rates=sample_rates)
+        folder = getattr(self, "results_folder", None)
+        if folder is not None and class_labels is not None:
+            # 295a: class names (owner data) in the run's own folder, in the
+            # confusion matrix's order; never in the metadata database.
+            import json
+            (Path(folder) / "class_labels.json").write_text(
+                json.dumps({"class_labels": [str(label) for label in list(class_labels)]},
+                           ensure_ascii=False), encoding="utf-8")
         return result
 
     def record_feature_importance(self, report):
@@ -217,7 +226,8 @@ def _compose(record, config, logger, credentials, artifacts: Path | None):
 
 def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=None,
             credentials=None, artifacts: Path | None = None, script_path: Path | None = None,
-            log_dir: Path | None = None, heartbeat_seconds: float = 30.0) -> int:
+            log_dir: Path | None = None, heartbeat_seconds: float = 30.0,
+            results_root: Path | None = None) -> int:
     """Claim and execute one job; return a worker exit code."""
     record = store.get(run)
     if record.source is DataSourceKind.SQL and credentials is None:
@@ -235,6 +245,14 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
             observed.checkpoint()                    # cancelled while it was queued
             composed, reference, run_config = _compose(record, config, observed,
                                                        credentials, artifacts)
+            project_run = record.spec.get("project_run") if isinstance(record.spec, dict) else None
+            if results_root is not None and isinstance(project_run, dict):
+                # 295a: each project run writes its outputs into its own folder,
+                # so later runs never overwrite them; class names stay there too.
+                folder = Path(results_root) / str(project_run["project_id"]) / run.key
+                folder.mkdir(parents=True, exist_ok=True)
+                run_config.output_path = folder
+                observed.results_folder = folder
             prepared = composed.preparation.prepare(
                 reference, RunConfiguration(record.source, run_config))
             if own_logger:
@@ -313,6 +331,8 @@ def main(argv=None) -> int:
     parser.add_argument("--script-path", type=Path, default=None,
                         help="Base for models and output; defaults to src, as in Voila")
     parser.add_argument("--log-dir", type=Path, default=None)
+    parser.add_argument("--results-root", type=Path, default=None,
+                        help="Per-run result folders of project runs (295a)")
     parser.add_argument("--heartbeat-seconds", type=float, default=30.0)
     args = parser.parse_args(argv)
     try:
@@ -324,7 +344,8 @@ def main(argv=None) -> int:
         credentials = read_credentials(sys.stdin)
         return run_job(store, RunReference(args.run), args.worker_id, credentials=credentials,
                        artifacts=args.artifacts, script_path=args.script_path,
-                       log_dir=args.log_dir, heartbeat_seconds=args.heartbeat_seconds)
+                       log_dir=args.log_dir, heartbeat_seconds=args.heartbeat_seconds,
+                       results_root=args.results_root)
     except Exception:
         traceback.print_exc(file=sys.stderr)
         return EXIT_ERROR

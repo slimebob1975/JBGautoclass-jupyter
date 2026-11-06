@@ -670,7 +670,7 @@ def _run_noise_sensitivity(
 
 
 def save_outputs(config, detailed: pd.DataFrame, summary: pd.DataFrame, metadata: dict) -> tuple[Path, Path, Path]:
-    output_dir = Path(config.script_path) / "output" / "csvs"
+    output_dir = Path(getattr(config, "output_path", None) or config.script_path) / "output" / "csvs"
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().astimezone().strftime("%Y%m%d_%H%M%S")
     model_name = str(config.io.model_name).replace(" ", "_")
@@ -772,7 +772,7 @@ def main(argv=None) -> int:
 
     model_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(config.io.model_name)) or "model"
     checkpoint_path = args.checkpoint or (
-        Path(config.script_path) / "output" / "csvs" /
+        Path(getattr(config, "output_path", None) or config.script_path) / "output" / "csvs" /
         f"dark_number_noise_sensitivity_{model_name}_checkpoint.json"
     )
     checkpoint_path = checkpoint_path.resolve()

@@ -153,3 +153,7 @@ table.importance .bar { height: 10px; background: var(--blue); border-radius: 3p
 .chip-close button { border: 0; background: none; color: var(--ink3); font: inherit; font-size: 15px;
                      line-height: 1; padding: 0 2px; cursor: pointer; }
 .chip-close button:hover { color: var(--blocked); }
+
+/* 295a: Results tab */
+.pager { display: flex; gap: 14px; align-items: center; margin-top: 10px; }
+table.matrix th { white-space: nowrap; }

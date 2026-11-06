@@ -1152,3 +1152,46 @@ msgstr "Stäng projekt"
 
 msgid "Project closed."
 msgstr "Projektet är stängt."
+
+# 295a: Results tab.
+msgid "All labelled rows where the cross-trained or the final model is wrong."
+msgstr "Alla rader med klass där den korstränade eller den slutliga modellen har fel."
+
+msgid "All results of this run"
+msgstr "Alla resultat för den här körningen"
+
+msgid "Finished runs"
+msgstr "Avslutade körningar"
+
+msgid "Mispredictions"
+msgstr "Felklassificeringar"
+
+msgid "Model comparison"
+msgstr "Modelljämförelse"
+
+msgid "Next"
+msgstr "Nästa"
+
+msgid "No finished runs yet."
+msgstr "Inga avslutade körningar ännu."
+
+msgid "Page"
+msgstr "Sida"
+
+msgid "Previous"
+msgstr "Föregående"
+
+msgid "Results of the project's finished runs."
+msgstr "Resultat för projektets avslutade körningar."
+
+msgid "Select a finished run in the list."
+msgstr "Välj en avslutad körning i listan."
+
+msgid "These details are kept for runs made after this update; earlier runs did not keep them."
+msgstr "Detaljerna sparas för körningar som görs efter den här uppdateringen; tidigare körningar sparade dem inte."
+
+msgid "weighted"
+msgstr "viktat"
+
+msgid "Nothing to show for this run (for example no mispredicted rows)."
+msgstr "Inget att visa för den här körningen (till exempel inga felklassificerade rader)."

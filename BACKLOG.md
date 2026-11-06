@@ -275,10 +275,23 @@ full SQL regression acceptance remain separately unverified.
     JavaScript polling instead of htmx, cancel, results summary). GUI
     Phase 1 is complete (Projects, Dataset, Configuration, Run).
   - [x] 294a2: close the open project (Projects tab and context bar).
-- [ ] **GUI delivery Phase 2:** Results (leaderboard, metrics, confusion
-  matrix with class names for the owner, feature importance, mispredictions,
-  predictions), Models (catalog, model card, prediction runs from a saved
-  model) and the remaining result DTOs (BACKLOG Phase 0 item 4).
+- [ ] **GUI delivery Phase 2** (agreed 2026-11-06: per-run result folders;
+  class names and row values only from the run's folder, for its owner):
+  - [x] 295a: per-run result folders and the Results tab (overview with
+    class names, model comparison, mispredictions, feature importance).
+  - [ ] 295b: Models tab (catalog and model card).
+  - [ ] 295c: predicting with a saved model (SQL into the prediction table,
+    CSV as a downloadable file) and a predictions view.
+  - [ ] 295d (requested 2026-11-06): the title "JBG Automatisk
+    klassificering" links to the Overview tab, with a first simple overview
+    (open project: active dataset, selected configuration, latest run,
+    models; without a project an empty page with a hint).
+  - [ ] 295d (requested 2026-11-06): an "Om"/"About" tab, right of the other
+    tabs: what the program does and how to use it, from a user guide in the
+    repository (`docs/user_guide.sv.md`, `docs/user_guide.en.md`; the README
+    is developer-oriented) and the program's version line.
+- [ ] Per-project retention (design decision 3) now covers model files
+  (288a) and per-run result folders (295a).
   - [ ] Interface details noted on 2026-11-05: show the Windows user name in
     local mode instead of the fixed "developer"; use the JBG logo image from
     `GUI/assets/logo.png` in the header.

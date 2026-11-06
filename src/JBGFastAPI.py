@@ -95,6 +95,7 @@ def create_app(
     project_runs=None,
     models=None,
     dataset_inspection=None,
+    run_results=None,
     sql_server=None,
     web_ui: bool = False,
     version_line: str = "",
@@ -192,7 +193,7 @@ def create_app(
                    inspection=dataset_inspection, configurations=configurations,
                    sessions=sessions, sql_server=sql_server,
                    runs=presentation if hasattr(presentation, "list_project_runs") else None,
-                   project_runs=project_runs)
+                   project_runs=project_runs, results=run_results)
     if datasets is not None:
         _add_dataset_endpoints(app, principal_dependency, datasets)
     if configurations is not None:
@@ -203,6 +204,8 @@ def create_app(
         _add_model_endpoints(app, principal_dependency, models)
     if dataset_inspection is not None:
         _add_dataset_inspection_endpoints(app, principal_dependency, dataset_inspection)
+    if run_results is not None:
+        _add_run_results_endpoints(app, principal_dependency, run_results)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
                                        submission, sessions, sql_server)
@@ -527,6 +530,30 @@ def _add_dataset_inspection_endpoints(app, principal_dependency, inspection):
     def class_distribution(project_id: str, dataset_id: str, column: str,
                            principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return call(inspection.class_distribution, principal, project_id, dataset_id, column)
+
+
+def _add_run_results_endpoints(app, principal_dependency, results):
+    """A project run's details for its owner (295a): class names and row values
+    come from the run's own folder, never from the metadata database."""
+    from JBGRunResults import RunResultsUnavailable
+
+    @app.get("/api/runs/{run_id}/class-labels")
+    def class_labels(run_id: str,
+                     principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        try:
+            return {"run_id": run_id,
+                    "class_labels": results.class_labels(principal.principal_key, run_id)}
+        except RunResultsUnavailable:
+            raise HTTPException(status_code=404, detail="run unavailable") from None
+
+    @app.get("/api/runs/{run_id}/details/{kind}")
+    def run_detail(run_id: str, kind: str, page: int = 1, page_size: int = 50,
+                   principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        try:
+            return results.detail(principal.principal_key, run_id, kind, page=page,
+                                  page_size=page_size)
+        except RunResultsUnavailable as error:
+            raise HTTPException(status_code=404, detail=str(error)) from None
 
 
 def _add_run_and_session_endpoints(app, runs, principal_dependency, read_owned,

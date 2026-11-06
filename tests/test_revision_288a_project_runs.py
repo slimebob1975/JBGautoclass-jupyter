@@ -207,6 +207,7 @@ class ProjectRunNative288a(revision_281c.CSVApplicationEndToEnd281c):
         client = TestClient(create_server_app(
             settings=MetadataStoreSettings(sqlite_path=work / "jobs.sqlite"),
             run_logs=work / "run-logs", csv_root=work / "csv", model_root=work / "models",
+            results_root=work / "runs",
             dispatcher_options={"script_path": self.root, "heartbeat_seconds": 5,
                                 "stale_after": timedelta(minutes=10), "poll_seconds": 1}))
         with client:
@@ -232,6 +233,14 @@ class ProjectRunNative288a(revision_281c.CSVApplicationEndToEnd281c):
             # 288c: the worker registered the model in the catalog.
             models = client.get(f"/api/projects/{project}/models").json()
             self.assertEqual([(m["run_id"], m["state"]) for m in models], [(run_id, "available")])
+            # 295a: the run's own folder holds its details and class names.
+            folder = work / "runs" / project / run_id
+            self.assertTrue((folder / "class_labels.json").is_file(), "no class names")
+            self.assertTrue(list((folder / "output" / "csvs").glob("crossval_*.csv")))
+            leaderboard = client.get(f"/api/runs/{run_id}/details/leaderboard").json()
+            self.assertGreaterEqual(leaderboard["total_rows"], 1)
+            labels = client.get(f"/api/runs/{run_id}/class-labels").json()["class_labels"]
+            self.assertGreaterEqual(len(labels), 2)
             dispatcher = client.app.state.jbg["dispatcher"]
             for _ in range(50):                      # release the run log before cleanup
                 dispatcher.poll_once()
