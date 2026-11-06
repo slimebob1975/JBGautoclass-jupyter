@@ -126,3 +126,8 @@ fieldset.choices { border: 0; padding: 0; margin: 0; columns: 2 220px; }
 fieldset.choices legend { font-weight: 600; margin-bottom: 4px; column-span: all; }
 .field.has-error input, .field.has-error select { border-color: var(--error); }
 .field-error { color: var(--error); font-size: 12.5px; margin: 4px 0 0; }
+
+/* 293b2 */
+.validation-result { border: 1px solid var(--line); border-radius: 6px; padding: 4px 12px 8px; margin: 10px 0; background: var(--panel); }
+table.classes tr.extra td { color: var(--ink2); }
+table.classes tr.total td { border-top: 2px solid var(--line); }

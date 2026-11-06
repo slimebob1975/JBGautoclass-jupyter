@@ -84,6 +84,9 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
     from JBGProjectService import ProjectConflict, ProjectUnavailable
 
     templates = Jinja2Templates(directory=str(WEB / "templates"))
+    # 293b2: shares with a decimal comma in Swedish, a point in English.
+    templates.env.filters["pct"] = lambda value, language="sv": (
+        f"{float(value or 0):.1f}".replace(".", "," if language == "sv" else ".") + " %")
     app.mount("/ui/static", StaticFiles(directory=str(WEB / "static")), name="ui-static")
 
     def active_project(request: Request, owner: str):

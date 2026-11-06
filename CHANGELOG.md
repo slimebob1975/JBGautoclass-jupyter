@@ -1,3 +1,20 @@
+## Revision 293b2 - Dataset tab details (2026-11-06)
+
+- Roles for datasets registered before decision A: when a dataset has no
+  roles, the roles view suggests those of the project's latest configuration
+  that still contains roles (only columns that exist), marked as a
+  suggestion. Nothing is saved until the user saves. The conversion moved
+  from the test helper into `JBGDatasetRoles.roles_from_configuration`.
+- The validation result appears above the views; the view tabs stay
+  visible, so the user can carry on directly.
+- Classes view: rows "Unknown" (rows without a class) and "In total" with
+  count and share like the classes, and "Other classes" when more than 100
+  classes exist, so the rows always add up to the total.
+- Shares use a decimal comma in Swedish and a point in English (new `pct`
+  template filter), also in the profile view.
+- Tests: `tests/test_revision_293b2_dataset_tab_details.py`; the 291a profile
+  check expects the decimal comma.
+
 ## Revision 293b - Dataset tab: SQL lists, column roles, compatibility (2026-11-06)
 
 - SQL tables are chosen from lists instead of typed (agreed 2026-11-05): after

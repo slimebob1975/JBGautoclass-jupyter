@@ -9,18 +9,8 @@ from JBGDatasetRoles import DatasetRoles
 
 
 def roles_from_settings(settings: dict) -> DatasetRoles:
-    connection = settings.get("connection", {})
-    categorical = list(settings.get("mode", {}).get("category_text_columns") or [])
-    mapping = {}
-    for name in connection.get("data_numerical_columns") or []:
-        mapping[name] = "numeric"
-    for name in connection.get("data_text_columns") or []:
-        mapping[name] = "categorical" if name in categorical else "text"
-    if connection.get("class_column"):
-        mapping[connection["class_column"]] = "class"
-    if connection.get("id_column"):
-        mapping[connection["id_column"]] = "id"
-    return DatasetRoles.from_mapping(mapping)
+    from JBGDatasetRoles import roles_from_configuration
+    return DatasetRoles.from_mapping(roles_from_configuration(settings))
 
 
 def store_roles(client, project_id: str, dataset_id: str, settings: dict) -> None:

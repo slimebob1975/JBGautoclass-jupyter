@@ -133,6 +133,7 @@
       <form id="validate-form" method="post" action="/ui/dataset/{{ selected.dataset_id }}/validate"></form>
 
       {% if validation %}
+        <div class="validation-result">
         <h3>{{ _("Validation") }}</h3>
         {% if validation.error %}
           <p class="message error">{{ _(read_errors[validation.error]) }}</p>
@@ -146,7 +147,8 @@
           {% endfor %}
           </ul>
         {% endif %}
-      {% else %}
+        </div>
+      {% endif %}
         <nav class="subtabs" aria-label="{{ _('Dataset') }}">
           {% for key, label in (("preview", "Preview"), ("profile", "Profile"), ("classes", "Classes"), ("roles", "Column roles")) %}
             <a href="/ui/dataset?dataset={{ selected.dataset_id }}&view={{ key }}" class="{{ 'on' if view == key }}">{{ _(label) }}</a>
@@ -165,7 +167,7 @@
           <div class="scroll"><table class="grid">
             <thead><tr><th>{{ _("Column") }}</th><th>{{ _("Type") }}</th><th>{{ _("Missing") }}</th><th>{{ _("Distinct values") }}</th></tr></thead>
             <tbody>{% for c in data.columns %}<tr><td>{{ c.name }}</td><td class="muted">{{ _(type_labels[c.type]) if c.type in type_labels else c.type }}</td>
-              <td class="num">{{ "%.1f" | format((c.missing_share or 0) * 100) }} %</td>
+              <td class="num">{{ ((c.missing_share or 0) * 100) | pct(language) }}</td>
               <td class="num">{{ c.distinct if c.distinct is not none else "–" }}</td></tr>{% endfor %}</tbody>
           </table></div>
         {% elif view == "roles" %}
@@ -173,7 +175,9 @@
             <p class="hint">{{ _("Prediction datasets use the column roles of the training dataset.") }}</p>
           {% elif data %}
             {% if roles_error %}<p class="message error">{{ _(roles_error) }}</p>{% endif %}
-            {% if not roles_stored and not roles_error %}<p class="hint">{{ _("No column roles yet. Columns without a role are ignored.") }}</p>{% endif %}
+            {% if roles_suggested_from %}
+              <p class="message ok">{{ _("Suggested from the configuration") }} “{{ roles_suggested_from }}”. {{ _("Review the roles and save to keep them.") }}</p>
+            {% elif not roles_stored and not roles_error %}<p class="hint">{{ _("No column roles yet. Columns without a role are ignored.") }}</p>{% endif %}
             <form method="post" action="/ui/dataset/{{ selected.dataset_id }}/roles" id="roles-form">
               <div class="field">
                 <label for="categorical-limit">{{ _("Categorical limit") }}</label>
@@ -213,15 +217,23 @@
           </form>
           {% if data %}
             {% if data.basis.method != "exact" %}<p class="hint">{{ _("Estimated from a sample of") }} {{ data.basis.rows_used }} {{ _("rows") }}.</p>{% endif %}
-            <table class="grid">
+            {% set total = data.basis.rows_used or 0 %}
+            {% set shown = data.classes | sum(attribute="count") %}
+            {% set other = total - shown - data.missing %}
+            <table class="grid classes">
               <thead><tr><th>{{ _("Class") }}</th><th>{{ _("Count") }}</th><th>{{ _("Share") }}</th></tr></thead>
               <tbody>{% for c in data.classes %}<tr><td>{{ c.value }}</td><td class="num">{{ c.count }}</td>
-                <td class="num">{{ "%.1f" | format((c.share or 0) * 100) }} %</td></tr>{% endfor %}</tbody>
+                <td class="num">{{ ((c.share or 0) * 100) | pct(language) }}</td></tr>{% endfor %}
+                {% if data.more_classes and other > 0 %}<tr class="extra"><td><i>{{ _("Other classes") }}</i></td><td class="num">{{ other }}</td>
+                  <td class="num">{{ (other / total * 100 if total else 0) | pct(language) }}</td></tr>{% endif %}
+                <tr class="extra"><td><i>{{ _("Unknown") }}</i></td><td class="num">{{ data.missing }}</td>
+                  <td class="num">{{ (data.missing / total * 100 if total else 0) | pct(language) }}</td></tr>
+                <tr class="total"><td><b>{{ _("In total") }}</b></td><td class="num"><b>{{ total }}</b></td>
+                  <td class="num"><b>{{ (100 if total else 0) | pct(language) }}</b></td></tr>
+              </tbody>
             </table>
-            <p class="hint">{{ _("Rows without a class") }}: {{ data.missing }}{% if data.more_classes %}. {{ _("More classes exist than are shown.") }}{% endif %}</p>
           {% endif %}
         {% endif %}
-      {% endif %}
     {% else %}
       <p class="empty">{{ _("Select a dataset in the list.") }}</p>
     {% endif %}

@@ -944,3 +944,19 @@ msgstr "Gränsen för kategorisering måste vara ett heltal mellan 2 och 1000."
 
 msgid "unknown column role"
 msgstr "Okänd kolumnroll."
+
+# 293b2: roles suggestion, classes table.
+msgid "Suggested from the configuration"
+msgstr "Förslag från konfigurationen"
+
+msgid "Review the roles and save to keep them."
+msgstr "Granska rollerna och spara för att behålla dem."
+
+msgid "Unknown"
+msgstr "Okänd"
+
+msgid "In total"
+msgstr "Totalt"
+
+msgid "Other classes"
+msgstr "Övriga klasser"

@@ -90,7 +90,8 @@ def test_upload_activate_and_the_three_views(tmp_path):
         assert "&lt;script&gt;x&lt;/script&gt;" in activated and "<script>x" not in activated
         assert "Tal" in activated                                                 # CSV type word
         profile = client.get(f"/ui/dataset?dataset={dataset}&view=profile").text
-        assert "Exakt, alla rader." in profile and "25.0 %" in profile           # 1 of 4 missing
+        # 1 of 4 missing; 293b2: a decimal comma in Swedish.
+        assert "Exakt, alla rader." in profile and "25,0 %" in profile
         classes = client.get(f"/ui/dataset?dataset={dataset}&view=classes&column=species").text
         assert re.search(r"<td>a</td><td class=\"num\">2</td>", classes)
 

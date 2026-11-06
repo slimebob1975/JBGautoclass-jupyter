@@ -122,7 +122,8 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                     if context["catalog"]:
                         context["table_choice"] = optional(inspection.table_choices, principal,
                                                            pid, context["catalog"], context["add_role"])
-            if selected is not None and validation is None:
+            # 293b2: the views stay available below a validation result.
+            if selected is not None:
                 v = context["view"]
                 if v == "preview":
                     context["data"], context["read_error"] = read(
@@ -136,6 +137,21 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                         stored, _ = read(inspection.get_roles, principal, pid, dataset)
                         context["data"] = profile
                         context["roles"] = roles_draft or (stored.as_mapping() if stored else {})
+                        if stored is None and not roles_draft and profile:
+                            # 293b2: a dataset registered before decision A has no
+                            # roles; suggest those of the project's latest
+                            # configuration that has any. Nothing is saved.
+                            from JBGDatasetRoles import roles_from_configuration
+                            names = [c["name"] for c in profile["columns"]]
+                            for item in sorted(context["configurations"],
+                                               key=lambda c: c["updated_at"], reverse=True):
+                                settings = optional(configurations.stored_settings, owner, pid,
+                                                    item["configuration_id"])
+                                mapping = roles_from_configuration(settings, names) if settings else {}
+                                if mapping:
+                                    context["roles"] = mapping
+                                    context["roles_suggested_from"] = item["name"]
+                                    break
                         context["roles_stored"] = stored is not None
                         context["categorical_limit"] = (roles_draft or {}).get(
                             "__limit__", stored.categorical_limit if stored else 30)

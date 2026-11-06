@@ -106,6 +106,26 @@ class DatasetRoles:
         config.mode.categorical_limit = self.categorical_limit
 
 
+def roles_from_configuration(settings: dict, columns=None) -> dict:
+    """293b2: column roles as an older configuration expressed them, as a
+    suggestion for a dataset without roles (decision A moved roles to the
+    dataset). Only columns in ``columns`` (when given) are kept."""
+    connection = settings.get("connection", {}) or {}
+    categorical = set(settings.get("mode", {}).get("category_text_columns") or [])
+    mapping = {}
+    for name in connection.get("data_numerical_columns") or []:
+        mapping[name] = "numeric"
+    for name in connection.get("data_text_columns") or []:
+        mapping[name] = "categorical" if name in categorical else "text"
+    if connection.get("class_column"):
+        mapping[connection["class_column"]] = "class"
+    if connection.get("id_column"):
+        mapping[connection["id_column"]] = "id"
+    if columns is not None:
+        mapping = {name: role for name, role in mapping.items() if name in set(columns)}
+    return mapping
+
+
 def check_compatible(roles: DatasetRoles, training_kinds: dict, candidate_kinds: dict) -> None:
     """A prediction dataset must contain the ID and feature columns of the
     training roles; numeric features must stay numeric. The class column may
