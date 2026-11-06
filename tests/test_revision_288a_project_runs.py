@@ -198,7 +198,6 @@ class ProjectRunNative288a(revision_281c.CSVApplicationEndToEnd281c):
     test_other_scope_cannot_prepare_csv_run = None
 
     def test_project_run_trains_and_saves_its_own_model_file(self):
-        from JBGConfigurationService import user_view
         self._configure_training()
         self.config.mail.notification_email = ""
         with self.repo.open_artifact(self.scope, self.ref.artifact_id) as stream:
@@ -211,8 +210,10 @@ class ProjectRunNative288a(revision_281c.CSVApplicationEndToEnd281c):
             dispatcher_options={"script_path": self.root, "heartbeat_seconds": 5,
                                 "stale_after": timedelta(minutes=10), "poll_seconds": 1}))
         with client:
+            # 293c: the full configuration; the service ignores its server-owned
+            # parts (roles included), the dataset gets the roles from it.
             project, _, configuration = _setup(
-                client, data=data, roles=user_view(self.config._config_to_json(username="")))
+                client, data=data, roles=self.config._config_to_json(username=""))
             created = client.post(f"/api/projects/{project}/runs",
                                   json={"configuration_id": configuration})
             self.assertEqual(created.status_code, 201, created.text)

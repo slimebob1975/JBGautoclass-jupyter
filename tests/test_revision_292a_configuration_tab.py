@@ -74,14 +74,13 @@ def test_kinds_are_converted_and_checked():
         "f:mode.test_size": "0,25",                     # decimal comma
         "f:debug.data_limit": "",                       # nullable: no value
         "f:mode.feature_search_sizes": "5, 10;20",
-        "f:connection.data_numerical_columns": "sepal, petal",   # text fallback
         "p:LRN:C": "0,5", "p:LRN:class_weight": "None", "p:KNN:n_neighbors": "",
     }))
     settings, errors = convert_form(schema, form)
     assert errors == {}
     assert settings["mode"]["test_size"] == 0.25 and settings["debug"]["data_limit"] is None
     assert settings["mode"]["feature_search_sizes"] == [5, 10, 20]
-    assert settings["connection"]["data_numerical_columns"] == ["sepal", "petal"]
+    assert "data_numerical_columns" not in settings.get("connection", {})      # 293c
     # The registry's own option is the text "None" (JBGModelSettings).
     assert settings["mode"]["model_parameters"] == {"LRN": {"C": 0.5, "class_weight": "None"}}
     assert settings["mode"]["train"] is True
@@ -154,12 +153,11 @@ def test_create_and_save_through_the_form(tmp_path):
         project = _project_with_dataset(client)
         configuration = _create(client)
         page = client.get(f"/ui/configuration?configuration={configuration}").text
-        assert "Kolumnroller" in page and "Förbehandling" in page
-        assert '<option value="species"' in page                       # columns as a list
+        # 293c: column roles are set on the Dataset tab, not here.
+        assert "Förbehandling" in page and 'name="f:connection.class_column"' not in page
+        assert "Kolumnroller anges under fliken Dataset." in page
         current = _current(client, project, configuration)
         form = _form_for(current["settings"], _schema(), **{
-            "f:connection.id_column": "id", "f:connection.class_column": "species",
-            "f:connection.data_numerical_columns": ["sepal", "petal"],
             "f:mode.algorithm": ["LRN"], "expected_version": "1"})
         saved = client.post(f"/ui/configuration/{configuration}", data=_as_form(form), follow_redirects=False)
         assert saved.status_code == 303 and "message=saved" in saved.headers["location"]
@@ -203,13 +201,16 @@ def test_a_refused_configuration_and_a_newer_version(tmp_path):
         assert _current(client, project, configuration)["settings"]["debug"]["data_limit"] == 5
 
 
-def test_without_a_readable_dataset_columns_are_typed(tmp_path):
+def test_no_column_fields_remain_in_the_form(tmp_path):
+    # 293c replaces the 292a column lists: roles belong to the dataset.
     with _client(tmp_path) as client:
         _project_with_dataset(client, with_dataset=False)
         configuration = _create(client)
         page = client.get(f"/ui/configuration?configuration={configuration}").text
-        assert 'name="f:connection.data_numerical_columns" value=""' in page
-        assert "Kolumnnamn visas som listor" in page
+        for key in ("connection.id_column", "connection.class_column",
+                    "connection.data_numerical_columns", "connection.data_text_columns",
+                    "mode.category_text_columns", "mode.excluded_predictor_columns"):
+            assert f'name="f:{key}"' not in page, key
 
 
 def test_other_users_and_cross_site_forms(tmp_path):

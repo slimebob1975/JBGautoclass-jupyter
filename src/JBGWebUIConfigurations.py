@@ -60,9 +60,13 @@ def convert_form(schema: dict, form) -> tuple[dict, dict]:
             elif kind == "multi_choice":
                 values = form.getlist(form_key)
                 allowed = {option["value"] for option in field["options"]}
-                if any(v not in allowed for v in values):
+                if field.get("allows_all") and ("ALL" in values or (values and set(values) == allowed)):
+                    # 293c rules 1, 3 and 5: "All" (or every box) is sent as ALL only.
+                    value = ["ALL"]
+                elif any(v not in allowed for v in values):
                     raise LookupError("choice")
-                value = values or (None if field["nullable"] else [])
+                else:
+                    value = values or (None if field["nullable"] else [])
             elif kind == "columns":
                 # Checkbox lists send one value each; the text fallback sends
                 # one comma-separated value. Both become one list of names.
@@ -129,6 +133,26 @@ def convert_form(schema: dict, form) -> tuple[dict, dict]:
     return settings, errors
 
 
+# 293c: shown first; the other groups sit under "More settings".
+ESSENTIAL_GROUPS = ("run_type", "algorithms", "validation")
+
+
+def combinations(schema: dict, values: dict) -> int:
+    """Spot-check combinations: algorithms x scalers x reductions x
+    oversamplers x undersamplers ("ALL" counts every option)."""
+    total = 1
+    for field in schema["fields"]:
+        if not field.get("allows_all"):
+            continue
+        section, name = field["key"].split(".", 1)
+        chosen = (values.get(section) or {}).get(name)
+        if chosen and "ALL" in chosen:
+            total *= len(field["options"])
+        elif chosen:
+            total *= len(chosen)
+    return total
+
+
 def add_configuration_tab(app, *, principal_dependency, render, redirect, active_project,
                           configurations, datasets, inspection) -> None:
     from JBGConfigSchema import configuration_schema
@@ -138,25 +162,14 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
     from JBGProjectService import ProjectUnavailable
     from JBGWebUI import request_language, translator
 
-    def columns_of_active_dataset(principal, project):
-        """Column names for the role lists, or None when they cannot be read."""
-        try:
-            items = datasets.list(principal.principal_key, project["project_id"])
-            active = next((d for d in items if d["active_training"]), None)
-            if active is None:
-                return None
-            preview = inspection.preview(principal, project["project_id"], active["dataset_id"])
-            return [column["name"] for column in preview["columns"]]
-        except Exception:
-            return None
-
     def page(request, principal, *, configuration="", values=None, field_errors=None,
              form_message=None, status_code=200):
         owner = principal.principal_key
         project = active_project(request, owner)
         context = {"no_project": project is None, "items": [], "selected": None,
                    "schema": None, "values": values, "field_errors": field_errors or {},
-                   "form_message": form_message, "columns": None,
+                   "form_message": form_message, "combinations": None,
+                   "essential_groups": ESSENTIAL_GROUPS,
                    "field_error_texts": FIELD_ERRORS, "tab_messages": MESSAGES}
         if project is not None:
             pid = project["project_id"]
@@ -173,7 +186,7 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
                                                          _server_template())
                 if values is None:
                     context["values"] = selected["settings"]
-                context["columns"] = columns_of_active_dataset(principal, project)
+                context["combinations"] = combinations(context["schema"], context["values"])
         return render(request, principal, "configuration.html", "configuration",
                       status_code=status_code, **context)
 

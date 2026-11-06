@@ -18,6 +18,7 @@ from JBGMetadataStore import MetadataStoreSettings  # noqa: E402
 from JBGSQLServer import SQLServerSettings  # noqa: E402
 
 MISSING = "00000000-0000-4000-8000-000000000000"
+_ROLES = {}                     # configuration ID -> the roles a test meant
 HEADER = ["id", "sepal", "petal", "species", "note"]
 ROWS = [[1, 5.1, 1.4, "a", "x"], [2, 7.0, 4.7, "b", "y"], [3, 6.3, 6.0, "a", "z"],
         [4, 4.9, 1.4, "b", "w"]]
@@ -83,6 +84,8 @@ def _project(client, source, roles=GOOD, rows=ROWS, role="training"):
             "name": "D", "role": role, "catalog": "Db", "table": "dbo.Iris"}).json()["dataset_id"]
     configuration = client.post(f"/api/projects/{project}/configurations",
                                 json={"name": "C", "settings": {"connection": roles}}).json()
+    # 293c: configurations no longer hold roles; keep the test's roles here.
+    _ROLES[configuration["configuration_id"]] = roles
     return project, dataset, configuration["configuration_id"]
 
 
@@ -93,12 +96,10 @@ def _validate(client, project, dataset, layer=None, configuration=None):
         sessions.data_layer_for = lambda principal, config, logger: layer
     try:
         if configuration:
-            # 293a: the roles belong to the dataset; take them from the
-            # configuration this test was written with.
+            # 293a/293c: the roles belong to the dataset; store the roles this
+            # test was written with.
             from jbg_test_roles import store_roles
-            settings = client.get(f"/api/projects/{project}/configurations/{configuration}"
-                                  ).json()["settings"]
-            store_roles(client, project, dataset, settings)
+            store_roles(client, project, dataset, {"connection": _ROLES[configuration]})
         return client.post(f"/api/projects/{project}/datasets/{dataset}/validate")
     finally:
         sessions.data_layer_for = original

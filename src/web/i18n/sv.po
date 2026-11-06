@@ -960,3 +960,19 @@ msgstr "Totalt"
 
 msgid "Other classes"
 msgstr "Övriga klasser"
+
+# 293c: Configuration tab.
+msgid "All"
+msgstr "Alla"
+
+msgid "More settings"
+msgstr "Fler inställningar"
+
+msgid "Combinations to spot-check"
+msgstr "Kombinationer att jämföra"
+
+msgid "only sensible for very small datasets"
+msgstr "bara rimligt för mycket små dataset"
+
+msgid "Column roles are set on the Dataset tab."
+msgstr "Kolumnroller anges under fliken Dataset."

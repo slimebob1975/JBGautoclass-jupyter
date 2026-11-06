@@ -30,10 +30,14 @@ from JBGProjectService import ProjectService
 USER_SECTIONS = ("connection", "mode", "io", "debug", "mail")
 SERVER_OWNED = {
     "connection": frozenset({"odbc_driver", "host", "trusted_connection", "sql_username",
-                             "sql_password", "data_catalog", "data_table"}),
+                             "sql_password", "data_catalog", "data_table",
+                             # 293c: column roles belong to the dataset (decision A).
+                             "id_column", "class_column", "data_numerical_columns",
+                             "data_text_columns"}),
     "io": frozenset({"model_path", "model_name"}),
-    # 293a2: belongs to the dataset with its column roles (decision A).
-    "mode": frozenset({"categorical_limit"}),
+    # 293a2/293c: belong to the dataset with its column roles (decision A).
+    "mode": frozenset({"categorical_limit", "category_text_columns",
+                       "excluded_predictor_columns"}),
     "mail": frozenset({"smtp_server"}),
 }
 _PLACEHOLDER_ID = "00000000-0000-4000-8000-000000000000"
@@ -120,6 +124,13 @@ def _normalized(settings: dict, project) -> dict:
         raise InvalidConfiguration("configuration is invalid") from None
 
     stored = loaded._config_to_json(username="")        # normalized, password blank
+    # 293c: keep "ALL" as entered; the loader expands it whenever the
+    # configuration is used, so later codes are included too.
+    from Config import Config as _Config
+    for key in _Config.ALL_EXPANDABLE:
+        value = candidate["mode"].get(key)
+        if isinstance(value, list) and _Config.ALL_CODE in value:
+            stored["mode"][key] = [_Config.ALL_CODE]
     for section, keys in SERVER_OWNED.items():
         for key in keys:
             stored[section][key] = template[section][key]

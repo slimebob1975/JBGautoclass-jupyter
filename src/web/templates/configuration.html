@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% set title = "Configuration" %}
 
-{% macro control(f, values, columns, errors) %}
+{% macro control(f, values, columns, errors) %}{# columns: unused since 293c #}
   {% set section, name = f.key.split(".", 1) %}
   {% set value = values[section][name] if values and section in values else none %}
   {% set id = "f-" ~ f.key | replace(".", "-") %}
@@ -10,9 +10,13 @@
   {% if f.kind == "boolean" %}
     <label class="check"><input type="checkbox" id="{{ id }}" name="f:{{ f.key }}" {{ 'checked' if value }}> {{ f.label }}</label>
   {% elif f.kind == "multi_choice" %}
-    <fieldset class="choices"><legend>{{ f.label }}</legend>
+    {% set all_chosen = f.allows_all and value and "ALL" in value %}
+    <fieldset class="choices"{% if f.allows_all %} data-all-group{% endif %}><legend>{{ f.label }}</legend>
+      {% if f.allows_all %}
+        <label class="check all"><input type="checkbox" name="f:{{ f.key }}" value="ALL" data-all {{ 'checked' if all_chosen }}> <b>{{ _("All") }}</b></label>
+      {% endif %}
       {% for option in f.options %}
-        <label class="check"><input type="checkbox" name="f:{{ f.key }}" value="{{ option.value }}" {{ 'checked' if value and option.value in value }}> {{ option.label }}</label>
+        <label class="check"><input type="checkbox" name="f:{{ f.key }}" value="{{ option.value }}" {{ 'checked' if all_chosen or (value and option.value in value) }}> {{ option.label }}</label>
       {% endfor %}
     </fieldset>
   {% elif f.kind == "columns" and columns %}
@@ -87,14 +91,14 @@
     {% elif form_message == "invalid" %}<p class="message error">{{ _("The configuration was not accepted. Check the settings and save again.") }}</p>
     {% elif form_message == "changed" %}<p class="message error">{{ _("Someone saved a newer version.") }}
       <a href="/ui/configuration?configuration={{ selected.configuration_id }}">{{ _("Load the latest version") }}</a></p>{% endif %}
-    {% if columns is none %}<p class="hint">{{ _("Column names appear as lists when the active training dataset can be read (for SQL: sign in on the Dataset tab).") }}</p>{% endif %}
+    <p class="hint">{{ _("Column roles are set on the Dataset tab.") }}</p>
 
     <form id="config-form" method="post" action="/ui/configuration/{{ selected.configuration_id }}">
       <input type="hidden" name="expected_version" value="{{ selected.version }}">
-      {% for group in schema.groups %}
+      {% macro group_block(group, open_first) %}
         {% set fields = schema.fields | selectattr("group", "equalto", group.key) | list %}
         {% set has_error = fields | selectattr("key", "in", field_errors.keys() | list) | list %}
-        <details class="group" {{ 'open' if loop.first or has_error }}>
+        <details class="group" {{ 'open' if open_first or has_error }}>
           <summary>{{ group.label }}</summary>
           {% for f in fields if not f.advanced and not f.subgroup and f.kind != "parameters" %}{{ control(f, values, columns, field_errors) }}{% endfor %}
           {% set sub = fields | selectattr("subgroup") | list %}
@@ -129,6 +133,8 @@
               </details>
             {% endfor %}
             <p class="hint">{{ _("Settings for newly ticked algorithms appear after saving.") }}</p>
+            <p class="hint combinations{{ ' warn' if combinations > 1000 }}">{{ _("Combinations to spot-check") }}: <b>{{ combinations }}</b>
+              {% if combinations > 1000 %}– {{ _("only sensible for very small datasets") }}{% endif %}</p>
           {% endif %}
           {% set advanced = fields | selectattr("advanced") | rejectattr("subgroup") | list %}
           {% if advanced %}
@@ -137,7 +143,12 @@
             </details>
           {% endif %}
         </details>
-      {% endfor %}
+      {% endmacro %}
+      {# 293c: the essentials first, everything else under "More settings". #}
+      {% for group in schema.groups if group.key in essential_groups %}{{ group_block(group, true) }}{% endfor %}
+      <details class="more"><summary>{{ _("More settings") }}</summary>
+        {% for group in schema.groups if group.key not in essential_groups %}{{ group_block(group, false) }}{% endfor %}
+      </details>
     </form>
   {% else %}
     <p class="empty">{{ _("Select a configuration in the list.") }}</p>

@@ -33,8 +33,10 @@ def _owner(client):
     return AuthenticatedPrincipal(AuthenticationMode.LOCAL, "developer").principal_key
 
 
+# 293c: column roles belong to the dataset; the roles here must be ignored.
 ROLES = {"connection": {"class_column": "species", "id_column": "id",
                         "data_numerical_columns": ["sepal", "petal"]},
+         "mode": {"max_iterations": 777},
          "debug": {"data_limit": 100}}
 
 
@@ -48,7 +50,8 @@ def test_created_configuration_shows_only_user_settings(tmp_path):
         assert body["version"] == 1 and body["name"] == "Standard"
         settings = body["settings"]
         assert set(settings) == {"connection", "mode", "io", "debug", "mail"}
-        assert settings["connection"]["class_column"] == "species"
+        assert settings["mode"]["max_iterations"] == 777
+        assert "class_column" not in settings["connection"]            # 293c: dataset-owned
         assert settings["debug"]["data_limit"] == 100
         for section, keys in SERVER_OWNED.items():
             assert not keys & set(settings[section]), section
@@ -74,7 +77,7 @@ def test_server_owned_fields_are_ignored(tmp_path):
     assert stored["io"]["model_path"] != "../../outside" and stored["io"]["verbose"] is False
     assert stored["mail"]["smtp_server"] != "smtp.evil.example.invalid"
     assert stored["data_source"]["kind"] == "sql" and stored["name"] == project
-    assert stored["connection"]["class_column"] == "species"
+    assert stored["connection"]["class_column"] != "species"           # 293c: ignored
 
 
 def test_invalid_settings_are_refused_without_echo(tmp_path):
@@ -102,7 +105,7 @@ def test_saving_needs_the_current_version(tmp_path):
                                        "expected_version": 1})
         assert saved.status_code == 200 and saved.json()["version"] == 2
         assert saved.json()["settings"]["debug"]["data_limit"] == 500
-        assert saved.json()["settings"]["connection"]["class_column"] == "species"   # kept
+        assert saved.json()["settings"]["mode"]["max_iterations"] == 777            # kept
         stale = client.put(item, json={"settings": {"debug": {"data_limit": 1}},
                                        "expected_version": 1})
         assert (stale.status_code, stale.json()) == (

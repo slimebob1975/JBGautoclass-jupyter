@@ -269,7 +269,7 @@ full SQL regression acceptance remain separately unverified.
   - [x] 293b2: Dataset tab details: roles suggested from an older
     configuration, validation above the views, complete classes table,
     decimal commas in Swedish.
-  - [ ] 293c: Configuration tab: roles removed, essentials first, "All"
+  - [x] 293c: Configuration tab: roles removed, essentials first, "All"
     choices for scalers, reductions, sampling and algorithms.
   - [ ] Then: the Run tab (start a run, follow its progress; likely the first
     use of htmx). That completes GUI Phase 1.

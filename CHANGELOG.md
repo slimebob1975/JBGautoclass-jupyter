@@ -1,3 +1,33 @@
+## Revision 293c - Configuration tab: ALL choices, essentials first, roles out (2026-11-06)
+
+- "ALL" in the engine (agreed 2026-11-06): in `algorithm`, `preprocessor`,
+  `feature_selection`, `oversamplers` and `undersamplers`, a list containing
+  `ALL` means every code the engine has when the configuration is loaded,
+  including the "none" options (no scaling, no reduction, no over- or
+  undersampling, the dummy classifier). `ALL` wins over other codes. The
+  engine had no such code before; Voilà files never contain it and are
+  unaffected. Stored configurations keep `["ALL"]` (so later codes are
+  included); a run records the expanded list.
+- Configuration tab: an "All" box on these five lists, following the agreed
+  rules: ticking All ticks every option; ticking the last option ticks All;
+  unticking an option unticks All; when All is ticked only ALL is saved.
+  Unticking All by hand unticks every option (otherwise rule 3 would tick
+  All again at once). The server applies the saving rules itself, so the
+  form also works without JavaScript; `src/web/static/jbg.js` (plain
+  JavaScript, no library) adds the live behaviour.
+- The essentials come first and open (run type, algorithms, validation and
+  decision); the other groups sit under "More settings". The Algorithms group
+  shows the number of combinations to spot-check, updated live; above 1,000
+  it adds that this is only sensible for very small datasets.
+- Column roles left the configuration (decision A): `id_column`,
+  `class_column`, `data_numerical_columns`, `data_text_columns`,
+  `category_text_columns` and `excluded_predictor_columns` are server-owned
+  in configurations and no longer in the form or the schema (70 user-owned
+  fields). The group column moved to "Validation & decision".
+- Tests: `tests/test_revision_293c_configuration_all.py`; tests of 286c,
+  289a, 292a and 293b2 no longer put roles into configurations (293b2 writes
+  an older configuration directly into the repository).
+
 ## Revision 293b2 - Dataset tab details (2026-11-06)
 
 - Roles for datasets registered before decision A: when a dataset has no

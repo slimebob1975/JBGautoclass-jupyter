@@ -89,23 +89,19 @@ def _f(key, group, kind, label, help=None, **extras):
 _f("mode.train", "run_type", "boolean", "Train a model")
 _f("mode.predict", "run_type", "boolean", "Predict unlabelled rows")
 _f("mode.mispredicted", "run_type", "boolean", "Show mispredictions")
-_f("connection.id_column", "roles", "column", "ID column", "Unique and never empty.")
-_f("connection.class_column", "roles", "column", "Class column", "Between 2 and 30 classes.")
-_f("connection.data_numerical_columns", "roles", "columns", "Numeric feature columns")
-_f("connection.data_text_columns", "roles", "columns", "Text feature columns")
-_f("mode.category_text_columns", "roles", "columns", "Categorical text columns")
-_f("mode.excluded_predictor_columns", "roles", "text", "Excluded columns",
-   "Comma-separated column names that are never used as features.", advanced=True)
-_f("mode.validation_group_column", "roles", "column", "Group column",
+# 293c: column roles (and the derived excluded columns) belong to the dataset
+# and are set on the Dataset tab; the group column is a splitting setting.
+_f("mode.validation_group_column", "validation", "text", "Group column",
    "Rows of one group stay together when data is split.")
-_f("mode.preprocessor", "preprocessing", "multi_choice", "Scalers", options=_meta("Preprocess"))
+_f("mode.preprocessor", "preprocessing", "multi_choice", "Scalers", options=_meta("Preprocess"),
+   allows_all=True)
 _f("mode.use_metas", "preprocessing", "boolean", "Pass on metadata")
 _f("mode.use_stop_words", "preprocessing", "boolean", "Filter stop words")
 _f("mode.ngram_range", "preprocessing", "choice", "N-grams", options=_meta("NgramRange"))
 _f("mode.hex_encode", "preprocessing", "boolean", "Encrypt text features")
 _f("mode.use_categorization", "preprocessing", "boolean", "Categorize text columns")
 _f("mode.feature_selection", "feature_modelling", "multi_choice", "Dimensionality reduction",
-   options=_meta("Reduction"))
+   options=_meta("Reduction"), allows_all=True)
 _f("mode.num_selected_features", "feature_modelling", "integer", "Number of features",
    "Empty selects automatically.", nullable=True, minimum=1)
 _f("mode.feature_selection_mode", "feature_modelling", "choice", "Feature selection mode",
@@ -146,14 +142,15 @@ for _name, _kind, _label, _options in _INVESTIGATION:
         _extras["options"] = _options
     _f(f"mode.feature_search_{_name}", "feature_modelling", _kind, _label, **_extras)
 _f("mode.oversamplers", "sampling", "multi_choice", "Oversampling methods", nullable=True,
-   options=_meta("Oversampling"))
+   options=_meta("Oversampling"), allows_all=True)
 _f("mode.undersamplers", "sampling", "multi_choice", "Undersampling methods", nullable=True,
-   options=_meta("Undersampling"))
+   options=_meta("Undersampling"), allows_all=True)
 _f("mode.oversampler", "sampling", "choice", "Oversampling (single, legacy)", advanced=True,
    options=_meta("Oversampling"))
 _f("mode.undersampler", "sampling", "choice", "Undersampling (single, legacy)", advanced=True,
    options=_meta("Undersampling"))
-_f("mode.algorithm", "algorithms", "multi_choice", "Algorithms", options=_meta("Algorithm"))
+_f("mode.algorithm", "algorithms", "multi_choice", "Algorithms", options=_meta("Algorithm"),
+   allows_all=True)
 _f("mode.model_parameters", "algorithms", "parameters", "Algorithm settings",
    "Settings per selected algorithm; empty uses the defaults.")
 _f("mode.scoring", "algorithms", "choice", "Scoring metric", options=_meta("ScoreMetric"))
@@ -214,6 +211,8 @@ def configuration_schema(source: str, translate: Callable[[str], str], defaults:
                  "default": defaults[section][name],
                  "nullable": entry.get("nullable", False),
                  "advanced": entry.get("advanced", False)}
+        if entry.get("allows_all"):
+            field["allows_all"] = True                   # 293c: an "All" (ALL) choice
         for extra in ("minimum", "maximum"):
             if extra in entry:
                 field[extra] = entry[extra]

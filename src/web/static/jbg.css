@@ -131,3 +131,9 @@ fieldset.choices legend { font-weight: 600; margin-bottom: 4px; column-span: all
 .validation-result { border: 1px solid var(--line); border-radius: 6px; padding: 4px 12px 8px; margin: 10px 0; background: var(--panel); }
 table.classes tr.extra td { color: var(--ink2); }
 table.classes tr.total td { border-top: 2px solid var(--line); }
+
+/* 293c: Configuration tab */
+fieldset.choices label.all { border-bottom: 1px solid var(--line2); padding-bottom: 4px; column-span: all; }
+details.more { margin-top: 14px; }
+details.more > summary { cursor: pointer; font-weight: 700; color: var(--blue); padding: 8px 0; }
+.combinations.warn b { color: var(--warning); }

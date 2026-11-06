@@ -87,6 +87,28 @@ class Config:
     
     MAX_ITERATIONS = 20000
     CONFIG_FILENAME_START = "autoclassconfig_"
+    # 293c: "ALL" in one of these lists means every code the engine has when
+    # the configuration is loaded, including the "none" options (agreed
+    # 2026-11-06). A stored configuration keeps ["ALL"] and so also covers
+    # codes added later; a run records the expanded list.
+    ALL_CODE = "ALL"
+    ALL_EXPANDABLE = ("algorithm", "preprocessor", "feature_selection", "oversamplers",
+                      "undersamplers")
+
+    @classmethod
+    def _expand_all_codes(cls, payload) -> None:
+        import JBGMeta
+        lists = {"algorithm": JBGMeta.Algorithm, "preprocessor": JBGMeta.Preprocess,
+                 "feature_selection": JBGMeta.Reduction, "oversamplers": JBGMeta.Oversampling,
+                 "undersamplers": JBGMeta.Undersampling}
+        mode = payload.get("mode") if isinstance(payload, dict) else None
+        if not isinstance(mode, dict):
+            return
+        for key, codes in lists.items():
+            value = mode.get(key)
+            if value == cls.ALL_CODE or (isinstance(value, list) and cls.ALL_CODE in value):
+                mode[key] = [member.name for member in codes]
+
     # 293a2: section keys added after the schema-v2 baseline, with the default
     # an older file implies. Agreed 2026-11-05; extend only deliberately.
     LATER_KEYS = {"mode": {"categorical_limit": 30}}
@@ -1089,6 +1111,7 @@ class Config:
         except (OSError, ValueError) as exc:
             raise ConfigException(f"Unable to read JSON configuration {path}: {exc}") from exc
 
+        cls._expand_all_codes(payload)
         cls._validate_json_payload(payload)
         connection = dict(payload["connection"])
         connection["sql_password"] = ""

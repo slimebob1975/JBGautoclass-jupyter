@@ -44,6 +44,20 @@ def _setup(client, data=CSV):
     return project, dataset
 
 
+def _store_old_configuration(client, project, name, roles_settings):
+    """A configuration as stored before 293c, roles included (the service no
+    longer accepts roles, so write it directly into the repository)."""
+    from JBGConfigurationService import _server_template
+    from JBGIdentity import AuthenticatedPrincipal, AuthenticationMode
+    settings = _server_template()
+    settings["data_source"]["kind"] = "csv"
+    settings["connection"].update(roles_settings["connection"])
+    settings["mode"].update(roles_settings.get("mode", {}))
+    owner = AuthenticatedPrincipal(AuthenticationMode.LOCAL, "developer").principal_key
+    repository = client.app.state.jbg["configuration_service"]._repository
+    repository.create(owner, project, name, settings)
+
+
 def _selected(page, column):
     match = re.search(rf'name="role:{column}"[^>]*>(.*?)</select>', page, re.S)
     return re.search(r'<option value="(\w+)" selected', match.group(1)).group(1)
@@ -59,8 +73,7 @@ def test_conversion_keeps_only_existing_columns():
 def test_a_dataset_without_roles_gets_a_suggestion_that_is_not_saved(tmp_path):
     with _client(tmp_path) as client:
         project, dataset = _setup(client)
-        client.post(f"/api/projects/{project}/configurations", json={"name": "From Voila",
-                                                                     "settings": OLD})
+        _store_old_configuration(client, project, "From Voila", OLD)
         page = client.get(f"/ui/dataset?dataset={dataset}&view=roles").text
         assert "Förslag från konfigurationen “From Voila”." in page
         assert (_selected(page, "species"), _selected(page, "note")) == ("class", "categorical")
