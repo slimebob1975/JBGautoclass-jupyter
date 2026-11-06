@@ -95,7 +95,8 @@ def test_create_rename_and_open_a_project(tmp_path):
         assert "jbg_project=" + project_id in opened.headers["set-cookie"]
         page = client.get(opened.headers["location"]).text
         assert "Projektet är öppnat." in page
-        assert re.search(r'<b>Ärenden 2026</b>\s*</span>', page)          # context bar
+        # context bar (294a2 added a close button after the name)
+        assert re.search(r'<span class="k">Projekt</span>\s*<b>Ärenden 2026</b>', page)
         assert "Det här projektet är öppet." in page                         # footer hint
 
 

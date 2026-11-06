@@ -32,7 +32,13 @@
   <div class="context" aria-label="{{ _('Current work') }}">
     <span class="chip"><span class="dot {{ 'd-ok' if active_project else 'd-off' }}"></span>
       <span class="k">{{ _("Project") }}</span>
-      <b>{{ active_project.name if active_project else _("None selected") }}</b></span>
+      <b>{{ active_project.name if active_project else _("None selected") }}</b>
+      {% if active_project %}
+        <form method="post" action="/ui/close-project" class="chip-close">
+          <input type="hidden" name="back" value="{{ request.url.path }}">
+          <button title="{{ _('Close project') }}" aria-label="{{ _('Close project') }}">×</button>
+        </form>
+      {% endif %}</span>
     <span class="sep">›</span>
     {% set ds_state = active_dataset.validation_state if active_dataset else "" %}
     <span class="chip"><span class="dot {{ {'valid': 'd-ok', 'invalid': 'd-block'}.get(ds_state, 'd-off') }}"></span>

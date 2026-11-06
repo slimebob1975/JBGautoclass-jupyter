@@ -147,3 +147,9 @@ dl.metrics { grid-template-columns: 170px 1fr; }
 table.matrix td.diag { background: #e3f3ea; font-weight: 600; }
 table.importance td.bar-cell { width: 70%; }
 table.importance .bar { height: 10px; background: var(--blue); border-radius: 3px; }
+
+/* 294a2: close the open project from the context bar */
+.chip-close { display: inline; margin: 0 0 0 2px; }
+.chip-close button { border: 0; background: none; color: var(--ink3); font: inherit; font-size: 15px;
+                     line-height: 1; padding: 0 2px; cursor: pointer; }
+.chip-close button:hover { color: var(--blocked); }

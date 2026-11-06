@@ -72,7 +72,11 @@
     <form method="post" action="/ui/projects/{{ selected.project_id }}/open">
       <button class="btn act ready">{{ _("Open project") }}</button>
     </form>
+  {% elif is_open %}
+    <form method="post" action="/ui/close-project">
+      <button class="btn sub">{{ _("Close project") }}</button>
+    </form>
   {% else %}
-    <button class="btn act blocked" disabled title="{{ _('Select a project in the list.') if not selected else _('This project is open.') }}">{{ _("Open project") }}</button>
+    <button class="btn act blocked" disabled title="{{ _('Select a project in the list.') }}">{{ _("Open project") }}</button>
   {% endif %}
 {% endblock %}

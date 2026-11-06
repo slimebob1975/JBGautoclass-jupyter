@@ -1,3 +1,15 @@
+## Revision 294a2 - close the open project (2026-11-06)
+
+- "Close project" in the Projects tab (for the open project) and as a small
+  close button on the project chip in the context bar, so a project can be
+  closed from any tab. Closing forgets the open project and the selected
+  configuration and returns to the same tab with a message. The route is
+  `POST /ui/close-project` (a path that cannot be read as a project ID).
+- Opening a different project forgets the previous project's selected
+  configuration; re-opening the same project keeps it.
+- Tests: `tests/test_revision_294a2_close_project.py`; the 287a context bar
+  check allows the close button after the project name.
+
 ## Revision 294a - Run tab; GUI phase 1 complete (2026-11-06)
 
 - Add the Run tab (`src/JBGWebUIRun.py`, `src/web/templates/run.html`): a

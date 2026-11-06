@@ -25,6 +25,7 @@ LANGUAGES = ("sv", "en")
 DEFAULT_LANGUAGE = "sv"
 LANGUAGE_COOKIE = "jbg_lang"
 PROJECT_COOKIE = "jbg_project"
+CONFIGURATION_COOKIE = "jbg_configuration"          # set on the Configuration tab
 
 # (key, English label, available in this revision)
 TABS = (("overview", "Overview", False), ("projects", "Projects", True),
@@ -35,6 +36,7 @@ TABS = (("overview", "Overview", False), ("projects", "Projects", True),
 MESSAGES = {
     "created": ("ok", "Project created."), "saved": ("ok", "Changes saved."),
     "opened": ("ok", "Project opened."),
+    "closed": ("ok", "Project closed."),
     "duplicate": ("error", "A project with that name already exists."),
     "invalid": ("error", "The input was not accepted. Check the name (1-200 characters)."),
     "unavailable": ("error", "The project is no longer available."),
@@ -219,8 +221,20 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         except ProjectUnavailable:
             return _redirect("/ui/projects", message="unavailable")
         response = _redirect("/ui/projects", selected=project_id, message="opened")
+        if request.cookies.get(PROJECT_COOKIE) != project_id:
+            # 294a2: a selected configuration belongs to the previous project.
+            response.delete_cookie(CONFIGURATION_COOKIE, path="/ui")
         response.set_cookie(PROJECT_COOKIE, project_id, httponly=True, samesite="lax",
                             path="/ui")
+        return response
+
+    @app.post("/ui/close-project", include_in_schema=False)
+    def close_project(back: str = Form("/ui/projects"), principal=Depends(principal_dependency)):
+        """294a2: forget the open project and its selected configuration."""
+        target = back if back.startswith("/ui/") and "//" not in back else "/ui/projects"
+        response = _redirect(target.split("?")[0], message="closed")
+        response.delete_cookie(PROJECT_COOKIE, path="/ui")
+        response.delete_cookie(CONFIGURATION_COOKIE, path="/ui")
         return response
 
     @app.post("/ui/language", include_in_schema=False)

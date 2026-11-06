@@ -274,6 +274,7 @@ full SQL regression acceptance remain separately unverified.
   - [x] 294a: the Run tab (preflight, start, live progress with plain
     JavaScript polling instead of htmx, cancel, results summary). GUI
     Phase 1 is complete (Projects, Dataset, Configuration, Run).
+  - [x] 294a2: close the open project (Projects tab and context bar).
 - [ ] **GUI delivery Phase 2:** Results (leaderboard, metrics, confusion
   matrix with class names for the owner, feature importance, mispredictions,
   predictions), Models (catalog, model card, prediction runs from a saved

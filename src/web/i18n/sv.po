@@ -1145,3 +1145,10 @@ msgstr "Konfigurationen tränar bara (CSV)."
 
 msgid "CSV runs cannot also predict: untick “Predict unlabelled rows” (Configuration tab)."
 msgstr "CSV-körningar kan inte samtidigt prediktera: avmarkera ”Prediktera rader utan klass” (fliken Konfiguration)."
+
+# 294a2: close the open project.
+msgid "Close project"
+msgstr "Stäng projekt"
+
+msgid "Project closed."
+msgstr "Projektet är stängt."
