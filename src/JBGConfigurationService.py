@@ -32,6 +32,8 @@ SERVER_OWNED = {
     "connection": frozenset({"odbc_driver", "host", "trusted_connection", "sql_username",
                              "sql_password", "data_catalog", "data_table"}),
     "io": frozenset({"model_path", "model_name"}),
+    # 293a2: belongs to the dataset with its column roles (decision A).
+    "mode": frozenset({"categorical_limit"}),
     "mail": frozenset({"smtp_server"}),
 }
 _PLACEHOLDER_ID = "00000000-0000-4000-8000-000000000000"

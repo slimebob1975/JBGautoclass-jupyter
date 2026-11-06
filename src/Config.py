@@ -87,6 +87,9 @@ class Config:
     
     MAX_ITERATIONS = 20000
     CONFIG_FILENAME_START = "autoclassconfig_"
+    # 293a2: section keys added after the schema-v2 baseline, with the default
+    # an older file implies. Agreed 2026-11-05; extend only deliberately.
+    LATER_KEYS = {"mode": {"categorical_limit": 30}}
     JSON_CONFIG_SCHEMA_VERSION = 2
 
     CLASS_TABLE_SCRIPT = "./sql/CreatePredictionTables.sql.txt"
@@ -364,6 +367,9 @@ class Config:
         hex_encode: bool = True
         use_categorization: bool = True
         category_text_columns: list = field(default_factory=list)
+        # 293a2: text columns with at most this many distinct values are
+        # categorised (unless forced in category_text_columns). Was a fixed 30.
+        categorical_limit: int = 30
         test_size: float = 0.2
         calculate_dark_numbers: bool = True
         dark_number_method: DarkNumberMethod = field(default_factory=lambda: DarkNumberMethod.LINEAR)
@@ -468,6 +474,10 @@ class Config:
             if self.mispredicted and not self.train:
                 raise ValueError(
                     "Class must be set for training if it is set for misprediction")
+
+            # Categorical limit (293a2)
+            if type(self.categorical_limit) is not int or not 2 <= self.categorical_limit <= 1000:
+                raise ValueError("Argument categorical_limit must be an integer between 2 and 1000")
 
             # Ngram range 
             if not (isinstance(self.ngram_range, NgramRange)):
@@ -1044,6 +1054,11 @@ class Config:
             section = payload[section_name]
             if not isinstance(section, dict):
                 raise ConfigException(f"JSON configuration section '{section_name}' must be an object")
+            # 293a2: keys added after the schema-v2 baseline (revision 176) get
+            # their defaults when a file predates them. Only keys listed here;
+            # every other missing or unknown key is still refused.
+            for key, default in cls.LATER_KEYS.get(section_name, {}).items():
+                section.setdefault(key, default)
             expected = {item.name for item in dataclass_fields(section_type)}
             actual = set(section)
             missing = expected - actual
@@ -1249,6 +1264,7 @@ class Config:
                 hex_encode=module.mode["hex_encode"],
                 use_categorization=module.mode["use_categorization"],
                 category_text_columns=category_text_columns,
+                categorical_limit=module.mode.get("categorical_limit", 30),
                 test_size=float(module.mode["test_size"]),
                 calculate_dark_numbers=calculate_dark_numbers,
                 dark_number_method=dark_number_method,
@@ -1561,6 +1577,10 @@ class Config:
     def use_categorization(self) -> bool:
         """ Returns if categorization should be used """
         return self.mode.use_categorization
+
+    def get_categorical_limit(self) -> int:
+        """ Text columns with at most this many distinct values are categorised (293a2) """
+        return getattr(self.mode, "categorical_limit", 30)
 
     def get_oversampler(self) -> Union[Oversampling, None]:
         """ Gets the oversampler for the model """

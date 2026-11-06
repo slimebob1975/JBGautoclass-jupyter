@@ -28,7 +28,7 @@ def text_options_from_config(config) -> dict:
     return dict(
         text_columns=tuple(config.get_text_column_names()),
         category_columns=tuple(config.get_categorical_text_column_names()),
-        limit_categorize=30,
+        limit_categorize=config.get_categorical_limit(),
         language="sv",
         stop_words=config.use_stop_words(),
         df=1.0,

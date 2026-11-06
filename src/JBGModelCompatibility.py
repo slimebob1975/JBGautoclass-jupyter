@@ -121,7 +121,8 @@ def _converter_config(config) -> dict:
     return {
         "text_columns": tuple(config.get_text_column_names()),
         "category_columns": tuple(config.get_categorical_text_column_names()),
-        "limit_categorize": 30,
+        # 293a2: the configured limit; the fitted converter records its own.
+        "limit_categorize": config.get_categorical_limit(),
         "language": "sv",
         "stop_words": bool(config.use_stop_words()),
         "df": 1.0,

@@ -494,7 +494,7 @@ class DatasetHandler:
                 ttnc = TextDataToNumbersConverter(
                     text_columns=self.handler.config.get_text_column_names(), 
                     category_columns=self.handler.config.get_categorical_text_column_names(), \
-                    limit_categorize=TextDataToNumbersConverter.LIMIT_IS_CATEGORICAL, \
+                    limit_categorize=self.handler.config.get_categorical_limit(), \
                     language=TextDataToNumbersConverter.STANDARD_LANGUAGE, \
                     stop_words=self.handler.config.use_stop_words(), \
                     df=1.0, \
@@ -818,7 +818,8 @@ class DatasetHandler:
         if not (self.handler.config.should_train() and self.handler.config.use_categorization()):
             return False
         
-        return column.value_counts().count() <= self.LIMIT_IS_CATEGORICAL or self.handler.config.is_categorical(column.name)
+        return column.value_counts().count() <= self.handler.config.get_categorical_limit() \
+            or self.handler.config.is_categorical(column.name)
         
     # Calculate the number of unclassified rows in data matrix
     def get_num_unpredicted_rows(self, dataset: pd.DataFrame = None) -> int:

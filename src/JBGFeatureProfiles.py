@@ -138,7 +138,10 @@ def review_compatibility(record, *, project, tables, class_column, id_column, co
         ngram_range = tuple(text_options.get("ngram_range", ()))
         if ngram_range not in ((1, 1), (1, 2), (1, 3), (2, 2), (2, 3), (3, 3)):
             problems.append("Saved n-gram representation is unsupported")
-        if text_options.get("limit_categorize") != 30 or text_options.get("language") != "sv" or text_options.get("df") != 1.0:
+        limit = text_options.get("limit_categorize")
+        # 293a2: any configured limit (2-1000) can be reproduced.
+        if type(limit) is not int or not 2 <= limit <= 1000 \
+                or text_options.get("language") != "sv" or text_options.get("df") != 1.0:
             problems.append("Saved text representation cannot be reproduced by the current converter contract")
         for key in ("stop_words", "use_encryption", "use_categorization"):
             if type(text_options.get(key)) is not bool:

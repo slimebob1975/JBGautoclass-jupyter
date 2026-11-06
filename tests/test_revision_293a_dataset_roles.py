@@ -100,7 +100,9 @@ def test_roles_are_checked_stored_and_reset_validation(tmp_path):
     with _client(tmp_path) as client:
         project, dataset = _csv_project(client, roles=None)
         url = f"/api/projects/{project}/datasets/{dataset}"
-        assert client.get(url + "/roles").json() == {"dataset_id": dataset, "columns": None}
+        # 293a2 added the categorical limit to the response.
+        assert client.get(url + "/roles").json() == {"dataset_id": dataset, "columns": None,
+                                                     "categorical_limit": None}
         client.post(url + "/validate")
         assert client.get(url).json()["validation_state"] == "valid"
         bad = client.put(url + "/roles", json={"columns": {"id": "id", "nope": "class",

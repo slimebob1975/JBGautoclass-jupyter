@@ -450,7 +450,7 @@ The map above is the target. What exists after revision 285m3:
 | `/ui/` (web interface) | 287a | Shell and Projects tab, server-rendered; Swedish by default; other tabs follow their backends |
 | `/ui/dataset` (Dataset tab) | 291a | Datasets, CSV upload, SQL registration and sign-in, preview, profile, classes and validation; plain forms, no JavaScript |
 | `/ui/configuration` (Configuration tab) | 292a | Forms generated from the schema; column roles from the active dataset; field-level errors; version check on save; no JavaScript |
-| `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
+| `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |
 | `POST .../datasets/{dataset}/validate`, `GET .../datasets/{dataset}/preview` | 289a | The same check list for SQL and CSV, optionally with a configuration's roles; preview of the first 50 rows; SQL needs the sign-in |

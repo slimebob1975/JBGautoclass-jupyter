@@ -1,3 +1,29 @@
+## Revision 293a2 - configurable categorical limit (2026-11-05)
+
+- Text columns with at most N distinct values are categorised; N was a fixed
+  30 in five places. Agreed 2026-11-05 (option A): `Config.Mode` gains
+  `categorical_limit` (default 30, whole number 2-1000) and
+  `get_categorical_limit()`; `JBGHandler` (the converter set-up and
+  `is_categorical_data`), `JBGModelCompatibility`, `JBGFeatureProfiles` and
+  `JBGFeatureSearchService` use it. Columns with the `categorical` role
+  (`category_text_columns`) are categorised regardless of the limit, as
+  before. The Voilà GUI keeps 30 and behaves as before.
+- Model compatibility compares a saved model's recorded limit with the
+  configured one, so a model built with 50 is checked against 50.
+- Config loader: section keys added after the schema-v2 baseline (revision
+  176) are listed in `Config.LATER_KEYS` with the default an older file
+  implies, currently only `mode.categorical_limit: 30`. Files that predate a
+  listed key load with its default; every other missing or unknown key is
+  still refused. Existing Voilà files, stored configurations, queued jobs and
+  CSV role records therefore keep loading.
+- The limit belongs to the dataset with its column roles (decision A):
+  `GET`/`PUT .../datasets/{id}/roles` carry `categorical_limit`; runs set it
+  into the configuration; configurations treat it as server-owned. Roles
+  stored in the 293a format read with 30.
+- Tests: `tests/test_revision_293a2_categorical_limit.py`, including the
+  handler's real converter set-up (at the limit: categorised; above it:
+  free text). The 293a roles response test includes the new field.
+
 ## Revision 293a - column roles belong to the training dataset (2026-11-05)
 
 - Agreed 2026-11-05 (decision A): column roles belong to the training dataset;

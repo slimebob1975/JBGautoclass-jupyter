@@ -361,20 +361,20 @@ class DatasetInspectionService:
     def get_roles(self, principal, project_id: str, dataset_id: str):
         owner = principal.principal_key
         self._dataset(owner, project_id, dataset_id)
-        roles = self._datasets.get_roles(owner, project_id, dataset_id)
-        return None if roles is None else roles.as_mapping()
+        return self._datasets.get_roles(owner, project_id, dataset_id)
 
-    def set_roles(self, principal, project_id: str, dataset_id: str, mapping) -> dict:
+    def set_roles(self, principal, project_id: str, dataset_id: str, mapping,
+                  categorical_limit: int = 30):
         """Check the roles against the dataset's real columns, then store them."""
         from JBGDatasetRoles import DatasetRoles
         owner = principal.principal_key
         project, dataset = self._dataset(owner, project_id, dataset_id)
         if dataset.role is DatasetRole.PREDICTION:
             raise ValueError("prediction datasets use the roles of the training dataset")
-        roles = DatasetRoles.from_mapping(mapping)
+        roles = DatasetRoles.from_mapping(mapping, categorical_limit)
         columns = self._with_facts(principal, project, dataset, lambda facts: list(facts.columns))
         roles.check(columns, require_class=True)
-        return self._datasets.set_roles(owner, project_id, dataset_id, roles).as_mapping()
+        return self._datasets.set_roles(owner, project_id, dataset_id, roles)
 
     # --- Validation -----------------------------------------------------------------
 

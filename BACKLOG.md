@@ -257,8 +257,9 @@ full SQL regression acceptance remain separately unverified.
   - [x] 293a: column roles belong to the training dataset (decision A,
     agreed 2026-11-05); compatibility rule for prediction datasets; SQL
     catalog and table lists.
-  - [ ] 293a2: configurable categorical limit (engine; default 30, Voilà
-    unchanged). Today hard-coded in JBGTransformers, JBGHandler (twice),
+  - [x] 293a2: configurable categorical limit (engine; default 30, Voilà
+    unchanged). Config loader accepts older files without listed later keys
+    (`Config.LATER_KEYS`). Today hard-coded in JBGTransformers, JBGHandler (twice),
     JBGModelCompatibility, JBGFeatureProfiles and JBGFeatureSearchService.
     Stored on the dataset with its roles; model compatibility must record
     the limit actually used.

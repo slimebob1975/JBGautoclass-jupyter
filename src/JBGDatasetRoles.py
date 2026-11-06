@@ -28,12 +28,20 @@ class IncompatibleDataset(ValueError):
         self.missing, self.different = tuple(missing), tuple(different)
 
 
+DEFAULT_CATEGORICAL_LIMIT = 30
+
+
 @dataclass(frozen=True)
 class DatasetRoles:
     columns: tuple            # ((column name, role), ...) in the dataset's order
+    # 293a2: text columns with at most this many distinct values are
+    # categorised; "categorical" columns are categorised regardless.
+    categorical_limit: int = DEFAULT_CATEGORICAL_LIMIT
 
     @classmethod
-    def from_mapping(cls, mapping) -> "DatasetRoles":
+    def from_mapping(cls, mapping, categorical_limit=DEFAULT_CATEGORICAL_LIMIT) -> "DatasetRoles":
+        if type(categorical_limit) is not int or not 2 <= categorical_limit <= 1000:
+            raise ValueError("the categorical limit must be a whole number between 2 and 1000")
         if not isinstance(mapping, dict) or len(mapping) > MAX_COLUMNS:
             raise ValueError("column roles must map column names to roles")
         pairs = []
@@ -43,14 +51,19 @@ class DatasetRoles:
             if role not in ROLES:
                 raise ValueError("unknown column role")
             pairs.append((name, role))
-        return cls(tuple(pairs))
+        return cls(tuple(pairs), categorical_limit)
 
     @classmethod
     def from_json(cls, text: str) -> "DatasetRoles":
-        return cls.from_mapping(dict(json.loads(text)))
+        stored = json.loads(text)
+        if "columns" in stored and isinstance(stored["columns"], dict):
+            return cls.from_mapping(stored["columns"],
+                                    stored.get("categorical_limit", DEFAULT_CATEGORICAL_LIMIT))
+        return cls.from_mapping(dict(stored))            # 293a format: the mapping only
 
     def to_json(self) -> str:
-        return json.dumps(dict(self.columns))
+        return json.dumps({"columns": dict(self.columns),
+                           "categorical_limit": self.categorical_limit})
 
     def as_mapping(self) -> dict:
         return dict(self.columns)
@@ -90,6 +103,7 @@ class DatasetRoles:
         config.connection.data_numerical_columns = self.by_role("numeric")
         config.connection.data_text_columns = text + categorical
         config.mode.category_text_columns = categorical
+        config.mode.categorical_limit = self.categorical_limit
 
 
 def check_compatible(roles: DatasetRoles, training_kinds: dict, candidate_kinds: dict) -> None:

@@ -68,8 +68,10 @@ class ProjectRunRequest(BaseModel):
 
 
 class DatasetRolesRequest(BaseModel):
-    """293a: one role per column (id, class, numeric, text, categorical, ignored)."""
+    """293a: one role per column (id, class, numeric, text, categorical, ignored);
+    293a2: the categorical limit for text columns (2-1000, default 30)."""
     columns: dict
+    categorical_limit: int = 30
 
 
 class SQLSignIn(BaseModel):
@@ -482,18 +484,24 @@ def _add_dataset_inspection_endpoints(app, principal_dependency, inspection):
         # training dataset's) replace the 289a choice of a configuration.
         return call(inspection.validate, principal, project_id, dataset_id)
 
+    def roles_response(dataset_id, roles):
+        if roles is None:
+            return {"dataset_id": dataset_id, "columns": None, "categorical_limit": None}
+        return {"dataset_id": dataset_id, "columns": roles.as_mapping(),
+                "categorical_limit": roles.categorical_limit}
+
     @app.get(base + "/roles")
     def get_roles(project_id: str, dataset_id: str,
                   principal: AuthenticatedPrincipal = Depends(principal_dependency)):
-        return {"dataset_id": dataset_id,
-                "columns": call(inspection.get_roles, principal, project_id, dataset_id)}
+        return roles_response(dataset_id, call(inspection.get_roles, principal, project_id,
+                                               dataset_id))
 
     @app.put(base + "/roles")
     def set_roles(project_id: str, dataset_id: str, request: DatasetRolesRequest = Body(...),
                   principal: AuthenticatedPrincipal = Depends(principal_dependency)):
-        return {"dataset_id": dataset_id,
-                "columns": call(inspection.set_roles, principal, project_id, dataset_id,
-                                request.columns)}
+        return roles_response(dataset_id, call(inspection.set_roles, principal, project_id,
+                                               dataset_id, request.columns,
+                                               request.categorical_limit))
 
     @app.get("/api/sql/catalogs")
     def sql_catalogs(principal: AuthenticatedPrincipal = Depends(principal_dependency)):
