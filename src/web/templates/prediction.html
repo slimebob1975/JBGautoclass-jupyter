@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% set title = "Prediction" %}
+{% block main %}
+{% if no_project %}
+  <div class="card"><p class="empty">{{ _("Open a project in the Projects tab first.") }}
+    <a href="/ui/projects">{{ _("Projects") }}</a></p></div>
+{% else %}
+<div class="layout-two run-layout">
+  <section>
+    <div class="card">
+      <h2>{{ _("Predict with a saved model") }}</h2>
+      {% if csv_project %}
+        <p class="hint">{{ _("Predictions for CSV projects come in the next update.") }}</p>
+      {% else %}
+        <ul class="checks">
+        {% for check in checks %}
+          <li class="check-{{ 'passed' if check.passed else 'failed' }}">
+            <span class="mark">{{ "✓" if check.passed else "✗" }}</span>{{ _(check.message) }}</li>
+        {% endfor %}
+        </ul>
+        {% if model %}<p class="hint">{{ _("Model") }}: <b>{{ model.name }}</b></p>{% endif %}
+        <form id="predict-form" method="post" action="/ui/prediction" class="stack">
+          <label for="predict-dataset">{{ _("Rows to predict") }}</label>
+          <select id="predict-dataset" name="dataset_id">
+            <option value="">{{ _("Rows without a class in the training dataset") }}</option>
+            {% for d in datasets %}<option value="{{ d.dataset_id }}">{{ d.name }}</option>{% endfor %}
+          </select>
+          <p class="hint">{{ _("The predictions are written to the prediction table in SQL Server. A table without a class column is predicted in full.") }}</p>
+        </form>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h2>{{ _("Prediction runs") }}</h2>
+      {% if recent %}
+      <table class="grid">
+        <thead><tr><th>{{ _("Started") }}</th><th>{{ _("Configuration") }}</th><th>{{ _("Status") }}</th></tr></thead>
+        <tbody>
+        {% for item in recent %}
+          <tr class="{{ 'hl' if item.run_id == selected_run }}">
+            <td class="num"><a href="/ui/prediction?run={{ item.run_id }}">{{ item.created_at | localtime }}</a></td>
+            <td>{{ item.configuration_name or "–" }}{% if item.configuration_version %} v{{ item.configuration_version }}{% endif %}</td>
+            <td><span class="badge {{ 'b-ok' if item.status == 'succeeded' else ('b-fail' if item.status in ('failed', 'interrupted') else 'b-neu') }}">{{ _(stages.get(item.status, item.status)) }}</span></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">{{ _("No prediction runs yet.") }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <aside class="card wide">
+  {% if overview %}
+    {% include "_run_panel.html" %}
+    {% if overview.status == "succeeded" %}
+      <p class="message ok">{{ _("The predictions were written to the prediction table in SQL Server.") }}</p>
+    {% elif overview.status in terminal %}
+      <p class="message error">{{ _("The run did not finish successfully.") }}</p>
+    {% endif %}
+  {% else %}
+    <p class="empty">{{ _("Start a prediction, or select one in the list.") }}</p>
+  {% endif %}
+  </aside>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block actions %}
+  <span class="hint">{{ _("Predicts with the model chosen on the Models tab.") }}</span>
+  {% if ready %}
+    <button class="btn act ready" form="predict-form">{{ _("Start prediction") }}</button>
+  {% else %}
+    <button class="btn act blocked" disabled title="{{ _('Not everything is ready yet.') }}">{{ _("Start prediction") }}</button>
+  {% endif %}
+{% endblock %}

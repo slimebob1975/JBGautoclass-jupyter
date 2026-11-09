@@ -71,13 +71,13 @@ def test_preflight_blocks_until_everything_is_ready(tmp_path):
         _open(client)
         page = client.get("/ui/run").text
         assert _checks(page)[:3] == ["failed", "failed", "failed"]
-        assert re.search(r'<button class="btn act blocked" disabled[^>]*>Starta körning', page)
+        assert re.search(r'<button class="btn act blocked" disabled[^>]*>Starta träning', page)
     with _client(tmp_path / "ready") as client:
         _ready(client)
         page = client.get("/ui/run").text
         assert "Konfigurationen tränar bara (CSV)." in page
         assert _checks(page)[-1] == "warning"                      # not validated: advisory only
-        assert '<button class="btn act ready">Starta körning</button>' in page
+        assert '<button class="btn act ready">Starta träning</button>' in page
 
 
 def test_csv_configurations_start_train_only_and_predicting_ones_are_refused(tmp_path):

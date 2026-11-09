@@ -1,3 +1,32 @@
+## Revision 296a - Training and Prediction tabs, live progress, logs (2026-11-09)
+
+- Found in use (2026-11-09): the progress bar stood still until a run had
+  finished. The engine reports progress through `update_progress`, which
+  adds up the share and calls the real logger's own `print_progress`, past
+  the worker's wrapper; only bare messages reached the store. The wrapper
+  now also takes `update_progress` and records the running total (clamped
+  to 0-100 %), and checks for cancellation there too.
+- Agreed 2026-11-09: the Run tab is split into Training (path `/ui/run`, so
+  bookmarks keep working) and Prediction (`/ui/prediction`, after Models):
+  train, look at the results, choose a model, predict. Each has its own
+  preflight list, start button, run list and live view (shared template
+  `_run_panel.html`); the Results tab lists training runs only.
+- The Training tab's confusion matrix names the classes, as the Results tab.
+- The header shows a display name, never the technical identity: "Unknown
+  user" unless `JBG_TRUST_APP_SERVICE_HEADERS` is set in `.env` (only behind
+  Azure App Service authentication, which sets `X-MS-CLIENT-PRINCIPAL-NAME`
+  and strips copies sent by clients); then that header's name (printable
+  characters, at most 200).
+- Run logs for their owner: "Show log" on each run shows the end of the
+  worker log in the browser (at most 200 kB); `GET /api/runs/{id}/log`
+  downloads all of it. Logs may contain data values, so they are owner-only.
+- Tests: `tests/test_revision_296a_training_prediction.py`; tests of 294a,
+  295b2 and 295c follow the new button text and the Prediction tab. The
+  native 288a test now waits for the model registration: the worker
+  registers the model right after marking the run succeeded, and the test
+  could ask in between (a timing race since 288c, exposed by the extra
+  progress writes).
+
 ## Revision 295c - predicting with a saved model (SQL) (2026-11-09)
 
 - Engine (agreed 2026-11-09): a prediction-only run may read a SQL table

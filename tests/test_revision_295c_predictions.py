@@ -210,24 +210,30 @@ def test_csv_projects_and_other_users_are_refused(tmp_path):
         assert response.status_code == 404
 
 
-def test_the_run_tab_offers_prediction_with_the_chosen_model(tmp_path):
+def test_the_prediction_tab_predicts_with_the_chosen_model(tmp_path):
+    # 296a moved predicting from the Run tab to its own Prediction tab.
     with _sql_signed_in(), _client(tmp_path) as client:
         project, model_id, prediction = _trained_sql_model(client, tmp_path)
         client.post(f"/ui/projects/{project}/open", follow_redirects=False)
-        page = client.get("/ui/run").text
-        assert "Prediktera med en sparad modell" in page and "Välj först en modell" in page
+        page = client.get("/ui/prediction").text
+        assert "Ingen modell är vald (fliken Modeller)." in page
+        assert re.search(r'<button class="btn act blocked" disabled[^>]*>Starta prediktion', page)
         client.post(f"/ui/models/{model_id}/choose", follow_redirects=False)
         _sign_in(client)
-        page = client.get("/ui/run").text
+        page = client.get("/ui/prediction").text
         assert "LR v3" in page and f'<option value="{prediction}">Nov</option>' in page
-        started = client.post("/ui/run/predict", data={"dataset_id": prediction}, follow_redirects=True).text
-        assert "Prediktionen har startat." in started and ">Prediktion</span>" in started
+        assert '<button class="btn act ready" form="predict-form">Starta prediktion</button>' in page
+        started = client.post("/ui/prediction", data={"dataset_id": prediction}, follow_redirects=True).text
+        assert "Prediktionen har startat." in started and "Prediktionskörningar" in started
+        assert "Prediktionskörningar" not in client.get("/ui/run").text      # not on Training
 
 
-def test_csv_projects_show_no_prediction_card_yet(tmp_path):
+def test_csv_projects_say_that_predictions_follow(tmp_path):
     with _client(tmp_path) as client:
         location = client.post("/ui/projects", data={"name": "C", "source": "csv"},
                                follow_redirects=False).headers["location"]
         project = re.search(r"selected=([0-9a-f-]{36})", location).group(1)
         client.post(f"/ui/projects/{project}/open", follow_redirects=False)
-        assert "Prediktera med en sparad modell" not in client.get("/ui/run").text
+        page = client.get("/ui/prediction").text
+        assert "Prediktioner för CSV-projekt kommer i nästa uppdatering." in page
+        assert 'class="btn act ready"' not in page

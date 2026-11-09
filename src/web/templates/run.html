@@ -1,12 +1,10 @@
 {% extends "base.html" %}
-{% set title = "Run" %}
+{% set title = "Training" %}
 {% block main %}
 {% if no_project %}
   <div class="card"><p class="empty">{{ _("Open a project in the Projects tab first.") }}
     <a href="/ui/projects">{{ _("Projects") }}</a></p></div>
 {% else %}
-{% set ns = namespace(labels={}) %}
-{% for key, label in stages.items() %}{% set _ignored = ns.labels.update({key: _(label)}) %}{% endfor %}
 <div class="layout-two run-layout">
   <section>
     <div class="card">
@@ -20,28 +18,8 @@
       </ul>
       {% if configuration %}<p class="hint">{{ _("Configuration") }}: <b>{{ configuration.name }}</b> v{{ configuration.version }}</p>{% endif %}
     </div>
-    {% if prediction and prediction.available %}
     <div class="card">
-      <h2>{{ _("Predict with a saved model") }}</h2>
-      {% if prediction.model %}
-        <p>{{ _("Model") }}: <b>{{ prediction.model.name }}</b></p>
-        <form method="post" action="/ui/run/predict" class="stack">
-          <label for="predict-dataset">{{ _("Rows to predict") }}</label>
-          <select id="predict-dataset" name="dataset_id">
-            <option value="">{{ _("Rows without a class in the training dataset") }}</option>
-            {% for d in prediction.datasets %}<option value="{{ d.dataset_id }}">{{ d.name }}</option>{% endfor %}
-          </select>
-          {% if not prediction.signed_in %}<p class="hint">{{ _("Sign in to SQL Server first.") }}</p>{% endif %}
-          <button class="btn {{ '' if prediction.ready else 'sub' }}" {{ '' if prediction.ready else 'disabled' }}>{{ _("Start prediction") }}</button>
-          <p class="hint">{{ _("The predictions are written to the prediction table in SQL Server. A table without a class column is predicted in full.") }}</p>
-        </form>
-      {% else %}
-        <p class="hint">{{ _("Choose a model on the Models tab first.") }}</p>
-      {% endif %}
-    </div>
-    {% endif %}
-    <div class="card">
-      <h2>{{ _("Runs in this project") }}</h2>
+      <h2>{{ _("Training runs") }}</h2>
       {% if recent %}
       <table class="grid">
         <thead><tr><th>{{ _("Started") }}</th><th>{{ _("Configuration") }}</th><th>{{ _("Status") }}</th></tr></thead>
@@ -50,7 +28,7 @@
           <tr class="{{ 'hl' if item.run_id == selected_run }}">
             <td class="num"><a href="/ui/run?run={{ item.run_id }}">{{ item.created_at | localtime }}</a></td>
             <td>{{ item.configuration_name or "–" }}{% if item.configuration_version %} v{{ item.configuration_version }}{% endif %}
-              {% if item.kind == "prediction" %}<span class="badge b-info">{{ _("Prediction") }}</span>{% endif %}</td>
+</td>
             <td><span class="badge {{ 'b-ok' if item.status == 'succeeded' else ('b-fail' if item.status in ('failed', 'interrupted') else 'b-neu') }}">{{ _(stages.get(item.status, item.status)) }}</span></td>
           </tr>
         {% endfor %}
@@ -64,20 +42,8 @@
 
   <aside class="card wide">
   {% if overview %}
-    {% set stage = overview.stage %}
+    {% include "_run_panel.html" %}
     {% set finished = overview.status in terminal %}
-    <div {% if not finished %}data-run-poll="{{ overview.run_id }}" data-terminal="{{ terminal | list | tojson | forceescape }}" data-stage-labels="{{ ns.labels | tojson | forceescape }}"{% endif %}>
-      <h2>{{ _("Run") }} <span class="muted">{{ overview.run_id[:8] }}</span></h2>
-      <p class="run-stage"><b data-run-stage>{{ ns.labels.get(stage.name, stage.name) }}</b></p>
-      <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
-           aria-valuenow="{{ ((stage.percent or 0) * 100) | round | int }}">
-        <div class="bar" data-run-bar style="width: {{ ((stage.percent or 0) * 100) | round | int }}%"></div>
-      </div>
-      {% if not finished %}
-        <p class="hint">{{ _("The page updates itself while the run is in progress.") }}</p>
-        <form method="post" action="/ui/run/{{ overview.run_id }}/cancel"><button class="btn sub">{{ _("Cancel the run") }}</button></form>
-      {% endif %}
-    </div>
     {% set results = overview.results %}
     {% if finished and results and results.available %}
       {% set ev = results.evaluation %}
@@ -92,9 +58,11 @@
         {% if ev.confusion_matrix %}
           <h3>{{ _("Confusion matrix") }}</h3>
           <p class="hint">{{ _("Rows: actual class; columns: predicted class.") }}</p>
+          {# 296a: class names, as on the Results tab, when the run kept them #}
+          {% set named = labels and labels | length == ev.confusion_matrix | length %}
           <div class="scroll"><table class="grid matrix">
-            <thead><tr><th></th>{% for _c in ev.confusion_matrix %}<th class="num">{{ loop.index }}</th>{% endfor %}</tr></thead>
-            <tbody>{% for row in ev.confusion_matrix %}{% set i = loop.index %}<tr><th class="num">{{ i }}</th>
+            <thead><tr><th></th>{% for _c in ev.confusion_matrix %}<th class="num">{{ labels[loop.index0] if named else loop.index }}</th>{% endfor %}</tr></thead>
+            <tbody>{% for row in ev.confusion_matrix %}{% set i = loop.index %}<tr><th>{{ labels[i - 1] if named else i }}</th>
               {% for value in row %}<td class="num{{ ' diag' if loop.index == i }}">{{ value }}</td>{% endfor %}</tr>{% endfor %}</tbody>
           </table></div>
         {% endif %}
@@ -113,8 +81,6 @@
         <p class="hint">{{ _("Classes") }}: {{ results.summary.class_count }} · {{ _("Mispredicted rows (all labelled rows)") }}: {{ results.summary.mispredicted_count }}</p>
       {% endif %}
       <p><a href="/ui/results?run={{ overview.run_id }}">{{ _("All results of this run") }} ›</a></p>
-    {% elif finished and overview.status == "succeeded" and selected_kind == "prediction" %}
-      <p class="message ok">{{ _("The predictions were written to the prediction table in SQL Server.") }}</p>
     {% elif finished and overview.status != "succeeded" %}
       <p class="message error">{{ _("The run did not finish successfully.") }}</p>
     {% endif %}
@@ -129,8 +95,8 @@
 {% block actions %}
   <span class="hint">{{ _("Starts a training run with the active dataset and the selected configuration.") }}</span>
   {% if ready %}
-    <form method="post" action="/ui/run"><button class="btn act ready">{{ _("Start run") }}</button></form>
+    <form method="post" action="/ui/run"><button class="btn act ready">{{ _("Start training") }}</button></form>
   {% else %}
-    <button class="btn act blocked" disabled title="{{ _('Not everything is ready yet.') }}">{{ _("Start run") }}</button>
+    <button class="btn act blocked" disabled title="{{ _('Not everything is ready yet.') }}">{{ _("Start training") }}</button>
   {% endif %}
 {% endblock %}

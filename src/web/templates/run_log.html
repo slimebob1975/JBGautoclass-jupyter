@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% set title = "Log" %}
+{% block main %}
+<div class="card">
+  <h2>{{ _("Log") }} <span class="muted">{{ run_id[:8] }}</span></h2>
+  {% if log_text is none %}
+    <p class="empty">{{ _("No log is available for this run.") }}</p>
+  {% else %}
+    <p><a class="btn sub" href="/api/runs/{{ run_id }}/log" download>{{ _("Download the whole log") }}</a>
+      <a href="javascript:history.back()">‹ {{ _("Back") }}</a></p>
+    {% if truncated %}<p class="hint">{{ _("Only the end of the log is shown; the download contains all of it.") }}</p>{% endif %}
+    <pre class="log">{{ log_text }}</pre>
+  {% endif %}
+</div>
+{% endblock %}
+{% block actions %}{% endblock %}

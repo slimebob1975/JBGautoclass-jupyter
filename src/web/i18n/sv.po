@@ -1273,3 +1273,55 @@ msgstr "Välj först en modell under fliken Modeller."
 
 msgid "The predictions were written to the prediction table in SQL Server."
 msgstr "Prediktionerna skrevs till prediktionstabellen i SQL Server."
+
+# 296a: Training and Prediction tabs, display name, logs.
+msgid "Unknown user"
+msgstr "Okänd användare"
+
+msgid "Start training"
+msgstr "Starta träning"
+
+msgid "Training runs"
+msgstr "Träningskörningar"
+
+msgid "Prediction runs"
+msgstr "Prediktionskörningar"
+
+msgid "No prediction runs yet."
+msgstr "Inga prediktionskörningar ännu."
+
+msgid "A model is chosen."
+msgstr "En modell är vald."
+
+msgid "No model is chosen (Models tab)."
+msgstr "Ingen modell är vald (fliken Modeller)."
+
+msgid "The model is available."
+msgstr "Modellen är tillgänglig."
+
+msgid "Predictions for CSV projects come in the next update."
+msgstr "Prediktioner för CSV-projekt kommer i nästa uppdatering."
+
+msgid "Start a prediction, or select one in the list."
+msgstr "Starta en prediktion eller välj en i listan."
+
+msgid "Predicts with the model chosen on the Models tab."
+msgstr "Predikterar med modellen som är vald under fliken Modeller."
+
+msgid "Show log"
+msgstr "Visa logg"
+
+msgid "Log"
+msgstr "Logg"
+
+msgid "No log is available for this run."
+msgstr "Det finns ingen logg för den här körningen."
+
+msgid "Download the whole log"
+msgstr "Ladda ned hela loggen"
+
+msgid "Back"
+msgstr "Tillbaka"
+
+msgid "Only the end of the log is shown; the download contains all of it."
+msgstr "Bara slutet av loggen visas; nedladdningen innehåller hela."

@@ -27,7 +27,7 @@ from JBGProjectRuns import DEFAULT_MODEL_ROOT, ProjectRunService
 from JBGSQLServer import SQLServerSettings, sql_server_settings
 from JBGModelService import ModelService
 from JBGDatasetInspection import DatasetInspectionService
-from JBGRunResults import DEFAULT_RESULTS_ROOT, RunResultsService
+from JBGRunResults import DEFAULT_RESULTS_ROOT, RunLogService, RunResultsService
 from JBGProjectStorage import DEFAULT_CSV_ROOT
 from JBGRunSubmission import RunSubmission
 from JBGSavedConfigurations import ROOT, SavedConfigurations
@@ -59,6 +59,7 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                       csv_root: Path = DEFAULT_CSV_ROOT,
                       model_root: Path = DEFAULT_MODEL_ROOT,
                       results_root: Path = DEFAULT_RESULTS_ROOT,
+                      trust_app_service_headers: bool | None = None,
                       sql_server: SQLServerSettings | None = None,
                       dispatcher_options: dict | None = None):
     identity = LocalIdentityProvider(IdentitySettings(AuthenticationMode.LOCAL, "development",
@@ -127,8 +128,21 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                      models=ModelService(models, project_service),
                      dataset_inspection=inspection,
                      run_results=RunResultsService(store, results_root=results_root),
+                     run_logs=RunLogService(store, run_logs),
+                     trust_app_service_headers=_trust_headers(trust_app_service_headers),
                      web_ui=True, version_line=_version_line(),
                      lifespan=lifespan)
     app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service,
                      "datasets": datasets}
     return app
+
+
+def _trust_headers(explicit: bool | None) -> bool:
+    """296a: JBG_TRUST_APP_SERVICE_HEADERS in .env (the environment wins); off by
+    default. Only set it when the server runs behind Azure App Service
+    authentication, which sets X-MS-CLIENT-PRINCIPAL-NAME itself."""
+    if explicit is not None:
+        return bool(explicit)
+    from JBGMetadataStore import ROOT, _environment
+    value = (_environment(ROOT).get("JBG_TRUST_APP_SERVICE_HEADERS") or "").strip().lower()
+    return value in ("1", "true", "yes")

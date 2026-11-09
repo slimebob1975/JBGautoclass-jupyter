@@ -286,9 +286,15 @@ full SQL regression acceptance remain separately unverified.
   - [x] 295c: predicting with a saved model for SQL projects (into the
     prediction table); prediction tables may lack the class column (agreed
     2026-11-09, engine change in SQLDataLayer).
-  - [ ] 295c2: CSV predictions as a downloadable file (the training
+  - [x] 296a (requested 2026-11-09): Training and Prediction tabs, live
+    progress (the engine's progress now reaches the store), class names in
+    the Training tab, display name in the header ("Unknown user" unless App
+    Service headers are trusted), run logs for their owner.
+  - [ ] 296b (was 295c2): CSV predictions as a downloadable file (the training
     dataset's rows without a class, agreed 2026-11-09) and a predictions view
-    in the Results tab for SQL and CSV.
+    on the Prediction tab for SQL and CSV.
+  - Not planned (decided 2026-11-09): importing models trained in Voilà into
+    the model catalog.
   - [ ] Later: separate CSV prediction datasets (the CSV prediction path is
     pinned to the training dataset's identity today); their class column may
     be missing too.
@@ -304,8 +310,10 @@ full SQL regression acceptance remain separately unverified.
     is developer-oriented) and the program's version line.
 - [ ] Per-project retention (design decision 3) now covers model files
   (288a) and per-run result folders (295a).
-  - [ ] Interface details noted on 2026-11-05: show the Windows user name in
-    local mode instead of the fixed "developer"; use the JBG logo image from
+  - [x] Header name (296a, decided 2026-11-09 instead of the Windows user
+    name): "Unknown user" in local mode; the App Service user name behind
+    Azure App Service authentication (`JBG_TRUST_APP_SERVICE_HEADERS`).
+  - [ ] Interface detail noted on 2026-11-05: use the JBG logo image from
     `GUI/assets/logo.png` in the header.
   - [ ] Store the language choice per user on the server (decision 6); 287a
     keeps it in a browser cookie.

@@ -106,3 +106,34 @@ class RunResultsService:
         return {"run_id": run_id, "kind": kind, "columns": columns,
                 "rows": [[_number(value) for value in row] for row in selected],
                 "total_rows": len(rows), "page": page, "page_size": page_size}
+
+
+class RunLogService:
+    """296a: a run's worker log, for the run's owner only. Logs may contain data
+    values (queries, rows), so they are never shown to anyone else."""
+
+    BROWSER_LIMIT = 200_000          # bytes shown in the browser; the download is whole
+
+    def __init__(self, store, log_dir: Path) -> None:
+        self._store = store
+        self._dir = Path(log_dir)
+
+    def path(self, owner: str, run_id: str) -> Path:
+        try:
+            record = self._store.get_owned(owner, RunReference(run_id))
+        except (KeyError, ValueError):
+            raise RunResultsUnavailable("run unavailable") from None
+        path = self._dir / f"run_{record.run.key}.log"
+        if not path.is_file():
+            raise RunResultsUnavailable("log unavailable")
+        return path
+
+    def tail(self, owner: str, run_id: str) -> tuple[str, bool]:
+        """The end of the log as text, and whether earlier parts were left out."""
+        path = self.path(owner, run_id)
+        size = path.stat().st_size
+        with path.open("rb") as stream:
+            if size > self.BROWSER_LIMIT:
+                stream.seek(size - self.BROWSER_LIMIT)
+            data = stream.read()
+        return data.decode("utf-8", errors="replace"), size > self.BROWSER_LIMIT

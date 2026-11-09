@@ -103,6 +103,8 @@ def create_app(
     models=None,
     dataset_inspection=None,
     run_results=None,
+    run_logs=None,
+    trust_app_service_headers: bool = False,
     sql_server=None,
     web_ui: bool = False,
     version_line: str = "",
@@ -200,7 +202,8 @@ def create_app(
                    inspection=dataset_inspection, configurations=configurations,
                    sessions=sessions, sql_server=sql_server,
                    runs=presentation if hasattr(presentation, "list_project_runs") else None,
-                   project_runs=project_runs, results=run_results, models=models)
+                   project_runs=project_runs, results=run_results, models=models,
+                   logs=run_logs, trust_app_service_headers=trust_app_service_headers)
     if datasets is not None:
         _add_dataset_endpoints(app, principal_dependency, datasets)
     if configurations is not None:
@@ -213,6 +216,8 @@ def create_app(
         _add_dataset_inspection_endpoints(app, principal_dependency, dataset_inspection)
     if run_results is not None:
         _add_run_results_endpoints(app, principal_dependency, run_results)
+    if run_logs is not None:
+        _add_run_log_endpoint(app, principal_dependency, run_logs)
     if submission is not None:
         _add_run_and_session_endpoints(app, presentation, principal_dependency, read_owned,
                                        submission, sessions, sql_server)
@@ -558,6 +563,21 @@ def _add_dataset_inspection_endpoints(app, principal_dependency, inspection):
     def class_distribution(project_id: str, dataset_id: str, column: str,
                            principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return call(inspection.class_distribution, principal, project_id, dataset_id, column)
+
+
+def _add_run_log_endpoint(app, principal_dependency, logs):
+    """296a: the whole worker log of a run, as a download, for its owner only."""
+    from fastapi.responses import FileResponse
+    from JBGRunResults import RunResultsUnavailable
+
+    @app.get("/api/runs/{run_id}/log")
+    def run_log(run_id: str, principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        try:
+            path = logs.path(principal.principal_key, run_id)
+        except RunResultsUnavailable:
+            raise HTTPException(status_code=404, detail="log unavailable") from None
+        return FileResponse(path, media_type="text/plain; charset=utf-8",
+                            filename=f"jbg_run_{run_id[:8]}.log")
 
 
 def _add_run_results_endpoints(app, principal_dependency, results):

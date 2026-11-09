@@ -66,7 +66,7 @@ def test_choosing_does_not_create_a_version_and_unblocks_the_run(tmp_path):
         assert client.get(f"/api/projects/{project}/configurations/{configuration}").json()["version"] == 1
         run = client.get("/ui/run").text
         assert "En konfiguration är vald." in run and "Konfigurationen tränar en modell." in run
-        assert '<button class="btn act ready">Starta körning</button>' in run
+        assert '<button class="btn act ready">Starta träning</button>' in run
 
 
 def test_the_new_texts_are_translated():

@@ -171,6 +171,21 @@ class StoreProgressLogger:
         self.checkpoint()
         return result
 
+    def update_progress(self, percent=None, message=None):
+        """296a: the engine reports its progress here (Voilà's bar); the real
+        logger adds it up and calls its *own* print_progress, past this
+        wrapper, so record the running total here or the bar stays still."""
+        progress = self._logger.update_progress(percent=percent, message=message)
+        if isinstance(progress, (int, float)) and not isinstance(progress, bool):
+            try:
+                self._store.record_progress(self._run, message,
+                                            min(max(float(progress), 0.0), 1.0))
+            except Exception as error:
+                print(f"[JBGRunWorker] progress not recorded: {type(error).__name__}",
+                      file=sys.stderr)
+        self.checkpoint()
+        return progress
+
     def __getattr__(self, name):
         return getattr(self._logger, name)
 

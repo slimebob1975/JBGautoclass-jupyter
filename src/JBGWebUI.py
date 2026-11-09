@@ -29,10 +29,13 @@ CONFIGURATION_COOKIE = "jbg_configuration"          # set on the Configuration t
 MODEL_COOKIE = "jbg_model"                          # set on the Models tab (295b)
 
 # (key, English label, available in this revision)
+# 296a: "Run" became "Training"; "Prediction" follows "Models" (the work order:
+# train, look at the results, choose a model, predict).
 TABS = (("overview", "Overview", False), ("projects", "Projects", True),
         ("dataset", "Dataset", False), ("configuration", "Configuration", False),
-        ("run", "Run", False), ("results", "Results", False),
-        ("models", "Models", False), ("history", "Run History", False))
+        ("run", "Training", False), ("results", "Results", False),
+        ("models", "Models", False), ("prediction", "Prediction", False),
+        ("history", "Run History", False))
 
 MESSAGES = {
     "created": ("ok", "Project created."), "saved": ("ok", "Changes saved."),
@@ -118,7 +121,7 @@ def _redirect(path: str, **query) -> RedirectResponse:
 def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: str = "",
                datasets=None, inspection=None, configurations=None, sessions=None,
                sql_server=None, runs=None, project_runs=None, results=None,
-               models=None) -> None:
+               models=None, logs=None, trust_app_service_headers: bool = False) -> None:
     """Mount the interface under /ui on ``app``.
 
     The Dataset tab (291a) is mounted when its services are given.
@@ -147,7 +150,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                     else set())
                  | ({"run"} if project_runs is not None and runs is not None else set())
                  | ({"results"} if results is not None and runs is not None else set())
-                 | ({"models"} if models is not None and runs is not None else set()))
+                 | ({"models"} if models is not None and runs is not None else set())
+                 | ({"prediction"} if project_runs is not None and runs is not None else set()))
     tabs = tuple((key, label, key in available) for key, label, _ in TABS)
 
     def active_dataset(owner: str, project):
@@ -170,6 +174,17 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         except Exception:
             return None
 
+    def display_name(request: Request):
+        """296a: the name shown in the header, never the technical identity.
+        X-MS-CLIENT-PRINCIPAL-NAME is read only behind Azure App Service
+        authentication (JBG_TRUST_APP_SERVICE_HEADERS), which sets it and
+        strips copies sent by clients; otherwise anyone could send one."""
+        if not trust_app_service_headers:
+            return None
+        value = request.headers.get("x-ms-client-principal-name", "")
+        value = "".join(ch for ch in value if ch.isprintable()).strip()[:200]
+        return value or None
+
     def active_model(request: Request, owner: str, project):
         """The model chosen on the Models tab (295b), for the context bar."""
         model_id = request.cookies.get(MODEL_COOKIE)
@@ -188,7 +203,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         message = context.pop("tab_messages", {}).get(code) or MESSAGES.get(code)
         project = active_project(request, principal.principal_key)
         base = {"request": request, "_": _, "language": language, "tabs": tabs,
-                "current_tab": tab, "user": principal.subject, "version_line": version_line,
+                "current_tab": tab, "user": display_name(request) or _("Unknown user"),
+                "version_line": version_line,
                 "active_project": project,
                 "active_dataset": active_dataset(principal.principal_key, project),
                 "active_configuration": active_configuration(request, principal.principal_key,
@@ -219,7 +235,12 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                     redirect=_redirect, active_project=active_project, runs=runs,
                     project_runs=project_runs, datasets=datasets,
                     configurations=configurations, sessions=sessions, inspection=inspection,
-                    models=models)
+                    models=models, results=results, logs=logs)
+        from JBGWebUIPrediction import add_prediction_tab
+        add_prediction_tab(app, principal_dependency=principal_dependency, render=render,
+                           redirect=_redirect, active_project=active_project, runs=runs,
+                           project_runs=project_runs, datasets=datasets, sessions=sessions,
+                           models=models, logs=logs)
     if configurations is not None and datasets is not None:
         from JBGWebUIConfigurations import add_configuration_tab
         add_configuration_tab(app, principal_dependency=principal_dependency, render=render,

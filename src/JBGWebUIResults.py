@@ -30,8 +30,11 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                    "detail": None, "detail_missing": False, "available": {},
                    "has_folder": False}
         if project is not None:
+            # 296a: results belong to training runs; prediction runs are on the
+            # Prediction tab.
             context["finished"] = [r for r in runs.list_project_runs(owner, project["project_id"])
-                                   if r["status"] == "succeeded"]
+                                   if r["status"] == "succeeded"
+                                   and r.get("kind", "training") != "prediction"]
             chosen = run or (context["finished"][0]["run_id"] if context["finished"] else "")
             if any(r["run_id"] == chosen for r in context["finished"]):
                 context["selected_run"] = chosen

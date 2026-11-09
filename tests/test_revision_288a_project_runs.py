@@ -230,8 +230,15 @@ class ProjectRunNative288a(revision_281c.CSVApplicationEndToEnd281c):
             self.assertEqual(status, "succeeded", tail)
             model_id = client.app.state.jbg["store"].get(RunReference(run_id)).spec[
                 "project_run"]["model_id"]
-            # 288c: the worker registered the model in the catalog.
-            models = client.get(f"/api/projects/{project}/models").json()
+            # 288c: the worker registered the model in the catalog. It does so
+            # right after marking the run succeeded (the catalog accepts only
+            # succeeded runs), so wait briefly instead of racing it (296a).
+            deadline, models = time.time() + 30, []
+            while time.time() < deadline:
+                models = client.get(f"/api/projects/{project}/models").json()
+                if models:
+                    break
+                time.sleep(0.2)
             self.assertEqual([(m["run_id"], m["state"]) for m in models], [(run_id, "available")])
             # 295a: the run's own folder holds its details and class names.
             folder = work / "runs" / project / run_id

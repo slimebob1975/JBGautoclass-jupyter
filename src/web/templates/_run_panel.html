@@ -1,0 +1,22 @@
+{# 296a: the live view of one run, shared by the Training and Prediction tabs.
+   Needs: overview, terminal, stages, back ("/ui/run" or "/ui/prediction"), has_log. #}
+{% set ns = namespace(labels={}) %}
+{% for key, label in stages.items() %}{% set _ignored = ns.labels.update({key: _(label)}) %}{% endfor %}
+{% set stage = overview.stage %}
+{% set finished = overview.status in terminal %}
+<div {% if not finished %}data-run-poll="{{ overview.run_id }}" data-terminal="{{ terminal | list | tojson | forceescape }}" data-stage-labels="{{ ns.labels | tojson | forceescape }}"{% endif %}>
+  <h2>{{ _("Run") }} <span class="muted">{{ overview.run_id[:8] }}</span></h2>
+  <p class="run-stage"><b data-run-stage>{{ ns.labels.get(stage.name, stage.name) }}</b></p>
+  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+       aria-valuenow="{{ ((stage.percent or 0) * 100) | round | int }}">
+    <div class="bar" data-run-bar style="width: {{ ((stage.percent or 0) * 100) | round | int }}%"></div>
+  </div>
+  {% if not finished %}
+    <p class="hint">{{ _("The page updates itself while the run is in progress.") }}</p>
+    <form method="post" action="/ui/run/{{ overview.run_id }}/cancel">
+      <input type="hidden" name="back" value="{{ back }}">
+      <button class="btn sub">{{ _("Cancel the run") }}</button>
+    </form>
+  {% endif %}
+  {% if has_log %}<p><a href="/ui/runs/{{ overview.run_id }}/log">{{ _("Show log") }}</a></p>{% endif %}
+</div>
