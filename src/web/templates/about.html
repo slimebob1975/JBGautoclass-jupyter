@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% set title = "About" %}
+{% block main %}
+<div class="layout-two">
+  <section class="card">
+    {% if guide %}
+      <article class="guide" lang="{{ guide_language }}">{{ guide }}</article>
+    {% else %}
+      <p class="empty">{{ _("The user guide is not available.") }}</p>
+    {% endif %}
+  </section>
+
+  <aside class="about-side">
+    <div class="card">
+      <h2>{{ _("Version") }}</h2>
+      <p>{{ version_line or "–" }}</p>
+    </div>
+    {% if contents %}
+    <nav class="card" aria-label="{{ _('Contents') }}">
+      <h2>{{ _("Contents") }}</h2>
+      <ul class="contents">
+        {% for anchor, heading in contents %}<li><a href="#{{ anchor }}">{{ heading }}</a></li>{% endfor %}
+      </ul>
+    </nav>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}
+{% block actions %}<span class="hint">{{ _("What the program does and how to use it.") }}</span>{% endblock %}

@@ -92,7 +92,7 @@ def test_tabs_follow_the_work_order(tmp_path):
     labels = re.findall(r'<(?:a href="/ui/[a-z]+"[^>]*|span class="off"[^>]*)>([^<]+)</(?:a|span)>',
                         page.split('<nav class="tabs"')[1].split("</nav>")[0])
     assert labels == ["Översikt", "Projekt", "Dataset", "Konfiguration", "Träning", "Resultat",
-                      "Modeller", "Prediktion", "Körhistorik"]
+                      "Modeller", "Prediktion", "Körhistorik", "Om"]          # 295d: About last
     assert '<a href="/ui/prediction"' in page
 
 

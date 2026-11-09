@@ -1,5 +1,8 @@
 """Server-rendered web interface: shell and Projects tab (revision 287a).
 
+295d: the Overview and About tabs (JBGWebUIOverview, JBGWebUIAbout); the
+title in the header links to the Overview.
+
 Locked decisions: FastAPI + Jinja2 (server-rendered), Fluent 2 layout patterns
 styled with the organization's stylesheet tokens, Swedish by default with
 English available, technical terms untranslated. This first slice uses plain
@@ -31,11 +34,12 @@ MODEL_COOKIE = "jbg_model"                          # set on the Models tab (295
 # (key, English label, available in this revision)
 # 296a: "Run" became "Training"; "Prediction" follows "Models" (the work order:
 # train, look at the results, choose a model, predict).
-TABS = (("overview", "Overview", False), ("projects", "Projects", True),
+# 295d: Overview is available; "About" is the last tab, right of the others.
+TABS = (("overview", "Overview", True), ("projects", "Projects", True),
         ("dataset", "Dataset", False), ("configuration", "Configuration", False),
         ("run", "Training", False), ("results", "Results", False),
         ("models", "Models", False), ("prediction", "Prediction", False),
-        ("history", "Run History", False))
+        ("history", "Run History", False), ("about", "About", True))
 
 MESSAGES = {
     "created": ("ok", "Project created."), "saved": ("ok", "Changes saved."),
@@ -145,7 +149,7 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         except ProjectUnavailable:
             return None
 
-    available = ({"projects"} | ({"dataset"} if datasets is not None else set())
+    available = ({"overview", "projects", "about"} | ({"dataset"} if datasets is not None else set())
                  | ({"configuration"} if configurations is not None and datasets is not None
                     else set())
                  | ({"run"} if project_runs is not None and runs is not None else set())
@@ -241,6 +245,12 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                            redirect=_redirect, active_project=active_project, runs=runs,
                            project_runs=project_runs, datasets=datasets, sessions=sessions,
                            models=models, logs=logs, results=results)
+    from JBGWebUIOverview import add_overview_tab                 # 295d
+    add_overview_tab(app, principal_dependency=principal_dependency, render=render,
+                     active_project=active_project, datasets=datasets,
+                     configurations=configurations, runs=runs, models=models)
+    from JBGWebUIAbout import add_about_tab                       # 295d
+    add_about_tab(app, principal_dependency=principal_dependency, render=render)
     if configurations is not None and datasets is not None:
         from JBGWebUIConfigurations import add_configuration_tab
         add_configuration_tab(app, principal_dependency=principal_dependency, render=render,

@@ -303,14 +303,24 @@ full SQL regression acceptance remain separately unverified.
     be missing too.
   - [ ] Later: SQL sign-ins live in the server's memory and are lost on a
     restart; consider an automatic Windows sign-in where possible.
-  - [ ] 295d (requested 2026-11-06): the title "JBG Automatisk
+  - [x] 295d (requested 2026-11-06): the title "JBG Automatisk
     klassificering" links to the Overview tab, with a first simple overview
-    (open project: active dataset, selected configuration, latest run,
-    models; without a project an empty page with a hint).
-  - [ ] 295d (requested 2026-11-06): an "Om"/"About" tab, right of the other
+    (open project: active dataset, selected configuration, latest training
+    and prediction runs, models; without a project an empty page with a hint).
+  - [x] 295d (requested 2026-11-06): an "Om"/"About" tab, right of the other
     tabs: what the program does and how to use it, from a user guide in the
     repository (`docs/user_guide.sv.md`, `docs/user_guide.en.md`; the README
     is developer-oriented) and the program's version line.
+  - [ ] Later: the rest of the designed Overview (Tab 1 in
+    `docs/gui/JBG_web_gui_design.md`): "Continue working", recent projects
+    in the empty state, the activity strip for other projects.
+  - [ ] Open question (noted with 295d): should `/ui` land on the Overview
+    instead of the Projects tab?
+  - [ ] Interface detail noted with 295d: on narrow screens (about 420 px)
+    the SV/EN switch in the header is squeezed and EN is hidden; also before
+    295d.
+  - [ ] Keep the user guide (`docs/user_guide.*.md`) in step with each
+    interface revision; tests require one section per tab in both languages.
 - [ ] Per-project retention (design decision 3) now covers model files
   (288a) and per-run result folders (295a).
   - [x] Header name (296a, decided 2026-11-09 instead of the Windows user

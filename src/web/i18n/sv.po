@@ -1335,3 +1335,52 @@ msgstr "Ladda ned prediktionerna"
 
 msgid "The predictions are shown here for runs made after this update."
 msgstr "Prediktionerna visas här för körningar som görs efter den här uppdateringen."
+
+# 295d: Overview and About tabs.
+msgid "About"
+msgstr "Om"
+
+msgid "New to the program? The About tab explains how to use it."
+msgstr "Ny i programmet? Fliken Om beskriver hur det används."
+
+msgid "Training dataset"
+msgstr "Träningsdataset"
+
+msgid "No active training dataset."
+msgstr "Inget aktivt träningsdataset."
+
+msgid "Datasets in the project"
+msgstr "Dataset i projektet"
+
+msgid "No configuration is chosen for runs."
+msgstr "Ingen konfiguration är vald för körning."
+
+msgid "Configurations in the project"
+msgstr "Konfigurationer i projektet"
+
+msgid "Latest runs"
+msgstr "Senaste körningar"
+
+msgid "Latest"
+msgstr "Senaste"
+
+msgid "Models in the project"
+msgstr "Modeller i projektet"
+
+msgid "available"
+msgstr "tillgängliga"
+
+msgid "Open a project to see its overview."
+msgstr "Öppna ett projekt för att se dess översikt."
+
+msgid "Overview of the open project."
+msgstr "Översikt över det öppna projektet."
+
+msgid "The user guide is not available."
+msgstr "Användarhandledningen är inte tillgänglig."
+
+msgid "Contents"
+msgstr "Innehåll"
+
+msgid "What the program does and how to use it."
+msgstr "Vad programmet gör och hur det används."

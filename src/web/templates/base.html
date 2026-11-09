@@ -13,11 +13,12 @@
 <div class="app">
   <header class="masthead">
     <div class="brand">
-      <span class="logo" aria-hidden="true">JBG</span>
-      <div>
+      {# 295d: the title leads to the Overview tab #}
+      <a href="/ui/overview" class="brand-link" title="{{ _('Overview') }}">
+        <span class="logo" aria-hidden="true">JBG</span>
         <h1>{{ _("Automatic classification") }}</h1>
-        {% if version_line %}<div class="version">{{ version_line }}</div>{% endif %}
-      </div>
+      </a>
+      {% if version_line %}<div class="version">{{ version_line }}</div>{% endif %}
     </div>
     <div class="masthead-right">
       <form method="post" action="/ui/language" class="lang" aria-label="{{ _('Language') }}">

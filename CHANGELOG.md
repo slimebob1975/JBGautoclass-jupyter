@@ -1,3 +1,30 @@
+## Revision 295d - Overview and About tabs (2026-11-09)
+
+- Overview tab (requested 2026-11-06), a first simple version scoped to the
+  open project (design decision 7): the project, the active training dataset
+  and its status, the configuration chosen for runs, the latest training run
+  (with accuracy and balanced accuracy when it has finished) and the latest
+  prediction run, and the models (chosen, latest, how many are available).
+  Each part links to the tab where it is changed; a part that is missing says
+  so. Without an open project the page has only a hint. Read-only, through
+  the existing services (`src/JBGWebUIOverview.py`).
+- The title "JBG Automatisk klassificering" links to the Overview. The link
+  is a real box laid out with a subgrid, so it takes keyboard focus
+  (`display: contents` would leave it out of the Tab order in Chromium).
+- About tab ("Om"), right of the other tabs: what the program does and how to
+  use it, from a user guide in the repository (`docs/user_guide.sv.md`,
+  `docs/user_guide.en.md`, one section per tab; the README stays
+  developer-oriented), with a contents list and the program's version line.
+  The guide is read on every request, so an edited guide needs no restart.
+  It is shown through a small Markdown subset that escapes all text first and
+  links only to the interface, to anchors on the page or to https addresses;
+  no new dependency (`src/JBGWebUIAbout.py`).
+- Found in the browser check: the run lists on the Training and Prediction
+  tabs showed the stored words "pending" and "running" for runs that had not
+  ended; they now read "I kö" and "Körs" (Queued, Running).
+- Tests: `tests/test_revision_295d_overview_about.py`; tests of 287a and 296a
+  follow the new tab list.
+
 ## Revision 296b - CSV predictions and the predictions view (2026-11-09)
 
 - CSV projects predict with a saved model (agreed 2026-11-09): the rows

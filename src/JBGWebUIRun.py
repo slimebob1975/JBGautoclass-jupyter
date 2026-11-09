@@ -17,6 +17,9 @@ STAGES = {
     "preparing": "Preparing", "executing": "Running", "finalizing": "Finishing",
     "succeeded": "Finished", "failed": "Failed", "cancelled": "Cancelled",
     "interrupted": "Interrupted",
+    # 295d: the stored statuses of runs that have not ended, as the run lists show them
+    # (they showed the raw words "pending" and "running").
+    "pending": "Queued", "running": "Running",
     "load_model": "Loading the model", "fetch_data": "Fetching data",
     "load_dataset": "Loading the dataset", "separate_dataset": "Splitting the data",
     "convert_to_numbers": "Converting text and categories",

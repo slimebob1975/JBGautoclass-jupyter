@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% set title = "Overview" %}
+{% set state_labels = {"valid": "Valid", "invalid": "Invalid", "unverified": "Not validated"} %}
+{% set model_states = {"registered": "Registered", "available": "Available", "missing": "Missing", "retired": "Retired"} %}
+{% macro status_badge(status) -%}
+  <span class="badge {{ 'b-ok' if status == 'succeeded' else ('b-fail' if status in ('failed', 'interrupted') else 'b-neu') }}">{{ _(stages.get(status, status)) }}</span>
+{%- endmacro %}
+{% block main %}
+{% if no_project %}
+  <div class="card">
+    <p class="empty">{{ _("Open a project in the Projects tab first.") }}
+      <a href="/ui/projects">{{ _("Projects") }}</a></p>
+    <p class="hint">{{ _("New to the program? The About tab explains how to use it.") }}
+      <a href="/ui/about">{{ _("About") }}</a></p>
+  </div>
+{% else %}
+<div class="overview-grid">
+  <div class="card">
+    <h2>{{ _("Project") }}</h2>
+    <p><b>{{ active_project.name }}</b>
+      <span class="badge {{ 'b-info' if active_project.source == 'sql' else 'b-neu' }}">{{ active_project.source | upper }}</span></p>
+    {% if active_project.description %}<p class="muted">{{ active_project.description | truncate(200) }}</p>{% endif %}
+    <dl class="meta">
+      <dt>{{ _("Created") }}</dt><dd>{{ active_project.created_at[:10] }}</dd>
+      <dt>{{ _("Modified") }}</dt><dd>{{ active_project.updated_at[:10] }}</dd>
+    </dl>
+    <p class="more"><a href="/ui/projects?selected={{ active_project.project_id }}">{{ _("Projects") }} ›</a></p>
+  </div>
+
+  {% if has_datasets %}
+  <div class="card">
+    <h2>{{ _("Training dataset") }}</h2>
+    {% if active_dataset %}
+      {% set ds_state = active_dataset.validation_state %}
+      <p><b>{{ active_dataset.name }}</b>
+        <span class="badge {{ 'b-ok' if ds_state == 'valid' else ('b-fail' if ds_state == 'invalid' else 'b-neu') }}">{{ _(state_labels.get(ds_state, ds_state)) }}</span></p>
+    {% else %}
+      <p class="empty">{{ _("No active training dataset.") }}</p>
+    {% endif %}
+    <p class="hint">{{ _("Datasets in the project") }}: {{ dataset_count }}</p>
+    <p class="more"><a href="/ui/dataset{{ ('?dataset=' ~ active_dataset.dataset_id) if active_dataset }}">{{ _("Dataset") }} ›</a></p>
+  </div>
+  {% endif %}
+
+  {% if has_configurations %}
+  <div class="card">
+    <h2>{{ _("Configuration") }}</h2>
+    {% if active_configuration %}
+      <p><b>{{ active_configuration.name }}</b> v{{ active_configuration.version }}</p>
+    {% else %}
+      <p class="empty">{{ _("No configuration is chosen for runs.") }}</p>
+    {% endif %}
+    <p class="hint">{{ _("Configurations in the project") }}: {{ configuration_count }}</p>
+    <p class="more"><a href="/ui/configuration">{{ _("Configuration") }} ›</a></p>
+  </div>
+  {% endif %}
+
+  {% if has_runs %}
+  <div class="card">
+    <h2>{{ _("Latest runs") }}</h2>
+    <dl class="meta runs">
+      <dt>{{ _("Training") }}</dt>
+      <dd>{% if latest_training %}
+        <a href="/ui/{{ 'results' if latest_training.status == 'succeeded' else 'run' }}?run={{ latest_training.run_id }}">{{ latest_training.created_at | localtime }}</a>
+        {{ status_badge(latest_training.status) }}
+        {% if latest_training.configuration_name %}<span class="muted"> · {{ latest_training.configuration_name }}{% if latest_training.configuration_version %} v{{ latest_training.configuration_version }}{% endif %}</span>{% endif %}
+      {% else %}–{% endif %}</dd>
+      <dt>{{ _("Prediction") }}</dt>
+      <dd>{% if latest_prediction %}
+        <a href="/ui/prediction?run={{ latest_prediction.run_id }}">{{ latest_prediction.created_at | localtime }}</a>
+        {{ status_badge(latest_prediction.status) }}
+      {% else %}–{% endif %}</dd>
+    </dl>
+    {% if evaluation %}
+      <dl class="meta metrics">
+        <dt>{{ _("Accuracy") }}</dt><dd>{{ (evaluation.accuracy * 100) | pct(language) }}</dd>
+        <dt>{{ _("Balanced accuracy") }}</dt><dd>{{ (evaluation.balanced_accuracy * 100) | pct(language) }}</dd>
+      </dl>
+    {% endif %}
+    {% if not latest_training and not latest_prediction %}<p class="hint">{{ _("No runs yet.") }}</p>{% endif %}
+    <p class="more"><a href="/ui/run">{{ _("Training") }} ›</a> · <a href="/ui/prediction">{{ _("Prediction") }} ›</a></p>
+  </div>
+  {% endif %}
+
+  {% if has_models %}
+  <div class="card">
+    <h2>{{ _("Models") }}</h2>
+    <dl class="meta">
+      <dt>{{ _("Chosen") }}</dt><dd>{{ active_model.name if active_model else "–" }}</dd>
+      <dt>{{ _("Latest") }}</dt><dd>{% if newest_model %}<a href="/ui/models?model={{ newest_model.model_id }}">{{ newest_model.name }}</a>
+        <span class="muted">{{ _(model_states.get(newest_model.state, newest_model.state)) }}</span>{% else %}–{% endif %}</dd>
+    </dl>
+    <p class="hint">{{ _("Models in the project") }}: {{ model_count }} · {{ _("available") }}: {{ available_count }}</p>
+    <p class="more"><a href="/ui/models">{{ _("Models") }} ›</a></p>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+{% block actions %}<span class="hint">{{ _("Open a project to see its overview.") if no_project else _("Overview of the open project.") }}</span>{% endblock %}
