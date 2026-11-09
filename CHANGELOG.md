@@ -1,3 +1,17 @@
+## Revision 295b - Models tab (2026-11-06)
+
+- Add the Models tab (`src/JBGWebUIModels.py`, `models.html`) on the 288c
+  catalog: the project's trained models with state (registered, available,
+  missing, retired) and creation time, and a model card with its origin
+  (dataset, configuration and version, run), the key figures on the holdout
+  data and a link to the run's results. No file paths are shown.
+- "Choose model" puts an available model into the context bar's model chip,
+  ready for predicting with it (295c); other states are refused with a
+  message. Closing the project or opening another one forgets the chosen
+  model, as for the configuration (294a2).
+- About 15 Swedish texts. The 287a tab test expects the Models tab.
+- Tests: `tests/test_revision_295b_models_tab.py`.
+
 ## Revision 295a - per-run result folders and the Results tab (2026-11-06)
 
 - Agreed 2026-11-06: every project run writes its outputs into its own folder,

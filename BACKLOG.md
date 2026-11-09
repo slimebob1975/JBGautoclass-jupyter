@@ -279,7 +279,8 @@ full SQL regression acceptance remain separately unverified.
   class names and row values only from the run's folder, for its owner):
   - [x] 295a: per-run result folders and the Results tab (overview with
     class names, model comparison, mispredictions, feature importance).
-  - [ ] 295b: Models tab (catalog and model card).
+  - [x] 295b: Models tab (catalog, model card, choosing a model for
+    predictions).
   - [ ] 295c: predicting with a saved model (SQL into the prediction table,
     CSV as a downloadable file) and a predictions view.
   - [ ] 295d (requested 2026-11-06): the title "JBG Automatisk

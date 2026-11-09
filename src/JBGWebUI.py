@@ -26,6 +26,7 @@ DEFAULT_LANGUAGE = "sv"
 LANGUAGE_COOKIE = "jbg_lang"
 PROJECT_COOKIE = "jbg_project"
 CONFIGURATION_COOKIE = "jbg_configuration"          # set on the Configuration tab
+MODEL_COOKIE = "jbg_model"                          # set on the Models tab (295b)
 
 # (key, English label, available in this revision)
 TABS = (("overview", "Overview", False), ("projects", "Projects", True),
@@ -101,7 +102,8 @@ def _redirect(path: str, **query) -> RedirectResponse:
 
 def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: str = "",
                datasets=None, inspection=None, configurations=None, sessions=None,
-               sql_server=None, runs=None, project_runs=None, results=None) -> None:
+               sql_server=None, runs=None, project_runs=None, results=None,
+               models=None) -> None:
     """Mount the interface under /ui on ``app``.
 
     The Dataset tab (291a) is mounted when its services are given.
@@ -129,7 +131,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                  | ({"configuration"} if configurations is not None and datasets is not None
                     else set())
                  | ({"run"} if project_runs is not None and runs is not None else set())
-                 | ({"results"} if results is not None and runs is not None else set()))
+                 | ({"results"} if results is not None and runs is not None else set())
+                 | ({"models"} if models is not None and runs is not None else set()))
     tabs = tuple((key, label, key in available) for key, label, _ in TABS)
 
     def active_dataset(owner: str, project):
@@ -152,6 +155,16 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         except Exception:
             return None
 
+    def active_model(request: Request, owner: str, project):
+        """The model chosen on the Models tab (295b), for the context bar."""
+        model_id = request.cookies.get(MODEL_COOKIE)
+        if models is None or project is None or not model_id:
+            return None
+        try:
+            return models.get(owner, project["project_id"], model_id)
+        except Exception:
+            return None
+
     def render(request: Request, principal, template: str, tab: str, status_code: int = 200,
                **context):
         language = request_language(request)
@@ -165,6 +178,7 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                 "active_dataset": active_dataset(principal.principal_key, project),
                 "active_configuration": active_configuration(request, principal.principal_key,
                                                              project),
+                "active_model": active_model(request, principal.principal_key, project),
                 "message": message}
         base.update(context)
         return templates.TemplateResponse(request, template, base, status_code=status_code)
@@ -175,6 +189,11 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                         redirect=_redirect, active_project=active_project, datasets=datasets,
                         inspection=inspection, configurations=configurations,
                         sessions=sessions, sql_server=sql_server)
+    if models is not None and runs is not None:
+        from JBGWebUIModels import add_models_tab
+        add_models_tab(app, principal_dependency=principal_dependency, render=render,
+                       redirect=_redirect, active_project=active_project, models=models,
+                       runs=runs, datasets=datasets)
     if results is not None and runs is not None:
         from JBGWebUIResults import add_results_tab
         add_results_tab(app, principal_dependency=principal_dependency, render=render,
@@ -241,8 +260,9 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
             return _redirect("/ui/projects", message="unavailable")
         response = _redirect("/ui/projects", selected=project_id, message="opened")
         if request.cookies.get(PROJECT_COOKIE) != project_id:
-            # 294a2: a selected configuration belongs to the previous project.
+            # 294a2/295b: configuration and model belong to the previous project.
             response.delete_cookie(CONFIGURATION_COOKIE, path="/ui")
+            response.delete_cookie(MODEL_COOKIE, path="/ui")
         response.set_cookie(PROJECT_COOKIE, project_id, httponly=True, samesite="lax",
                             path="/ui")
         return response
@@ -254,6 +274,7 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         response = _redirect(target.split("?")[0], message="closed")
         response.delete_cookie(PROJECT_COOKIE, path="/ui")
         response.delete_cookie(CONFIGURATION_COOKIE, path="/ui")
+        response.delete_cookie(MODEL_COOKIE, path="/ui")
         return response
 
     @app.post("/ui/language", include_in_schema=False)

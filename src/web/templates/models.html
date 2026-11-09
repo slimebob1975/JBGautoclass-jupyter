@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% set title = "Models" %}
+{% block main %}
+{% if no_project %}
+  <div class="card"><p class="empty">{{ _("Open a project in the Projects tab first.") }}
+    <a href="/ui/projects">{{ _("Projects") }}</a></p></div>
+{% else %}
+<div class="layout-two run-layout">
+  <section>
+    <div class="card">
+      <h2>{{ _("Trained models") }}</h2>
+      {% if models %}
+      <table class="grid">
+        <thead><tr><th>{{ _("Name") }}</th><th>{{ _("Status") }}</th><th>{{ _("Created") }}</th></tr></thead>
+        <tbody>
+        {% for item in models %}
+          <tr class="{{ 'hl' if selected and selected.model_id == item.model_id }}">
+            <td><a href="/ui/models?model={{ item.model_id }}"><b>{{ item.name }}</b></a>
+              {% if item.model_id == chosen_id %}<span class="badge b-info">{{ _("Chosen") }}</span>{% endif %}</td>
+            <td><span class="badge {{ 'b-ok' if item.state == 'available' else ('b-fail' if item.state == 'missing' else 'b-neu') }}">{{ _(states.get(item.state, item.state)) }}</span></td>
+            <td class="num">{{ item.created_at | localtime }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">{{ _("No models yet. A successful training run on the Run tab creates one.") }}</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <aside class="card wide">
+  {% if selected %}
+    <h2>{{ selected.name }}</h2>
+    <dl class="meta">
+      <dt>{{ _("Status") }}</dt><dd>{{ _(states.get(selected.state, selected.state)) }}</dd>
+      <dt>{{ _("Source") }}</dt><dd>{{ selected.source | upper }}</dd>
+      <dt>{{ _("Created") }}</dt><dd>{{ selected.created_at | localtime }}</dd>
+      <dt>{{ _("Dataset") }}</dt><dd>{{ card.dataset.name if card.dataset else "–" }}</dd>
+      <dt>{{ _("Configuration") }}</dt><dd>{% if card.run %}{{ card.run.configuration_name or "–" }}{% if card.run.configuration_version %} v{{ card.run.configuration_version }}{% endif %}{% else %}–{% endif %}</dd>
+      <dt>{{ _("Run") }}</dt><dd>{% if selected.run_id %}<a href="/ui/results?run={{ selected.run_id }}">{{ (card.run.created_at | localtime) if card.run else selected.run_id[:8] }}</a>{% else %}–{% endif %}</dd>
+    </dl>
+    {% set ev = card.evaluation %}
+    {% if ev %}
+      <h3>{{ _("Evaluation on the holdout data") }}</h3>
+      <dl class="meta metrics">
+        <dt>{{ _("Accuracy") }}</dt><dd>{{ (ev.accuracy * 100) | pct(language) }}</dd>
+        <dt>{{ _("Balanced accuracy") }}</dt><dd>{{ (ev.balanced_accuracy * 100) | pct(language) }}</dd>
+        <dt>MCC</dt><dd>{{ ev.mcc | num(language) }}</dd>
+        <dt>F1 (macro)</dt><dd>{{ ev.f1_macro | num(language) }}</dd>
+      </dl>
+    {% endif %}
+    {% if selected.run_id %}<p><a href="/ui/results?run={{ selected.run_id }}">{{ _("All results of this run") }} ›</a></p>{% endif %}
+  {% else %}
+    <p class="empty">{{ _("Select a model in the list.") }}</p>
+  {% endif %}
+  </aside>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block actions %}
+  {% if selected and selected.model_id == chosen_id %}
+    {# Nothing is missing: no red "blocked" button for an already chosen model. #}
+    <span class="hint">{{ _("This model is chosen.") }}</span>
+  {% elif selected and selected.state == "available" %}
+    <span class="hint">{{ _("The chosen model is used for predictions.") }}</span>
+    <form method="post" action="/ui/models/{{ selected.model_id }}/choose"><button class="btn act ready">{{ _("Choose model") }}</button></form>
+  {% else %}
+    <span class="hint">{{ _("Only available models can be chosen.") if selected else _("Select a model in the list.") }}</span>
+    <button class="btn act blocked" disabled>{{ _("Choose model") }}</button>
+  {% endif %}
+{% endblock %}

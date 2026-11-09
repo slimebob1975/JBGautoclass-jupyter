@@ -47,7 +47,8 @@
     <span class="chip"><span class="dot {{ 'd-ok' if active_configuration else 'd-off' }}"></span>
       <span class="k">{{ _("Configuration") }}</span><b>{{ (active_configuration.name ~ " v" ~ active_configuration.version) if active_configuration else "–" }}</b></span>
     <span class="sep">›</span>
-    <span class="chip"><span class="dot d-off"></span><span class="k">{{ _("Model") }}</span><b>–</b></span>
+    <span class="chip"><span class="dot {{ 'd-ok' if active_model else 'd-off' }}"></span>
+      <span class="k">{{ _("Model") }}</span><b>{{ active_model.name if active_model else "–" }}</b></span>
   </div>
 
   <nav class="tabs" aria-label="{{ _('Main navigation') }}">

@@ -71,12 +71,13 @@ def test_language_switch_never_redirects_elsewhere(tmp_path, back):
 def test_unavailable_tabs_are_shown_but_not_linked(tmp_path):
     with _client(tmp_path) as client:
         page = client.get("/ui/projects").text
-    # 291a-295a made Dataset, Configuration, Run and Results available.
-    for label in ("Översikt", "Modeller", "Körhistorik"):
+    # 291a-295b made Dataset, Configuration, Run, Results and Models available.
+    for label in ("Översikt", "Körhistorik"):
         assert re.search(rf'<span class="off" aria-disabled="true"[^>]*>{label}</span>', page), label
     assert '<a href="/ui/projects" class="on"' in page
     assert '<a href="/ui/dataset"' in page and '<a href="/ui/configuration"' in page
     assert '<a href="/ui/run"' in page and '<a href="/ui/results"' in page
+    assert '<a href="/ui/models"' in page
 
 
 # --- Projects tab -----------------------------------------------------------------------------

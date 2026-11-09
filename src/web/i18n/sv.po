@@ -1195,3 +1195,43 @@ msgstr "viktat"
 
 msgid "Nothing to show for this run (for example no mispredicted rows)."
 msgstr "Inget att visa för den här körningen (till exempel inga felklassificerade rader)."
+
+# 295b: Models tab.
+msgid "Available"
+msgstr "Tillgänglig"
+
+msgid "Choose model"
+msgstr "Välj modell"
+
+msgid "Chosen"
+msgstr "Vald"
+
+msgid "Model chosen."
+msgstr "Modellen är vald."
+
+msgid "No models yet. A successful training run on the Run tab creates one."
+msgstr "Inga modeller ännu. En lyckad träningskörning under fliken Körning skapar en."
+
+msgid "Only available models can be chosen."
+msgstr "Bara tillgängliga modeller kan väljas."
+
+msgid "Registered"
+msgstr "Registrerad"
+
+msgid "Retired"
+msgstr "Avvecklad"
+
+msgid "Select a model in the list."
+msgstr "Välj en modell i listan."
+
+msgid "The chosen model is used for predictions."
+msgstr "Den valda modellen används för prediktioner."
+
+msgid "The model is no longer available."
+msgstr "Modellen är inte längre tillgänglig."
+
+msgid "This model is chosen."
+msgstr "Den här modellen är vald."
+
+msgid "Trained models"
+msgstr "Tränade modeller"
