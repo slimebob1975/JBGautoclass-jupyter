@@ -137,10 +137,8 @@ class ProjectRunService:
         from JBGModelCatalog import ModelCatalog, ModelState
         owner = principal.principal_key
         project = self._projects.require(owner, project_id)
-        if project.source is DataSourceKind.CSV:
-            raise RunRequestRefused("predicting with a saved model is not available for CSV "
-                                    "projects yet")
-        if self._sql_server is None or not self._sql_server.configured or self._sessions is None:
+        if project.source is DataSourceKind.SQL and (
+                self._sql_server is None or not self._sql_server.configured or self._sessions is None):
             raise RunRequestRefused("no SQL Server is configured on this server")
         try:
             entry = ModelCatalog(self._store.engine, schema=self._store.schema).get_owned(
@@ -157,6 +155,9 @@ class ProjectRunService:
         config = _load_config(training.spec["configuration"])
         if not Path(config.get_model_filename()).is_file():
             raise RunRequestRefused("the model file is missing")
+        if project.source is DataSourceKind.CSV:
+            return self._submit_csv_prediction(principal, project, training, trained, config,
+                                               model_id, dataset_id)
         dataset = self._dataset(owner, project_id, dataset_id or trained.get("dataset_id"))
         config.mode.train, config.mode.predict = False, True
         config.mode.mispredicted = False
@@ -178,6 +179,43 @@ class ProjectRunService:
                                     authorize_dataset=self._sessions.authorize,
                                     on_submit=self._on_submit)
         return service.submit(principal, prepared, run_metadata=metadata)
+
+    def _submit_csv_prediction(self, principal, project, training, trained, config, model_id,
+                               dataset_id):
+        """296b (agreed 2026-11-09): a CSV model predicts the rows without a class
+        of its own training dataset, as in the Voilà GUI; the CSV prediction
+        path is pinned to that dataset's identity. The configuration is the
+        training run's own (complete, with the roles and data source identity
+        the CSV prediction path checks), switched to prediction only. The model
+        file's embedded configuration is not used here: after training it names
+        the single chosen algorithm, which is not a valid run configuration."""
+        from copy import deepcopy
+        from JBGRunComposition import compose_csv_run
+        csv = training.spec.get("csv") or {}
+        if dataset_id and dataset_id != trained.get("dataset_id"):
+            raise RunRequestRefused("CSV predictions use the training dataset")
+        if not csv.get("artifact_id") or not csv.get("configuration_id"):
+            raise RunRequestRefused("the model is not available")
+        runtime = deepcopy(config)
+        runtime.mode.train, runtime.mode.predict = False, True
+        runtime.mode.mispredicted = False
+        runtime.mode.use_metas = False
+        runtime.mode.calculate_feature_importance = False
+        runtime.mode.calculate_dark_numbers = False
+        runtime.io.model_path, runtime.io.model_name = config.io.model_path, config.io.model_name
+        metadata = {"project_id": project.project_id, "kind": "prediction", "model_id": model_id,
+                    "dataset_id": trained.get("dataset_id"),
+                    "configuration_name": trained.get("configuration_name"),
+                    "configuration_version": trained.get("configuration_version")}
+        repository, scope = project_csv_storage(project.project_id, root=self._csv_root)
+        composed = compose_csv_run(repository, scope, csv["configuration_id"], _QuietLogger())
+        prepared = composed.preparation.prepare(
+            DatasetReference(DataSourceKind.CSV, csv["artifact_id"]),
+            RunConfiguration(DataSourceKind.CSV, runtime))
+        service = DurableRunService(self._store, scope_for=lambda principal: scope,
+                                    on_submit=self._on_submit)
+        return service.submit(principal, prepared, configuration_id=csv["configuration_id"],
+                              run_metadata=metadata)
 
     def _submit_sql(self, principal, settings, dataset, model_folder, model_id, metadata,
                     roles):

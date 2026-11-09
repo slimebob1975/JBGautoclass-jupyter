@@ -24,6 +24,7 @@ DETAILS = {
     # The per-feature table; "feature_importance_details_" holds only the
     # calculation's metadata and is excluded below.
     "feature_importance": "feature_importance_",
+    "predictions": "predictions_",                         # 296b: prediction runs
 }
 PAGE_SIZE = 50
 MAX_PAGE_SIZE = 500
@@ -65,6 +66,13 @@ class RunResultsService:
             return [str(label) for label in json.loads(path.read_text(encoding="utf-8"))["class_labels"]]
         except (ValueError, KeyError, TypeError):
             return []
+
+    def predictions_file(self, owner: str, run_id: str) -> Path:
+        """296b: a prediction run's whole predictions file, for its owner."""
+        path = self._file(self._folder(owner, run_id) / "output" / "csvs", DETAILS["predictions"])
+        if path is None:
+            raise RunResultsUnavailable("predictions unavailable")
+        return path
 
     def has_folder(self, owner: str, run_id: str) -> bool:
         """False for runs from before 295a, which kept no details of their own."""

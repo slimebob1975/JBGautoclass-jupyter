@@ -103,6 +103,23 @@ class RegisteredCSVClassifierRuntime:
                 or getattr(source, "artifact_id", None) != reference.artifact_id
                 or getattr(source, "dataset_id", None) != reference.dataset_id):
             raise ValueError("CSV runtime configuration mismatch")
+        predicts = getattr(config, "should_predict", None)
+        trains = getattr(config, "should_train", None)
+        if callable(predicts) and callable(trains) and predicts() and not trains():
+            # 296b: predict with a saved model through the same CSV boundary
+            # as the Voilà GUI (identity and roles checked against the
+            # training record); the model path comes from the server-built spec.
+            from Storage.CSVApplicationRuntime import prepare_registered_csv_prediction_classifier
+            # The CSV boundary takes the trusted file name as text (as the
+            # Voilà GUI passes it); get_model_filename() returns a Path.
+            classifier = prepare_registered_csv_prediction_classifier(
+                str(config.get_model_filename()), config, self._repository, self._scope,
+                self._configuration_id, self._logger)
+            # The CSV boundary runs with the configuration restored from the
+            # model file; carry only the run's own output folder over (295a),
+            # so the predictions are also kept there (296b).
+            classifier.config.output_path = getattr(config, "output_path", None)
+            return classifier.run()
         from Storage.CSVTrainingApplication import prepare_registered_csv_training_classifier
         classifier = prepare_registered_csv_training_classifier(
             config, self._repository, self._scope, self._configuration_id, self._logger)

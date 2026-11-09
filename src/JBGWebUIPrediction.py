@@ -2,8 +2,10 @@
 
 Agreed 2026-11-09: the former Run tab is split into Training and Prediction;
 Prediction follows Models (train, look at the results, choose a model,
-predict). Predicting uses the model chosen on the Models tab (295b) and the
-295c prediction runs: SQL projects for now, CSV in 296b.
+predict). Predicting uses the model chosen on the Models tab (295b): SQL
+projects into the prediction table (295c), CSV projects on the training
+dataset's rows without a class (296b). Finished prediction runs show their
+predictions, paged, and offer them as a file.
 """
 from __future__ import annotations
 
@@ -27,7 +29,8 @@ MESSAGES = {
 
 
 def add_prediction_tab(app, *, principal_dependency, render, redirect, active_project, runs,
-                       project_runs, datasets, sessions, models, logs=None) -> None:
+                       project_runs, datasets, sessions, models, logs=None,
+                       results=None) -> None:
     from JBGApplicationContracts import RunReference
     from JBGProjectRuns import RunRequestRefused
     from JBGWebUIRun import STAGES, TERMINAL
@@ -43,26 +46,29 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                 model = None
         outcome = {"model": model is not None,
                    "available": bool(model and model["state"] == "available"),
-                   "signed_in": sessions.is_signed_in(principal)}
+                   # 296b: CSV projects need no SQL sign-in.
+                   "signed_in": None if project["source"] == "csv"
+                   else sessions.is_signed_in(principal)}
         checks = [{"code": code, "passed": outcome[code], "blocking": True,
                    "message": passed if outcome[code] else failed}
-                  for code, passed, failed in PREFLIGHT]
+                  for code, passed, failed in PREFLIGHT if outcome[code] is not None]
         return checks, all(c["passed"] for c in checks), model
 
     @app.get("/ui/prediction", response_class=HTMLResponse, include_in_schema=False)
-    def prediction_tab(request: Request, run: str = "", principal=Depends(principal_dependency)):
+    def prediction_tab(request: Request, run: str = "", page: int = 1,
+                       principal=Depends(principal_dependency)):
         owner = principal.principal_key
         project = active_project(request, owner)
         context = {"no_project": project is None, "csv_project": False, "checks": [],
                    "ready": False, "model": None, "datasets": [], "recent": [],
                    "overview": None, "selected_run": None, "stages": STAGES,
                    "terminal": TERMINAL, "tab_messages": MESSAGES, "has_log": False,
-                   "back": "/ui/prediction"}
+                   "back": "/ui/prediction", "predictions": None}
         if project is not None:
             context["csv_project"] = project["source"] == "csv"
+            context["checks"], context["ready"], context["model"] = preflight(
+                request, principal, project)
             if not context["csv_project"]:
-                context["checks"], context["ready"], context["model"] = preflight(
-                    request, principal, project)
                 try:
                     context["datasets"] = [d for d in datasets.list(owner, project["project_id"])
                                            if d["role"] in ("prediction", "mixed")]
@@ -83,6 +89,13 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                         context["has_log"] = True
                     except Exception:
                         context["has_log"] = False
+                if results is not None and context["overview"] and \
+                        context["overview"]["status"] == "succeeded":
+                    try:
+                        context["predictions"] = results.detail(owner, chosen, "predictions",
+                                                                page=page)
+                    except Exception:
+                        context["predictions"] = None
         return render(request, principal, "prediction.html", "prediction", **context)
 
     @app.post("/ui/prediction", include_in_schema=False)

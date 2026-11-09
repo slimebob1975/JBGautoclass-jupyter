@@ -457,6 +457,7 @@ The map above is the target. What exists after revision 285m3:
 | `/ui/models` (Models tab) | 295b | Catalog with state, model card (origin, key figures, link to results), choosing a model for the context bar |
 | `POST /api/projects/{id}/predictions`; prediction card on `/ui/run` | 295c | Predict with a saved model (SQL); prediction tables may lack the class column |
 | `/ui/prediction` (Prediction tab); `/ui/runs/{id}/log`, `GET /api/runs/{id}/log` | 296a | Run tab split into Training and Prediction; live progress; display name; owner-only run logs |
+| `GET /api/runs/{id}/predictions.csv`; predictions view on `/ui/prediction` | 296b | CSV predictions (training dataset's rows without a class); predictions kept per run for SQL and CSV, shown paged and downloadable |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |

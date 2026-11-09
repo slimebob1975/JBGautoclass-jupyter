@@ -248,6 +248,10 @@ class ProjectRunNative288a(revision_281c.CSVApplicationEndToEnd281c):
             self.assertGreaterEqual(leaderboard["total_rows"], 1)
             labels = client.get(f"/api/runs/{run_id}/class-labels").json()["class_labels"]
             self.assertGreaterEqual(len(labels), 2)
+            # 296b: let the worker exit before the temporary folder is removed;
+            # on Windows an exiting worker still holds its log file open.
+            from test_revision_296b_csv_predictions import _wait_for_workers_to_exit
+            _wait_for_workers_to_exit(client)
             dispatcher = client.app.state.jbg["dispatcher"]
             for _ in range(50):                      # release the run log before cleanup
                 dispatcher.poll_once()

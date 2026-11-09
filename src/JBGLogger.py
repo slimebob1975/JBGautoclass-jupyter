@@ -139,7 +139,7 @@ class JBGLogger(terminal.Logger):
         config_title = config_dict.pop("title")
         # The source identity is metadata, not a user-facing settings section.
         # It has no "title" key and may contain private dataset identifiers.
-        # (285b: same fix as JBGStreamedLogger, which the Voila GUI uses.)
+        # (285b: same fix as JBGStreamedLogger, which the Voilà GUI uses.)
         config_dict.pop("data_source", None)
         self.print_unformatted(config_title, html_function=h2)
         self.print_unformatted("Headers marked with (*) are optional in the config")
@@ -195,6 +195,19 @@ class JBGLogger(terminal.Logger):
     def print_prediction_results(self, results: dict) -> None:
         """Show retrieval SQL interactively while keeping terminal logs privacy-safe."""
         if self._enable_quiet:
+            return self
+
+        # 296b: file-backed CSV predictions have no SQL retrieval query (as in
+        # JBGStreamedLogger, which the Voilà GUI uses; the API worker uses this
+        # logger). Report only the saved row count, never IDs or row values.
+        if 'query' not in results and 'artifact_id' in results and 'run_id' in results:
+            row_count = results.get('row_count')
+            if not isinstance(row_count, int) or isinstance(row_count, bool) or row_count < 0:
+                raise ValueError('Invalid saved CSV prediction row count')
+            message = f'Saved {row_count} CSV predictions to the CSV artifact store.'
+            if self.in_terminal:
+                return self.writeln('unformatted', message)
+            print_html(message)
             return self
 
         query_text = str(results['query'])

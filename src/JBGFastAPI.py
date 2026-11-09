@@ -594,6 +594,18 @@ def _add_run_results_endpoints(app, principal_dependency, results):
         except RunResultsUnavailable:
             raise HTTPException(status_code=404, detail="run unavailable") from None
 
+    @app.get("/api/runs/{run_id}/predictions.csv")
+    def predictions_download(run_id: str,
+                             principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        """296b: a prediction run's predictions as a file, for its owner only."""
+        from fastapi.responses import FileResponse
+        try:
+            path = results.predictions_file(principal.principal_key, run_id)
+        except RunResultsUnavailable:
+            raise HTTPException(status_code=404, detail="predictions unavailable") from None
+        return FileResponse(path, media_type="text/csv; charset=utf-8",
+                            filename=f"jbg_predictions_{run_id[:8]}.csv")
+
     @app.get("/api/runs/{run_id}/details/{kind}")
     def run_detail(run_id: str, kind: str, page: int = 1, page_size: int = 50,
                    principal: AuthenticatedPrincipal = Depends(principal_dependency)):

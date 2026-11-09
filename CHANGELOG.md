@@ -1,3 +1,35 @@
+## Revision 296b - CSV predictions and the predictions view (2026-11-09)
+
+- CSV projects predict with a saved model (agreed 2026-11-09): the rows
+  without a class of the model's own training dataset, through the same CSV
+  boundary as the Voilà GUI (identity and roles checked against the training
+  record). `POST /api/projects/{id}/predictions` builds the run from the
+  training job's own configuration, switched to prediction only; the model
+  file's embedded configuration is not used (after training it names only the
+  chosen algorithm, which is not a valid run configuration).
+- The execution service's CSV runtime has a prediction branch
+  (`prepare_registered_csv_prediction_classifier`, model file name as text)
+  and carries the run's own output folder over to the configuration restored
+  from the model file, which the classifier actually runs with.
+- Engine: `JBGLogger.print_prediction_results` handles CSV results (no SQL
+  query; only the saved row count), as `JBGStreamedLogger` (used by the
+  Voilà GUI) already did; the API worker uses the base logger.
+- Engine: a run with its own output folder keeps its predictions there
+  (`predictions_*.csv`: ID, predicted class, rate and one probability column
+  per class), for SQL and CSV; the prediction table and the CSV artifact are
+  saved as before. The Voilà GUI has no such folder and is unchanged.
+- Prediction tab: CSV projects are supported (no SQL sign-in); a finished
+  prediction run shows its predictions, paged, and offers them as a file
+  (`GET /api/runs/{id}/predictions.csv`, owner only).
+- Tests: `tests/test_revision_296b_csv_predictions.py`, including a native
+  test (train, then predict every row without a class, through the API);
+  tests of 295c follow the CSV support. The native tests wait until the
+  dispatcher has collected their workers: a worker reports "succeeded" and
+  then exits, holding its log file open until then, and Windows cannot
+  delete open files (WinError 32 in the temporary folder's cleanup, first
+  gate run 2026-11-09). Workers deliberately outlive the server, so this is
+  a test concern only.
+
 ## Revision 296a - Training and Prediction tabs, live progress, logs (2026-11-09)
 
 - Found in use (2026-11-09): the progress bar stood still until a run had

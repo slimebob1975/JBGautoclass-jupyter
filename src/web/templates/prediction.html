@@ -9,9 +9,7 @@
   <section>
     <div class="card">
       <h2>{{ _("Predict with a saved model") }}</h2>
-      {% if csv_project %}
-        <p class="hint">{{ _("Predictions for CSV projects come in the next update.") }}</p>
-      {% else %}
+      {% if true %}
         <ul class="checks">
         {% for check in checks %}
           <li class="check-{{ 'passed' if check.passed else 'failed' }}">
@@ -21,11 +19,18 @@
         {% if model %}<p class="hint">{{ _("Model") }}: <b>{{ model.name }}</b></p>{% endif %}
         <form id="predict-form" method="post" action="/ui/prediction" class="stack">
           <label for="predict-dataset">{{ _("Rows to predict") }}</label>
-          <select id="predict-dataset" name="dataset_id">
-            <option value="">{{ _("Rows without a class in the training dataset") }}</option>
-            {% for d in datasets %}<option value="{{ d.dataset_id }}">{{ d.name }}</option>{% endfor %}
-          </select>
-          <p class="hint">{{ _("The predictions are written to the prediction table in SQL Server. A table without a class column is predicted in full.") }}</p>
+          {% if csv_project %}
+            {# 296b: CSV models predict their own training dataset's rows without a class. #}
+            <input type="hidden" name="dataset_id" value="">
+            <p>{{ _("Rows without a class in the training dataset") }}</p>
+            <p class="hint">{{ _("The predictions can be downloaded as a file when the run has finished.") }}</p>
+          {% else %}
+            <select id="predict-dataset" name="dataset_id">
+              <option value="">{{ _("Rows without a class in the training dataset") }}</option>
+              {% for d in datasets %}<option value="{{ d.dataset_id }}">{{ d.name }}</option>{% endfor %}
+            </select>
+            <p class="hint">{{ _("The predictions are written to the prediction table in SQL Server. A table without a class column is predicted in full.") }}</p>
+          {% endif %}
         </form>
       {% endif %}
     </div>
@@ -54,7 +59,26 @@
   {% if overview %}
     {% include "_run_panel.html" %}
     {% if overview.status == "succeeded" %}
-      <p class="message ok">{{ _("The predictions were written to the prediction table in SQL Server.") }}</p>
+      {% if not csv_project %}<p class="message ok">{{ _("The predictions were written to the prediction table in SQL Server.") }}</p>{% endif %}
+      {% if predictions %}
+        <h3>{{ _("Predictions") }}</h3>
+        <p><a class="btn sub" href="/api/runs/{{ selected_run }}/predictions.csv" download>{{ _("Download the predictions") }}</a>
+          <span class="hint">{{ predictions.total_rows }} {{ _("rows") }}</span></p>
+        <div class="scroll"><table class="grid">
+          <thead><tr>{% for c in predictions.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+          <tbody>{% for row in predictions.rows %}<tr>{% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table></div>
+        {% set pages = ((predictions.total_rows + predictions.page_size - 1) // predictions.page_size) %}
+        {% if pages > 1 %}
+          <nav class="pager">
+            {% if predictions.page > 1 %}<a href="/ui/prediction?run={{ selected_run }}&page={{ predictions.page - 1 }}">‹ {{ _("Previous") }}</a>{% endif %}
+            <span>{{ _("Page") }} {{ predictions.page }} / {{ pages }}</span>
+            {% if predictions.page < pages %}<a href="/ui/prediction?run={{ selected_run }}&page={{ predictions.page + 1 }}">{{ _("Next") }} ›</a>{% endif %}
+          </nav>
+        {% endif %}
+      {% else %}
+        <p class="hint">{{ _("The predictions are shown here for runs made after this update.") }}</p>
+      {% endif %}
     {% elif overview.status in terminal %}
       <p class="message error">{{ _("The run did not finish successfully.") }}</p>
     {% endif %}

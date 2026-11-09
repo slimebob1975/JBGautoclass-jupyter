@@ -2282,6 +2282,7 @@ class PredictionsHandler:
             raise HandlerException(e)
 
         class_labels = mh.get_class_labels(Y=dh.Y)
+        self._keep_predictions_in_run_folder(results, class_labels)
 
         try:
             return self.handler.datalayer.save_prediction_data(
@@ -2294,6 +2295,30 @@ class PredictionsHandler:
         except Exception as e:
             self.handler.logger.print_dragon(exception=e)
             raise HandlerException(e)
+
+    def _keep_predictions_in_run_folder(self, results: list, class_labels) -> None:
+        """296b: a run with its own output folder (API runs, served to its owner
+        only) also keeps its predictions there, for SQL and CSV alike, so the
+        Prediction tab can show and offer them. The Voilà GUI has no such
+        folder and is unchanged; the predictions are saved as before."""
+        if getattr(self.handler.config, "output_path", None) is None or not results:
+            return
+        labels = [str(label) for label in list(class_labels)] if class_labels is not None else []
+        rows = []
+        for item in results:
+            row = {"Predicted": item["prediction"], "Rate": item["rate"]}
+            parts = str(item["probabilities"]).split(",")
+            if labels and len(parts) == len(labels):
+                for label, value in zip(labels, parts):
+                    try:
+                        row[f"P({label})"] = float(value)
+                    except ValueError:
+                        row[f"P({label})"] = value
+            rows.append(row)
+        id_name = self.handler.config.get_id_column_name() or "id"
+        frame = pd.DataFrame(rows, index=pd.Index([item["key"] for item in results], name=id_name))
+        Helpers.save_matrix_as_csv(frame, self.handler.config.get_output_filepath("predictions"),
+                                   id_name)
 
     def get_probablities_as_string(self, item) -> str:
         """ Gets a probabilities list as a comma-delimited string """

@@ -828,6 +828,8 @@ class Config:
                 "prefix": "crossval_"
             },
             "feature_importance": {"suffix": "csv", "prefix": "feature_importance_"},
+            # 296b: predictions kept in a run's own folder (API runs only).
+            "predictions": {"suffix": "csv", "prefix": "predictions_"},
             "feature_importance_details": {"suffix": "csv", "prefix": "feature_importance_details_"},
             "config": {
                 "suffix": "json",

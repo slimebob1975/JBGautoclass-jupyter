@@ -240,7 +240,7 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         add_prediction_tab(app, principal_dependency=principal_dependency, render=render,
                            redirect=_redirect, active_project=active_project, runs=runs,
                            project_runs=project_runs, datasets=datasets, sessions=sessions,
-                           models=models, logs=logs)
+                           models=models, logs=logs, results=results)
     if configurations is not None and datasets is not None:
         from JBGWebUIConfigurations import add_configuration_tab
         add_configuration_tab(app, principal_dependency=principal_dependency, render=render,

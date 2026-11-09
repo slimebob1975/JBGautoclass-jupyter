@@ -204,7 +204,8 @@ def test_csv_projects_and_other_users_are_refused(tmp_path):
         project, model_id, _ = _trained_sql_model(client, tmp_path)
         csv = client.post("/api/projects", json={"name": "C", "source": "csv"}).json()["project_id"]
         refused = client.post(f"/api/projects/{csv}/predictions", json={"model_id": model_id})
-        assert refused.json() == {"detail": "predicting with a saved model is not available for CSV projects yet"}
+        # 296b: CSV projects predict too; a model of another project is not theirs.
+        assert refused.json() == {"detail": "the model is not available"}
     with _sql_signed_in(), _client(tmp_path, subject="bob") as theirs:
         response = theirs.post(f"/api/projects/{project}/predictions", json={"model_id": model_id})
         assert response.status_code == 404
@@ -228,12 +229,14 @@ def test_the_prediction_tab_predicts_with_the_chosen_model(tmp_path):
         assert "Prediktionskörningar" not in client.get("/ui/run").text      # not on Training
 
 
-def test_csv_projects_say_that_predictions_follow(tmp_path):
+def test_csv_projects_show_their_prediction_checks(tmp_path):
+    # 296b: CSV prediction is available; without a chosen model it is blocked.
     with _client(tmp_path) as client:
         location = client.post("/ui/projects", data={"name": "C", "source": "csv"},
                                follow_redirects=False).headers["location"]
         project = re.search(r"selected=([0-9a-f-]{36})", location).group(1)
         client.post(f"/ui/projects/{project}/open", follow_redirects=False)
         page = client.get("/ui/prediction").text
-        assert "Prediktioner för CSV-projekt kommer i nästa uppdatering." in page
+        assert "Ingen modell är vald (fliken Modeller)." in page
+        assert "Inte inloggad på SQL Server" not in page                   # no sign-in for CSV
         assert 'class="btn act ready"' not in page

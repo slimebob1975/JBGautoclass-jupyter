@@ -1325,3 +1325,13 @@ msgstr "Tillbaka"
 
 msgid "Only the end of the log is shown; the download contains all of it."
 msgstr "Bara slutet av loggen visas; nedladdningen innehåller hela."
+
+# 296b: CSV predictions and the predictions view.
+msgid "The predictions can be downloaded as a file when the run has finished."
+msgstr "Prediktionerna kan laddas ned som en fil när körningen är klar."
+
+msgid "Download the predictions"
+msgstr "Ladda ned prediktionerna"
+
+msgid "The predictions are shown here for runs made after this update."
+msgstr "Prediktionerna visas här för körningar som görs efter den här uppdateringen."

@@ -290,11 +290,14 @@ full SQL regression acceptance remain separately unverified.
     progress (the engine's progress now reaches the store), class names in
     the Training tab, display name in the header ("Unknown user" unless App
     Service headers are trusted), run logs for their owner.
-  - [ ] 296b (was 295c2): CSV predictions as a downloadable file (the training
+  - [x] 296b (was 295c2): CSV predictions as a downloadable file (the training
     dataset's rows without a class, agreed 2026-11-09) and a predictions view
     on the Prediction tab for SQL and CSV.
   - Not planned (decided 2026-11-09): importing models trained in Voilà into
     the model catalog.
+  - [ ] Later (noted 2026-11-09): a second, inner progress bar during
+    spot-checking that moves for every algorithm combination, as in Voilà;
+    296a passes on the outer bar only.
   - [ ] Later: separate CSV prediction datasets (the CSV prediction path is
     pinned to the training dataset's identity today); their class column may
     be missing too.
