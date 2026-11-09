@@ -198,3 +198,10 @@ pre.log { background: #1e1e1e; color: #e8e8e8; padding: 12px 14px; border-radius
 .guide blockquote { margin: 10px 0; padding: 4px 12px; border-left: 3px solid var(--blue); background: #f4f8fc; }
 ul.contents { list-style: none; padding: 0; margin: 6px 0 0; }
 ul.contents li { padding: 3px 0; }
+
+/* 295e: the logo image (100 x 73 px, shown at 40 px high); the header wraps on
+   narrow screens instead of squeezing the language switch. */
+img.logo { display: block; height: 40px; width: auto; }
+.masthead { flex-wrap: wrap; row-gap: 8px; }
+.lang { flex-shrink: 0; }
+.lang button { white-space: nowrap; }

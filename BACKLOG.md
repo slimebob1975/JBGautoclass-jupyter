@@ -314,11 +314,10 @@ full SQL regression acceptance remain separately unverified.
   - [ ] Later: the rest of the designed Overview (Tab 1 in
     `docs/gui/JBG_web_gui_design.md`): "Continue working", recent projects
     in the empty state, the activity strip for other projects.
-  - [ ] Open question (noted with 295d): should `/ui` land on the Overview
-    instead of the Projects tab?
-  - [ ] Interface detail noted with 295d: on narrow screens (about 420 px)
-    the SV/EN switch in the header is squeezed and EN is hidden; also before
-    295d.
+  - [x] 295e: `/ui` lands on the Overview instead of the Projects tab
+    (asked with 295d; chosen when the next revision was left open).
+  - [x] 295e: on narrow screens (about 420 px) the header wraps instead of
+    squeezing the SV/EN switch (noted with 295d; also before it).
   - [ ] Keep the user guide (`docs/user_guide.*.md`) in step with each
     interface revision; tests require one section per tab in both languages.
 - [ ] Per-project retention (design decision 3) now covers model files
@@ -326,8 +325,9 @@ full SQL regression acceptance remain separately unverified.
   - [x] Header name (296a, decided 2026-11-09 instead of the Windows user
     name): "Unknown user" in local mode; the App Service user name behind
     Azure App Service authentication (`JBG_TRUST_APP_SERVICE_HEADERS`).
-  - [ ] Interface detail noted on 2026-11-05: use the JBG logo image from
-    `GUI/assets/logo.png` in the header.
+  - [x] 295e (noted on 2026-11-05): the JBG logo image in the header, the
+    same file as the Voilà GUI (`GUI/assets/logo.png`, served at
+    `/ui/logo.png`).
   - [ ] Store the language choice per user on the server (decision 6); 287a
     keeps it in a browser cookie.
   - [ ] Introduce htmx and Fluent web components (pinned, with integrity

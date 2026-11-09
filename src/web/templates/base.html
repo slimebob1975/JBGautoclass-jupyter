@@ -15,7 +15,8 @@
     <div class="brand">
       {# 295d: the title leads to the Overview tab #}
       <a href="/ui/overview" class="brand-link" title="{{ _('Overview') }}">
-        <span class="logo" aria-hidden="true">JBG</span>
+        {% if has_logo %}<img class="logo" src="/ui/logo.png" alt="JBG" width="55" height="40">
+        {% else %}<span class="logo">JBG</span>{% endif %}
         <h1>{{ _("Automatic classification") }}</h1>
       </a>
       {% if version_line %}<div class="version">{{ version_line }}</div>{% endif %}

@@ -24,7 +24,8 @@ Flikarna följer arbetsgången från vänster till höger:
 
 Raden under rubriken visar det pågående arbetet: öppet projekt, aktivt
 träningsdataset, konfigurationen som är vald för körning och vald modell.
-Rubriken ”JBG Automatisk klassificering” leder till fliken Översikt.
+Programmet öppnas på fliken Översikt, och rubriken ”JBG Automatisk
+klassificering” leder dit.
 Språket väljs med SV/EN uppe till höger.
 
 ## Översikt

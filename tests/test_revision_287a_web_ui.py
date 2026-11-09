@@ -41,7 +41,8 @@ def _create(client, name, source="sql", description=""):
 def test_root_leads_to_the_interface_and_docs_remain(tmp_path):
     with _client(tmp_path) as client:
         assert client.get("/", follow_redirects=False).headers["location"] == "/ui/"
-        assert client.get("/ui/", follow_redirects=False).headers["location"] == "/ui/projects"
+        # 295e: the interface opens on the Overview.
+        assert client.get("/ui/", follow_redirects=False).headers["location"] == "/ui/overview"
         assert client.get("/docs").status_code == 200
         assert client.get("/ui/static/jbg.css").status_code == 200
 

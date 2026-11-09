@@ -2,6 +2,7 @@
 
 295d: the Overview and About tabs (JBGWebUIOverview, JBGWebUIAbout); the
 title in the header links to the Overview.
+295e: the JBG logo image in the header; /ui opens on the Overview.
 
 Locked decisions: FastAPI + Jinja2 (server-rendered), Fluent 2 layout patterns
 styled with the organization's stylesheet tokens, Swedish by default with
@@ -19,11 +20,14 @@ from typing import Callable
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 WEB = Path(__file__).resolve().parent / "web"
+# 295e: the header shows the logo the Voilà GUI uses (GUI/default_settings.json),
+# served from where it is, so the two interfaces share one file.
+LOGO = Path(__file__).resolve().parent / "GUI" / "assets" / "logo.png"
 LANGUAGES = ("sv", "en")
 DEFAULT_LANGUAGE = "sv"
 LANGUAGE_COOKIE = "jbg_lang"
@@ -209,6 +213,7 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         base = {"request": request, "_": _, "language": language, "tabs": tabs,
                 "current_tab": tab, "user": display_name(request) or _("Unknown user"),
                 "version_line": version_line,
+                "has_logo": LOGO.is_file(),                      # 295e: else the text logo
                 "active_project": project,
                 "active_dataset": active_dataset(principal.principal_key, project),
                 "active_configuration": active_configuration(request, principal.principal_key,
@@ -261,7 +266,17 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
     @app.get("/ui", include_in_schema=False)
     @app.get("/ui/", include_in_schema=False)
     def ui_root():
-        return _redirect("/ui/projects")
+        # 295e: the interface opens on the Overview (tab 1 of the design); without
+        # an open project it points to the Projects tab.
+        return _redirect("/ui/overview")
+
+    @app.get("/ui/logo.png", include_in_schema=False)
+    def logo():
+        """295e: no sign-in needed; the file is the same public logo as in Voilà."""
+        if not LOGO.is_file():
+            return Response(status_code=404)
+        return FileResponse(LOGO, media_type="image/png",
+                            headers={"Cache-Control": "public, max-age=86400"})
 
     @app.get("/ui/projects", response_class=HTMLResponse, include_in_schema=False)
     def projects_tab(request: Request, selected: str = "",

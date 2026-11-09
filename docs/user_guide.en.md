@@ -24,7 +24,8 @@ The tabs follow the work order from left to right:
 
 The line below the title shows the current work: the open project, the
 active training dataset, the configuration chosen for runs and the chosen
-model. The title "JBG Automatic classification" leads to the Overview tab.
+model. The program opens on the Overview tab, and the title "JBG Automatic
+classification" leads there.
 Choose the language with SV/EN at the top right.
 
 ## Overview

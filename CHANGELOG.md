@@ -1,3 +1,20 @@
+## Revision 295e - Logo, narrow header, start on the Overview (2026-11-09)
+
+- The header shows the JBG logo image (noted 2026-11-05). It is the file
+  the Voilà GUI uses (`src/GUI/assets/logo.png`, named in
+  `GUI/default_settings.json`), served from where it is at `/ui/logo.png`,
+  so both interfaces share one file and the patch carries no binary. If the
+  file is missing, the header keeps the text logo rather than a broken image.
+- On narrow screens (about 420 px) the header wraps instead of squeezing the
+  language switch, which hid EN (noted with 295d; also before it).
+- `/ui` opens on the Overview (tab 1 of the design; it points to the
+  Projects tab when no project is open), instead of the Projects tab. Chosen
+  on 2026-11-09, when the next revision was left open; a one-line change if
+  Projects is preferred. The user guide says where the
+  program opens.
+- Tests: `tests/test_revision_295e_header.py`; the 287a test follows the new
+  start page.
+
 ## Revision 295d - Overview and About tabs (2026-11-09)
 
 - Overview tab (requested 2026-11-06), a first simple version scoped to the
