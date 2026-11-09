@@ -281,6 +281,8 @@ full SQL regression acceptance remain separately unverified.
     class names, model comparison, mispredictions, feature importance).
   - [x] 295b: Models tab (catalog, model card, choosing a model for
     predictions).
+  - [x] 295b2: "Choose for runs" in the Configuration tab (found in use:
+    an opened configuration was not chosen until it was saved again).
   - [ ] 295c: predicting with a saved model (SQL into the prediction table,
     CSV as a downloadable file) and a predictions view.
   - [ ] 295d (requested 2026-11-06): the title "JBG Automatisk

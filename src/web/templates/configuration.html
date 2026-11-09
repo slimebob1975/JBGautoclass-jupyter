@@ -63,7 +63,8 @@
         <tbody>
         {% for item in items %}
           <tr class="{{ 'hl' if selected and selected.configuration_id == item.configuration_id }}">
-            <td><a href="/ui/configuration?configuration={{ item.configuration_id }}"><b>{{ item.name }}</b></a></td>
+            <td><a href="/ui/configuration?configuration={{ item.configuration_id }}"><b>{{ item.name }}</b></a>
+              {% if item.configuration_id == chosen_id %}<span class="badge b-info">{{ _("Chosen") }}</span>{% endif %}</td>
             <td class="num">{{ item.version }}</td><td class="num">{{ item.updated_at[:10] }}</td>
           </tr>
         {% endfor %}
@@ -86,7 +87,17 @@
 
   <aside class="card wide">
   {% if selected and schema %}
-    <h2>{{ selected.name }} <span class="badge b-neu">{{ _("Version") }} {{ selected.version }}</span></h2>
+    <div class="card-head">
+      <h2>{{ selected.name }} <span class="badge b-neu">{{ _("Version") }} {{ selected.version }}</span></h2>
+      {% if selected.configuration_id == chosen_id %}
+        <span class="badge b-ok">{{ _("Chosen for runs") }}</span>
+      {% else %}
+        {# 295b2: choosing does not create a new version, unlike saving. #}
+        <form method="post" action="/ui/configuration/{{ selected.configuration_id }}/select">
+          <button class="btn sub">{{ _("Choose for runs") }}</button>
+        </form>
+      {% endif %}
+    </div>
     {% if form_message == "fields" %}<p class="message error">{{ _("Some values were not accepted. See the marked fields.") }}</p>
     {% elif form_message == "invalid" %}<p class="message error">{{ _("The configuration was not accepted. Check the settings and save again.") }}</p>
     {% elif form_message == "changed" %}<p class="message error">{{ _("Someone saved a newer version.") }}

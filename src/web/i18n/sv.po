@@ -1235,3 +1235,10 @@ msgstr "Den här modellen är vald."
 
 msgid "Trained models"
 msgstr "Tränade modeller"
+
+# 295b2: choosing a configuration for runs.
+msgid "Choose for runs"
+msgstr "Välj för körning"
+
+msgid "Chosen for runs"
+msgstr "Vald för körning"

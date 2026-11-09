@@ -157,3 +157,7 @@ table.importance .bar { height: 10px; background: var(--blue); border-radius: 3p
 /* 295a: Results tab */
 .pager { display: flex; gap: 14px; align-items: center; margin-top: 10px; }
 table.matrix th { white-space: nowrap; }
+
+/* 295b2: heading with an action */
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.card-head h2 { margin-bottom: 0; }

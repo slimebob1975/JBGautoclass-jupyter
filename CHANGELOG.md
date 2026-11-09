@@ -1,3 +1,18 @@
+## Revision 295b2 - choose a configuration for runs (2026-11-09)
+
+- Found in use (2026-11-09): opening a configuration in the Configuration tab
+  only showed it; it was chosen for runs only by creating or saving it, so a
+  configuration made elsewhere (for example "From Voila") left the Run tab
+  blocked unless it was saved again as a new version. The server route
+  existed (292a) but the tab offered no button for it.
+- The open configuration now has "Choose for runs" next to its name, like
+  "Choose model" on the Models tab; choosing creates no new version. The
+  chosen configuration is marked "Chosen" in the list and "Chosen for runs"
+  in its heading.
+- Tests: `tests/test_revision_295b2_choose_configuration.py`, including the
+  situation that was found (a configuration created elsewhere unblocks the
+  run once chosen).
+
 ## Revision 295b - Models tab (2026-11-06)
 
 - Add the Models tab (`src/JBGWebUIModels.py`, `models.html`) on the 288c

@@ -170,7 +170,9 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
                    "schema": None, "values": values, "field_errors": field_errors or {},
                    "form_message": form_message, "combinations": None,
                    "essential_groups": ESSENTIAL_GROUPS,
-                   "field_error_texts": FIELD_ERRORS, "tab_messages": MESSAGES}
+                   "field_error_texts": FIELD_ERRORS, "tab_messages": MESSAGES,
+                   # 295b2: the configuration chosen for runs (shown, not just opened).
+                   "chosen_id": request.cookies.get(CONFIGURATION_COOKIE)}
         if project is not None:
             pid = project["project_id"]
             try:
