@@ -127,6 +127,58 @@ class ProjectRunService:
         return self._submit_csv(principal, project, settings, dataset, model_folder,
                                 model_id, metadata, roles)
 
+    def submit_prediction(self, principal, project_id: str, *, model_id: str,
+                          dataset_id: str | None = None) -> dict:
+        """295c: predict with a saved model (SQL). The training run's own engine
+        configuration (roles and model file included) is reused in prediction-
+        only mode on the chosen dataset, or on the training dataset's rows
+        without a class. A table may lack the class column; it is generated."""
+        from JBGApplicationContracts import RunReference
+        from JBGModelCatalog import ModelCatalog, ModelState
+        owner = principal.principal_key
+        project = self._projects.require(owner, project_id)
+        if project.source is DataSourceKind.CSV:
+            raise RunRequestRefused("predicting with a saved model is not available for CSV "
+                                    "projects yet")
+        if self._sql_server is None or not self._sql_server.configured or self._sessions is None:
+            raise RunRequestRefused("no SQL Server is configured on this server")
+        try:
+            entry = ModelCatalog(self._store.engine, schema=self._store.schema).get_owned(
+                owner, project_id, model_id)
+        except KeyError:                    # unknown, or another user's model
+            raise RunRequestRefused("the model is not available") from None
+        if entry.state is not ModelState.AVAILABLE or not entry.run_id:
+            raise RunRequestRefused("the model is not available")
+        try:
+            training = self._store.get_owned(owner, RunReference(entry.run_id))
+        except (KeyError, ValueError):
+            raise RunRequestRefused("the model is not available") from None
+        trained = training.spec.get("project_run") or {}
+        config = _load_config(training.spec["configuration"])
+        if not Path(config.get_model_filename()).is_file():
+            raise RunRequestRefused("the model file is missing")
+        dataset = self._dataset(owner, project_id, dataset_id or trained.get("dataset_id"))
+        config.mode.train, config.mode.predict = False, True
+        config.mode.mispredicted = False
+        config.mode.calculate_feature_importance = False
+        self._sql_server.apply_to(config)
+        config.connection.data_catalog = dataset.catalog
+        config.connection.data_table = dataset.table
+        metadata = {"project_id": project.project_id, "kind": "prediction", "model_id": model_id,
+                    "dataset_id": dataset.dataset_id,
+                    "configuration_name": trained.get("configuration_name"),
+                    "configuration_version": trained.get("configuration_version")}
+        from JBGRunComposition import compose_sql_run
+        from JBGRunSubmission import _SQL_SCOPE
+        composed = compose_sql_run(self._sessions, principal, config, _QuietLogger())
+        prepared = composed.preparation.prepare(
+            DatasetReference(DataSourceKind.SQL, composed.sql_dataset_key()),
+            RunConfiguration(DataSourceKind.SQL, composed.configuration))
+        service = DurableRunService(self._store, scope_for=lambda principal: _SQL_SCOPE,
+                                    authorize_dataset=self._sessions.authorize,
+                                    on_submit=self._on_submit)
+        return service.submit(principal, prepared, run_metadata=metadata)
+
     def _submit_sql(self, principal, settings, dataset, model_folder, model_id, metadata,
                     roles):
         from JBGRunComposition import compose_sql_run

@@ -1242,3 +1242,34 @@ msgstr "Välj för körning"
 
 msgid "Chosen for runs"
 msgstr "Vald för körning"
+
+# 295c: predicting with a saved model.
+msgid "The prediction has started."
+msgstr "Prediktionen har startat."
+
+msgid "The prediction could not be started."
+msgstr "Prediktionen kunde inte startas."
+
+msgid "The model is not available."
+msgstr "Modellen är inte tillgänglig."
+
+msgid "Predict with a saved model"
+msgstr "Prediktera med en sparad modell"
+
+msgid "Rows to predict"
+msgstr "Rader att prediktera"
+
+msgid "Rows without a class in the training dataset"
+msgstr "Rader utan klass i träningsdatasetet"
+
+msgid "Start prediction"
+msgstr "Starta prediktion"
+
+msgid "The predictions are written to the prediction table in SQL Server. A table without a class column is predicted in full."
+msgstr "Prediktionerna skrivs till prediktionstabellen i SQL Server. En tabell utan klasskolumn predikteras i sin helhet."
+
+msgid "Choose a model on the Models tab first."
+msgstr "Välj först en modell under fliken Modeller."
+
+msgid "The predictions were written to the prediction table in SQL Server."
+msgstr "Prediktionerna skrevs till prediktionstabellen i SQL Server."

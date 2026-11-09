@@ -152,7 +152,8 @@ class DurableRunService:
                              created_at=record.created_at.isoformat(),
                              finished_at=record.finished_at.isoformat() if record.finished_at else None,
                              configuration_name=meta.get("configuration_name"),
-                             configuration_version=meta.get("configuration_version")))
+                             configuration_version=meta.get("configuration_version"),
+                             kind=meta.get("kind", "training")))           # 295c
             if len(runs) >= limit:
                 break
         return runs

@@ -67,6 +67,13 @@ class ProjectRunRequest(BaseModel):
     dataset_id: Optional[str] = None
 
 
+class PredictionRequest(BaseModel):
+    """295c: the saved model, and optionally the dataset to predict (default:
+    the training dataset's rows without a class)."""
+    model_id: str
+    dataset_id: Optional[str] = None
+
+
 class DatasetRolesRequest(BaseModel):
     """293a: one role per column (id, class, numeric, text, categorical, ignored);
     293a2: the categorical limit for text columns (2-1000, default 30)."""
@@ -422,6 +429,27 @@ def _add_project_run_endpoints(app, principal_dependency, project_runs):
             raise HTTPException(status_code=422, detail=str(error)) from None
         except (ValueError, TypeError, KeyError, OSError):
             # Configuration, dataset or storage problem; details stay server-side.
+            raise HTTPException(status_code=422, detail="the run cannot be started") from None
+
+    @app.post("/api/projects/{project_id}/predictions", status_code=201)
+    def start_prediction(project_id: str, request: PredictionRequest = Body(...),
+                         principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        """295c: predict with a saved model (SQL projects for now)."""
+        try:
+            return project_runs.submit_prediction(principal, project_id,
+                                                  model_id=request.model_id,
+                                                  dataset_id=request.dataset_id)
+        except ProjectUnavailable:
+            raise HTTPException(status_code=404, detail="project unavailable") from None
+        except DatasetUnavailable:
+            raise HTTPException(status_code=404, detail="dataset unavailable") from None
+        except RunRequestRefused as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        except PermissionError as error:
+            if str(error) == "SQL sign-in required":
+                raise HTTPException(status_code=409, detail="SQL sign-in required") from None
+            raise HTTPException(status_code=403, detail="not permitted") from None
+        except (ValueError, TypeError, KeyError, OSError):
             raise HTTPException(status_code=422, detail="the run cannot be started") from None
 
 

@@ -54,10 +54,25 @@ def _load_catalog(language: str) -> dict[str, str]:
 
 
 _CATALOGS = {language: _load_catalog(language) for language in LANGUAGES}
+_CATALOG_TIMES: dict[str, float] = {}
+
+
+def _current_catalog(language: str) -> dict[str, str]:
+    """295c: reload a catalogue when its file has changed, as the templates are
+    re-read, so new texts after an update need no server restart."""
+    path = WEB / "i18n" / f"{language}.po"
+    try:
+        changed = path.stat().st_mtime
+    except OSError:
+        return _CATALOGS.get(language, {})
+    if _CATALOG_TIMES.get(language) != changed:
+        _CATALOGS[language] = _load_catalog(language)
+        _CATALOG_TIMES[language] = changed
+    return _CATALOGS[language]
 
 
 def translator(language: str) -> Callable[[str], str]:
-    catalog = _CATALOGS.get(language, {})
+    catalog = _current_catalog(language)
     return lambda text: catalog.get(text, text)
 
 
@@ -203,7 +218,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
         add_run_tab(app, principal_dependency=principal_dependency, render=render,
                     redirect=_redirect, active_project=active_project, runs=runs,
                     project_runs=project_runs, datasets=datasets,
-                    configurations=configurations, sessions=sessions, inspection=inspection)
+                    configurations=configurations, sessions=sessions, inspection=inspection,
+                    models=models)
     if configurations is not None and datasets is not None:
         from JBGWebUIConfigurations import add_configuration_tab
         add_configuration_tab(app, principal_dependency=principal_dependency, render=render,

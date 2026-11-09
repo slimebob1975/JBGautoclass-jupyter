@@ -283,8 +283,17 @@ full SQL regression acceptance remain separately unverified.
     predictions).
   - [x] 295b2: "Choose for runs" in the Configuration tab (found in use:
     an opened configuration was not chosen until it was saved again).
-  - [ ] 295c: predicting with a saved model (SQL into the prediction table,
-    CSV as a downloadable file) and a predictions view.
+  - [x] 295c: predicting with a saved model for SQL projects (into the
+    prediction table); prediction tables may lack the class column (agreed
+    2026-11-09, engine change in SQLDataLayer).
+  - [ ] 295c2: CSV predictions as a downloadable file (the training
+    dataset's rows without a class, agreed 2026-11-09) and a predictions view
+    in the Results tab for SQL and CSV.
+  - [ ] Later: separate CSV prediction datasets (the CSV prediction path is
+    pinned to the training dataset's identity today); their class column may
+    be missing too.
+  - [ ] Later: SQL sign-ins live in the server's memory and are lost on a
+    restart; consider an automatic Windows sign-in where possible.
   - [ ] 295d (requested 2026-11-06): the title "JBG Automatisk
     klassificering" links to the Overview tab, with a first simple overview
     (open project: active dataset, selected configuration, latest run,

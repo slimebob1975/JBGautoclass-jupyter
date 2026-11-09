@@ -297,6 +297,9 @@ def register_trained_model(store: RunJobStore, record, run_config) -> bool:
     project_run = record.spec.get("project_run")
     if not isinstance(project_run, dict):
         return False
+    if project_run.get("kind") == "prediction":
+        # 295c: a prediction run loads an existing model; it trains none.
+        return False
     try:
         model_file = Path(run_config.get_model_filename())
         if not model_file.is_file():

@@ -20,6 +20,26 @@
       </ul>
       {% if configuration %}<p class="hint">{{ _("Configuration") }}: <b>{{ configuration.name }}</b> v{{ configuration.version }}</p>{% endif %}
     </div>
+    {% if prediction and prediction.available %}
+    <div class="card">
+      <h2>{{ _("Predict with a saved model") }}</h2>
+      {% if prediction.model %}
+        <p>{{ _("Model") }}: <b>{{ prediction.model.name }}</b></p>
+        <form method="post" action="/ui/run/predict" class="stack">
+          <label for="predict-dataset">{{ _("Rows to predict") }}</label>
+          <select id="predict-dataset" name="dataset_id">
+            <option value="">{{ _("Rows without a class in the training dataset") }}</option>
+            {% for d in prediction.datasets %}<option value="{{ d.dataset_id }}">{{ d.name }}</option>{% endfor %}
+          </select>
+          {% if not prediction.signed_in %}<p class="hint">{{ _("Sign in to SQL Server first.") }}</p>{% endif %}
+          <button class="btn {{ '' if prediction.ready else 'sub' }}" {{ '' if prediction.ready else 'disabled' }}>{{ _("Start prediction") }}</button>
+          <p class="hint">{{ _("The predictions are written to the prediction table in SQL Server. A table without a class column is predicted in full.") }}</p>
+        </form>
+      {% else %}
+        <p class="hint">{{ _("Choose a model on the Models tab first.") }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
     <div class="card">
       <h2>{{ _("Runs in this project") }}</h2>
       {% if recent %}
@@ -29,7 +49,8 @@
         {% for item in recent %}
           <tr class="{{ 'hl' if item.run_id == selected_run }}">
             <td class="num"><a href="/ui/run?run={{ item.run_id }}">{{ item.created_at | localtime }}</a></td>
-            <td>{{ item.configuration_name or "–" }}{% if item.configuration_version %} v{{ item.configuration_version }}{% endif %}</td>
+            <td>{{ item.configuration_name or "–" }}{% if item.configuration_version %} v{{ item.configuration_version }}{% endif %}
+              {% if item.kind == "prediction" %}<span class="badge b-info">{{ _("Prediction") }}</span>{% endif %}</td>
             <td><span class="badge {{ 'b-ok' if item.status == 'succeeded' else ('b-fail' if item.status in ('failed', 'interrupted') else 'b-neu') }}">{{ _(stages.get(item.status, item.status)) }}</span></td>
           </tr>
         {% endfor %}
@@ -92,6 +113,8 @@
         <p class="hint">{{ _("Classes") }}: {{ results.summary.class_count }} · {{ _("Mispredicted rows (all labelled rows)") }}: {{ results.summary.mispredicted_count }}</p>
       {% endif %}
       <p><a href="/ui/results?run={{ overview.run_id }}">{{ _("All results of this run") }} ›</a></p>
+    {% elif finished and overview.status == "succeeded" and selected_kind == "prediction" %}
+      <p class="message ok">{{ _("The predictions were written to the prediction table in SQL Server.") }}</p>
     {% elif finished and overview.status != "succeeded" %}
       <p class="message error">{{ _("The run did not finish successfully.") }}</p>
     {% endif %}

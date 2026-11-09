@@ -8,7 +8,7 @@ run's overview every few seconds and reloads the page once the run has ended.
 """
 from __future__ import annotations
 
-from fastapi import Depends, Request
+from fastapi import Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
 TERMINAL = ("succeeded", "failed", "cancelled", "interrupted")
@@ -43,11 +43,15 @@ MESSAGES = {
     "not_fitting": ("error", "The column roles do not fit the dataset."),
     "signin_needed": ("error", "Sign in to SQL Server first."),
     "unavailable": ("error", "The run is no longer available."),
+    "prediction_started": ("ok", "The prediction has started."),
+    "prediction_refused": ("error", "The prediction could not be started."),
+    "model_missing": ("error", "The model is not available."),
 }
 
 
 def add_run_tab(app, *, principal_dependency, render, redirect, active_project, runs,
-                project_runs, datasets, configurations, sessions, inspection) -> None:
+                project_runs, datasets, configurations, sessions, inspection,
+                models=None) -> None:
     from JBGApplicationContracts import RunReference
     from JBGProjectRuns import RunDoesNotMatchDataset, RunRequestRefused
 
@@ -94,16 +98,20 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
         project = active_project(request, owner)
         context = {"no_project": project is None, "checks": [], "ready": False, "recent": [],
                    "overview": None, "selected_run": None, "stages": STAGES,
-                   "terminal": TERMINAL, "tab_messages": MESSAGES}
+                   "terminal": TERMINAL, "tab_messages": MESSAGES, "prediction": None,
+                   "selected_kind": "training"}
         if project is not None:
             context["checks"], context["ready"], context["configuration"] = preflight(
                 request, principal, project)
             context["recent"] = runs.list_project_runs(owner, project["project_id"])
+            context["prediction"] = prediction_card(request, principal, project)
             chosen = run or (context["recent"][0]["run_id"] if context["recent"] else "")
             if chosen and any(r["run_id"] == chosen for r in context["recent"]):
                 try:
                     context["overview"] = runs.overview(owner, RunReference(chosen))
                     context["selected_run"] = chosen
+                    context["selected_kind"] = next(r for r in context["recent"]
+                                                    if r["run_id"] == chosen).get("kind", "training")
                 except Exception:
                     context["overview"] = None
         return render(request, principal, "run.html", "run", **context)
@@ -124,6 +132,43 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
         except (RunRequestRefused, LookupError, ValueError, TypeError, OSError):
             return redirect("/ui/run", message="refused")
         return redirect("/ui/run", run=created["run_id"], message="started")
+
+    def prediction_card(request, principal, project):
+        """295c: predicting with the chosen model (SQL projects for now)."""
+        owner, pid = principal.principal_key, project["project_id"]
+        card = {"available": project["source"] == "sql", "model": None, "datasets": [],
+                "signed_in": sessions.is_signed_in(principal) if project["source"] == "sql" else None}
+        model_id = request.cookies.get("jbg_model")
+        if models is not None and model_id:
+            try:
+                card["model"] = models.get(owner, pid, model_id)
+            except Exception:
+                card["model"] = None
+        try:
+            card["datasets"] = [d for d in datasets.list(owner, pid)
+                                if d["role"] in ("prediction", "mixed")]
+        except Exception:
+            card["datasets"] = []
+        card["ready"] = bool(card["available"] and card["model"]
+                             and card["model"]["state"] == "available" and card["signed_in"])
+        return card
+
+    @app.post("/ui/run/predict", include_in_schema=False)
+    def predict(request: Request, dataset_id: str = Form(""),
+                principal=Depends(principal_dependency)):
+        project = active_project(request, principal.principal_key)
+        model_id = request.cookies.get("jbg_model", "")
+        if project is None or not model_id:
+            return redirect("/ui/run", message="model_missing")
+        try:
+            created = project_runs.submit_prediction(principal, project["project_id"],
+                                                     model_id=model_id,
+                                                     dataset_id=dataset_id or None)
+        except PermissionError:
+            return redirect("/ui/run", message="signin_needed")
+        except (RunRequestRefused, LookupError, ValueError, TypeError, OSError):
+            return redirect("/ui/run", message="prediction_refused")
+        return redirect("/ui/run", run=created["run_id"], message="prediction_started")
 
     @app.post("/ui/run/{run_id}/cancel", include_in_schema=False)
     def cancel(request: Request, run_id: str, principal=Depends(principal_dependency)):

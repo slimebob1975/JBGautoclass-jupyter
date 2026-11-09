@@ -1,3 +1,28 @@
+## Revision 295c - predicting with a saved model (SQL) (2026-11-09)
+
+- Engine (agreed 2026-11-09): a prediction-only run may read a SQL table
+  without the class column; every row is then unclassified and the class is
+  generated. `SQLDataLayer._generates_class_column()` looks the table's
+  columns up once per run (by the plain `schema.table` name that
+  `INFORMATION_SCHEMA` matches); the data query selects `NULL AS [class]`
+  without a filter, the class count counts every row as unclassified and the
+  ordering by class is dropped. Training runs and tables that have the
+  column use the previous queries unchanged; the Voilà GUI is unaffected.
+- `POST /api/projects/{id}/predictions` (SQL projects): reuses the training
+  run's own engine configuration (roles and model file included) in
+  prediction-only mode on a chosen dataset, or on the training dataset's rows
+  without a class. Refused with fixed messages for unavailable models, a
+  missing model file, a missing SQL sign-in and, for now, CSV projects.
+- The worker registers no model for prediction runs (they load an existing
+  one); without this, every prediction would have registered it again.
+- Run tab: "Predict with a saved model" with the chosen model (Models tab)
+  and the rows to predict; prediction runs are marked in the run list and
+  say where their predictions went.
+- Translations reload when `sv.po` changes, as the templates do, so new
+  texts after an update need no server restart (found 2026-11-09: the 295b2
+  button showed in English until the server was restarted).
+- Tests: `tests/test_revision_295c_predictions.py`.
+
 ## Revision 295b2 - choose a configuration for runs (2026-11-09)
 
 - Found in use (2026-11-09): opening a configuration in the Configuration tab
