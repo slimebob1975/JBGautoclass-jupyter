@@ -298,12 +298,10 @@ full SQL regression acceptance remain separately unverified.
   - [x] 297c (bug 2026-11-10): a training run that also predicts, on a table
     where every row has a class, trains only instead of failing at its last
     step; a finished inner bar stays until the stage changes.
-  - [ ] Next candidate (asked 2026-11-10): copy the column roles from another
-    dataset of the project ("Kopiera kolumnroller från ..." on the Column roles
-    view), accepted only when the ID, class and feature columns exist in the
-    target with compatible kinds (the prediction-dataset compatibility check).
-    A configuration is already table-independent within its project
-    (decision A); only the roles must be entered again today.
+  - [x] 297d (asked 2026-11-10): copy the column roles from another dataset
+    of the project ("Kopiera kolumnroller från ..." on the Column roles view),
+    as a filled-in form to review and save; missing and non-numeric columns
+    are named.
   - [ ] Later, if wanted: copy a configuration to another project.
   - [x] 297b (bug 2026-11-10): SQL runs read all rows when "Row limit" is
     empty (the engine read it as zero rows); a training run without a model

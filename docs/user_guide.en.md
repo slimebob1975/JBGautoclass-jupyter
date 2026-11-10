@@ -74,6 +74,11 @@ as" shows the outcome.
 Save with **Save column roles**, then validate the dataset again with
 **Validate dataset** at the bottom.
 
+If the project already has a dataset with the same columns, choose it under
+**Copy column roles from** and **Fill in**. The roles are filled in but not
+kept until you save; columns that are missing or not numbers are pointed
+out. A configuration can be used with every dataset in the project.
+
 ## Configuration
 
 A configuration holds the machine learning settings, for example the run

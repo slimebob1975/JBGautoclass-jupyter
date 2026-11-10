@@ -1403,3 +1403,19 @@ msgstr "Anpassningar för mörkertal"
 
 msgid "of"
 msgstr "av"
+
+# 297d: copying column roles from another dataset.
+msgid "Copy column roles from"
+msgstr "Kopiera kolumnroller från"
+
+msgid "Fill in"
+msgstr "Fyll i"
+
+msgid "Copied from the dataset"
+msgstr "Kopierade från datasetet"
+
+msgid "Not in this dataset, so their roles were not copied:"
+msgstr "Finns inte i det här datasetet, så deras roller kopierades inte:"
+
+msgid "Numeric in the other dataset but not numbers here; choose another role:"
+msgstr "Numeriska i det andra datasetet men inte tal här; välj en annan roll:"

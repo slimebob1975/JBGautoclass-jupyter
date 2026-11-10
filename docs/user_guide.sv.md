@@ -73,6 +73,11 @@ som” visar resultatet.
 Spara med **Spara kolumnroller** och validera sedan datasetet igen med
 **Validera dataset** längst ned.
 
+Har projektet redan ett dataset med samma kolumner, välj det under
+**Kopiera kolumnroller från** och **Fyll i**. Rollerna fylls i men sparas
+inte förrän du sparar; kolumner som saknas eller inte är tal sägs till.
+En konfiguration kan användas med alla dataset i projektet.
+
 ## Konfiguration
 
 En konfiguration innehåller inställningarna för maskininlärningen, till

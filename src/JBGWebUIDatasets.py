@@ -86,7 +86,8 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
             return None
 
     def page(request, principal, *, dataset="", view="preview", column="", validation=None,
-             status_code=200, incompatible=None, roles_error=None, roles_draft=None):
+             status_code=200, incompatible=None, roles_error=None, roles_draft=None,
+             roles_from=""):
         owner = principal.principal_key
         project = active_project(request, owner)
         context = {"no_project": project is None, "datasets": [], "selected": None,
@@ -155,6 +156,29 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                         context["roles_stored"] = stored is not None
                         context["categorical_limit"] = (roles_draft or {}).get(
                             "__limit__", stored.categorical_limit if stored else 30)
+                        # 297d: the roles of another dataset of the project, to copy.
+                        sources = []
+                        for item in items:
+                            if item["dataset_id"] == dataset or item["role"] == "prediction":
+                                continue
+                            roles = optional(inspection.get_roles, principal, pid,
+                                             item["dataset_id"])
+                            if roles is not None:
+                                sources.append((item, roles))
+                        context["roles_sources"] = [item for item, _ in sources]
+                        source = next((pair for pair in sources
+                                       if pair[0]["dataset_id"] == roles_from), None)
+                        if source is not None and not roles_draft and profile:
+                            from JBGDatasetRoles import copy_roles
+                            kinds = {c["name"]: c["type"] for c in profile["columns"]}
+                            mapping, missing, not_numeric = copy_roles(source[1], kinds)
+                            context["roles"] = mapping
+                            context["categorical_limit"] = source[1].categorical_limit
+                            context["roles_copied_from"] = source[0]["name"]
+                            context["roles_from"] = roles_from
+                            context["roles_missing"] = missing
+                            context["roles_not_numeric"] = not_numeric
+                            context.pop("roles_suggested_from", None)
                 else:
                     columns, context["read_error"] = read(inspection.preview, principal, pid, dataset)
                     context["column_names"] = [c["name"] for c in columns["columns"]] if columns else []
@@ -170,8 +194,9 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
 
     @app.get("/ui/dataset", response_class=HTMLResponse, include_in_schema=False)
     def dataset_tab(request: Request, dataset: str = "", view: str = "preview", column: str = "",
-                    principal=Depends(principal_dependency)):
-        return page(request, principal, dataset=dataset, view=view, column=column)
+                    roles_from: str = "", principal=Depends(principal_dependency)):
+        return page(request, principal, dataset=dataset, view=view, column=column,
+                    roles_from=roles_from)
 
     @app.post("/ui/dataset/csv", include_in_schema=False)
     def upload_csv(request: Request, file: UploadFile = File(...), name: str = Form(""),

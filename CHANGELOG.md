@@ -1,3 +1,25 @@
+## Revision 297d - Copy column roles from another dataset (2026-11-10)
+
+- Asked on 2026-11-10: train table y with the configuration made for table
+  x. A configuration is already table-independent within its project
+  (decision A: it holds only the ML settings), but the column roles had to
+  be entered again for y.
+- The Column roles view of a training or mixed dataset now offers "Kopiera
+  kolumnroller från" with the project's other training and mixed datasets
+  that have roles. "Fyll i" fills the form in from the chosen dataset (its
+  roles and categorical limit); nothing is saved until "Spara kolumnroller",
+  which runs the usual checks. Columns with a role that this dataset lacks
+  are left out and named; numeric columns that are not numbers here are kept
+  and named, so the user chooses another role. Ignored columns are not
+  copied; this dataset's other columns stay ignored. The column kinds come
+  from the profile the view already reads; no extra query.
+- `JBGDatasetRoles.copy_roles` (pure); `?roles_from=<dataset>` on
+  `/ui/dataset?view=roles`, accepted only for another training or mixed
+  dataset of the open project with roles. No API change: an API client can
+  read one dataset's roles and save them to another already.
+- User guide: the Column roles section describes the copying.
+- Tests: `tests/test_revision_297d_copy_roles.py`.
+
 ## Revision 297c - Nothing to predict; inner bar until the stage changes (2026-11-10)
 
 - Bug found on 2026-11-10: an SQL training run whose configuration also

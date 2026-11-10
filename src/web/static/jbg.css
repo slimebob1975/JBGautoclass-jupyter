@@ -211,3 +211,7 @@ img.logo { display: block; height: 40px; width: auto; }
 .inner-progress .hint { margin: 0 0 4px; }
 .progress.thin { height: 5px; margin-bottom: 0; }
 .progress.thin .bar { background: #7fb2dc; }
+
+/* 297d: copying column roles from another dataset */
+.message.warn { background: #fdf3dc; color: #7a5200; }
+form.copy-roles { margin-bottom: 10px; }

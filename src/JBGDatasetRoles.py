@@ -137,3 +137,25 @@ def check_compatible(roles: DatasetRoles, training_kinds: dict, candidate_kinds:
                  and training_kinds.get(name) == "number"]
     if missing or different:
         raise IncompatibleDataset(missing, different)
+
+
+def copy_roles(source: DatasetRoles, target_kinds: dict) -> tuple[dict, list, list]:
+    """297d: another dataset's roles for a dataset with the columns (and kinds,
+    "number" or "text") in ``target_kinds``, as a suggestion to review and save.
+
+    Returns (mapping, missing, not_numeric): the roles of the columns that
+    exist in the target; the columns with a role that do not (left out); and
+    numeric columns that are not numbers in the target (kept, for the user to
+    review: validation will refuse them). Ignored columns are not copied.
+    """
+    mapping, missing, not_numeric = {}, [], []
+    for name, role in source.columns:
+        if role == "ignored":
+            continue
+        if name not in target_kinds:
+            missing.append(name)
+            continue
+        mapping[name] = role
+        if role == "numeric" and target_kinds[name] != "number":
+            not_numeric.append(name)
+    return mapping, missing, not_numeric

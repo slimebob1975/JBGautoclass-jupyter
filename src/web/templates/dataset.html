@@ -174,8 +174,26 @@
           {% if selected.role == "prediction" %}
             <p class="hint">{{ _("Prediction datasets use the column roles of the training dataset.") }}</p>
           {% elif data %}
+            {% if roles_sources %}
+              {# 297d: fill the form in from another dataset's roles; nothing is saved. #}
+              <form method="get" action="/ui/dataset" class="inline copy-roles">
+                <input type="hidden" name="dataset" value="{{ selected.dataset_id }}">
+                <input type="hidden" name="view" value="roles">
+                <label for="roles-from">{{ _("Copy column roles from") }}</label>
+                <select id="roles-from" name="roles_from">
+                  {% for item in roles_sources %}<option value="{{ item.dataset_id }}" {{ 'selected' if item.dataset_id == roles_from }}>{{ item.name }}</option>{% endfor %}
+                </select>
+                <button class="btn sub">{{ _("Fill in") }}</button>
+              </form>
+            {% endif %}
             {% if roles_error %}<p class="message error">{{ _(roles_error) }}</p>{% endif %}
-            {% if roles_suggested_from %}
+            {% if roles_copied_from %}
+              <p class="message ok">{{ _("Copied from the dataset") }} “{{ roles_copied_from }}”. {{ _("Review the roles and save to keep them.") }}</p>
+              {% if roles_missing %}<p class="message warn">{{ _("Not in this dataset, so their roles were not copied:") }}
+                {{ roles_missing[:20] | join(", ") }}{% if roles_missing | length > 20 %} (+{{ roles_missing | length - 20 }}){% endif %}</p>{% endif %}
+              {% if roles_not_numeric %}<p class="message warn">{{ _("Numeric in the other dataset but not numbers here; choose another role:") }}
+                {{ roles_not_numeric[:20] | join(", ") }}{% if roles_not_numeric | length > 20 %} (+{{ roles_not_numeric | length - 20 }}){% endif %}</p>{% endif %}
+            {% elif roles_suggested_from %}
               <p class="message ok">{{ _("Suggested from the configuration") }} “{{ roles_suggested_from }}”. {{ _("Review the roles and save to keep them.") }}</p>
             {% elif not roles_stored and not roles_error %}<p class="hint">{{ _("No column roles yet. Columns without a role are ignored.") }}</p>{% endif %}
             <form method="post" action="/ui/dataset/{{ selected.dataset_id }}/roles" id="roles-form">
