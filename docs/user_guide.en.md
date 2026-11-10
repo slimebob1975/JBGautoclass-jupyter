@@ -101,6 +101,10 @@ thinner bar shows how many algorithm combinations are done, for example
 browser, and it can be stopped with **Cancel the run**. **Show log** shows
 the run's log.
 
+If the configuration also predicts rows without a class but the training
+dataset has no such rows, the run only trains and skips the prediction; the
+log says so.
+
 When the run has finished, the evaluation on the holdout data, the
 confusion matrix and the most important features are shown.
 

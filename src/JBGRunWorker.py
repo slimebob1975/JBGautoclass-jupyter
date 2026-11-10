@@ -113,7 +113,7 @@ class StoreProgressLogger:
         self._heartbeat = heartbeat
         self.evaluation = None
         self.feature_importance = None
-        self._inner = {}                    # 297a: key -> [kind, total, done, recorded at]
+        self._inner = {}     # 297a: key -> [kind, total, recorded done, recorded at, latest done]
 
     # --- 297a: inner progress (Voilà's inner bars), for the web interface ---------------
 
@@ -135,7 +135,7 @@ class StoreProgressLogger:
         except (TypeError, ValueError, OverflowError):
             total = 0
         if kind is not None and total >= 1:
-            self._inner[key] = [kind, total, 0, time.monotonic()]
+            self._inner[key] = [kind, total, 0, time.monotonic(), 0]
             self._record_inner(kind, 0, total)
         return result
 
@@ -143,11 +143,12 @@ class StoreProgressLogger:
         result = self._logger.update_inline_progress(key, current_count, terminal_text)
         bar = self._inner.get(key)
         if bar is not None:
-            kind, total, previous, recorded = bar
+            kind, total, previous, recorded, _latest = bar
             try:
                 done = min(max(int(current_count), 0), total)
             except (TypeError, ValueError, OverflowError):
                 return result
+            bar[4] = done
             now = time.monotonic()
             if done != previous and (done == total or now - recorded >= self.INNER_INTERVAL):
                 bar[2], bar[3] = done, now
@@ -158,14 +159,20 @@ class StoreProgressLogger:
         result = self._logger.reset_inline_progress(key)
         bar = self._inner.get(key)
         if bar is not None:
-            bar[2], bar[3] = 0, time.monotonic()
+            bar[2], bar[3], bar[4] = 0, time.monotonic(), 0
             self._record_inner(bar[0], 0, bar[1])
         return result
 
     def end_inline_progress(self, key, set_100=True):
+        """297c: the finished bar stays (full, unless the engine says otherwise)
+        until the next stage marker hides it, together with the stage text;
+        clearing it here left the stage unchanged for a while (the grid search
+        after a spot check runs in the same stage)."""
         result = self._logger.end_inline_progress(key, set_100)
-        if self._inner.pop(key, None) is not None:
-            self._record_inner(None)
+        bar = self._inner.pop(key, None)
+        if bar is not None:
+            kind, total, _recorded_done, _recorded_at, latest = bar
+            self._record_inner(kind, total if set_100 else latest, total)
         return result
 
     def parse_dataset_progress(self, key, num_lines, row_count):
@@ -281,6 +288,43 @@ class _Heartbeat:
 
 # --- Running one job ------------------------------------------------------------------------
 
+NOTHING_TO_PREDICT = ("The training dataset has no rows without a class: this run trains "
+                      "only, and the prediction step is skipped.")
+
+
+def train_only_without_unlabelled_rows(record, layer, logger) -> bool:
+    """297c: a project training run that also predicts the rows without a class,
+    on a table where every row has one, has nothing to predict. The engine then
+    fails at its last step ("No data to predict on"), after the whole training
+    (found 2026-11-10). Count those rows first, with the engine's own query and
+    rule, and switch prediction off for this run only (the run's own Config
+    copy; nothing is saved). If they cannot be counted, the engine decides.
+    True if prediction was switched off.
+    """
+    project_run = record.spec.get("project_run") if isinstance(record.spec, dict) else None
+    if not isinstance(project_run, dict) or project_run.get("kind") == "prediction":
+        return False
+    config = layer.config
+    try:
+        if not (config.should_train() and config.should_predict()):
+            return False
+        distribution = layer.count_class_distribution()
+        unlabelled = type(layer)._count_rows_available_for_mode(
+            distribution, train=False, predict=True)
+    except Exception as error:
+        print(f"[JBGRunWorker] rows without a class not counted: {type(error).__name__}",
+              file=sys.stderr)
+        return False
+    if unlabelled != 0:
+        return False
+    config.mode.predict = False
+    try:
+        logger.print_info(NOTHING_TO_PREDICT)
+    except Exception:
+        print(f"[JBGRunWorker] {NOTHING_TO_PREDICT}", file=sys.stderr)
+    return True
+
+
 def _compose(record, config, logger, credentials, artifacts: Path | None):
     from JBGRunComposition import compose_csv_run, compose_sql_run_on_layer
     if record.source is DataSourceKind.CSV:
@@ -295,6 +339,7 @@ def _compose(record, config, logger, credentials, artifacts: Path | None):
         return composed, reference, config
     from JBGSQLSessions import open_sql_data_layer
     layer = open_sql_data_layer(credentials, config, logger)
+    train_only_without_unlabelled_rows(record, layer, logger)          # 297c
     composed = compose_sql_run_on_layer(layer, logger)
     return composed, DatasetReference(DataSourceKind.SQL, composed.sql_dataset_key()), \
         composed.configuration

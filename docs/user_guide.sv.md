@@ -101,6 +101,10 @@ en tunnare stapel hur många algoritmkombinationer som är klara, till exempel
 webbläsaren och kan avbrytas med **Avbryt körningen**. **Visa logg** visar
 körningens logg.
 
+Om konfigurationen också predikterar rader utan klass men träningsdatasetet
+saknar sådana rader, tränar körningen bara och hoppar över prediktionen;
+loggen säger det.
+
 När körningen är klar visas utvärderingen på testdata, förväxlingsmatrisen
 och de viktigaste variablerna.
 

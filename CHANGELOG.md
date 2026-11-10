@@ -1,3 +1,33 @@
+## Revision 297c - Nothing to predict; inner bar until the stage changes (2026-11-10)
+
+- Bug found on 2026-11-10: an SQL training run whose configuration also
+  predicts the rows without a class ("Predict unlabelled rows", on by
+  default), on a table where every row has a class, trained completely and
+  then failed at its last step ("PredictionsException: No data to predict
+  on", the engine's `make_predictions` task, followed by `abort_cleanly`).
+  Voilà runs the same engine; the fix is in the worker, so Voilà is
+  unchanged.
+- The worker now counts those rows before an SQL project training run that
+  also predicts, with the engine's own query and rule
+  (`count_class_distribution` and `_count_rows_available_for_mode`, as the
+  fetch does), on the data layer it opens with the user's login anyway. With
+  none, prediction is switched off for this run only (its own Config copy;
+  the stored run specification and the saved configuration keep it on) and
+  the log says "The training dataset has no rows without a class: this run
+  trains only, and the prediction step is skipped." If they cannot be
+  counted, the engine decides as before. Prediction runs, runs outside
+  projects and CSV runs (train-only already) are unchanged. Nothing is
+  queried when a run is submitted.
+- Inner progress (297a), noted on 2026-11-10: a finished bar disappeared
+  while the stage text and the outer bar stayed unchanged for a while (the
+  grid search after a spot check runs in the same stage). A finished bar now
+  stays, full, or at its latest count when the engine ends it short (the SQL
+  fetch), and is hidden together with the stage change by the next stage
+  marker.
+- User guide: the Training section mentions the skipped prediction.
+- Tests: `tests/test_revision_297c_nothing_to_predict.py`; the 297a tests
+  follow the bar that stays.
+
 ## Revision 297b - SQL runs read all rows when the row limit is empty (2026-11-10)
 
 - Bug found on 2026-11-10: the first training run of a new SQL project

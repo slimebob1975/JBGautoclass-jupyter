@@ -151,6 +151,9 @@ def test_the_proxy_records_a_spot_check_and_forwards_every_call(tmp_path):
     proxy.update_inline_progress("k", 99, "x")          # beyond the total: capped
     assert _stage(store, run)["inner"]["done"] == 4
     proxy.end_inline_progress("k")
+    # 297c: a finished bar stays full until the next stage marker hides it.
+    assert _stage(store, run)["inner"] == {"kind": "models", "done": 4, "total": 4}
+    store.record_progress(run, "jbg_stage:evaluate_model")
     assert "inner" not in _stage(store, run)
     assert proxy._logger.calls == ["start_inline_progress", "update_inline_progress",
                                    "reset_inline_progress", "update_inline_progress",
@@ -319,6 +322,12 @@ class InnerProgressNative297a(revision_281c.CSVApplicationEndToEnd281c):
             self.assertTrue(all(0 <= inner["done"] <= 9 for inner in models))
             done = [inner["done"] for inner in models]
             self.assertEqual(done, sorted(done))                             # never backwards
+            # 297c: the finished spot check is left full; later stages hide it, and a
+            # finished run shows no inner progress.
             events = client.app.state.jbg["store"].progress(RunReference(run_id))
-            self.assertFalse([e for e in events if (e.message or "").startswith("jbg_inner:")])
+            self.assertEqual([e.message for e in events
+                              if (e.message or "").startswith("jbg_inner:")],
+                             ["jbg_inner:models:9:9"])
+            overview = client.get(f"/api/runs/{run_id}/overview").json()
+            self.assertNotIn("inner", overview["stage"])
             _wait_for_workers_to_exit(client)
