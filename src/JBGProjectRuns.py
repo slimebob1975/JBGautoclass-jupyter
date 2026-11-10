@@ -49,6 +49,21 @@ class _QuietLogger:
         return lambda *args, **kwargs: None
 
 
+# 297b: the row limit an SQL run gets when the configuration leaves "Row limit"
+# empty ("Empty reads all rows"). The SQL engine reads an empty limit as zero
+# rows (Voilà always fills it in with the table's row count) but caps any limit
+# at the rows eligible when the run fetches, so this reads them all, also from a
+# table that has grown since it was registered. Runtime only: the saved
+# configuration keeps its empty limit.
+SQL_ALL_ROWS = 2_147_483_647            # the largest SQL Server int
+
+
+def _read_all_rows_unless_limited(config) -> None:
+    limit = config.debug.data_limit
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+        config.debug.data_limit = SQL_ALL_ROWS
+
+
 def _load_config(settings: dict):
     from Config import Config
     with tempfile.TemporaryDirectory(prefix="jbg_run_") as folder:
@@ -165,6 +180,9 @@ class ProjectRunService:
         self._sql_server.apply_to(config)
         config.connection.data_catalog = dataset.catalog
         config.connection.data_table = dataset.table
+        # 297b: also for models trained before 297b, whose stored configuration
+        # may hold the empty limit (it would predict no rows).
+        _read_all_rows_unless_limited(config)
         metadata = {"project_id": project.project_id, "kind": "prediction", "model_id": model_id,
                     "dataset_id": dataset.dataset_id,
                     "configuration_name": trained.get("configuration_name"),
@@ -226,6 +244,7 @@ class ProjectRunService:
         self._sql_server.apply_to(config)
         config.connection.data_catalog = dataset.catalog
         config.connection.data_table = dataset.table
+        _read_all_rows_unless_limited(config)                    # 297b
         try:
             validate_saved_sql_run_config(config)
         except ValueError as error:

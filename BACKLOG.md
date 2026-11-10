@@ -295,6 +295,11 @@ full SQL regression acceptance remain separately unverified.
     on the Prediction tab for SQL and CSV.
   - Not planned (decided 2026-11-09): importing models trained in Voilà into
     the model catalog.
+  - [x] 297b (bug 2026-11-10): SQL runs read all rows when "Row limit" is
+    empty (the engine read it as zero rows); a training run without a model
+    fails instead of succeeding.
+  - [ ] Later, if wanted: show why a run failed on the Training tab (a fixed
+    text per `error_type`, such as "NoModelTrained"); today the log says it.
   - [x] 297a (noted 2026-11-09): a second, inner progress bar during
     spot-checking that moves for every algorithm combination, as in Voilà
     (also data fetching, data validation, feature importance and dark-number

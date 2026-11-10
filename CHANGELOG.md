@@ -1,3 +1,28 @@
+## Revision 297b - SQL runs read all rows when the row limit is empty (2026-11-10)
+
+- Bug found on 2026-11-10: the first training run of a new SQL project
+  fetched no data ("No eligible SQL rows for this mode") and still ended as
+  succeeded, without a model. The Configuration tab's "Row limit" says
+  "Empty reads all rows", but the SQL engine reads an empty limit as zero
+  rows (`Config.get_data_limit()` returns 0, and `SQLDataLayer.get_dataset`
+  fetches at most that many). Voilà always fills the limit in with the
+  table's row count, and the CSV adapter reads zero as no limit, so only web
+  SQL runs were affected.
+- Fixed in the application layer, without an engine change: an SQL training
+  or prediction run whose limit is empty gets the largest SQL Server int as
+  its runtime limit (`JBGProjectRuns.SQL_ALL_ROWS`). The engine caps any
+  limit at the rows eligible when the run fetches, so this reads them all,
+  also from a table that has grown since it was registered. The saved
+  configuration keeps its empty limit; a limit the user chose is kept.
+  Predictions with models trained before 297b get the same treatment.
+- A project training run that ends without a model file now fails
+  (`error_type` "NoModelTrained", with a line in the run's log) instead of
+  succeeding: the engine ends a run that found no data normally ("Process
+  finished"). Prediction runs and runs outside projects are unchanged.
+- Tests: `tests/test_revision_297b_sql_row_limit.py`, including the
+  engine's reading of an empty limit (the cause) and the eligible rows a run
+  now asks for.
+
 ## Revision 297a - Inner progress during a run (2026-11-10)
 
 - The live view of a run (Training and Prediction tabs) shows a second,

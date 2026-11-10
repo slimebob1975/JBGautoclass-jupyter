@@ -352,6 +352,13 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
             traceback.print_exc(file=sys.stderr)     # worker log only, never the store
             store.finish(run, worker_id, RunStatus.FAILED, error_type=type(error).__name__)
             return EXIT_FINISHED
+        if trained_nothing(record, run_config):
+            # 297b: the engine ends a run that found no data normally ("Process
+            # finished"); a training run without a model has failed. The log says why.
+            print("[JBGRunWorker] the training run produced no model; see the log above",
+                  file=sys.stderr)
+            store.finish(run, worker_id, RunStatus.FAILED, error_type="NoModelTrained")
+            return EXIT_FINISHED
         projected = project_classifier_result(result)
         if observed.evaluation is not None:
             projected["evaluation"] = observed.evaluation
@@ -360,6 +367,19 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
         store.finish(run, worker_id, RunStatus.SUCCEEDED, result=projected)
         register_trained_model(store, record, run_config)
         return EXIT_FINISHED
+
+
+def trained_nothing(record, run_config) -> bool:
+    """297b: a project training run whose model file is missing after the run."""
+    project_run = record.spec.get("project_run") if isinstance(record.spec, dict) else None
+    if not isinstance(project_run, dict) or project_run.get("kind") == "prediction":
+        return False
+    try:
+        if not run_config.should_train():
+            return False
+        return not Path(run_config.get_model_filename()).is_file()
+    except Exception:
+        return False                     # cannot tell: keep the engine's outcome
 
 
 def register_trained_model(store: RunJobStore, record, run_config) -> bool:
