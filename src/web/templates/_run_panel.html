@@ -7,11 +7,28 @@
 <div {% if not finished %}data-run-poll="{{ overview.run_id }}" data-terminal="{{ terminal | list | tojson | forceescape }}" data-stage-labels="{{ ns.labels | tojson | forceescape }}"{% endif %}>
   <h2>{{ _("Run") }} <span class="muted">{{ overview.run_id[:8] }}</span></h2>
   <p class="run-stage"><b data-run-stage>{{ ns.labels.get(stage.name, stage.name) }}</b></p>
-  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" data-run-meter
        aria-valuenow="{{ ((stage.percent or 0) * 100) | round | int }}">
     <div class="bar" data-run-bar style="width: {{ ((stage.percent or 0) * 100) | round | int }}%"></div>
   </div>
   {% if not finished %}
+    {# 297a: the inner progress (Voilà's inner bars), e.g. the algorithm combinations
+       of a spot check; hidden while the run has none. #}
+    {% set inner = stage.inner %}
+    {% set inner_labels = {"models": _("Algorithm combinations"), "fetch_data": _("Rows fetched"),
+                           "validation": _("Columns checked"),
+                           "feature_importance": _("Feature importance steps"),
+                           "shadow_fits": _("Dark number fits")} %}
+    {% set inner_percent = ((inner.done / inner.total * 100) | round | int) if inner else 0 %}
+    <div class="inner-progress" data-run-inner data-inner-labels="{{ inner_labels | tojson | forceescape }}"
+         data-inner-of="{{ _('of') }}"{% if not inner %} hidden{% endif %}>
+      <p class="hint"><span data-inner-label>{{ inner_labels.get(inner.kind, "") if inner }}</span>:
+        <span data-inner-count>{% if inner %}{{ inner.done }} {{ _("of") }} {{ inner.total }}{% endif %}</span></p>
+      <div class="progress thin" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+           aria-valuenow="{{ inner_percent }}" data-inner-meter>
+        <div class="bar" data-inner-bar style="width: {{ inner_percent }}%"></div>
+      </div>
+    </div>
     <p class="hint">{{ _("The page updates itself while the run is in progress.") }}</p>
     <form method="post" action="/ui/run/{{ overview.run_id }}/cancel">
       <input type="hidden" name="back" value="{{ back }}">

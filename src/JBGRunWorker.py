@@ -23,6 +23,7 @@ import json
 import sys
 import tempfile
 import threading
+import time
 import traceback
 from pathlib import Path
 
@@ -112,6 +113,66 @@ class StoreProgressLogger:
         self._heartbeat = heartbeat
         self.evaluation = None
         self.feature_importance = None
+        self._inner = {}                    # 297a: key -> [kind, total, done, recorded at]
+
+    # --- 297a: inner progress (Voilà's inner bars), for the web interface ---------------
+
+    INNER_INTERVAL = 1.0                    # seconds between recorded steps of one bar
+
+    def _record_inner(self, kind, done=0, total=1):
+        try:
+            self._store.record_inner_progress(self._run, kind, done, total)
+        except Exception as error:
+            print(f"[JBGRunWorker] inner progress not recorded: {type(error).__name__}",
+                  file=sys.stderr)
+
+    def start_inline_progress(self, key, description, final_count, tooltip):
+        result = self._logger.start_inline_progress(key, description, final_count, tooltip)
+        from JBGRunOverview import INNER_PROGRESS
+        kind = INNER_PROGRESS.get(description) if isinstance(description, str) else None
+        try:
+            total = int(final_count)
+        except (TypeError, ValueError, OverflowError):
+            total = 0
+        if kind is not None and total >= 1:
+            self._inner[key] = [kind, total, 0, time.monotonic()]
+            self._record_inner(kind, 0, total)
+        return result
+
+    def update_inline_progress(self, key, current_count, terminal_text):
+        result = self._logger.update_inline_progress(key, current_count, terminal_text)
+        bar = self._inner.get(key)
+        if bar is not None:
+            kind, total, previous, recorded = bar
+            try:
+                done = min(max(int(current_count), 0), total)
+            except (TypeError, ValueError, OverflowError):
+                return result
+            now = time.monotonic()
+            if done != previous and (done == total or now - recorded >= self.INNER_INTERVAL):
+                bar[2], bar[3] = done, now
+                self._record_inner(kind, done, total)
+        return result
+
+    def reset_inline_progress(self, key):
+        result = self._logger.reset_inline_progress(key)
+        bar = self._inner.get(key)
+        if bar is not None:
+            bar[2], bar[3] = 0, time.monotonic()
+            self._record_inner(bar[0], 0, bar[1])
+        return result
+
+    def end_inline_progress(self, key, set_100=True):
+        result = self._logger.end_inline_progress(key, set_100)
+        if self._inner.pop(key, None) is not None:
+            self._record_inner(None)
+        return result
+
+    def parse_dataset_progress(self, key, num_lines, row_count):
+        """The real logger's version calls its own inline methods, past this wrapper."""
+        self.start_inline_progress(key, "Fetching data", row_count,
+                                   "Percent data fetched of available")
+        self.update_inline_progress(key, num_lines, "Data fetched of available")
 
     def record_task_stage(self, name):
         from JBGStructuredEvaluation import TASK_STAGES

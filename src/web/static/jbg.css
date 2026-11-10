@@ -205,3 +205,9 @@ img.logo { display: block; height: 40px; width: auto; }
 .masthead { flex-wrap: wrap; row-gap: 8px; }
 .lang { flex-shrink: 0; }
 .lang button { white-space: nowrap; }
+
+/* 297a: the inner progress under the stage bar */
+.inner-progress { margin: -2px 0 10px; }
+.inner-progress .hint { margin: 0 0 4px; }
+.progress.thin { height: 5px; margin-bottom: 0; }
+.progress.thin .bar { background: #7fb2dc; }

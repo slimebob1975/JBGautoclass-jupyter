@@ -3,6 +3,9 @@
 The engine currently persists only an allowlisted classifier summary. Do not
 interpret log text as metrics or expose raw progress messages. Progress phase
 is a coarse UI estimate, not a claim about the active ML task.
+
+297a: ``stage.inner`` ({kind, done, total}) while a running run has an inner
+progress bar, for example the algorithm combinations of a spot check.
 """
 from __future__ import annotations
 
@@ -10,6 +13,40 @@ from math import isfinite
 from typing import Any
 
 from JBGApplicationContracts import RunStatus
+
+
+# 297a: the engine's inner progress bars (``start_inline_progress``), by the
+# description it gives them, as the kinds the interface may show. Others are
+# not recorded.
+INNER_PROGRESS = {
+    "Checking & Training models": "models",
+    "Fetching data": "fetch_data",
+    "Validation progress": "validation",
+    "Feature importance": "feature_importance",
+    "Shadow fits": "shadow_fits",
+}
+INNER_KINDS = frozenset(INNER_PROGRESS.values())
+
+
+def _inner(events) -> dict[str, Any] | None:
+    """The inner progress, if it was recorded after the newest stage marker."""
+    for event in reversed(tuple(events)):
+        message = event.message
+        if not isinstance(message, str):
+            continue
+        if message.startswith("jbg_stage:"):
+            return None                      # a later stage: the inner bar is over
+        if message.startswith("jbg_inner:"):
+            parts = message[len("jbg_inner:"):].split(":")
+            if len(parts) != 3 or parts[0] not in INNER_KINDS:
+                return None
+            if not (parts[1].isdigit() and parts[2].isdigit()):
+                return None
+            done, total = int(parts[1]), int(parts[2])
+            if total < 1 or done > total:
+                return None
+            return {"kind": parts[0], "done": done, "total": total}
+    return None
 
 
 def _percent(events) -> float | None:
@@ -78,8 +115,11 @@ def project_run_overview(run_id: str, status: RunStatus, events,
         importance = sanitize_stored_feature_importance(result.get("feature_importance"))
         if importance is not None:
             results["feature_importance"] = importance
+    stage = {"name": phase, "precision": "exact" if status is not RunStatus.RUNNING
+             or phase in TASK_STAGES else "estimated", "percent": percent}
+    if status is RunStatus.RUNNING:
+        inner = _inner(events)
+        if inner is not None:
+            stage["inner"] = inner                       # 297a: only while running
     return {"schema_version": 2, "run_id": run_id, "status": status.value,
-            "stage": {"name": phase, "precision": "exact" if status is not RunStatus.RUNNING
-                      or phase in TASK_STAGES
-                      else "estimated", "percent": percent},
-            "results": results}
+            "stage": stage, "results": results}

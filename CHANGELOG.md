@@ -1,3 +1,38 @@
+## Revision 297a - Inner progress during a run (2026-11-10)
+
+- The live view of a run (Training and Prediction tabs) shows a second,
+  thinner bar under the stage bar while the engine works through steps, for
+  example "Algoritmkombinationer: 12 av 40" during the spot check, as Voilà's
+  inner bars do. Also for data fetching, data validation, feature importance
+  and dark-number fits; hidden when there is none, and updated by the page's
+  existing polling (`jbg.js`, text only through `textContent`).
+- No engine change, so Voilà is unchanged: the engine already reports these
+  steps through `start/update/reset/end_inline_progress`. The API worker's
+  logger proxy (`StoreProgressLogger`) forwards every call as before and
+  records reviewed kinds and counts only (`JBGRunOverview.INNER_PROGRESS`;
+  bars with other descriptions are not recorded), at most once a second per
+  bar plus the last step, and clears it when the bar ends. A store error is
+  reported on stderr and never stops the run. `parse_dataset_progress` is
+  handled by the proxy, since the real logger's version calls its own
+  methods past the proxy.
+- The store keeps the inner progress as one event per run that replaces the
+  previous one (`RunJobStore.record_inner_progress`, marker
+  `jbg_inner:<kind>:<done>:<total>`), and the overview shows it as
+  `stage.inner` only while the run is running and only until a later stage
+  marker. The key is absent otherwise, so the overview's schema is unchanged
+  for other runs.
+- Found while building it: the store keeps at most 200 progress events per
+  run, and the spot check records one per algorithm combination. With more
+  combinations than that the stage marker and the latest percentage were
+  pruned, and the Training tab fell back to an estimated "preparing" phase
+  without a percentage. Pruning now keeps the newest stage marker, the
+  newest event with a percentage and the inner-progress event.
+- The outer bar's `aria-valuenow` now follows the polled percentage.
+- User guide: the Training section mentions the inner bar.
+- Tests: `tests/test_revision_297a_inner_progress.py` (one native test runs
+  a real spot check of 3 x 3 combinations and follows the inner progress
+  through the API).
+
 ## Revision 295e - Logo, narrow header, start on the Overview (2026-11-09)
 
 - The header shows the JBG logo image (noted 2026-11-05). It is the file

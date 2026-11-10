@@ -1384,3 +1384,22 @@ msgstr "Innehåll"
 
 msgid "What the program does and how to use it."
 msgstr "Vad programmet gör och hur det används."
+
+# 297a: inner progress during a run.
+msgid "Algorithm combinations"
+msgstr "Algoritmkombinationer"
+
+msgid "Rows fetched"
+msgstr "Hämtade rader"
+
+msgid "Columns checked"
+msgstr "Kontrollerade kolumner"
+
+msgid "Feature importance steps"
+msgstr "Steg för variabelbetydelse"
+
+msgid "Dark number fits"
+msgstr "Anpassningar för mörkertal"
+
+msgid "of"
+msgstr "av"

@@ -295,9 +295,12 @@ full SQL regression acceptance remain separately unverified.
     on the Prediction tab for SQL and CSV.
   - Not planned (decided 2026-11-09): importing models trained in Voilà into
     the model catalog.
-  - [ ] Later (noted 2026-11-09): a second, inner progress bar during
-    spot-checking that moves for every algorithm combination, as in Voilà;
-    296a passes on the outer bar only.
+  - [x] 297a (noted 2026-11-09): a second, inner progress bar during
+    spot-checking that moves for every algorithm combination, as in Voilà
+    (also data fetching, data validation, feature importance and dark-number
+    fits). No engine change: the worker records the engine's existing inner
+    progress calls. Pruning of progress events keeps the stage and the
+    percentage, which large spot checks pushed out.
   - [ ] Later: separate CSV prediction datasets (the CSV prediction path is
     pinned to the training dataset's identity today); their class column may
     be missing too.

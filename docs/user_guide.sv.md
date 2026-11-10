@@ -95,7 +95,9 @@ träningsdataset med kolumnroller, vald konfiguration och, för SQL, inloggning.
 **Starta träning** startar körningen med det aktiva datasetet och den valda
 konfigurationen.
 
-Förloppet uppdateras av sig självt. Körningen fortsätter även om du stänger
+Förloppet uppdateras av sig självt. När modellerna tränas och jämförs visar
+en tunnare stapel hur många algoritmkombinationer som är klara, till exempel
+”12 av 40”. Körningen fortsätter även om du stänger
 webbläsaren och kan avbrytas med **Avbryt körningen**. **Visa logg** visar
 körningens logg.
 

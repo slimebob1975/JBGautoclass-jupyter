@@ -95,7 +95,9 @@ active training dataset with column roles, a chosen configuration and, for
 SQL, a sign-in. **Start training** starts the run with the active dataset
 and the chosen configuration.
 
-The progress updates itself. The run continues even if you close the
+The progress updates itself. While the models are trained and compared, a
+thinner bar shows how many algorithm combinations are done, for example
+"12 of 40". The run continues even if you close the
 browser, and it can be stopped with **Cancel the run**. **Show log** shows
 the run's log.
 

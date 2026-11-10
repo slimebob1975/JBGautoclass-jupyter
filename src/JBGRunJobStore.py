@@ -25,6 +25,9 @@ from sqlalchemy.engine import Engine
 from JBGApplicationContracts import DataSourceKind, RunReference, RunStatus
 from JBGRunProgress import ProgressEvent
 
+STAGE_MARKER = "jbg_stage:"     # 285m2: exact task stages, recorded by the worker
+INNER_MARKER = "jbg_inner:"     # 297a: inner progress, at most one event per run
+
 TABLE_PREFIX = "jbg_run_"
 TERMINAL_STATES = frozenset({RunStatus.SUCCEEDED, RunStatus.FAILED, RunStatus.CANCELLED,
                              RunStatus.INTERRUPTED})
@@ -367,16 +370,71 @@ class RunJobStore:
             connection.execute(insert(self._events).values(
                 run_id=run.key, created_at=now, message=message,
                 percent=float(percent) if percent is not None else None))
-            count = connection.execute(
-                select(func.count()).select_from(self._events)
-                .where(self._events.c.run_id == run.key)).scalar_one()
-            if count > self._max_events:
-                oldest = select(self._events.c.event_id).where(
-                    self._events.c.run_id == run.key).order_by(
-                    self._events.c.event_id).limit(count - self._max_events)
-                ids = [row.event_id for row in connection.execute(oldest).all()]
-                connection.execute(delete(self._events).where(self._events.c.event_id.in_(ids)))
+            self._prune(connection, run)
         return ProgressEvent(run, now, message, percent)
+
+    def _prune(self, connection, run: RunReference) -> None:
+        """Keep at most ``max_events`` events, the oldest going first.
+
+        297a: never the newest event with a percentage, the newest stage marker
+        or the inner-progress marker: the live view reads exactly these. A spot
+        check records one event per algorithm combination, so with a few
+        hundred combinations they were pruned and the view fell back to an
+        estimated phase without a percentage.
+        """
+        events = self._events
+        count = connection.execute(
+            select(func.count()).select_from(events)
+            .where(events.c.run_id == run.key)).scalar_one()
+        if count <= self._max_events:
+            return
+        keep = set()
+        for condition in (events.c.percent.is_not(None),
+                          events.c.message.startswith(STAGE_MARKER, autoescape=True),
+                          events.c.message.startswith(INNER_MARKER, autoescape=True)):
+            newest = connection.execute(
+                select(func.max(events.c.event_id))
+                .where(events.c.run_id == run.key, condition)).scalar_one()
+            if newest is not None:
+                keep.add(newest)
+        oldest = select(events.c.event_id).where(events.c.run_id == run.key)
+        if keep:
+            oldest = oldest.where(events.c.event_id.not_in(keep))
+        oldest = oldest.order_by(events.c.event_id).limit(count - self._max_events)
+        ids = [row.event_id for row in connection.execute(oldest).all()]
+        if ids:
+            connection.execute(delete(events).where(events.c.event_id.in_(ids)))
+
+    def record_inner_progress(self, run: RunReference, kind: str | None,
+                              done: int = 0, total: int = 1) -> None:
+        """297a: the inner progress (``done`` of ``total`` steps of ``kind``) as one
+        event that replaces the previous one; ``kind=None`` clears it.
+
+        Only reviewed kinds and counts are stored, never engine text.
+        """
+        from JBGRunOverview import INNER_KINDS
+        if kind is not None:
+            if kind not in INNER_KINDS:
+                raise ValueError("unknown inner progress kind")
+            for value in (done, total):
+                if isinstance(value, bool) or not isinstance(value, int):
+                    raise TypeError("counts must be integers")
+            if total < 1 or not 0 <= done <= total:
+                raise ValueError("counts out of range")
+        events = self._events
+        with self._engine.begin() as connection:
+            exists = connection.execute(
+                select(self._jobs.c.run_id).where(self._jobs.c.run_id == run.key)).first()
+            if exists is None:
+                raise KeyError("unknown run reference")
+            connection.execute(delete(events).where(
+                events.c.run_id == run.key,
+                events.c.message.startswith(INNER_MARKER, autoescape=True)))
+            if kind is not None:
+                connection.execute(insert(events).values(
+                    run_id=run.key, created_at=_now(),
+                    message=f"{INNER_MARKER}{kind}:{done}:{total}", percent=None))
+                self._prune(connection, run)
 
     def progress(self, run: RunReference) -> tuple[ProgressEvent, ...]:
         self.get(run)  # unknown runs raise KeyError, as in RunProgressService
