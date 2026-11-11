@@ -1441,3 +1441,13 @@ msgstr "Körningen stoppades innan den var klar, till exempel när servern start
 
 msgid "The run failed; the log says why."
 msgstr "Körningen misslyckades; loggen visar varför."
+
+# 297f: CSV prediction datasets.
+msgid "The dataset does not fit the model: columns are missing, not numbers, or the ID column is not unique."
+msgstr "Datasetet passar inte modellen: kolumner saknas, är inte tal, eller ID-kolumnen är inte unik."
+
+msgid "Every row of the dataset has a class: there is nothing to predict."
+msgstr "Alla rader i datasetet har en klass: det finns inget att prediktera."
+
+msgid "The rows without a class are predicted; a file without a class column is predicted in full. The predictions can be downloaded as a file when the run has finished."
+msgstr "Raderna utan klass predikteras; en fil utan klasskolumn predikteras i sin helhet. Prediktionerna kan laddas ned som en fil när körningen är klar."

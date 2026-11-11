@@ -44,6 +44,10 @@ class RunDoesNotMatchDataset(ValueError):
     """The configuration's column roles do not fit the dataset (422)."""
 
 
+class NothingToPredict(RunRequestRefused):
+    """297f: every row of the chosen dataset already has a class (409)."""
+
+
 class _QuietLogger:
     def __getattr__(self, name):
         return lambda *args, **kwargs: None
@@ -210,10 +214,12 @@ class ProjectRunService:
         from copy import deepcopy
         from JBGRunComposition import compose_csv_run
         csv = training.spec.get("csv") or {}
-        if dataset_id and dataset_id != trained.get("dataset_id"):
-            raise RunRequestRefused("CSV predictions use the training dataset")
         if not csv.get("artifact_id") or not csv.get("configuration_id"):
             raise RunRequestRefused("the model is not available")
+        if dataset_id and dataset_id != trained.get("dataset_id"):
+            # 297f (decision 4 changed 2026-11-10): another CSV dataset of the project.
+            return self._submit_csv_prediction_on(principal, project, trained, config, csv,
+                                                  model_id, dataset_id)
         runtime = deepcopy(config)
         runtime.mode.train, runtime.mode.predict = False, True
         runtime.mode.mispredicted = False
@@ -233,6 +239,73 @@ class ProjectRunService:
         service = DurableRunService(self._store, scope_for=lambda principal: scope,
                                     on_submit=self._on_submit)
         return service.submit(principal, prepared, configuration_id=csv["configuration_id"],
+                              run_metadata=metadata)
+
+    def _submit_csv_prediction_on(self, principal, project, trained, config, csv, model_id,
+                                  dataset_id):
+        """297f: a CSV model predicts another CSV dataset of its project.
+
+        The dataset must be a prediction or mixed dataset whose columns fit the
+        model (``check_csv_prediction_columns``); the class column may be
+        missing (then every row is predicted, as for SQL), otherwise its rows
+        without a class are predicted. The dataset gets its own CSV registration
+        with the model's roles, the run reads its rows, and the worker checks
+        the model against its training dataset (``project_run.model_source``,
+        set as ``Config.model_source``, 297e).
+        """
+        from copy import deepcopy
+        from JBGDatasetRoles import IncompatibleDataset
+        from JBGProjectStorage import check_csv_prediction_columns
+        from JBGRunComposition import compose_csv_run
+        from Storage.CSVModelConfiguration import (load_csv_model_configuration,
+                                                   save_csv_model_configuration)
+        owner = principal.principal_key
+        dataset = self._dataset(owner, project.project_id, dataset_id)
+        if dataset.role.value not in ("prediction", "mixed") or not dataset.registration_id:
+            raise RunRequestRefused("choose a prediction or mixed dataset")
+        repository, scope = project_csv_storage(project.project_id, root=self._csv_root)
+        model_roles = load_csv_model_configuration(repository, scope, csv["configuration_id"])
+        artifact_id = dataset.registration_id
+        csv_format = csv_upload_format(repository, scope, artifact_id)
+        try:
+            check_csv_prediction_columns(
+                repository, scope, artifact_id, csv_format, id_column=model_roles.id_column,
+                class_column=model_roles.class_column,
+                numeric_columns=model_roles.data_columns, text_columns=model_roles.text_columns)
+        except IncompatibleDataset:
+            raise RunDoesNotMatchDataset("the dataset does not fit the model") from None
+        except ValueError as error:
+            if str(error) == "nothing to predict":
+                raise NothingToPredict("every row of the dataset has a class") from None
+            raise RunDoesNotMatchDataset("the dataset does not fit the model") from None
+        registered = save_csv_model_configuration(
+            repository, scope, artifact_id, id_column=model_roles.id_column,
+            class_column=model_roles.class_column, data_columns=model_roles.data_columns,
+            text_columns=model_roles.text_columns, csv_format=csv_format)
+        trained_source = config.data_source
+        runtime = deepcopy(config)
+        runtime.mode.train, runtime.mode.predict = False, True
+        runtime.mode.mispredicted = False
+        runtime.mode.use_metas = False
+        runtime.mode.calculate_feature_importance = False
+        runtime.mode.calculate_dark_numbers = False
+        runtime.data_source = type(trained_source)(
+            kind="csv", dataset_id=registered.dataset_id, artifact_id=artifact_id,
+            display_name=dataset.name[:200], **csv_format)
+        runtime.data_source.validate()
+        metadata = {"project_id": project.project_id, "kind": "prediction", "model_id": model_id,
+                    "dataset_id": dataset.dataset_id,
+                    "configuration_name": trained.get("configuration_name"),
+                    "configuration_version": trained.get("configuration_version"),
+                    "model_source": {"dataset_id": trained_source.dataset_id,
+                                     "artifact_id": trained_source.artifact_id}}
+        composed = compose_csv_run(repository, scope, registered.configuration_id, _QuietLogger())
+        prepared = composed.preparation.prepare(
+            DatasetReference(DataSourceKind.CSV, artifact_id),
+            RunConfiguration(DataSourceKind.CSV, runtime))
+        service = DurableRunService(self._store, scope_for=lambda principal: scope,
+                                    on_submit=self._on_submit)
+        return service.submit(principal, prepared, configuration_id=registered.configuration_id,
                               run_metadata=metadata)
 
     def _submit_sql(self, principal, settings, dataset, model_folder, model_id, metadata,

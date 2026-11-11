@@ -444,6 +444,8 @@ def _add_project_run_endpoints(app, principal_dependency, project_runs):
             return project_runs.submit_prediction(principal, project_id,
                                                   model_id=request.model_id,
                                                   dataset_id=request.dataset_id)
+        except RunDoesNotMatchDataset as error:              # 297f: CSV prediction datasets
+            raise HTTPException(status_code=422, detail=str(error)) from None
         except ProjectUnavailable:
             raise HTTPException(status_code=404, detail="project unavailable") from None
         except DatasetUnavailable:

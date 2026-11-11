@@ -4,7 +4,8 @@ Agreed 2026-11-09: the former Run tab is split into Training and Prediction;
 Prediction follows Models (train, look at the results, choose a model,
 predict). Predicting uses the model chosen on the Models tab (295b): SQL
 projects into the prediction table (295c), CSV projects on the training
-dataset's rows without a class (296b). Finished prediction runs show their
+dataset's rows without a class (296b) or, since 297f, on another CSV dataset
+of the project. Finished prediction runs show their
 predictions, paged, and offer them as a file.
 """
 from __future__ import annotations
@@ -25,6 +26,11 @@ MESSAGES = {
     "signin_needed": ("error", "Sign in to SQL Server first."),
     "cancel_requested": ("ok", "Cancelling the run."),
     "unavailable": ("error", "The run is no longer available."),
+    # 297f: CSV prediction datasets.
+    "prediction_incompatible": ("error", "The dataset does not fit the model: columns are missing, "
+                                         "not numbers, or the ID column is not unique."),
+    "nothing_to_predict": ("error", "Every row of the dataset has a class: there is nothing to "
+                                    "predict."),
 }
 
 
@@ -32,7 +38,7 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                        project_runs, datasets, sessions, models, logs=None,
                        results=None) -> None:
     from JBGApplicationContracts import RunReference
-    from JBGProjectRuns import RunRequestRefused
+    from JBGProjectRuns import NothingToPredict, RunDoesNotMatchDataset, RunRequestRefused
     from JBGWebUIRun import STAGES, TERMINAL
 
     def preflight(request, principal, project):
@@ -68,12 +74,12 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
             context["csv_project"] = project["source"] == "csv"
             context["checks"], context["ready"], context["model"] = preflight(
                 request, principal, project)
-            if not context["csv_project"]:
-                try:
-                    context["datasets"] = [d for d in datasets.list(owner, project["project_id"])
-                                           if d["role"] in ("prediction", "mixed")]
-                except Exception:
-                    context["datasets"] = []
+            # 297f: CSV projects too (decision 4 changed 2026-11-10).
+            try:
+                context["datasets"] = [d for d in datasets.list(owner, project["project_id"])
+                                       if d["role"] in ("prediction", "mixed")]
+            except Exception:
+                context["datasets"] = []
             context["recent"] = [r for r in runs.list_project_runs(owner, project["project_id"])
                                  if r.get("kind") == "prediction"]
             chosen = run or (context["recent"][0]["run_id"] if context["recent"] else "")
@@ -111,6 +117,10 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                                                      dataset_id=dataset_id or None)
         except PermissionError:
             return redirect("/ui/prediction", message="signin_needed")
+        except RunDoesNotMatchDataset:
+            return redirect("/ui/prediction", message="prediction_incompatible")
+        except NothingToPredict:
+            return redirect("/ui/prediction", message="nothing_to_predict")
         except (RunRequestRefused, LookupError, ValueError, TypeError, OSError):
             return redirect("/ui/prediction", message="prediction_refused")
         return redirect("/ui/prediction", run=created["run_id"], message="prediction_started")

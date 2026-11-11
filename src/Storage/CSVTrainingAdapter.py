@@ -68,6 +68,13 @@ class CSVTrainingAdapter:
                                 quotechar=fmt['quotechar'], encoding=fmt['encoding'],
                                 dtype=object, keep_default_na=False, index_col=False,
                                 on_bad_lines='error')
+            if (c.class_column not in frame.columns
+                    and getattr(self.config, 'model_source', None) is not None
+                    and self.config.should_predict() and not self.config.should_train()):
+                # 297f (opt-in with Config.model_source, prediction only): a
+                # separate prediction dataset may lack the class column; every
+                # row is then without a class and is predicted, as SQL does.
+                frame[c.class_column] = ''
             names = list(frame.columns)
             if (not len(frame) or len(names) != len(set(names))
                     or any(n.rsplit('.', 1)[-1].isdigit() and n.rsplit('.', 1)[0] in names for n in names)

@@ -153,3 +153,48 @@ def check_csv_roles(repository, scope: StorageScope, artifact_id: str, csv_forma
                                      encoding=csv_format["encoding"])
     validate_csv_column_roles(schema, id_column=id_column, class_column=class_column,
                               feature_columns=tuple(feature_columns))
+
+
+def check_csv_prediction_columns(repository, scope: StorageScope, artifact_id: str,
+                                 csv_format: dict, *, id_column: str, class_column: str,
+                                 numeric_columns, text_columns) -> bool:
+    """297f: does a separate CSV prediction dataset fit a model's roles?
+
+    The ID and feature columns must exist, the ID column must be filled in and
+    unique, and the model's numeric features must be numbers here; the class
+    column may be missing. Raises JBGDatasetRoles.IncompatibleDataset (column
+    names only, no values) or ValueError("nothing to predict") when every row
+    already has a class. Returns whether the file has the class column.
+    """
+    import shutil
+    import tempfile
+    import pandas as pd
+    from CSVColumnSchema import inspect_csv_columns
+    from JBGDatasetRoles import IncompatibleDataset
+    numeric_columns, text_columns = tuple(numeric_columns), tuple(text_columns)
+    with tempfile.TemporaryDirectory(prefix="jbg_predict_") as folder:
+        path = Path(folder) / "data.csv"
+        with repository.open_artifact(scope, artifact_id) as source, path.open("wb") as target:
+            shutil.copyfileobj(source, target)
+        schema = inspect_csv_columns(path, delimiter=csv_format["delimiter"],
+                                     encoding=csv_format["encoding"])
+        missing = [name for name in (id_column, *numeric_columns, *text_columns)
+                   if name not in schema.columns]
+        different = [name for name in numeric_columns
+                     if name in schema.columns and name in schema.text_feature_candidates]
+        if missing or different:
+            raise IncompatibleDataset(missing, different)
+        if id_column not in schema.unique_id_candidates:
+            raise IncompatibleDataset((), (id_column,))
+        has_class = class_column in schema.columns
+        if has_class:
+            values = pd.read_csv(path, sep=csv_format["delimiter"],
+                                 quotechar=csv_format.get("quotechar", '"'),
+                                 encoding=csv_format["encoding"], dtype=object,
+                                 keep_default_na=False, usecols=[class_column])[class_column]
+            stripped = values.astype("string").str.strip()
+            unlabelled = (values.isna() | stripped.eq("").fillna(True)
+                          | stripped.str.casefold().eq("null").fillna(True))
+            if not unlabelled.any():
+                raise ValueError("nothing to predict")
+    return has_class

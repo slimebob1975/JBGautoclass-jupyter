@@ -134,7 +134,11 @@ Prediction uses the model chosen on the Models tab.
   a registered prediction dataset that is compatible with the training
   dataset. The predictions are written to the prediction table in SQL
   Server. A table without a class column is predicted in full.
-- **CSV projects**: predict the training dataset's rows without a class.
+- **CSV projects**: predict the training dataset's rows without a class, or
+  a prediction (or mixed) dataset with the same columns. The rows without a
+  class are predicted; a file without a class column is predicted in full.
+  If the file does not fit the model, or every row already has a class, the
+  tab says so before anything starts.
 
 When the run has finished, the predictions are shown page by page, and they
 can be downloaded as a file with **Download the predictions**.

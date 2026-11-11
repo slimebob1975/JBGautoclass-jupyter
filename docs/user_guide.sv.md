@@ -134,7 +134,11 @@ Prediktion använder modellen som är vald under fliken Modeller.
   registrerat prediktionsdataset som passar ihop med träningsdatasetet.
   Prediktionerna skrivs till prediktionstabellen i SQL Server. En tabell
   utan klasskolumn predikteras i sin helhet.
-- **CSV-projekt**: prediktera träningsdatasetets rader utan klass.
+- **CSV-projekt**: prediktera träningsdatasetets rader utan klass eller ett
+  prediktionsdataset (eller blandat dataset) med samma kolumner. Raderna
+  utan klass predikteras; en fil utan klasskolumn predikteras i sin helhet.
+  Passar filen inte modellen, eller har alla rader redan en klass, säger
+  fliken det innan något startar.
 
 När körningen är klar visas prediktionerna sida för sida, och de kan laddas
 ned som en fil med **Ladda ned prediktionerna**.

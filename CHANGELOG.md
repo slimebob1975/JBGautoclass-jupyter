@@ -1,3 +1,33 @@
+## Revision 297f - CSV prediction datasets (2026-11-11)
+
+- Decision 4 changed on 2026-11-10 (option A), completed: a CSV project's
+  Prediction tab (and `POST /api/projects/{id}/predictions` with
+  `dataset_id`) predicts with the chosen model either the training dataset's
+  rows without a class, as before, or another prediction or mixed CSV
+  dataset of the project. As for SQL, its rows without a class are
+  predicted, and a file without the class column is predicted in full
+  (agreed 2026-11-11).
+- At submit (`ProjectRunService._submit_csv_prediction_on`), the file is
+  checked against the model's roles (`check_csv_prediction_columns`): the ID
+  and feature columns must exist, the ID column must be filled in and
+  unique, the model's numeric features must be numbers. A file that does not
+  fit is refused (422 in the API; "Datasetet passar inte modellen ..." on the
+  tab), and so is one where every row has a class (409; "Alla rader i
+  datasetet har en klass ..."). The upload already refuses a prediction
+  dataset that lacks training columns; this check adds what the upload does
+  not cover. The dataset gets its own CSV registration with the model's
+  roles; the run's metadata names the model's training dataset
+  (`project_run.model_source`), which the worker sets as
+  `Config.model_source` (297e).
+- Engine, opt-in: the CSV reader (`CSVTrainingAdapter.get_dataset`) adds an
+  empty class column when the file lacks it, only with `Config.model_source`
+  in a prediction-only run; otherwise the column is required as before, so
+  the Voilà GUI is unchanged.
+- User guide: the Prediction section describes CSV prediction datasets.
+- Tests: `tests/test_revision_297f_csv_prediction_datasets.py`, including a
+  native test through the API with a real worker (a file without a class
+  column, one with some classes, and the refusals).
+
 ## Revision 297e - CSV models on other datasets (engine, opt-in); failure reasons (2026-11-10)
 
 - Decision 4 changed on 2026-11-10 (option A): a CSV model may predict
