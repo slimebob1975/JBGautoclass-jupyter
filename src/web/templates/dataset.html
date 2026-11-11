@@ -129,6 +129,15 @@
         <button class="btn sub">{{ _("Activate for training") }}</button>
       </form>
       {% endif %}
+      {% if selected.role != "prediction" %}
+      {# 298f: training and mixed datasets may switch role. #}
+      {% set other = "mixed" if selected.role == "training" else "training" %}
+      <form method="post" action="/ui/dataset/{{ selected.dataset_id }}/role" class="change-role">
+        <input type="hidden" name="role" value="{{ other }}">
+        <button class="btn sub">{{ _("Change role to") }} {{ _(role_labels[other]) | lower }}</button>
+      </form>
+      <p class="hint">{{ _("Mixed datasets can also be predicted on the Prediction tab; training uses only their rows with a class.") }}</p>
+      {% endif %}
 
       <form id="validate-form" method="post" action="/ui/dataset/{{ selected.dataset_id }}/validate"></form>
 

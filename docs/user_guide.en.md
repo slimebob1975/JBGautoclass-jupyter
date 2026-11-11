@@ -56,7 +56,10 @@ Prediction or Mixed.
   the server's memory; after a server restart, sign in again.
 
 Choose **Activate for training** on the dataset the model is to be trained
-on. Below the dataset are the views Preview, Profile, Classes and Column
+on. A training or mixed dataset can switch to the other role with **Change
+role to …**; its column roles and validation are kept. Training uses only
+rows with a class, and a mixed dataset can also be predicted on the
+Prediction tab. Prediction datasets cannot switch role. Below the dataset are the views Preview, Profile, Classes and Column
 roles.
 
 ### Column roles
@@ -134,7 +137,8 @@ only be chosen with the method "Linear".
 
 The list **Before the run** shows whether everything needed is there: an
 active training dataset with column roles, a chosen configuration and, for
-SQL, a sign-in. **Start training** starts the run with the active dataset
+SQL, a sign-in. For a point that is not met, **Put right** leads to where it
+is fixed. **Start training** starts the run with the active dataset
 and the chosen configuration.
 
 The progress updates itself. While the models are trained and compared, a

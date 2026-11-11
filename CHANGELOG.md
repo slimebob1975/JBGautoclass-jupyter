@@ -1,3 +1,28 @@
+## Revision 298f - Switching a dataset between training and mixed (2026-11-11)
+
+- Noted 2026-11-11: a CSV dataset uploaded as mixed by mistake could not be
+  changed back to training, and the Training tab blocked the run ("CSV-
+  körningar kan inte samtidigt prediktera"). That check concerns the
+  configuration's "Prediktera rader utan klass", not the dataset's role: a
+  CSV training run uses only the rows with a class, so a mixed dataset can
+  be trained on. Both are now easier to put right:
+  - Training and mixed datasets switch role with "Byt roll till ..." on the
+    Dataset tab (`POST /ui/dataset/{id}/role`) or
+    `PATCH /api/projects/{id}/datasets/{dataset}` with `role`. The column
+    roles, the validation state (both roles are checked the same way) and
+    the active choice are kept. Prediction datasets and the prediction role
+    are refused (422, fixed text), as compatibility and column roles would
+    need settling; listed in the BACKLOG with renaming and deleting.
+  - Every failed check before a training run has an "Åtgärda" link to where
+    it is put right; the CSV predict check opens the chosen configuration's
+    Körningstyp (`#section-run_type`, 298e).
+- User guides and design document describe both. BACKLOG: the "Grupp"
+  column role is now 298g.
+- Tests: `tests/test_revision_298f_dataset_role.py`. Checked in headless
+  Chromium with the reported situation (mixed upload, predict ticked):
+  blocked, "Åtgärda" opens Körningstyp, unticking clears the block, the role
+  switches back to training with roles and the active choice kept.
+
 ## Revision 298e - The pipeline picture (2026-11-11)
 
 - Requested and agreed on 2026-11-11 (picture shown in the conversation

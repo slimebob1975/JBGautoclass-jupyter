@@ -13,6 +13,7 @@
       {% for check in checks %}
         <li class="check-{{ 'passed' if check.passed else ('failed' if check.blocking else 'warning') }}">
           <span class="mark">{{ "✓" if check.passed else ("✗" if check.blocking else "!") }}</span>{{ _(check.message) }}
+          {% if check.link %}<a href="{{ check.link }}" class="fix-link">{{ _("Put right") }} ›</a>{% endif %}
         </li>
       {% endfor %}
       </ul>

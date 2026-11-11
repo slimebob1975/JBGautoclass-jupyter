@@ -40,6 +40,11 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
 
 
+class DatasetUpdate(BaseModel):
+    """298f: training and mixed datasets may switch role."""
+    role: Literal["training", "mixed"]
+
+
 class SQLDatasetCreate(BaseModel):
     """286b: an SQL dataset names a catalog and table; never a host or login."""
     name: str
@@ -328,6 +333,12 @@ def _add_dataset_endpoints(app, principal_dependency, datasets):
     def get_dataset(project_id: str, dataset_id: str,
                     principal: AuthenticatedPrincipal = Depends(principal_dependency)):
         return call(datasets.get, principal.principal_key, project_id, dataset_id)
+
+    @app.patch("/api/projects/{project_id}/datasets/{dataset_id}")
+    def update_dataset(project_id: str, dataset_id: str, request: DatasetUpdate = Body(...),
+                       principal: AuthenticatedPrincipal = Depends(principal_dependency)):
+        return call(datasets.change_role, principal.principal_key, project_id, dataset_id,
+                    request.role)
 
     @app.post("/api/projects/{project_id}/datasets/{dataset_id}/activate")
     def activate_dataset(project_id: str, dataset_id: str,

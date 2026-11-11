@@ -161,6 +161,18 @@ class DatasetService:
             raise DatasetUnavailable("dataset unavailable") from None
 
 
+    def change_role(self, owner: str, project_id: str, dataset_id: str,
+                    role: str) -> dict[str, Any]:
+        """298f: switch a dataset between training and mixed (fixed refusal
+        for prediction datasets and the prediction role)."""
+        self._project(owner, project_id)
+        try:
+            return dataset_response(self._repository.change_role(
+                owner, project_id, dataset_id, _role(role)))
+        except KeyError:
+            raise DatasetUnavailable("dataset unavailable") from None
+
+
 def _copy_limited(source: BinaryIO, target: BinaryIO, limit: int) -> int:
     copied = 0
     while copied < limit:

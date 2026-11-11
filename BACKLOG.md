@@ -332,7 +332,12 @@ full SQL regression acceptance remain separately unverified.
     panel shows the pipeline below the list of configurations, in Swedish and
     English, marking each step of the configuration on show as used, several
     alternatives or not used; a click on a step opens its section.
-  - [ ] Next (298f, chosen 2026-11-11): a group column must be a feature to
+  - [x] 298f (noted 2026-11-11): a CSV dataset uploaded as mixed by mistake
+    could not be changed back; training and mixed datasets now switch role.
+    The checks before a run link to where a failed check is put right.
+  - [ ] Later, if wanted: rename and delete datasets; switching to or from
+    the prediction role (compatibility and column roles to settle).
+  - [ ] Next (298g, chosen 2026-11-11): a group column must be a feature to
     reach a web run, so it is also a predictor (noted with 298d). Voilà kept
     it out of the predictors ("exclude predictors"). Plan: a "Grupp" column
     role on the Dataset tab (decision A), passed to the engine and excluded

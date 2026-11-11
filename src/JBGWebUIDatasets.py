@@ -42,6 +42,8 @@ MESSAGES = {
     "incompatible": ("error", "The dataset is not compatible with the training dataset."),
     "signin_needed": ("error", "Sign in to SQL Server first."),
     "roles_saved": ("ok", "Column roles saved. Validate the dataset again."),
+    "role_changed": ("ok", "The dataset's role is changed."),
+    "cannot_change_role": ("error", "Only training and mixed datasets can switch role."),
 }
 READ_ERRORS = {
     "signin_required": "Sign in to SQL Server to read this dataset.",
@@ -274,6 +276,22 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
         except (ValueError, TypeError):
             return redirect("/ui/dataset", dataset=dataset_id, message="cannot_activate")
         return redirect("/ui/dataset", dataset=dataset_id, message="activated")
+
+    @app.post("/ui/dataset/{dataset_id}/role", include_in_schema=False)
+    def change_role(request: Request, dataset_id: str, role: str = Form(""),
+                    principal=Depends(principal_dependency)):
+        """298f: switch between training and mixed (a mixed CSV dataset chosen
+        by mistake could not be changed back)."""
+        pid = project_id(request, principal)
+        if pid is None:
+            return redirect("/ui/dataset")
+        try:
+            datasets.change_role(principal.principal_key, pid, dataset_id, role)
+        except (DatasetUnavailable, ProjectUnavailable):
+            return redirect("/ui/dataset", message="unavailable")
+        except (ValueError, TypeError):
+            return redirect("/ui/dataset", dataset=dataset_id, message="cannot_change_role")
+        return redirect("/ui/dataset", dataset=dataset_id, message="role_changed")
 
     @app.post("/ui/dataset/{dataset_id}/validate", response_class=HTMLResponse,
               include_in_schema=False)

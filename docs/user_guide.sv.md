@@ -55,6 +55,10 @@ Prediktion eller Blandad.
   serverns minne; efter en omstart av servern loggar du in igen.
 
 Välj **Aktivera för träning** på det dataset som modellen ska tränas på.
+Ett tränings- eller blandat dataset kan byta till den andra rollen med **Byt
+roll till …**; kolumnrollerna och valideringen behålls. Träningen använder
+bara rader med klass, och ett blandat dataset kan också predikteras på fliken
+Prediktion. Prediktionsdataset kan inte byta roll.
 Under datasetet finns vyerna Förhandsgranskning, Profil, Klasser och
 Kolumnroller.
 
@@ -135,6 +139,7 @@ dina val direkt, och alpha ”Separated” går bara att välja med metoden
 
 Listan **Före körningen** visar om allt som behövs finns: aktivt
 träningsdataset med kolumnroller, vald konfiguration och, för SQL, inloggning.
+Vid en punkt som inte är uppfylld leder **Åtgärda** dit den rättas till.
 **Starta träning** startar körningen med det aktiva datasetet och den valda
 konfigurationen.
 

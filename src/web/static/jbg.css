@@ -243,3 +243,7 @@ form.copy-roles { margin-bottom: 10px; }
 .pipeline-legend .swatch.used { background: #e1f5ee; border-color: #0f6e56; }
 .pipeline-legend .swatch.alternatives { background: #eeedfe; border-color: #534ab7; }
 .pipeline-legend .swatch.unused { background: #fff; border-style: dashed; border-color: #b4b2a9; }
+
+/* 298f: role change on the Dataset tab; links from the checks before a run. */
+.change-role { margin-top: 10px; }
+.fix-link { margin-left: 6px; font-size: 12.5px; white-space: nowrap; }

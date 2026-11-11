@@ -39,6 +39,14 @@ PREFLIGHT = (
     ("signed_in", "Signed in to SQL Server.", "Not signed in to SQL Server (Dataset tab).", True),
     ("validated", "The dataset is validated.", "The dataset has not been validated yet.", False),
 )
+# 298f: where a failed check is put right (the configuration's sections open
+# from the address, 298e).
+FIX_LINKS = {
+    "dataset": "/ui/dataset", "roles": "/ui/dataset", "configuration": "/ui/configuration",
+    "trains": "/ui/configuration#section-run_type",
+    "train_only": "/ui/configuration#section-run_type", "signed_in": "/ui/dataset",
+    "validated": "/ui/dataset",
+}
 MESSAGES = {
     "started": ("ok", "The run has started."),
     "cancel_requested": ("ok", "Cancelling the run."),
@@ -86,8 +94,16 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
             "signed_in": None if project["source"] != "sql" else sessions.is_signed_in(principal),
             "validated": bool(active and active["validation_state"] == "valid"),
         }
+        links = dict(FIX_LINKS)
+        if active is not None:
+            links["roles"] = links["validated"] = f"/ui/dataset?dataset={active['dataset_id']}"
+            links["roles"] += "&view=roles"
+        if configuration is not None:
+            links["trains"] = links["train_only"] = (
+                f"/ui/configuration?configuration={configuration['configuration_id']}#section-run_type")
         checks = [{"code": code, "passed": outcome[code], "blocking": blocking,
-                   "message": passed if outcome[code] else failed}
+                   "message": passed if outcome[code] else failed,
+                   "link": None if outcome[code] else links.get(code)}
                   for code, passed, failed, blocking in PREFLIGHT if outcome[code] is not None]
         ready = all(c["passed"] for c in checks if c["blocking"])
         return checks, ready, configuration

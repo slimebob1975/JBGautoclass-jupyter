@@ -1600,3 +1600,19 @@ msgstr "Ingen algoritm vald"
 
 msgid "On the Prediction tab"
 msgstr "På fliken Prediktion"
+
+# 298f: changing a dataset's role; links from the checks before a run.
+msgid "The dataset's role is changed."
+msgstr "Datasetets roll är ändrad."
+
+msgid "Only training and mixed datasets can switch role."
+msgstr "Bara tränings- och blandade dataset kan byta roll."
+
+msgid "Change role to"
+msgstr "Byt roll till"
+
+msgid "Mixed datasets can also be predicted on the Prediction tab; training uses only their rows with a class."
+msgstr "Blandade dataset kan också predikteras på fliken Prediktion; träningen använder bara deras rader med klass."
+
+msgid "Put right"
+msgstr "Åtgärda"

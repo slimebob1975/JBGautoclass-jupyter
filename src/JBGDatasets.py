@@ -245,6 +245,26 @@ class DatasetRepository:
                 active_training=True, updated_at=now))
         return self.get_owned(owner, project_id, dataset_id)
 
+    # 298f: training and mixed datasets carry their own column roles and are
+    # checked the same way, so they may switch between the two; the
+    # validation state, the roles and the active choice are kept.
+    SWITCHABLE_ROLES = frozenset({DatasetRole.TRAINING, DatasetRole.MIXED})
+
+    def change_role(self, owner, project_id, dataset_id, role: DatasetRole):
+        if not isinstance(role, DatasetRole):
+            raise TypeError("role must be DatasetRole")
+        owner = _text(owner, "owner", 256)
+        with self._engine.begin() as connection:
+            row = self._owned_row(connection, owner, project_id, dataset_id)
+            if (DatasetRole(row.role) not in self.SWITCHABLE_ROLES
+                    or role not in self.SWITCHABLE_ROLES):
+                raise ValueError("only training and mixed datasets can switch role")
+            if DatasetRole(row.role) is not role:
+                connection.execute(update(self._datasets).where(
+                    self._datasets.c.dataset_id == dataset_id).values(
+                    role=role.value, updated_at=datetime.now(timezone.utc)))
+        return self.get_owned(owner, project_id, dataset_id)
+
     def get_roles(self, owner, project_id, dataset_id):
         """The dataset's column roles (293a), or None when none are set."""
         from JBGDatasetRoles import DatasetRoles
