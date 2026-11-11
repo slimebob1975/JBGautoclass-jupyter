@@ -153,10 +153,9 @@ _f("mode.oversamplers", "oversampling", "multi_choice", "Oversampling methods", 
    options=_meta("Oversampling"), allows_all=True)
 _f("mode.undersamplers", "undersampling", "multi_choice", "Undersampling methods", nullable=True,
    options=_meta("Undersampling"), allows_all=True)
-_f("mode.oversampler", "oversampling", "choice", "Oversampling (single, legacy)", advanced=True,
-   options=_meta("Oversampling"))
-_f("mode.undersampler", "undersampling", "choice", "Undersampling (single, legacy)", advanced=True,
-   options=_meta("Undersampling"))
+# 298d (asked 2026-11-11): only the lists are shown. The single, older
+# fields (mode.oversampler, mode.undersampler) stay in the stored settings,
+# unchanged, and are the engine's fallback when a list is empty.
 _f("mode.algorithm", "algorithms", "multi_choice", "Algorithms", options=_meta("Algorithm"),
    allows_all=True)
 _f("mode.model_parameters", "algorithms", "parameters", "Algorithm settings",

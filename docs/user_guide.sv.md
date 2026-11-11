@@ -103,6 +103,12 @@ avsnitt är stängda när sidan öppnas; klicka på ett avsnitts rubrik för att
 efter sparandet. Ovanligare inställningar finns under **Avancerade
 inställningar** i respektive avsnitt.
 
+I **Uppdelning** väljs **Gruppkolumn** bland variablerna i det aktiva
+träningsdatasetet, eller **Ingen**. Den används bara när grupper hålls isär
+vid korsvalidering eller vid uppdelningen av testdata. En sparad kolumn som
+inte är en variabel markeras. I **Översampling** och **Undersampling** kryssar
+du i de metoder som ska prövas; är inget ikryssat används ingen sampling.
+
 I **Mörkertal** väljs **Målklass** bland klasserna i det aktiva
 träningsdatasetets klasskolumn, eller **Alla klasser**. Klasserna läses när
 avsnittet öppnas (i SQL-projekt behövs inloggning). Under fälten visas

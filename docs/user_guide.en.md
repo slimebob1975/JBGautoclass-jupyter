@@ -104,6 +104,12 @@ section's title to open or close it. Sections that were open when you saved
 stay open after saving. Less common settings are under **Advanced settings**
 in each section.
 
+In **Data split**, the **Group column** is chosen among the features of the
+active training dataset, or **None**. It is used only when groups are kept
+apart in cross-validation or in the holdout split. A saved column that is
+not a feature is marked. In **Oversampling** and **Undersampling**, tick the
+methods to try; with nothing ticked, no sampling is used.
+
 In **Dark Numbers**, the **Target class** is chosen among the classes of the
 active training dataset's class column, or **All classes**. The classes are
 read when the section is opened (SQL projects need a sign-in). Below the

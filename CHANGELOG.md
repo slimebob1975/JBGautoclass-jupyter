@@ -1,3 +1,31 @@
+## Revision 298d - Configuration tab fixes (2026-11-11)
+
+- Noted 2026-11-11 on an existing configuration, after 298c:
+  - The Dark Numbers formula did not follow the choices and the target
+    class offered only "Alla klasser": the browser kept running the
+    previous jbg.js. `jbg.js` and `jbg.css` were served without a version
+    in their address and without a cache instruction. Their addresses now
+    carry a hash of their content (`?v=`, `JBGWebUI.static_version`), so a
+    changed file is always fetched anew.
+  - Two controls per sampling step: only the lists remain. The single,
+    older `mode.oversampler` and `mode.undersampler` are server-owned (not
+    shown, not changed through the API), keep their stored value and stay
+    the engine's fallback for an empty list; the form shows that fallback
+    ticked ("No Oversampling", "No Undersampling" by default), which is
+    what a run uses.
+  - "iafId" as group column in a dataset without it: the engine's default
+    (a column of the Voilà GUI's data). New web configurations now have no
+    group column (the engine's default is unchanged); the group column is a
+    choice of "Ingen" or a feature of the active training dataset (only
+    features reach the engine in a web run); a stored column that is not a
+    feature is shown, marked, with a warning.
+- The formula no longer shows a vertical scroll control.
+- BACKLOG: the pipeline picture is now 298e; open question on a group
+  column role.
+- Tests: `tests/test_revision_298d_configuration_fixes.py`; the 293c test
+  expects the versioned script address. Checked in headless Chromium with a
+  configuration holding "iafId" and empty sampling lists.
+
 ## Revision 298c - Closed sections; Dark Numbers target and formula (2026-11-11)
 
 - Asked 2026-11-11: every section of the Configuration tab starts closed

@@ -1541,3 +1541,13 @@ msgstr "α: medelsäkerhet för felen"
 
 msgid "alpha_FP / alpha_FN: mean certainty on FP / FN"
 msgstr "α_FP / α_FN: medelsäkerhet för FP / FN"
+
+# 298d: the group column is a choice.
+msgid "not a feature"
+msgstr "inte en variabel"
+
+msgid "Used only when groups are kept apart in cross-validation or in the holdout split. The choices are the features of the active training dataset."
+msgstr "Används bara när grupper hålls isär vid korsvalidering eller vid uppdelningen av testdata. Valen är variablerna i det aktiva träningsdatasetet."
+
+msgid "This column is not a feature of the active training dataset, so a run that keeps groups apart would stop. Choose a feature or None."
+msgstr "Kolumnen är inte en variabel i det aktiva träningsdatasetet, så en körning som håller grupper isär skulle avbrytas. Välj en variabel eller Ingen."

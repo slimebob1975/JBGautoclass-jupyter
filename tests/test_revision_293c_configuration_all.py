@@ -152,7 +152,7 @@ def test_the_form_shows_all_essentials_first_and_the_combinations(tmp_path):
     assert re.search(rf"Kombinationer att jämföra: <b>{expected}</b>", page)
     # 298b: pipeline order replaced 293c's essentials first.
     assert "Fler inställningar" not in page
-    assert '<script src="/ui/static/jbg.js" defer></script>' in page
+    assert re.search(r'<script src="/ui/static/jbg\.js\?v=[0-9a-f]{12}" defer></script>', page)  # 298d
 
 
 def test_the_script_is_served_and_needs_no_library(tmp_path):

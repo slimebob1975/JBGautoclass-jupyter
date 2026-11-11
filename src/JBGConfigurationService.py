@@ -37,7 +37,11 @@ SERVER_OWNED = {
     "io": frozenset({"model_path", "model_name"}),
     # 293a2/293c: belong to the dataset with its column roles (decision A).
     "mode": frozenset({"categorical_limit", "category_text_columns",
-                       "excluded_predictor_columns"}),
+                       "excluded_predictor_columns",
+                       # 298d: only the lists of sampling methods are settings; the
+                       # single, older fields keep their stored value (the engine's
+                       # fallback when a list is empty).
+                       "oversampler", "undersampler"}),
     "mail": frozenset({"smtp_server"}),
 }
 _PLACEHOLDER_ID = "00000000-0000-4000-8000-000000000000"
@@ -62,7 +66,11 @@ class InvalidConfiguration(ValueError):
 def _server_template() -> dict:
     """Server defaults for a new configuration (no credentials, no data location)."""
     from Config import Config
-    return Config()._config_to_json(username="")
+    template = Config()._config_to_json(username="")
+    # 298d: no group column until the user chooses one (the engine's default,
+    # "iafId", is a column of the Voila GUI's own data; unchanged there).
+    template["mode"]["validation_group_column"] = ""
+    return template
 
 
 def user_view(settings: dict) -> dict:

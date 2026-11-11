@@ -15,6 +15,7 @@ business rules. Messages are chosen by fixed codes, never by echoing input.
 """
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlencode
@@ -120,6 +121,27 @@ def _local_time(iso: str) -> str:
         return ""
 
 
+_STATIC_VERSIONS: dict = {}
+
+
+def static_version(name: str) -> str:
+    """298d: a short hash of a static file's content, added to its address
+    (``?v=``) so that a browser never runs an old jbg.js or jbg.css after an
+    update (found 2026-11-11: the files were served without a version and
+    browsers kept using a cached copy). Recomputed when the file changes."""
+    path = WEB / "static" / name
+    try:
+        stat = path.stat()
+    except OSError:
+        return ""
+    key = (stat.st_mtime_ns, stat.st_size)
+    cached = _STATIC_VERSIONS.get(name)
+    if cached is None or cached[0] != key:
+        cached = (key, hashlib.sha256(path.read_bytes()).hexdigest()[:12])
+        _STATIC_VERSIONS[name] = cached
+    return cached[1]
+
+
 def _redirect(path: str, **query) -> RedirectResponse:
     query = {key: value for key, value in query.items() if value}
     separator = "&" if "?" in path else "?"
@@ -142,6 +164,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
     templates.env.filters["num"] = _number_text                  # 295a
     templates.env.filters["pct"] = lambda value, language="sv": (
         f"{float(value or 0):.1f}".replace(".", "," if language == "sv" else ".") + " %")
+    templates.env.globals["static_url"] = (                       # 298d
+        lambda name: f"/ui/static/{name}?v={static_version(name)}")
     app.mount("/ui/static", StaticFiles(directory=str(WEB / "static")), name="ui-static")
 
     def active_project(request: Request, owner: str):

@@ -140,6 +140,24 @@ def convert_form(schema: dict, form) -> tuple[dict, dict]:
 OPEN_GROUPS = ()
 
 
+# 298d: the lists of sampling methods and the single, older fields they fall
+# back to when empty (JBGSampling.sampling_names in Config).
+SAMPLING_FALLBACKS = (("oversamplers", "oversampler"), ("undersamplers", "undersampler"))
+
+
+def effective_sampling(settings: dict, stored: dict | None) -> dict:
+    """The settings as a run uses them: an empty sampling list shows the
+    single method the engine falls back to (from the complete ``stored``
+    settings; by default no sampling), so the form shows it ticked. Saving
+    then stores it in the list."""
+    mode = dict(settings.get("mode") or {})
+    fallback = (stored or {}).get("mode") or {}
+    for listed, single in SAMPLING_FALLBACKS:
+        if not mode.get(listed) and fallback.get(single):
+            mode[listed] = [fallback[single]]
+    return dict(settings, mode=mode)
+
+
 def combinations(schema: dict, values: dict) -> int:
     """Spot-check combinations: algorithms x scalers x reductions x
     oversamplers x undersamplers ("ALL" counts every option)."""
@@ -190,33 +208,45 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
                 context["schema"] = configuration_schema(project["source"], translator(language),
                                                          _server_template())
                 if values is None:
-                    context["values"] = selected["settings"]
+                    try:
+                        stored = configurations.stored_settings(owner, pid,
+                                                                selected["configuration_id"])
+                    except Exception:
+                        stored = None
+                    context["values"] = effective_sampling(selected["settings"], stored)
                 context["combinations"] = combinations(context["schema"], context["values"])
                 # 298c: the Dark Numbers formula, and where the target classes come from.
                 from JBGWebUIDarkNumbers import calculation_type, formula_cards
                 cards = formula_cards(translator(language))
                 context["dark_cards"] = cards
                 context["dark_type"] = calculation_type(cards, context["values"])
-                context["class_source"] = class_source(principal, pid)
+                active, roles = training_roles(principal, pid)
+                context["class_source"] = (
+                    {"project_id": pid, "dataset_id": active["dataset_id"],
+                     "column": roles.class_column, "dataset": active["name"]}
+                    if roles is not None and roles.class_column else None)
+                # 298d: a group column must reach the engine, so it is chosen
+                # among the active training dataset's features.
+                context["group_columns"] = roles.features if roles is not None else None
         return render(request, principal, "configuration.html", "configuration",
                       status_code=status_code, **context)
 
-    def class_source(principal, pid):
-        """298c: the class column of the active training dataset, if its roles
-        name one. The classes themselves are read by the browser (the
-        existing class-distribution endpoint) when the Dark Numbers section is
-        opened, so a large SQL table does not slow down every page."""
+    def training_roles(principal, pid):
+        """The active training dataset and its roles (either may be None).
+
+        298c: the class column names the target classes; the classes
+        themselves are read by the browser (the existing class-distribution
+        endpoint) when the Dark Numbers section is opened, so a large SQL
+        table does not slow down every page. 298d: the features are the
+        possible group columns."""
         try:
             active = next((d for d in datasets.list(principal.principal_key, pid)
                            if d.get("active_training")), None)
             roles = (inspection.get_roles(principal, pid, active["dataset_id"])
                      if active else None)
         except Exception:
-            return None
-        if roles is None or not roles.class_column:
-            return None
-        return {"project_id": pid, "dataset_id": active["dataset_id"],
-                "column": roles.class_column, "dataset": active["name"]}
+            return None, None
+        return active, roles
 
     def project_id(request, principal):
         project = active_project(request, principal.principal_key)
