@@ -1451,3 +1451,16 @@ msgstr "Alla rader i datasetet har en klass: det finns inget att prediktera."
 
 msgid "The rows without a class are predicted; a file without a class column is predicted in full. The predictions can be downloaded as a file when the run has finished."
 msgstr "Raderna utan klass predikteras; en fil utan klasskolumn predikteras i sin helhet. Prediktionerna kan laddas ned som en fil när körningen är klar."
+
+# 298a: suggested column roles; the Classes view sets the class column.
+msgid "No column roles yet. The roles below are suggested from the dataset's contents."
+msgstr "Inga kolumnroller ännu. Rollerna nedan är föreslagna utifrån datasetets innehåll."
+
+msgid "The class column is not suggested: choose it here, or show a column's distribution on the Classes view."
+msgstr "Klasskolumnen föreslås inte: välj den här, eller visa en kolumns fördelning i vyn Klasser."
+
+msgid "The class column is the column last shown on the Classes view:"
+msgstr "Klasskolumnen är den kolumn som senast visades i vyn Klasser:"
+
+msgid "Until column roles are saved, the column shown here is suggested as the class column on the Column roles view."
+msgstr "Tills kolumnrollerna har sparats föreslås kolumnen som visas här som klasskolumn i vyn Kolumnroller."

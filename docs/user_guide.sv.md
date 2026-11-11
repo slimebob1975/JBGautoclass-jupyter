@@ -65,6 +65,16 @@ Exakt en kolumn ska vara ID-kolumn och exakt en klasskolumn, och minst en
 kolumn ska vara en variabel: numerisk variabel, textvariabel eller
 kategorisk variabel. Kolumner som ignoreras används inte.
 
+Har datasetet inga sparade kolumnroller fylls formuläret i med förslag: den
+första kolumnen som är ifylld och har olika värden på alla rader blir
+ID-kolumn, tal blir numeriska variabler, text med högst så många olika
+värden som gränsen för kategorisering blir kategoriska variabler och annan
+text textvariabler. Tomma kolumner och kolumner med ett enda värde
+ignoreras, liksom till exempel datumkolumner i SQL-tabeller. Klasskolumnen
+föreslås inte: välj den i formuläret, eller visa en kolumns fördelning i
+vyn Klasser, så blir den klasskolumn i förslaget. Förslaget sparas inte
+förrän du väljer **Spara kolumnroller**.
+
 **Gräns för kategorisering** (standard 30, tillåtet 2–1000): textkolumner med
 högst så många olika värden behandlas som kategorier, andra textkolumner som
 fritext. Kategoriska variabler kategoriseras alltid. Kolumnen ”Behandlas

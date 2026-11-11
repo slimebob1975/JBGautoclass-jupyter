@@ -307,18 +307,16 @@ full SQL regression acceptance remain separately unverified.
     chosen dataset after "Starta prediktion" (and after a refused start).
   - [x] 297g (bug 2026-11-11): the predictions download opens in Excel (a
     UTF-8 byte-order mark; Excel took a file starting with "ID" for SYLK).
-  - [ ] Requested 2026-11-11: the Dataset tab suggests column roles for a new
-    dataset, so that wide datasets need not be filled in column by column:
-    every column except the class column gets a preliminary role (for
-    example ID: the first filled-in, unique column; numbers: numeric;
-    text with few distinct values: categorical; other text: text; empty or
-    single-valued columns: ignored). The class column is left for the user.
-    Open: shown as a suggestion to review and save (as 293b2 and 297d do), or
-    stored as preliminary roles at upload.
-  - [ ] Requested 2026-11-11: choosing a column on the Classes view and
-    showing its distribution makes it the class column on the Column roles
-    view, as long as the user does not choose another there (then the
-    user's choice stands).
+  - [x] 298a (requested 2026-11-11): the Dataset tab suggests column roles
+    for a dataset without saved roles (ID: the first filled-in, unique column;
+    numbers: numeric; text with at most the categorical limit of distinct
+    values: categorical; other text: text; empty, single-valued and other SQL
+    types: ignored). Agreed 2026-11-11: the suggestion only fills the form
+    in; nothing is saved until "Spara kolumnroller". The column last shown on
+    the Classes view is the class column in the suggestion; once roles are
+    saved, they stand.
+  - [ ] If wanted: in the roles form, choosing a second class or ID column
+    could reset the former one in the browser (now refused on save).
   - [ ] Requested 2026-11-11: the Configuration tab follows the pipeline
     order, as the Voilà GUI does, and the left panel shows an illustration of
     the pipeline below (or above) the list of configurations, ideally marking

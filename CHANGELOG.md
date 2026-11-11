@@ -1,3 +1,24 @@
+## Revision 298a - Suggested column roles (2026-11-11)
+
+- Requested 2026-11-11; agreed the same day that suggestions only fill the
+  form in and are never saved without the user's choice.
+- The Column roles view of a dataset without saved roles is filled in with
+  suggested roles from the dataset's profile (`suggest_roles` in
+  `JBGDatasetRoles`): the first filled-in column with a different value on
+  every row is the ID column; numbers are numeric features; text with at
+  most the categorical limit of distinct values is categorical, other text
+  free text; empty and single-valued columns, and other SQL types (dates,
+  binary data, ...) unless they are the ID column, are ignored. A
+  suggestion from an older configuration (293b2) and copied roles (297d)
+  still come first. Nothing is saved until "Spara kolumnroller".
+- The class column is not suggested. The column last shown on the Classes
+  view is: the view links carry it (`column=`), and the Column roles view
+  makes it the class column of the suggestion (also of a 293b2 suggestion,
+  `with_class_column`). Once roles are saved, they stand. The Classes view
+  says so while the dataset has no saved roles.
+- User guides: the Column roles section describes the suggestion.
+- Tests: `tests/test_revision_298a_suggested_roles.py`.
+
 ## Revision 297h - The Prediction tab keeps the chosen dataset (2026-11-11)
 
 - Noted on 2026-11-11: after "Starta prediktion" the page shows the new run,

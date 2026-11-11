@@ -151,7 +151,8 @@
       {% endif %}
         <nav class="subtabs" aria-label="{{ _('Dataset') }}">
           {% for key, label in (("preview", "Preview"), ("profile", "Profile"), ("classes", "Classes"), ("roles", "Column roles")) %}
-            <a href="/ui/dataset?dataset={{ selected.dataset_id }}&view={{ key }}" class="{{ 'on' if view == key }}">{{ _(label) }}</a>
+            {# 298a: the column shown on the Classes view goes along to Column roles. #}
+            <a href="/ui/dataset?dataset={{ selected.dataset_id }}&view={{ key }}{% if column %}&column={{ column | urlencode }}{% endif %}" class="{{ 'on' if view == key }}">{{ _(label) }}</a>
           {% endfor %}
         </nav>
         {% if read_error %}
@@ -195,6 +196,12 @@
                 {{ roles_not_numeric[:20] | join(", ") }}{% if roles_not_numeric | length > 20 %} (+{{ roles_not_numeric | length - 20 }}){% endif %}</p>{% endif %}
             {% elif roles_suggested_from %}
               <p class="message ok">{{ _("Suggested from the configuration") }} “{{ roles_suggested_from }}”. {{ _("Review the roles and save to keep them.") }}</p>
+              {% if roles_class_chosen %}<p class="hint">{{ _("The class column is the column last shown on the Classes view:") }} “{{ roles_class_chosen }}”.</p>{% endif %}
+            {% elif roles_suggested %}
+              {# 298a: suggested from the profile; nothing is saved until the user saves. #}
+              <p class="message ok roles-suggested">{{ _("No column roles yet. The roles below are suggested from the dataset's contents.") }} {{ _("Review the roles and save to keep them.") }}</p>
+              {% if roles_class_chosen %}<p class="hint">{{ _("The class column is the column last shown on the Classes view:") }} “{{ roles_class_chosen }}”.</p>
+              {% else %}<p class="message warn">{{ _("The class column is not suggested: choose it here, or show a column's distribution on the Classes view.") }}</p>{% endif %}
             {% elif not roles_stored and not roles_error %}<p class="hint">{{ _("No column roles yet. Columns without a role are ignored.") }}</p>{% endif %}
             <form method="post" action="/ui/dataset/{{ selected.dataset_id }}/roles" id="roles-form">
               <div class="field">
@@ -233,6 +240,7 @@
             </select>
             <button class="btn sub">{{ _("Show") }}</button>
           </form>
+          {% if not roles_stored %}<p class="hint">{{ _("Until column roles are saved, the column shown here is suggested as the class column on the Column roles view.") }}</p>{% endif %}
           {% if data %}
             {% if data.basis.method != "exact" %}<p class="hint">{{ _("Estimated from a sample of") }} {{ data.basis.rows_used }} {{ _("rows") }}.</p>{% endif %}
             {% set total = data.basis.rows_used or 0 %}

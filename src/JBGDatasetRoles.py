@@ -126,6 +126,68 @@ def roles_from_configuration(settings: dict, columns=None) -> dict:
     return mapping
 
 
+def _column_kind(type_name) -> str:
+    """"number", "text" or "other" for a profile column type: CSV columns are
+    "number" or "text"; SQL columns carry their type name (nvarchar, int, ...)."""
+    from JBGDatasetInspection import _TEXT_SQL_TYPES, NUMERIC_SQL_TYPES
+    name = str(type_name or "").lower()
+    if name == "number" or name in NUMERIC_SQL_TYPES:
+        return "number"
+    if name == "text" or name in _TEXT_SQL_TYPES:
+        return "text"
+    return "other"                                  # dates, binary data, GUIDs, ...
+
+
+def suggest_roles(columns, rows: int, categorical_limit: int = DEFAULT_CATEGORICAL_LIMIT,
+                  class_column: str = "") -> dict:
+    """298a: preliminary roles for a dataset without roles, from its profile
+    (``columns``: name, type, missing and distinct per column; ``rows``: the
+    rows the profile counted). A suggestion to review and save; nothing here
+    is stored.
+
+    The class column is the user's choice: only ``class_column`` (when it is
+    a column of the dataset) gets that role. Of the other columns, the first
+    filled-in column with a distinct value on every row (and at least two
+    rows) is the ID column; empty and single-valued columns are ignored;
+    numbers are numeric features; text with at most ``categorical_limit``
+    distinct values is categorical, other text is free text. Other SQL types
+    (dates, binary data, ...) are ignored unless they are the ID column.
+    """
+    mapping, id_given = {}, False
+    names = [c["name"] for c in columns]
+    for column in columns:
+        name, distinct = column["name"], column.get("distinct")
+        if name == class_column:
+            mapping[name] = "class"
+        elif (not id_given and rows >= 2 and distinct == rows
+                and not column.get("missing")):
+            mapping[name], id_given = "id", True
+        elif distinct is None or distinct <= 1:
+            mapping[name] = "ignored"
+        else:
+            kind = _column_kind(column.get("type"))
+            if kind == "number":
+                mapping[name] = "numeric"
+            elif kind == "text":
+                mapping[name] = "categorical" if distinct <= categorical_limit else "text"
+            else:
+                mapping[name] = "ignored"
+    return {name: mapping[name] for name in names}
+
+
+def with_class_column(mapping: dict, column: str, suggested: dict) -> dict:
+    """298a: ``mapping`` with ``column`` as its class column. A former class
+    column gets its role from ``suggested`` (see ``suggest_roles``); so does
+    the ID column when ``column`` was the ID column."""
+    result = {name: (suggested.get(name, "ignored") if role == "class" else role)
+              for name, role in mapping.items()}
+    if mapping.get(column) == "id":
+        result.update({name: "id" for name, role in suggested.items()
+                       if role == "id" and name != column})
+    result[column] = "class"
+    return result
+
+
 def check_compatible(roles: DatasetRoles, training_kinds: dict, candidate_kinds: dict) -> None:
     """A prediction dataset must contain the ID and feature columns of the
     training roles; numeric features must stay numeric. The class column may

@@ -468,6 +468,7 @@ The map above is the target. What exists after revision 285m3:
 | `/ui/prediction`; `POST /api/projects/{id}/predictions` (CSV `dataset_id`) | 297f | CSV prediction and mixed datasets, checked against the model's roles at submit (422 does not fit, 409 nothing to predict); a file without the class column is predicted in full |
 | `GET /api/runs/{id}/predictions.csv` | 297g | Download starts with a UTF-8 byte-order mark (Excel: UTF-8, not SYLK); stored file unchanged |
 | `/ui/prediction?dataset=` | 297h | "Rows to predict" shows the dataset of the run on show, or of a refused start |
+| `/ui/dataset?view=roles&column=<column>` | 298a | A dataset without saved roles gets suggested roles in the form (not saved); the column last shown on the Classes view (`column`, carried by the view links) is the class column |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |

@@ -138,24 +138,37 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                         stored, _ = read(inspection.get_roles, principal, pid, dataset)
                         context["data"] = profile
                         context["roles"] = roles_draft or (stored.as_mapping() if stored else {})
+                        context["roles_stored"] = stored is not None
+                        context["categorical_limit"] = (roles_draft or {}).get(
+                            "__limit__", stored.categorical_limit if stored else 30)
                         if stored is None and not roles_draft and profile:
+                            from JBGDatasetRoles import (roles_from_configuration,
+                                                         suggest_roles, with_class_column)
+                            names = [c["name"] for c in profile["columns"]]
+                            # 298a: the column last shown on the Classes view
+                            # (carried in the address) is the class column.
+                            chosen = column if column in names else ""
+                            suggested = suggest_roles(
+                                profile["columns"], profile["basis"].get("rows_used") or 0,
+                                context["categorical_limit"], chosen)
+                            context["roles"] = suggested
+                            context["roles_suggested"] = True
+                            context["roles_class_chosen"] = chosen
                             # 293b2: a dataset registered before decision A has no
                             # roles; suggest those of the project's latest
                             # configuration that has any. Nothing is saved.
-                            from JBGDatasetRoles import roles_from_configuration
-                            names = [c["name"] for c in profile["columns"]]
                             for item in sorted(context["configurations"],
                                                key=lambda c: c["updated_at"], reverse=True):
                                 settings = optional(configurations.stored_settings, owner, pid,
                                                     item["configuration_id"])
                                 mapping = roles_from_configuration(settings, names) if settings else {}
                                 if mapping:
+                                    if chosen:
+                                        mapping = with_class_column(mapping, chosen, suggested)
                                     context["roles"] = mapping
                                     context["roles_suggested_from"] = item["name"]
+                                    context["roles_suggested"] = False
                                     break
-                        context["roles_stored"] = stored is not None
-                        context["categorical_limit"] = (roles_draft or {}).get(
-                            "__limit__", stored.categorical_limit if stored else 30)
                         # 297d: the roles of another dataset of the project, to copy.
                         sources = []
                         for item in items:
@@ -178,10 +191,16 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                             context["roles_from"] = roles_from
                             context["roles_missing"] = missing
                             context["roles_not_numeric"] = not_numeric
-                            context.pop("roles_suggested_from", None)
+                            for key in ("roles_suggested_from", "roles_suggested",
+                                        "roles_class_chosen"):
+                                context.pop(key, None)
                 else:
                     columns, context["read_error"] = read(inspection.preview, principal, pid, dataset)
                     context["column_names"] = [c["name"] for c in columns["columns"]] if columns else []
+                    # 298a: before roles are saved, the column shown here
+                    # becomes the class column on the Column roles view.
+                    context["roles_stored"] = (selected["role"] == "prediction" or optional(
+                        inspection.get_roles, principal, pid, dataset) is not None)
                     if column and context["read_error"] is None:
                         context["data"], context["read_error"] = read(
                             inspection.class_distribution, principal, pid, dataset, column)

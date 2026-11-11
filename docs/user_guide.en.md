@@ -66,6 +66,16 @@ it. Exactly one column must be the ID column and exactly one the class
 column, and at least one column must be a feature: a numeric feature, a text
 feature or a categorical feature. Ignored columns are not used.
 
+If the dataset has no saved column roles, the form is filled in with
+suggestions: the first filled-in column with a different value on every row
+becomes the ID column, numbers become numeric features, text with at most as
+many distinct values as the categorical limit becomes categorical features
+and other text text features. Empty and single-valued columns are ignored,
+as are, for example, date columns in SQL tables. The class column is not
+suggested: choose it in the form, or show a column's distribution on the
+Classes view, and it becomes the class column in the suggestion. The
+suggestion is not kept until you choose **Save column roles**.
+
 **Categorical limit** (default 30, allowed 2–1000): text columns with at most
 this many distinct values are treated as categories, other text columns as
 free text. Categorical features are always categorised. The column "Treated
