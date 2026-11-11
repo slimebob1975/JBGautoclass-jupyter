@@ -320,7 +320,11 @@ full SQL regression acceptance remain separately unverified.
   - [x] 298b (requested 2026-11-11): the Configuration tab follows the
     pipeline order, as the Voilà GUI does (agreed 2026-11-11: replaces 293c's
     essentials first and "More settings"; run type and algorithms open).
-  - [ ] 298c (requested 2026-11-11; picture agreed 2026-11-11): the left
+  - [x] 298c (asked 2026-11-11): every Configuration section starts closed;
+    the Dark Numbers target class is a choice among the active training
+    dataset's classes; the formula of the chosen method and alpha is shown
+    and follows the form, as in the Voilà GUI.
+  - [ ] 298d (requested 2026-11-11; picture agreed 2026-11-11): the left
     panel shows the pipeline below the list of configurations, in Swedish and
     English, marking each step of the selected configuration as used, not
     used or "N alternatives"; a click on a step opens its section.

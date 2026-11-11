@@ -99,9 +99,17 @@ Feature selection, Data split, Scaling, Oversampling, Undersampling,
 Dimensionality reduction, Algorithms, Decision, Evaluation, Dark Numbers
 and, in SQL projects, Predictions, last Advanced. Scaling, sampling,
 dimensionality reduction and the algorithm are tried together in
-cross-validation. Click a section's title to open or close it; Run type and
-Algorithms are open from the start. Less common settings are under
-**Advanced settings** in each section.
+cross-validation. Every section is closed when the page opens; click a
+section's title to open or close it. Sections that were open when you saved
+stay open after saving. Less common settings are under **Advanced settings**
+in each section.
+
+In **Dark Numbers**, the **Target class** is chosen among the classes of the
+active training dataset's class column, or **All classes**. The classes are
+read when the section is opened (SQL projects need a sign-in). Below the
+fields is the formula of the chosen method and alpha, with the target class
+and the fallback; it follows your choices at once, and alpha "Separated" can
+only be chosen with the method "Linear".
 
 - The **All** box in a list ticks every choice. It is also ticked when the
   last choice is ticked, and it is unticked when a choice is unticked.

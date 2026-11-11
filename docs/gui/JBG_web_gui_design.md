@@ -191,7 +191,7 @@ Configuration edits one `Config` through seven sub-sections in a left-hand side 
 
 **Summary panel (always visible):** selected pipeline components, scoring metric, and **candidate count** = scalers × reductions × oversamplers × undersamplers × algorithms, with a warning above a server-defined threshold. This makes the cost of multi-selects visible before a run.
 
-298b (agreed 2026-11-11): the sections follow the pipeline order, as the Voilà GUI does; they are collapsible, with Run type and Algorithms open. This replaces 293c's essentials first and "More settings". The schema's groups (`GET /api/config/schema`, `schema_version` 2) are in this order; field keys and stored configurations are unchanged.
+298b (agreed 2026-11-11): the sections follow the pipeline order, as the Voilà GUI does; they are collapsible and, since 298c, all closed when the page opens (sections open at a save stay open after it). This replaces 293c's essentials first and "More settings". The schema's groups (`GET /api/config/schema`, `schema_version` 2) are in this order; field keys and stored configurations are unchanged.
 
 | Section | Sektion | Controls | Config fields |
 | --- | --- | --- | --- |
@@ -206,7 +206,7 @@ Configuration edits one `Config` through seven sub-sections in a left-hand side 
 | Algorithms | Algoritmer | Classifiers; per-algorithm settings for the selected ones; score metric (default MCC); max iterations | `algorithm`, `model_parameters`, `scoring`, `max_iterations` |
 | Decision | Beslut | Decision policy default / fixed threshold (binary) + threshold; threshold diagnostics | `decision_policy`, `probability_threshold`, `threshold_diagnostics` |
 | Evaluation | Utvärdering | Feature importance + repeats; OOF benchmark | `calculate_feature_importance`, `feature_importance_repeats`, `model_benchmark_150` |
-| Dark Numbers | Mörkertal | Enable; method Linear / Non-linear; alpha None / Single / Separated; target class; flip fraction; experimental fallback | `calculate_dark_numbers`, `dark_number_*`, `experimental_perturbed_dark_number_fallback` |
+| Dark Numbers | Mörkertal | Enable; method Linear / Non-linear; alpha None / Single / Separated (not with Non-linear); target class, a choice among the active training dataset's classes (298c); flip fraction; experimental fallback; the formula of the chosen method and alpha, live (298c) | `calculate_dark_numbers`, `dark_number_*`, `experimental_perturbed_dark_number_fallback` |
 | Predictions (SQL) | Prediktioner | Prediction catalog and table | `class_catalog`, `class_table` |
 | Advanced | Avancerat | Data limit, verbose output, debug, notification e-mail | `debug.data_limit`, `io.verbose`, `debug.on`, `mail.notification_email` |
 
@@ -481,6 +481,7 @@ The map above is the target. What exists after revision 285m3:
 | `/ui/prediction?dataset=` | 297h | "Rows to predict" shows the dataset of the run on show, or of a refused start |
 | `/ui/dataset?view=roles&column=<column>` | 298a | A dataset without saved roles gets suggested roles in the form (not saved); the column last shown on the Classes view (`column`, carried by the view links) is the class column |
 | `/ui/configuration`; `GET /api/config/schema` (`schema_version` 2) | 298b | Sections in pipeline order (run type, text processing, feature selection, data split, scaling, oversampling, undersampling, dimensionality reduction, algorithms, decision, evaluation, Dark Numbers, predictions, advanced); run type and algorithms open; "More settings" removed |
+| `/ui/configuration` (Dark Numbers); `jbg.js` | 298c | All sections closed on load (open ones kept across a save); target class chosen among the classes of the active training dataset (read with `GET .../class-distribution` when the section opens); the formula of the chosen method and alpha as MathML from the engine's LaTeX (`JBGWebUIDarkNumbers`), following the form |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |

@@ -1,7 +1,8 @@
 """298b: the Configuration tab follows the pipeline order (agreed 2026-11-11),
 as the Voila GUI does. The schema's groups are in that order; field keys and
 stored configurations are unchanged. Run type and algorithms are open; the
-other sections are collapsed (293c's "More settings" is gone)."""
+other sections are collapsed (293c's "More settings" is gone). Since 298c
+every section starts closed."""
 import re
 from datetime import timedelta
 
@@ -99,7 +100,7 @@ def test_the_form_shows_the_sections_in_pipeline_order(tmp_path, source):
     sections = _sections(page)
     expected = [k for k in ORDER if source == "sql" or k != "predictions"]
     assert [key for key, _, _ in sections] == expected
-    assert [key for key, opened, _ in sections if opened] == ["run_type", "algorithms"]
+    assert [key for key, opened, _ in sections if opened] == []          # 298c: all closed
     assert [label for _, _, label in sections] == [
         label for key, label in zip(ORDER, SWEDISH) if key in expected]
     assert "Fler inställningar" not in page

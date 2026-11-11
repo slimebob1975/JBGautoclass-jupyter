@@ -97,10 +97,18 @@ Avsnitten kommer i den ordning som stegen körs: Körningstyp, Textbehandling,
 Variabelurval, Uppdelning, Skalning, Översampling, Undersampling,
 Dimensionsreduktion, Algoritmer, Beslut, Utvärdering, Mörkertal och, i
 SQL-projekt, Prediktioner, sist Avancerat. Skalning, sampling,
-dimensionsreduktion och algoritmen prövas tillsammans i korsvalidering. Klicka
-på ett avsnitts rubrik för att öppna eller stänga det; Körningstyp och
-Algoritmer är öppna från början. Ovanligare inställningar finns under
-**Avancerade inställningar** i respektive avsnitt.
+dimensionsreduktion och algoritmen prövas tillsammans i korsvalidering. Alla
+avsnitt är stängda när sidan öppnas; klicka på ett avsnitts rubrik för att
+öppna eller stänga det. Avsnitt som var öppna när du sparade är öppna även
+efter sparandet. Ovanligare inställningar finns under **Avancerade
+inställningar** i respektive avsnitt.
+
+I **Mörkertal** väljs **Målklass** bland klasserna i det aktiva
+träningsdatasetets klasskolumn, eller **Alla klasser**. Klasserna läses när
+avsnittet öppnas (i SQL-projekt behövs inloggning). Under fälten visas
+formeln för vald metod och alpha, med målklass och reservmetod; den följer
+dina val direkt, och alpha ”Separated” går bara att välja med metoden
+”Linear”.
 
 - Rutan **Alla** i en lista markerar alla val. Den markeras också när sista
   valet markeras, och den avmarkeras när ett val avmarkeras.

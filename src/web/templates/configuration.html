@@ -25,6 +25,20 @@
         <label class="check"><input type="checkbox" name="f:{{ f.key }}" value="{{ column }}" {{ 'checked' if value and column in value }}> {{ column }}</label>
       {% endfor %}
     </fieldset>
+  {% elif f.key == "mode.dark_number_target" %}
+    {# 298c: the classes of the active training dataset, read by jbg.js when
+       the section opens; without it, "All classes" and the saved class. #}
+    <label for="{{ id }}">{{ f.label }}</label>
+    <select id="{{ id }}" name="f:{{ f.key }}" data-class-choice
+      {% if class_source %}data-classes-url="/api/projects/{{ class_source.project_id }}/datasets/{{ class_source.dataset_id }}/class-distribution?column={{ class_source.column | urlencode }}"{% endif %}
+      data-loading="{{ _('Reading the classes ...') }}" data-failed="{{ _('The classes could not be read. For SQL projects, sign in on the Dataset tab.') }}"
+      data-more="{{ _('Only the 100 most common classes are listed.') }}">
+      <option value="">{{ _("All classes") }}</option>
+      {% if value %}<option value="{{ value }}" selected>{{ value }}</option>{% endif %}
+    </select>
+    {% if class_source %}<p class="hint">{{ _("Classes of the column") }} “{{ class_source.column }}” {{ _("in the active training dataset") }} “{{ class_source.dataset }}”.</p>
+    {% else %}<p class="hint">{{ _("To choose a target class, set the class column of the active training dataset on the Dataset tab.") }}</p>{% endif %}
+    <p class="hint" data-class-status hidden></p>
   {% else %}
     <label for="{{ id }}">{{ f.label }}</label>
     {% if f.kind == "choice" %}
@@ -146,6 +160,27 @@
             <p class="hint">{{ _("Settings for newly ticked algorithms appear after saving.") }}</p>
             <p class="hint combinations{{ ' warn' if combinations > 1000 }}">{{ _("Combinations to spot-check") }}: <b>{{ combinations }}</b>
               {% if combinations > 1000 %}– {{ _("only sensible for very small datasets") }}{% endif %}</p>
+          {% endif %}
+          {% if group.key == "dark_numbers" and dark_cards %}
+            {# 298c: the formula of the chosen method and alpha, as in the Voila GUI;
+               jbg.js follows the form without saving. #}
+            {% set dm = values["mode"] %}
+            <div class="formula-card{{ ' off' if not dm.calculate_dark_numbers }}" data-dark-formula
+                 data-types='{{ dark_cards.types | tojson }}'>
+              <h4>{{ _("Formula") }}</h4>
+              {% for type, card in dark_cards.formulas.items() %}
+                <div data-formula="{{ type }}" {{ 'hidden' if type != dark_type }}>
+                  {% if card.mathml %}{{ card.mathml | safe }}{% else %}<code>{{ card.latex }}</code>{% endif %}
+                  <p class="formula-note">{{ card.note }}{% if card.non_linear %} · {{ _("root") }} = {{ dark_cards.root_degree }}{% endif %}</p>
+                </div>
+              {% endfor %}
+              <p class="message warn" data-formula-missing {{ 'hidden' if dark_type }}>{{ _("Separated alpha is only available with the linear method.") }}</p>
+              <p class="formula-note">c: {{ _("correction") }} · TN<sub>r</sub>, TP<sub>r</sub>: {{ _("true negative and true positive rate") }}</p>
+              <p class="formula-note">{{ _("Target class") }}: <span data-formula-target>{{ dm.dark_number_target or _("All classes") }}</span></p>
+              <p class="formula-note">{{ _("If the correction cannot be estimated") }}:
+                <span data-formula-fallback data-yes="{{ _('Experimental fallback') }}" data-no="{{ _('No fallback') }}">{{ _("Experimental fallback") if dm.experimental_perturbed_dark_number_fallback else _("No fallback") }}</span></p>
+              <p class="formula-note" data-formula-off {{ 'hidden' if dm.calculate_dark_numbers }}><i>{{ _("The estimate is off.") }}</i></p>
+            </div>
           {% endif %}
           {% set advanced = fields | selectattr("advanced") | rejectattr("subgroup") | list %}
           {% if advanced %}

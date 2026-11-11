@@ -1486,3 +1486,58 @@ msgstr "Beslut"
 
 msgid "Evaluation"
 msgstr "Utvärdering"
+
+# 298c: all sections closed; Dark Numbers target class and formula.
+msgid "Reading the classes ..."
+msgstr "Läser klasserna …"
+
+msgid "The classes could not be read. For SQL projects, sign in on the Dataset tab."
+msgstr "Klasserna kunde inte läsas. I SQL-projekt: logga in under fliken Dataset."
+
+msgid "Only the 100 most common classes are listed."
+msgstr "Bara de 100 vanligaste klasserna visas."
+
+msgid "All classes"
+msgstr "Alla klasser"
+
+msgid "Classes of the column"
+msgstr "Klasser i kolumnen"
+
+msgid "in the active training dataset"
+msgstr "i det aktiva träningsdatasetet"
+
+msgid "To choose a target class, set the class column of the active training dataset on the Dataset tab."
+msgstr "Ange klasskolumnen för det aktiva träningsdatasetet under fliken Dataset för att kunna välja en målklass."
+
+msgid "Formula"
+msgstr "Formel"
+
+msgid "root"
+msgstr "rot"
+
+msgid "Separated alpha is only available with the linear method."
+msgstr "Alpha ”Separated” finns bara med metoden ”Linear”."
+
+msgid "correction"
+msgstr "korrektion"
+
+msgid "true negative and true positive rate"
+msgstr "andel sanna negativa och sanna positiva"
+
+msgid "If the correction cannot be estimated"
+msgstr "Om korrektionen inte kan skattas"
+
+msgid "No fallback"
+msgstr "Ingen reservmetod"
+
+msgid "The estimate is off."
+msgstr "Skattningen är avstängd."
+
+msgid "No alpha"
+msgstr "Ingen alpha"
+
+msgid "alpha: mean certainty on errors"
+msgstr "α: medelsäkerhet för felen"
+
+msgid "alpha_FP / alpha_FN: mean certainty on FP / FN"
+msgstr "α_FP / α_FN: medelsäkerhet för FP / FN"

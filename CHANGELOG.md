@@ -1,3 +1,32 @@
+## Revision 298c - Closed sections; Dark Numbers target and formula (2026-11-11)
+
+- Asked 2026-11-11: every section of the Configuration tab starts closed
+  (298b opened Run type and Algorithms). A section with a refused value
+  still opens, and the sections open when the form is saved are open again
+  on the page that follows (`jbg.js`, the browser's session storage).
+- Dark Numbers, as in the Voilà GUI:
+  - "Målklass" is a choice: "Alla klasser" or a class of the active training
+    dataset's class column. The classes are read by the browser through the
+    existing `GET .../class-distribution` when the section is first opened,
+    so a large SQL table does not slow every page down; a saved class is
+    always offered. Without a class column the tab points to the Dataset
+    tab; a failed read (for example SQL without sign-in) says so.
+  - The formula of the chosen method and alpha, with the alpha note, the
+    root for the non-linear method, the target class and the fallback;
+    faded when the estimate is off. It follows the form without saving.
+    The formulas come from the engine (`DarkNumberCalculator.get_formula_spec`,
+    LaTeX) and are turned into MathML on the server
+    (`JBGWebUIDarkNumbers.latex_to_mathml`), drawn natively by the browser:
+    no MathJax, no network. As in Voilà, alpha "Separated" is not offered
+    with the non-linear method (saving that combination was already
+    refused).
+- User guides and design document describe the change. BACKLOG: the
+  pipeline picture is now 298d.
+- Tests: `tests/test_revision_298c_dark_numbers.py`; the 298b test expects
+  every section closed. Checked in headless Chromium against a real server:
+  sections, class loading, live formula, non-linear alpha rule, target and
+  fallback texts, off state, sections kept across a save, English.
+
 ## Revision 298b - The Configuration tab in pipeline order (2026-11-11)
 
 - Requested 2026-11-11; agreed the same day that the pipeline order replaces

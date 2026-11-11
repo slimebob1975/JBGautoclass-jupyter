@@ -213,3 +213,10 @@ img.logo { display: block; height: 40px; width: auto; }
 /* 297d: copying column roles from another dataset */
 .message.warn { background: #fdf3dc; color: #7a5200; }
 form.copy-roles { margin-bottom: 10px; }
+
+/* 298c: the Dark Numbers formula card. */
+.formula-card { border-left: 2px solid var(--line); padding: 2px 0 2px 14px; margin: 12px 0 4px; }
+.formula-card.off { opacity: .45; }
+.formula-card h4 { margin: 0 0 4px; font-size: 13px; }
+.formula-card math.formula { display: block; text-align: left; font-size: 1.2em; margin: 4px 0; overflow-x: auto; }
+.formula-note { color: var(--ink2); font-size: 12.5px; margin: 2px 0 0; }

@@ -133,9 +133,11 @@ def convert_form(schema: dict, form) -> tuple[dict, dict]:
     return settings, errors
 
 
-# 298b: every group in pipeline order (the schema's order); these are open
-# from the start, the others collapsed. Replaces 293c's essentials first.
-OPEN_GROUPS = ("run_type", "algorithms")
+# 298b: every group in pipeline order (the schema's order), replacing 293c's
+# essentials first. 298c (asked 2026-11-11): every section starts closed; a
+# section with a refused value opens, and jbg.js reopens the sections that
+# were open when the form was saved.
+OPEN_GROUPS = ()
 
 
 def combinations(schema: dict, values: dict) -> int:
@@ -190,8 +192,31 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
                 if values is None:
                     context["values"] = selected["settings"]
                 context["combinations"] = combinations(context["schema"], context["values"])
+                # 298c: the Dark Numbers formula, and where the target classes come from.
+                from JBGWebUIDarkNumbers import calculation_type, formula_cards
+                cards = formula_cards(translator(language))
+                context["dark_cards"] = cards
+                context["dark_type"] = calculation_type(cards, context["values"])
+                context["class_source"] = class_source(principal, pid)
         return render(request, principal, "configuration.html", "configuration",
                       status_code=status_code, **context)
+
+    def class_source(principal, pid):
+        """298c: the class column of the active training dataset, if its roles
+        name one. The classes themselves are read by the browser (the
+        existing class-distribution endpoint) when the Dark Numbers section is
+        opened, so a large SQL table does not slow down every page."""
+        try:
+            active = next((d for d in datasets.list(principal.principal_key, pid)
+                           if d.get("active_training")), None)
+            roles = (inspection.get_roles(principal, pid, active["dataset_id"])
+                     if active else None)
+        except Exception:
+            return None
+        if roles is None or not roles.class_column:
+            return None
+        return {"project_id": pid, "dataset_id": active["dataset_id"],
+                "column": roles.class_column, "dataset": active["name"]}
 
     def project_id(request, principal):
         project = active_project(request, principal.principal_key)
