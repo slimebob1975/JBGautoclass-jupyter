@@ -91,10 +91,17 @@ out. A configuration can be used with every dataset in the project.
 
 ## Configuration
 
-A configuration holds the machine learning settings, for example the run
-type, preprocessing, algorithms and validation. **Create configuration**
-starts with the default settings; less common settings are under **More
-settings**.
+A configuration holds the machine learning settings. **Create
+configuration** starts with the default settings.
+
+The sections come in the order the steps run: Run type, Text processing,
+Feature selection, Data split, Scaling, Oversampling, Undersampling,
+Dimensionality reduction, Algorithms, Decision, Evaluation, Dark Numbers
+and, in SQL projects, Predictions, last Advanced. Scaling, sampling,
+dimensionality reduction and the algorithm are tried together in
+cross-validation. Click a section's title to open or close it; Run type and
+Algorithms are open from the start. Less common settings are under
+**Advanced settings** in each section.
 
 - The **All** box in a list ticks every choice. It is also ticked when the
   last choice is ticked, and it is unticked when a choice is unticked.

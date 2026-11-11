@@ -1464,3 +1464,25 @@ msgstr "Klasskolumnen är den kolumn som senast visades i vyn Klasser:"
 
 msgid "Until column roles are saved, the column shown here is suggested as the class column on the Column roles view."
 msgstr "Tills kolumnrollerna har sparats föreslås kolumnen som visas här som klasskolumn i vyn Kolumnroller."
+
+# 298b: Configuration tab sections in pipeline order.
+msgid "Text processing"
+msgstr "Textbehandling"
+
+msgid "Feature selection"
+msgstr "Variabelurval"
+
+msgid "Data split"
+msgstr "Uppdelning"
+
+msgid "Scaling"
+msgstr "Skalning"
+
+msgid "Undersampling"
+msgstr "Undersampling"
+
+msgid "Decision"
+msgstr "Beslut"
+
+msgid "Evaluation"
+msgstr "Utvärdering"

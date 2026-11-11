@@ -1,3 +1,23 @@
+## Revision 298b - The Configuration tab in pipeline order (2026-11-11)
+
+- Requested 2026-11-11; agreed the same day that the pipeline order replaces
+  293c's essentials first and "Fler inställningar".
+- The configuration schema's groups follow the engine's pipeline, as the
+  Voilà GUI does: Körningstyp, Textbehandling, Variabelurval, Uppdelning,
+  Skalning, Översampling, Undersampling, Dimensionsreduktion, Algoritmer,
+  Beslut, Utvärdering, Mörkertal, Prediktioner (SQL) and Avancerat.
+  "Förbehandling", "Variabelmodellering", "Sampling" and "Validering &
+  beslut" are split into these steps; "Skicka vidare metadata" moved to
+  Körningstyp (as in Voilà's Mode row). Field keys and stored
+  configurations are unchanged; `GET /api/config/schema` reports
+  `schema_version` 2.
+- The Configuration tab shows every section in that order; Körningstyp and
+  Algoritmer are open, the others collapsed, and a section with a refused
+  value opens. Each section has an anchor (`#section-<group>`) for 298c.
+- Design document and user guides describe the new order.
+- Tests: `tests/test_revision_298b_pipeline_order.py`; the 290a, 292a and
+  293c tests expect the new groups.
+
 ## Revision 298a - Suggested column roles (2026-11-11)
 
 - Requested 2026-11-11; agreed the same day that suggestions only fill the

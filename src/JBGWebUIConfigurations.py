@@ -133,8 +133,9 @@ def convert_form(schema: dict, form) -> tuple[dict, dict]:
     return settings, errors
 
 
-# 293c: shown first; the other groups sit under "More settings".
-ESSENTIAL_GROUPS = ("run_type", "algorithms", "validation")
+# 298b: every group in pipeline order (the schema's order); these are open
+# from the start, the others collapsed. Replaces 293c's essentials first.
+OPEN_GROUPS = ("run_type", "algorithms")
 
 
 def combinations(schema: dict, values: dict) -> int:
@@ -169,7 +170,7 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
         context = {"no_project": project is None, "items": [], "selected": None,
                    "schema": None, "values": values, "field_errors": field_errors or {},
                    "form_message": form_message, "combinations": None,
-                   "essential_groups": ESSENTIAL_GROUPS,
+                   "open_groups": OPEN_GROUPS,
                    "field_error_texts": FIELD_ERRORS, "tab_messages": MESSAGES,
                    # 295b2: the configuration chosen for runs (shown, not just opened).
                    "chosen_id": request.cookies.get(CONFIGURATION_COOKIE)}

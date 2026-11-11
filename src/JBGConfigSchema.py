@@ -17,20 +17,30 @@ from __future__ import annotations
 
 from typing import Callable
 
-# Group key -> English label (in display order). The GUI decides on which tab
-# each group appears (e.g. column roles on the Dataset tab, run type on Run).
+# Group key -> English label, in display order. 298b (agreed 2026-11-11):
+# the order of the engine's pipeline, as in the Voila GUI: text processing,
+# feature selection and the split before the cross-validated pipeline
+# (scaling, oversampling, undersampling, dimensionality reduction, the
+# algorithm), then the decision, evaluation, Dark Numbers and predictions.
+# Column roles belong to the dataset (decision A) and have no group.
 GROUPS = (
     ("run_type", "Run type"),
-    ("roles", "Column roles"),
-    ("preprocessing", "Preprocessing"),
-    ("feature_modelling", "Feature modelling"),
-    ("sampling", "Sampling"),
+    ("text_processing", "Text processing"),
+    ("feature_selection", "Feature selection"),
+    ("splitting", "Data split"),
+    ("scaling", "Scaling"),
+    ("oversampling", "Oversampling"),
+    ("undersampling", "Undersampling"),
+    ("reduction", "Dimensionality reduction"),
     ("algorithms", "Algorithms"),
-    ("validation", "Validation & decision"),
+    ("decision", "Decision"),
+    ("evaluation", "Evaluation"),
     ("dark_numbers", "Dark Numbers"),
     ("predictions", "Predictions"),
     ("advanced", "Advanced"),
 )
+# 298b: the configuration schema's version (2: the groups above).
+SCHEMA_VERSION = 2
 
 # Values declared here because Config (or the run) checks them inline.
 INLINE_OPTIONS = {
@@ -90,23 +100,21 @@ _f("mode.train", "run_type", "boolean", "Train a model")
 _f("mode.predict", "run_type", "boolean", "Predict unlabelled rows")
 _f("mode.mispredicted", "run_type", "boolean", "Show mispredictions")
 # 293c: column roles (and the derived excluded columns) belong to the dataset
-# and are set on the Dataset tab; the group column is a splitting setting.
-_f("mode.validation_group_column", "validation", "text", "Group column",
-   "Rows of one group stay together when data is split.")
-_f("mode.preprocessor", "preprocessing", "multi_choice", "Scalers", options=_meta("Preprocess"),
+# and are set on the Dataset tab.
+_f("mode.preprocessor", "scaling", "multi_choice", "Scalers", options=_meta("Preprocess"),
    allows_all=True)
-_f("mode.use_metas", "preprocessing", "boolean", "Pass on metadata")
-_f("mode.use_stop_words", "preprocessing", "boolean", "Filter stop words")
-_f("mode.ngram_range", "preprocessing", "choice", "N-grams", options=_meta("NgramRange"))
-_f("mode.hex_encode", "preprocessing", "boolean", "Encrypt text features")
-_f("mode.use_categorization", "preprocessing", "boolean", "Categorize text columns")
-_f("mode.feature_selection", "feature_modelling", "multi_choice", "Dimensionality reduction",
+_f("mode.use_metas", "run_type", "boolean", "Pass on metadata")
+_f("mode.use_categorization", "text_processing", "boolean", "Categorize text columns")
+_f("mode.use_stop_words", "text_processing", "boolean", "Filter stop words")
+_f("mode.ngram_range", "text_processing", "choice", "N-grams", options=_meta("NgramRange"))
+_f("mode.hex_encode", "text_processing", "boolean", "Encrypt text features")
+_f("mode.feature_selection", "reduction", "multi_choice", "Dimensionality reduction",
    options=_meta("Reduction"), allows_all=True)
-_f("mode.num_selected_features", "feature_modelling", "integer", "Number of features",
+_f("mode.num_selected_features", "reduction", "integer", "Number of features",
    "Empty selects automatically.", nullable=True, minimum=1)
-_f("mode.feature_selection_mode", "feature_modelling", "choice", "Feature selection mode",
+_f("mode.feature_selection_mode", "feature_selection", "choice", "Feature selection mode",
    options=_inline("mode.feature_selection_mode"))
-_f("mode.feature_selection_profile_id", "feature_modelling", "text", "Saved feature profile",
+_f("mode.feature_selection_profile_id", "feature_selection", "text", "Saved feature profile",
    advanced=True)
 _INVESTIGATION = (
     ("preset", "choice", "Search preset", _presets),
@@ -140,14 +148,14 @@ for _name, _kind, _label, _options in _INVESTIGATION:
     _extras = {"subgroup": "Feature investigation"}
     if _options is not None:
         _extras["options"] = _options
-    _f(f"mode.feature_search_{_name}", "feature_modelling", _kind, _label, **_extras)
-_f("mode.oversamplers", "sampling", "multi_choice", "Oversampling methods", nullable=True,
+    _f(f"mode.feature_search_{_name}", "feature_selection", _kind, _label, **_extras)
+_f("mode.oversamplers", "oversampling", "multi_choice", "Oversampling methods", nullable=True,
    options=_meta("Oversampling"), allows_all=True)
-_f("mode.undersamplers", "sampling", "multi_choice", "Undersampling methods", nullable=True,
+_f("mode.undersamplers", "undersampling", "multi_choice", "Undersampling methods", nullable=True,
    options=_meta("Undersampling"), allows_all=True)
-_f("mode.oversampler", "sampling", "choice", "Oversampling (single, legacy)", advanced=True,
+_f("mode.oversampler", "oversampling", "choice", "Oversampling (single, legacy)", advanced=True,
    options=_meta("Oversampling"))
-_f("mode.undersampler", "sampling", "choice", "Undersampling (single, legacy)", advanced=True,
+_f("mode.undersampler", "undersampling", "choice", "Undersampling (single, legacy)", advanced=True,
    options=_meta("Undersampling"))
 _f("mode.algorithm", "algorithms", "multi_choice", "Algorithms", options=_meta("Algorithm"),
    allows_all=True)
@@ -155,19 +163,22 @@ _f("mode.model_parameters", "algorithms", "parameters", "Algorithm settings",
    "Settings per selected algorithm; empty uses the defaults.")
 _f("mode.scoring", "algorithms", "choice", "Scoring metric", options=_meta("ScoreMetric"))
 _f("mode.max_iterations", "algorithms", "integer", "Maximum iterations", minimum=1)
-_f("mode.test_size", "validation", "number", "Holdout share", "Share of rows kept for testing.",
+_f("mode.test_size", "splitting", "number", "Holdout share", "Share of rows kept for testing.",
    minimum=0.0, maximum=1.0)
-_f("mode.holdout_split_mode", "validation", "choice", "Holdout split",
+_f("mode.holdout_split_mode", "splitting", "choice", "Holdout split",
    options=_inline("mode.holdout_split_mode"))
-_f("mode.grouped_cross_validation", "validation", "boolean", "Keep groups apart in cross-validation")
-_f("mode.decision_policy", "validation", "choice", "Decision policy",
+_f("mode.grouped_cross_validation", "splitting", "boolean", "Keep groups apart in cross-validation")
+# The group column is a splitting setting (293c).
+_f("mode.validation_group_column", "splitting", "text", "Group column",
+   "Rows of one group stay together when data is split.")
+_f("mode.decision_policy", "decision", "choice", "Decision policy",
    options=_inline("mode.decision_policy"))
-_f("mode.probability_threshold", "validation", "number", "Probability threshold",
+_f("mode.probability_threshold", "decision", "number", "Probability threshold",
    "Used with the fixed decision policy (binary classes).", minimum=0.0, maximum=1.0)
-_f("mode.threshold_diagnostics", "validation", "boolean", "Threshold diagnostics")
-_f("mode.model_benchmark_150", "validation", "boolean", "Out-of-fold benchmark", advanced=True)
-_f("mode.calculate_feature_importance", "validation", "boolean", "Feature importance")
-_f("mode.feature_importance_repeats", "validation", "integer", "Feature importance repeats",
+_f("mode.threshold_diagnostics", "decision", "boolean", "Threshold diagnostics")
+_f("mode.model_benchmark_150", "evaluation", "boolean", "Out-of-fold benchmark", advanced=True)
+_f("mode.calculate_feature_importance", "evaluation", "boolean", "Feature importance")
+_f("mode.feature_importance_repeats", "evaluation", "integer", "Feature importance repeats",
    minimum=2, maximum=30)
 _f("mode.calculate_dark_numbers", "dark_numbers", "boolean", "Estimate Dark Numbers")
 _f("mode.dark_number_method", "dark_numbers", "choice", "Method", options=_dark("DarkNumberMethod"))
@@ -227,7 +238,7 @@ def configuration_schema(source: str, translate: Callable[[str], str], defaults:
                      "default": p.default, "minimum": p.minimum, "maximum": p.maximum,
                      "options": list(p.options)} for name, p in settings.items()]
         for algorithm, settings in REGISTRY.items()}
-    return {"schema_version": 1, "source": source,
+    return {"schema_version": SCHEMA_VERSION, "source": source,
             "groups": [{"key": key, "label": translate(label)} for key, label in GROUPS
                        if key in used],
             "fields": fields, "model_parameters": parameters}

@@ -191,19 +191,28 @@ Configuration edits one `Config` through seven sub-sections in a left-hand side 
 
 **Summary panel (always visible):** selected pipeline components, scoring metric, and **candidate count** = scalers × reductions × oversamplers × undersamplers × algorithms, with a warning above a server-defined threshold. This makes the cost of multi-selects visible before a run.
 
-| Sub-section | Delsektion | Controls | Config fields |
+298b (agreed 2026-11-11): the sections follow the pipeline order, as the Voilà GUI does; they are collapsible, with Run type and Algorithms open. This replaces 293c's essentials first and "More settings". The schema's groups (`GET /api/config/schema`, `schema_version` 2) are in this order; field keys and stored configurations are unchanged.
+
+| Section | Sektion | Controls | Config fields |
 | --- | --- | --- | --- |
-| Preprocessing | Förbehandling | Scalers (multi: No scaling, Standard, Min-Max, Max-Abs, Normalizer, Binarizer); text: n-gram range, stop-word filter, hex encoding, categorizer, pass on metadata | `preprocessor`, `ngram_range`, `use_stop_words`, `hex_encode`, `use_categorization`, `use_metas` |
-| Feature modelling | Feature-modellering | Reduction (multi: None, RFE, PCA, Nystroem, Truncated SVD, Fast ICA, NMF, Gaussian RP, Isomap, LLE); number of variables; selection mode Manual / Investigate / Saved recommendation; investigation settings | `feature_selection`, `num_selected_features`, `feature_selection_mode`, `feature_search_*` |
-| Sampling | Sampling | Oversamplers (multi: None, Random, SMOTE, SMOTE-NC, SMOTE-N, ADASYN, Borderline, K-means, SVM-SMOTE); undersamplers (multi: None, Random + four ratio presets, Cluster Centroids, CNN, ENN, RENN, AllKNN, IHT, NearMiss, NCR, OSS, Tomek) | `oversamplers`, `undersamplers` |
-| Algorithms | Algoritmer | 45 classifiers grouped by library (scikit-learn, imbalanced-learn, scikit-clean, PyTorch, Keras, Flax, CatBoost) with search and "select family"; per-algorithm hyperparameter cards for the selected ones; score metric (default MCC); max iterations | `algorithm`, `model_parameters`, `scoring`, `max_iterations` |
-| Validation & decision | Validering & beslut | Holdout % (default 20); holdout mode stratified / group-disjoint; group-disjoint CV; decision policy default / fixed threshold (binary) + threshold; threshold diagnostics; OOF benchmark; feature importance + repeats | `test_size`, `holdout_split_mode`, `grouped_cross_validation`, `decision_policy`, `probability_threshold`, `threshold_diagnostics`, `calculate_feature_importance`, `feature_importance_repeats` |
+| Run type | Körningstyp | Train, predict, mispredictions, pass on metadata | `train`, `predict`, `mispredicted`, `use_metas` |
+| Text processing | Textbehandling | Categorizer, stop-word filter, n-gram range, hex encoding | `use_categorization`, `use_stop_words`, `ngram_range`, `hex_encode` |
+| Feature selection | Variabelurval | Selection mode Manual / Investigate / Saved recommendation; investigation settings | `feature_selection_mode`, `feature_selection_profile_id`, `feature_search_*` |
+| Data split | Uppdelning | Holdout % (default 20); holdout mode stratified / group-disjoint; group-disjoint CV; group column | `test_size`, `holdout_split_mode`, `grouped_cross_validation`, `validation_group_column` |
+| Scaling | Skalning | Scalers (multi: No scaling, Standard, Min-Max, Max-Abs, Normalizer, Binarizer) | `preprocessor` |
+| Oversampling | Översampling | Oversamplers (multi: None, Random, SMOTE, SMOTE-NC, SMOTE-N, ADASYN, Borderline, K-means, SVM-SMOTE) | `oversamplers` |
+| Undersampling | Undersampling | Undersamplers (multi: None, Random + four ratio presets, Cluster Centroids, CNN, ENN, RENN, AllKNN, IHT, NearMiss, NCR, OSS, Tomek) | `undersamplers` |
+| Dimensionality reduction | Dimensionsreduktion | Reduction (multi: None, RFE, PCA, Nystroem, Truncated SVD, Fast ICA, NMF, Gaussian RP, Isomap, LLE); number of variables | `feature_selection`, `num_selected_features` |
+| Algorithms | Algoritmer | Classifiers; per-algorithm settings for the selected ones; score metric (default MCC); max iterations | `algorithm`, `model_parameters`, `scoring`, `max_iterations` |
+| Decision | Beslut | Decision policy default / fixed threshold (binary) + threshold; threshold diagnostics | `decision_policy`, `probability_threshold`, `threshold_diagnostics` |
+| Evaluation | Utvärdering | Feature importance + repeats; OOF benchmark | `calculate_feature_importance`, `feature_importance_repeats`, `model_benchmark_150` |
 | Dark Numbers | Mörkertal | Enable; method Linear / Non-linear; alpha None / Single / Separated; target class; flip fraction; experimental fallback | `calculate_dark_numbers`, `dark_number_*`, `experimental_perturbed_dark_number_fallback` |
-| Advanced | Avancerat | Data limit, verbose output, notification e-mail (SQL only), model name | `debug.data_limit`, `io.verbose`, `mail.notification_email`, `io.model_name` |
+| Predictions (SQL) | Prediktioner | Prediction catalog and table | `class_catalog`, `class_table` |
+| Advanced | Avancerat | Data limit, verbose output, debug, notification e-mail | `debug.data_limit`, `io.verbose`, `debug.on`, `mail.notification_email` |
 
 **Compatibility hints, not just errors.** Option-level badges come from the backend: "RFE-compatible" on algorithms, a 10,000-row limit on SVC and Self Training, "needs categorical columns" on SMOTE-NC, "no scaling/SMOTE/PCA" on native CatBoost, "binary only" on fixed-threshold policy. Incompatible combinations are shown as warnings in the summary panel, matching what the spot-check preflight would skip.
 
-**Feature modelling investigation** is configured here but executed as a job in the Run tab (job type "Feature investigation"), so it gets the same progress, pause/resume and checkpoint handling. Saved recommendations show a Review dialog with evidence and a compatibility check before Apply, as today.
+**Feature investigation** is configured here but executed as a job in the Run tab (job type "Feature investigation"), so it gets the same progress, pause/resume and checkpoint handling. Saved recommendations show a Review dialog with evidence and a compatibility check before Apply, as today.
 
 **Forms are generated, not hand-coded.** The client renders each sub-section from `GET /api/config/schema`, built from `JBGMeta` enums and the `JBGModelSettings` registry. A new algorithm or sampler then appears in the GUI without front-end changes.
 
@@ -368,27 +377,29 @@ Every control in the current Voilà GUI has a place in the new design, except th
 | Class cardinality limit | Dataset → Column roles, "Max number of classes" field |
 | ID column diagnostic | Dataset → Validation |
 | Class summary / distribution | Dataset → Class distribution |
-| Categorizer, Categorize columns | Dataset → Column roles (Categorical predictor) + Configuration → Preprocessing |
+| Categorizer, Categorize columns | Dataset → Column roles (Categorical predictor) + Configuration → Text processing |
 | Exclude predictors | Dataset → Column roles (Ignore) |
 | Continue | Replaced by Validate dataset |
 | Train, Predict, Display mispredictions | Run → Run type (saved with the configuration) |
-| Pass on meta data, Encryption, Filter (stop words), Ngrams | Configuration → Preprocessing |
-| Preprocess, Reduction, Variables | Configuration → Preprocessing / Feature modelling |
-| Oversampler, Undersampler | Configuration → Sampling |
+| Pass on meta data | Configuration → Run type |
+| Encryption, Filter (stop words), Ngrams | Configuration → Text processing |
+| Preprocess, Reduction, Variables | Configuration → Scaling / Dimensionality reduction |
+| Oversampler, Undersampler | Configuration → Oversampling / Undersampling |
 | Algorithm, Score metric, Max. iter | Configuration → Algorithms |
 | Classifier hyperparameters (Model settings, advanced) | Configuration → Algorithms, one card per selected algorithm |
-| Testdata (%), Holdout validation, Group column, Group-disjoint CV | Configuration → Validation & decision |
-| Decision policy, Positive-class threshold, Threshold diagnostics, OOF model benchmark | Configuration → Validation & decision |
-| Feature importance, Repeats | Configuration → Validation & decision |
+| Testdata (%), Holdout validation, Group column, Group-disjoint CV | Configuration → Data split |
+| Decision policy, Positive-class threshold, Threshold diagnostics | Configuration → Decision |
+| OOF model benchmark | Configuration → Evaluation |
+| Feature importance, Repeats | Configuration → Evaluation |
 | Dark Numbers: Estimate, Method, Alpha, Target, Failure | Configuration → Dark Numbers |
 | Data limit, Show info | Configuration → Advanced |
-| Feature selection mode, preset, model type, scaler, oversampling, reduction, budget, rows, folds, family parameters | Configuration → Feature modelling |
-| Investigation mode, Compare by (subgroup) | Configuration → Feature modelling |
+| Feature selection mode, preset, model type, scaler, oversampling, reduction, budget, rows, folds, family parameters | Configuration → Feature selection |
+| Investigation mode, Compare by (subgroup) | Configuration → Feature selection |
 | Investigate, Pause, Resume | Run → Feature investigation job |
 | Recover run, Refresh (checkpoints) | Run History → Resume |
 | Investigation preview, result tabs, status, diagnostics | Results, for feature-investigation runs |
 | Save recommendation | Results, for a completed feature-investigation run |
-| Review, Apply, Delete recommendation | Configuration → Feature modelling |
+| Review, Apply, Delete recommendation | Configuration → Feature selection |
 | Models dropdown | Models tab |
 | Erase CSV model | Models → Delete |
 | Start | Run → Start run |
@@ -469,6 +480,7 @@ The map above is the target. What exists after revision 285m3:
 | `GET /api/runs/{id}/predictions.csv` | 297g | Download starts with a UTF-8 byte-order mark (Excel: UTF-8, not SYLK); stored file unchanged |
 | `/ui/prediction?dataset=` | 297h | "Rows to predict" shows the dataset of the run on show, or of a refused start |
 | `/ui/dataset?view=roles&column=<column>` | 298a | A dataset without saved roles gets suggested roles in the form (not saved); the column last shown on the Classes view (`column`, carried by the view links) is the class column |
+| `/ui/configuration`; `GET /api/config/schema` (`schema_version` 2) | 298b | Sections in pipeline order (run type, text processing, feature selection, data split, scaling, oversampling, undersampling, dimensionality reduction, algorithms, decision, evaluation, Dark Numbers, predictions, advanced); run type and algorithms open; "More settings" removed |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |

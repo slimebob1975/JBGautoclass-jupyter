@@ -109,7 +109,7 @@
       {% macro group_block(group, open_first) %}
         {% set fields = schema.fields | selectattr("group", "equalto", group.key) | list %}
         {% set has_error = fields | selectattr("key", "in", field_errors.keys() | list) | list %}
-        <details class="group" {{ 'open' if open_first or has_error }}>
+        <details class="group" id="section-{{ group.key }}" {{ 'open' if open_first or has_error }}>
           <summary>{{ group.label }}</summary>
           {% for f in fields if not f.advanced and not f.subgroup and f.kind != "parameters" %}{{ control(f, values, columns, field_errors) }}{% endfor %}
           {% set sub = fields | selectattr("subgroup") | list %}
@@ -155,11 +155,8 @@
           {% endif %}
         </details>
       {% endmacro %}
-      {# 293c: the essentials first, everything else under "More settings". #}
-      {% for group in schema.groups if group.key in essential_groups %}{{ group_block(group, true) }}{% endfor %}
-      <details class="more"><summary>{{ _("More settings") }}</summary>
-        {% for group in schema.groups if group.key not in essential_groups %}{{ group_block(group, false) }}{% endfor %}
-      </details>
+      {# 298b: the sections in pipeline order; run type and algorithms open. #}
+      {% for group in schema.groups %}{{ group_block(group, group.key in open_groups) }}{% endfor %}
     </form>
   {% else %}
     <p class="empty">{{ _("Select a configuration in the list.") }}</p>

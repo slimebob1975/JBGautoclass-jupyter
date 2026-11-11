@@ -317,10 +317,13 @@ full SQL regression acceptance remain separately unverified.
     saved, they stand.
   - [ ] If wanted: in the roles form, choosing a second class or ID column
     could reset the former one in the browser (now refused on save).
-  - [ ] Requested 2026-11-11: the Configuration tab follows the pipeline
-    order, as the Voilà GUI does, and the left panel shows an illustration of
-    the pipeline below (or above) the list of configurations, ideally marking
-    the steps the selected configuration uses.
+  - [x] 298b (requested 2026-11-11): the Configuration tab follows the
+    pipeline order, as the Voilà GUI does (agreed 2026-11-11: replaces 293c's
+    essentials first and "More settings"; run type and algorithms open).
+  - [ ] 298c (requested 2026-11-11; picture agreed 2026-11-11): the left
+    panel shows the pipeline below the list of configurations, in Swedish and
+    English, marking each step of the selected configuration as used, not
+    used or "N alternatives"; a click on a step opens its section.
   - Voilà, noted 2026-11-11 (not to be fixed; Voilà will be retired): its
     combined CSV train-and-predict run refuses a file where every row has a
     class ("Combined CSV needs unlabelled prediction rows",

@@ -154,7 +154,7 @@ def test_create_and_save_through_the_form(tmp_path):
         configuration = _create(client)
         page = client.get(f"/ui/configuration?configuration={configuration}").text
         # 293c: column roles are set on the Dataset tab, not here.
-        assert "Förbehandling" in page and 'name="f:connection.class_column"' not in page
+        assert "Skalning" in page and 'name="f:connection.class_column"' not in page   # 298b
         assert "Kolumnroller anges under fliken Dataset." in page
         current = _current(client, project, configuration)
         form = _form_for(current["settings"], _schema(), **{

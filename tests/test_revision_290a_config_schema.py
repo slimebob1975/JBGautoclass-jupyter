@@ -99,7 +99,8 @@ def test_schema_in_swedish_with_technical_names_unchanged(tmp_path):
         schema = client.get("/api/config/schema", params={"source": "csv", "language": "sv"}).json()
     assert schema["language"] == "sv" and schema["source"] == "csv"
     groups = {g["key"]: g["label"] for g in schema["groups"]}
-    assert groups["preprocessing"] == "Förbehandling" and groups["dark_numbers"] == "Mörkertal"
+    # 298b: pipeline-order groups (scaling was part of "Förbehandling").
+    assert groups["scaling"] == "Skalning" and groups["dark_numbers"] == "Mörkertal"
     assert "predictions" not in groups                                   # SQL only
     fields = {f["key"]: f for f in schema["fields"]}
     assert "connection.class_table" not in fields

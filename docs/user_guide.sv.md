@@ -90,10 +90,17 @@ En konfiguration kan användas med alla dataset i projektet.
 
 ## Konfiguration
 
-En konfiguration innehåller inställningarna för maskininlärningen, till
-exempel körningstyp, förbehandling, algoritmer och validering. **Skapa
-konfiguration** börjar med standardinställningarna; ovanligare inställningar
-finns under **Fler inställningar**.
+En konfiguration innehåller inställningarna för maskininlärningen. **Skapa
+konfiguration** börjar med standardinställningarna.
+
+Avsnitten kommer i den ordning som stegen körs: Körningstyp, Textbehandling,
+Variabelurval, Uppdelning, Skalning, Översampling, Undersampling,
+Dimensionsreduktion, Algoritmer, Beslut, Utvärdering, Mörkertal och, i
+SQL-projekt, Prediktioner, sist Avancerat. Skalning, sampling,
+dimensionsreduktion och algoritmen prövas tillsammans i korsvalidering. Klicka
+på ett avsnitts rubrik för att öppna eller stänga det; Körningstyp och
+Algoritmer är öppna från början. Ovanligare inställningar finns under
+**Avancerade inställningar** i respektive avsnitt.
 
 - Rutan **Alla** i en lista markerar alla val. Den markeras också när sista
   valet markeras, och den avmarkeras när ett val avmarkeras.

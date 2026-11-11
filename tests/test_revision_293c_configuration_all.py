@@ -87,7 +87,7 @@ def test_schema_offers_all_on_exactly_the_five_lists_and_no_roles():
                  "mode.excluded_predictor_columns"):
         assert role not in keys
     assert next(f for f in schema["fields"] if f["key"] == "mode.validation_group_column")[
-        "group"] == "validation"
+        "group"] == "splitting"                                   # 298b
 
 
 # --- Through the API and the tab -----------------------------------------------------------------
@@ -150,7 +150,8 @@ def test_the_form_shows_all_essentials_first_and_the_combinations(tmp_path):
     assert algorithms.count(" checked>") == len(list(JBGMeta.Algorithm)) + 1   # every box shown ticked
     expected = len(list(JBGMeta.Algorithm)) * 2       # x 2 scalers x 1 reduction x 1 x 1
     assert re.search(rf"Kombinationer att jämföra: <b>{expected}</b>", page)
-    assert page.index("Algoritmer") < page.index("Fler inställningar") < page.index("Förbehandling")
+    # 298b: pipeline order replaced 293c's essentials first.
+    assert "Fler inställningar" not in page
     assert '<script src="/ui/static/jbg.js" defer></script>' in page
 
 
