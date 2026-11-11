@@ -109,6 +109,35 @@
         <button class="btn">{{ _("Create configuration") }}</button>
       </fieldset>
     </form>
+    {% if pipeline %}
+    {# 298e: the pipeline of the configuration on show, in run order. #}
+    {% set state_texts = {"used": _("Used"), "alternatives": _("Several alternatives"), "unused": _("Not used")} %}
+    {% macro pipeline_step(s) %}
+      {% set href = "/ui/dataset" if s.key == "dataset" else ("/ui/prediction" if s.key == "predictions" and active_project.source != "sql" else "#section-" ~ s.key) %}
+      <li class="step {{ s.state }}{{ ' step-dataset' if s.key == 'dataset' }}" data-step="{{ s.key }}">
+        <a href="{{ href }}"{% if href.startswith('#') %} data-open-section="section-{{ s.key }}"{% endif %}>
+          <b>{{ s.label }}</b><span>{{ s.subtitle }}</span><span class="sr-only"> ({{ state_texts[s.state] }})</span>
+        </a>
+      </li>
+    {% endmacro %}
+    <div class="card pipeline-card">
+      <h2>{{ _("Pipeline") }} <span class="muted">· {{ selected.name }}</span></h2>
+      <p class="hint">{{ _("The steps in the order they run. Changes show here once saved. Click a step to open its section.") }}</p>
+      <ol class="pipeline">
+        {% for s in pipeline.before %}{{ pipeline_step(s) }}{% endfor %}
+        <li class="pipeline-cv">
+          <span class="pipeline-cv-label">{{ _("Cross-validation") }} · {{ combinations }} {{ _("combinations") }}</span>
+          <ol>{% for s in pipeline.cv %}{{ pipeline_step(s) }}{% endfor %}</ol>
+        </li>
+        {% for s in pipeline.after %}{{ pipeline_step(s) }}{% endfor %}
+      </ol>
+      <ul class="pipeline-legend">
+        <li><span class="swatch used"></span>{{ _("Used") }}</li>
+        <li><span class="swatch alternatives"></span>{{ _("Several alternatives") }}</li>
+        <li><span class="swatch unused"></span>{{ _("Not used") }}</li>
+      </ul>
+    </div>
+    {% endif %}
   </section>
 
   <aside class="card wide">

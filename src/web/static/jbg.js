@@ -191,6 +191,19 @@
     });
   }
 
+  /* 298e: a step of the pipeline picture opens its section of the form;
+     so does an address ending in #section-... */
+  function wireSectionLinks() {
+    document.querySelectorAll("a[data-open-section]").forEach(function (link) {
+      link.addEventListener("click", function () {
+        var section = document.getElementById(link.getAttribute("data-open-section"));
+        if (section) { section.open = true; }
+      });
+    });
+    var target = window.location.hash ? document.getElementById(window.location.hash.slice(1)) : null;
+    if (target && target.tagName === "DETAILS") { target.open = true; }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll("[data-all-group]").forEach(wireAllGroup);
     document.querySelectorAll("[data-run-poll]").forEach(followRun);
@@ -198,5 +211,6 @@
     if (configuration) { keepOpenSections(configuration); }
     document.querySelectorAll("[data-dark-formula]").forEach(wireDarkFormula);
     document.querySelectorAll("select[data-class-choice]").forEach(wireClassChoice);
+    wireSectionLinks();
   });
 })();

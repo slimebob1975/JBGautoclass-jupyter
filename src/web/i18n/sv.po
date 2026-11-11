@@ -1551,3 +1551,52 @@ msgstr "Används bara när grupper hålls isär vid korsvalidering eller vid upp
 
 msgid "This column is not a feature of the active training dataset, so a run that keeps groups apart would stop. Choose a feature or None."
 msgstr "Kolumnen är inte en variabel i det aktiva träningsdatasetet, så en körning som håller grupper isär skulle avbrytas. Välj en variabel eller Ingen."
+
+# 298e: the pipeline picture.
+msgid "Pipeline"
+msgstr "Pipeline"
+
+msgid "The steps in the order they run. Changes show here once saved. Click a step to open its section."
+msgstr "Stegen i den ordning de körs. Ändringar syns här när du har sparat. Klicka på ett steg för att öppna dess avsnitt."
+
+msgid "Cross-validation"
+msgstr "Korsvalidering"
+
+msgid "combinations"
+msgstr "kombinationer"
+
+msgid "Used"
+msgstr "Används"
+
+msgid "Several alternatives"
+msgstr "Flera alternativ"
+
+msgid "alternatives"
+msgstr "alternativ"
+
+msgid "No active training dataset"
+msgstr "Inget aktivt träningsdataset"
+
+msgid "No text features"
+msgstr "Inga textvariabler"
+
+msgid "categorisation"
+msgstr "kategorisering"
+
+msgid "stop words"
+msgstr "stoppord"
+
+msgid "encryption"
+msgstr "kryptering"
+
+msgid "Test share"
+msgstr "Testandel"
+
+msgid "groups kept apart"
+msgstr "grupper hålls isär"
+
+msgid "No algorithm chosen"
+msgstr "Ingen algoritm vald"
+
+msgid "On the Prediction tab"
+msgstr "På fliken Prediktion"

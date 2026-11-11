@@ -191,6 +191,8 @@ Configuration edits one `Config` through seven sub-sections in a left-hand side 
 
 **Summary panel (always visible):** selected pipeline components, scoring metric, and **candidate count** = scalers × reductions × oversamplers × undersamplers × algorithms, with a warning above a server-defined threshold. This makes the cost of multi-selects visible before a run.
 
+298e: the left panel shows the pipeline picture below the list of configurations (steps in run order, marked used / several alternatives / not used; each opens its section).
+
 298b (agreed 2026-11-11): the sections follow the pipeline order, as the Voilà GUI does; they are collapsible and, since 298c, all closed when the page opens (sections open at a save stay open after it). This replaces 293c's essentials first and "More settings". The schema's groups (`GET /api/config/schema`, `schema_version` 2) are in this order; field keys and stored configurations are unchanged.
 
 | Section | Sektion | Controls | Config fields |
@@ -483,6 +485,7 @@ The map above is the target. What exists after revision 285m3:
 | `/ui/configuration`; `GET /api/config/schema` (`schema_version` 2) | 298b | Sections in pipeline order (run type, text processing, feature selection, data split, scaling, oversampling, undersampling, dimensionality reduction, algorithms, decision, evaluation, Dark Numbers, predictions, advanced); run type and algorithms open; "More settings" removed |
 | `/ui/configuration` (Dark Numbers); `jbg.js` | 298c | All sections closed on load (open ones kept across a save); target class chosen among the classes of the active training dataset (read with `GET .../class-distribution` when the section opens); the formula of the chosen method and alpha as MathML from the engine's LaTeX (`JBGWebUIDarkNumbers`), following the form |
 | `/ui/static/jbg.js?v=`, `jbg.css?v=`; `/ui/configuration` | 298d | Static files addressed with a content hash (browsers kept old scripts); only the sampling lists (the single `oversampler`/`undersampler` server-owned); group column chosen among the active training dataset's features, none by default |
+| `/ui/configuration` (left panel) | 298e | Pipeline picture of the configuration on show (`JBGWebUIPipeline`): steps in run order, used / several alternatives / not used, cross-validated steps framed with the combination count; each step links to its section; HTML and CSS (wrapping text), Swedish and English |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |

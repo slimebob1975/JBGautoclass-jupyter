@@ -328,14 +328,15 @@ full SQL regression acceptance remain separately unverified.
     static files (the browser kept the old jbg.js, so 298c's formula and
     target classes did not react); only the lists of sampling methods; the
     group column is a choice among the features, none by default.
-  - [ ] Open (noted with 298d): a group column must be a feature to reach a
-    web run, so it is also a predictor. Voilà kept it out of the predictors
-    ("exclude predictors"). Possible: a "group" column role on the Dataset
-    tab (with decision A), passed to the engine and excluded as a predictor.
-  - [ ] 298e (requested 2026-11-11; picture agreed 2026-11-11): the left
+  - [x] 298e (requested 2026-11-11; picture agreed 2026-11-11): the left
     panel shows the pipeline below the list of configurations, in Swedish and
-    English, marking each step of the selected configuration as used, not
-    used or "N alternatives"; a click on a step opens its section.
+    English, marking each step of the configuration on show as used, several
+    alternatives or not used; a click on a step opens its section.
+  - [ ] Next (298f, chosen 2026-11-11): a group column must be a feature to
+    reach a web run, so it is also a predictor (noted with 298d). Voilà kept
+    it out of the predictors ("exclude predictors"). Plan: a "Grupp" column
+    role on the Dataset tab (decision A), passed to the engine and excluded
+    as a predictor.
   - Voilà, noted 2026-11-11 (not to be fixed; Voilà will be retired): its
     combined CSV train-and-predict run refuses a file where every row has a
     class ("Combined CSV needs unlabelled prediction rows",

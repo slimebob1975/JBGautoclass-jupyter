@@ -104,6 +104,12 @@ section's title to open or close it. Sections that were open when you saved
 stay open after saving. Less common settings are under **Advanced settings**
 in each section.
 
+On the left, below the list, **Pipeline** shows the steps of the open
+configuration in the order they run. A green step is used, a purple one
+compares several alternatives and a dashed one is not used. The steps tried
+together in cross-validation are framed, with the number of combinations.
+Click a step to open its section. The picture shows the saved version.
+
 In **Data split**, the **Group column** is chosen among the features of the
 active training dataset, or **None**. It is used only when groups are kept
 apart in cross-validation or in the holdout split. A saved column that is

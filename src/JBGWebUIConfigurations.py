@@ -228,6 +228,16 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
                 # 298d: a group column must reach the engine, so it is chosen
                 # among the active training dataset's features.
                 context["group_columns"] = roles.features if roles is not None else None
+                # 298e: the pipeline picture in the left panel.
+                from JBGWebUIPipeline import CROSS_VALIDATED, pipeline_steps
+                steps = pipeline_steps(context["schema"], context["values"],
+                                       translate=translator(language), language=language,
+                                       dataset_name=active["name"] if active else "",
+                                       roles=roles)
+                first = next(i for i, s in enumerate(steps) if s["key"] in CROSS_VALIDATED)
+                last = max(i for i, s in enumerate(steps) if s["key"] in CROSS_VALIDATED)
+                context["pipeline"] = {"before": steps[:first], "cv": steps[first:last + 1],
+                                       "after": steps[last + 1:]}
         return render(request, principal, "configuration.html", "configuration",
                       status_code=status_code, **context)
 

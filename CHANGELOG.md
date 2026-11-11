@@ -1,3 +1,29 @@
+## Revision 298e - The pipeline picture (2026-11-11)
+
+- Requested and agreed on 2026-11-11 (picture shown in the conversation
+  first): the Configuration tab's left panel shows, below the list of
+  configurations, the pipeline of the configuration on show, in the order
+  the engine runs it: Dataset, Textbehandling, Variabelurval, Uppdelning,
+  then, framed as Korsvalidering with the number of combinations, Skalning,
+  Översampling, Undersampling, Dimensionsreduktion and Algoritmer, then
+  Beslut, Utvärdering, Mörkertal and Prediktioner.
+- Each step is marked used (green), several alternatives (purple: several
+  ticked or "Alla", with the count) or not used (dashed), with a short
+  subtitle (for example "Testandel 20 %"). The state is also in the text for
+  screen readers. Text processing is not used when the active training
+  dataset has no text features; in CSV projects, predictions are on the
+  Prediction tab (decision 9).
+- Every step links to its section of the form and opens it (`jbg.js`; also
+  for an address ending in `#section-...`); Dataset links to the Dataset
+  tab, CSV predictions to the Prediction tab.
+- Drawn with HTML and CSS rather than SVG, so that long subtitles wrap in
+  the narrow panel; steps from `JBGWebUIPipeline.pipeline_steps`.
+- User guides and design document describe the picture. BACKLOG: the
+  "Grupp" column role is next (298f).
+- Tests: `tests/test_revision_298e_pipeline_picture.py`. Checked in headless
+  Chromium: states, combination count, links and opened sections, English,
+  no overflowing boxes on a narrow screen.
+
 ## Revision 298d - Configuration tab fixes (2026-11-11)
 
 - Noted 2026-11-11 on an existing configuration, after 298c:

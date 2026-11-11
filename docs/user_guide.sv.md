@@ -103,6 +103,13 @@ avsnitt är stängda när sidan öppnas; klicka på ett avsnitts rubrik för att
 efter sparandet. Ovanligare inställningar finns under **Avancerade
 inställningar** i respektive avsnitt.
 
+Till vänster, under listan, visar **Pipeline** stegen för den öppnade
+konfigurationen i den ordning de körs. Ett grönt steg används, ett lila
+jämför flera alternativ och ett streckat används inte. De steg som prövas
+tillsammans i korsvalidering står inom en streckad ram med antalet
+kombinationer. Klicka på ett steg för att öppna dess avsnitt. Bilden visar den
+sparade versionen.
+
 I **Uppdelning** väljs **Gruppkolumn** bland variablerna i det aktiva
 träningsdatasetet, eller **Ingen**. Den används bara när grupper hålls isär
 vid korsvalidering eller vid uppdelningen av testdata. En sparad kolumn som
