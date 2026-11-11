@@ -1,3 +1,37 @@
+## Revision 297e - CSV models on other datasets (engine, opt-in); failure reasons (2026-11-10)
+
+- Decision 4 changed on 2026-11-10 (option A): a CSV model may predict
+  another CSV dataset of its project, not only its training dataset's rows
+  without a class. This revision adds the engine part; the Prediction tab
+  and API follow in 297f.
+- Engine, opt-in and runtime only: `Config.model_source` (a `DataSource`,
+  default None, never saved in configuration or model files, like
+  `output_path`). With it, `check_model_source_identity` checks the saved
+  model against `model_source` (its training dataset, which must match
+  exactly, CSV only) instead of the run's data source, and
+  `Config.load_config_from_model_file` gives the loaded configuration the
+  run's own data source and keeps `model_source`, so the classifier's second
+  load (`AutomaticClassifier`) and every CSV reader and result check see the
+  prediction dataset consistently, as an SQL model takes the run's table.
+  The prediction dataset's own CSV registration must carry the model's
+  roles (the reader checks them). Without `model_source` every check is
+  exactly as before, so the Voilà GUI is unchanged.
+- Worker: `apply_model_source` sets it from the server-built
+  `project_run.model_source` (dataset and artifact ID) of a CSV prediction
+  run, and refuses anything malformed.
+- The Training and Prediction tabs say why a run failed: the run overview
+  has a `failure` code for failed and interrupted runs, mapped from the
+  stored `error_type` (no_model, engine_stopped, worker_start, sign_in,
+  model_mismatch, interrupted, other; class names are not exposed), shown as
+  a fixed text under the progress bar, with the log link as before.
+- Tests: `tests/test_revision_297e_csv_model_source.py`; one native test
+  trains a CSV model on one dataset and predicts all rows of another through
+  the engine's own entry point, and checks that the model is refused without
+  the opt-in or with another model source. The engine test groups give the
+  same results with and without this revision. That test closes the log
+  file of its own logger: Windows cannot delete an open file, so the
+  temporary folder's cleanup failed in the first gate (2026-11-11).
+
 ## Revision 297d - Copy column roles from another dataset (2026-11-10)
 
 - Asked on 2026-11-10: train table y with the configuration made for table

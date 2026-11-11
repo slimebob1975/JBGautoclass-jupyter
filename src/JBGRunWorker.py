@@ -374,6 +374,7 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
                 folder.mkdir(parents=True, exist_ok=True)
                 run_config.output_path = folder
                 observed.results_folder = folder
+            apply_model_source(record, run_config)                       # 297e
             prepared = composed.preparation.prepare(
                 reference, RunConfiguration(record.source, run_config))
             if own_logger:
@@ -412,6 +413,27 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
         store.finish(run, worker_id, RunStatus.SUCCEEDED, result=projected)
         register_trained_model(store, record, run_config)
         return EXIT_FINISHED
+
+
+def apply_model_source(record, run_config) -> bool:
+    """297e: a CSV prediction run on another dataset than the model's own names
+    the model's training dataset in its server-built ``project_run`` metadata
+    (``model_source``: dataset_id and artifact_id). Set it on the run's Config,
+    where it is runtime only. Anything malformed is refused, never ignored: the
+    run would otherwise be checked against the wrong dataset."""
+    project_run = record.spec.get("project_run") if isinstance(record.spec, dict) else None
+    if not isinstance(project_run, dict) or "model_source" not in project_run:
+        return False
+    source = project_run["model_source"]
+    if (project_run.get("kind") != "prediction" or record.source is not DataSourceKind.CSV
+            or not isinstance(source, dict) or set(source) != {"dataset_id", "artifact_id"}):
+        raise ValueError("invalid model source")
+    from Config import Config
+    model_source = Config.DataSource(kind="csv", dataset_id=source["dataset_id"],
+                                     artifact_id=source["artifact_id"])
+    model_source.validate()
+    run_config.model_source = model_source
+    return True
 
 
 def trained_nothing(record, run_config) -> bool:

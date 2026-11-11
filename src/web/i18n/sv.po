@@ -1419,3 +1419,25 @@ msgstr "Finns inte i det här datasetet, så deras roller kopierades inte:"
 
 msgid "Numeric in the other dataset but not numbers here; choose another role:"
 msgstr "Numeriska i det andra datasetet men inte tal här; välj en annan roll:"
+
+# 297e: why a run failed.
+msgid "No model was trained; the log says why."
+msgstr "Ingen modell tränades; loggen visar varför."
+
+msgid "The program stopped the run; the log says why."
+msgstr "Programmet avbröt körningen; loggen visar varför."
+
+msgid "The run could not be started on the server. Try again."
+msgstr "Körningen kunde inte startas på servern. Försök igen."
+
+msgid "The SQL sign-in is missing or has expired. Sign in and start again."
+msgstr "Inloggningen till SQL saknas eller har gått ut. Logga in och starta igen."
+
+msgid "The model does not fit this data (columns or roles); the log says more."
+msgstr "Modellen passar inte de här data (kolumner eller roller); loggen säger mer."
+
+msgid "The run stopped before it finished, for example when the server was restarted. Start it again."
+msgstr "Körningen stoppades innan den var klar, till exempel när servern startades om. Starta den igen."
+
+msgid "The run failed; the log says why."
+msgstr "Körningen misslyckades; loggen visar varför."

@@ -35,5 +35,14 @@
       <button class="btn sub">{{ _("Cancel the run") }}</button>
     </form>
   {% endif %}
+  {# 297e: why the run failed, as a fixed text per failure code #}
+  {% set failures = {"no_model": "No model was trained; the log says why.",
+                     "engine_stopped": "The program stopped the run; the log says why.",
+                     "worker_start": "The run could not be started on the server. Try again.",
+                     "sign_in": "The SQL sign-in is missing or has expired. Sign in and start again.",
+                     "model_mismatch": "The model does not fit this data (columns or roles); the log says more.",
+                     "interrupted": "The run stopped before it finished, for example when the server was restarted. Start it again.",
+                     "other": "The run failed; the log says why."} %}
+  {% if overview.failure %}<p class="message error run-failure">{{ _(failures.get(overview.failure, failures.other)) }}</p>{% endif %}
   {% if has_log %}<p><a href="/ui/runs/{{ overview.run_id }}/log">{{ _("Show log") }}</a></p>{% endif %}
 </div>

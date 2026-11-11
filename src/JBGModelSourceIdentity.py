@@ -16,6 +16,14 @@ def check_model_source_identity(saved_config, runtime_config) -> None:
     """
     saved = getattr(saved_config, "data_source", None)
     runtime = getattr(runtime_config, "data_source", None)
+    model_source = getattr(runtime_config, "model_source", None)
+    if model_source is not None:
+        # 297e (opt-in, runtime only): a prediction run reads another CSV dataset
+        # of the same project. The model must still be the one trained on
+        # model_source, and both sides must be CSV.
+        if getattr(runtime, "kind", None) != "csv" or getattr(model_source, "kind", None) != "csv":
+            raise ValueError("A model source applies to CSV predictions only")
+        runtime = model_source
     saved_kind = getattr(saved, "kind", "sql")
     runtime_kind = getattr(runtime, "kind", "sql")
     if saved_kind not in ("sql", "csv") or runtime_kind not in ("sql", "csv"):

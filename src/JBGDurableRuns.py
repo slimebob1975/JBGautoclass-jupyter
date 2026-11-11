@@ -130,7 +130,7 @@ class DurableRunService:
         from JBGRunOverview import project_run_overview
         record = self._owned(principal, run)
         return project_run_overview(run.key, record.status, self._store.progress(run),
-                                    record.result)
+                                    record.result, error_type=record.error_type)
 
     def cancel(self, principal: str, run: RunReference) -> dict[str, Any]:
         """Queued jobs stop at once; a running job stops at its next checkpoint."""

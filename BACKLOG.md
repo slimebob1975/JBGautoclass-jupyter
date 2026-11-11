@@ -314,9 +314,18 @@ full SQL regression acceptance remain separately unverified.
     fits). No engine change: the worker records the engine's existing inner
     progress calls. Pruning of progress events keeps the stage and the
     percentage, which large spot checks pushed out.
-  - [ ] Later: separate CSV prediction datasets (the CSV prediction path is
-    pinned to the training dataset's identity today); their class column may
-    be missing too.
+  - [ ] Separate CSV prediction datasets (decision 4 changed 2026-11-10,
+    option A): 297e added the engine part (opt-in `Config.model_source`,
+    runtime only; Voilà unchanged). 297f, next: the Prediction tab and API
+    choose a CSV prediction dataset compatible with the model's training
+    dataset; the server registers it with the model's roles
+    (`save_csv_model_configuration`) and sets `project_run.model_source`.
+    Open in 297f: a prediction file without the class column (SQL generates
+    it; for CSV, add an empty one or let the reader do so); which rows are
+    predicted (as SQL: the rows without a class, all of them if the column is
+    missing).
+  - [x] 297e: the Training and Prediction tabs say why a run failed (a fixed
+    text per failure code; `failure` in the run overview).
   - [ ] Later: SQL sign-ins live in the server's memory and are lost on a
     restart; consider an automatic Windows sign-in where possible.
   - [x] 295d (requested 2026-11-06): the title "JBG Automatisk

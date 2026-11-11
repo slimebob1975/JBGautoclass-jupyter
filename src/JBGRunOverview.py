@@ -59,8 +59,29 @@ def _percent(events) -> float | None:
     return None
 
 
+# 297e: why a run failed, as a fixed code the interface turns into a text. The
+# stored error_type is a class name chosen by the worker or dispatcher (never
+# message text); unknown ones are "other".
+FAILURES = {
+    "NoModelTrained": "no_model",                # 297b
+    "SystemExit": "engine_stopped",              # the engine's abort_cleanly()
+    "WorkerStartFailed": "worker_start",
+    "PermissionError": "sign_in",
+    "ConfigException": "model_mismatch",         # e.g. the model does not fit the data
+}
+
+
+def failure_code(status: RunStatus, error_type: str | None) -> str | None:
+    if status is RunStatus.INTERRUPTED:
+        return "interrupted"
+    if status is not RunStatus.FAILED:
+        return None
+    return FAILURES.get(error_type, "other")
+
+
 def project_run_overview(run_id: str, status: RunStatus, events,
-                         result: dict[str, Any] | None = None) -> dict[str, Any]:
+                         result: dict[str, Any] | None = None, *,
+                         error_type: str | None = None) -> dict[str, Any]:
     """Produce JSON-native, allowlisted fields from already-authorized records."""
     if not isinstance(status, RunStatus):
         raise TypeError("status must be RunStatus")
@@ -121,5 +142,9 @@ def project_run_overview(run_id: str, status: RunStatus, events,
         inner = _inner(events)
         if inner is not None:
             stage["inner"] = inner                       # 297a: only while running
-    return {"schema_version": 2, "run_id": run_id, "status": status.value,
-            "stage": stage, "results": results}
+    overview = {"schema_version": 2, "run_id": run_id, "status": status.value,
+                "stage": stage, "results": results}
+    failure = failure_code(status, error_type)
+    if failure is not None:
+        overview["failure"] = failure                   # 297e: failed or interrupted only
+    return overview

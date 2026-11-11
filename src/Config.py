@@ -782,6 +782,10 @@ class Config:
     # configuration file). None means script_path, so the Voilà GUI is
     # unchanged; API project runs give each run its own folder.
     output_path: Path = None
+    # 297e: the CSV dataset a saved model was trained on, when a prediction run
+    # reads its rows from another dataset (data_source). Runtime only (never
+    # saved); None keeps the exact-identity rule, so the Voilà GUI is unchanged.
+    model_source: "Config.DataSource" = None
     _filename: str = None
     save: bool = False
     
@@ -1236,6 +1240,12 @@ class Config:
             # persisted in model metadata.  Keep the current GUI/CLI values when
             # a prediction-only run replaces the live config with the saved one.
             saved_config.mail = copy.deepcopy(config.mail)
+            if getattr(config, "model_source", None) is not None:
+                # 297e: the model was checked against model_source above; its
+                # rows come from the run's own CSV dataset, as an SQL model takes
+                # the run's table. Keep both for the classifier's own reload.
+                saved_config.data_source = copy.deepcopy(config.data_source)
+                saved_config.model_source = copy.deepcopy(config.model_source)
         
         return saved_config
 

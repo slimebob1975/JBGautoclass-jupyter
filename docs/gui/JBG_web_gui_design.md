@@ -464,6 +464,7 @@ The map above is the target. What exists after revision 285m3:
 | SQL runs (`POST /api/projects/{id}/runs`, `/predictions`) | 297b | An empty row limit reads all eligible rows (runtime limit, not saved); a training run without a model ends as failed |
 | SQL training runs (worker); live run view | 297c | Without rows to predict, a training run that also predicts trains only (runtime, logged); a finished inner bar stays until the next stage |
 | `/ui/dataset?view=roles&roles_from=<dataset>` | 297d | Copy column roles from another training or mixed dataset of the project: fills the form in (not saved); missing and non-numeric columns named |
+| Live run view; `failure` in `GET /api/runs/{id}/overview`; engine `Config.model_source` | 297e | Why a run failed (fixed text per code); CSV models may predict another dataset of the project (engine opt-in, runtime only; decision 4 changed 2026-11-10) |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |
