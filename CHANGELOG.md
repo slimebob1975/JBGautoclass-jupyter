@@ -1,3 +1,18 @@
+## Revision 297h - The Prediction tab keeps the chosen dataset (2026-11-11)
+
+- Noted on 2026-11-11: after "Starta prediktion" the page shows the new run,
+  and "Rader att prediktera" fell back to its first option although the run
+  used the chosen dataset; it looked as if the choice had been ignored.
+- The choice now shows the dataset of the run on show (the run just
+  started, or the latest one), and, after a refused start, the dataset that
+  was chosen (`?dataset=` on the redirect), so it can be corrected or
+  tried again. Only the project's offered prediction and mixed datasets can
+  be shown as chosen; anything else shows the first option, the training
+  dataset's rows without a class.
+- The project's run listing (`DurableRunService.list_project_runs`) names
+  each run's dataset (`dataset_id`).
+- Tests: `tests/test_revision_297h_prediction_choice.py`.
+
 ## Revision 297g - Predictions open in Excel; backlog requests (2026-11-11)
 
 - Bug found on 2026-11-11: Excel refused a downloaded predictions file ("the

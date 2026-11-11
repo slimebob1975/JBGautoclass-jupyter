@@ -303,6 +303,8 @@ full SQL regression acceptance remain separately unverified.
     as a filled-in form to review and save; missing and non-numeric columns
     are named.
   - [ ] Later, if wanted: copy a configuration to another project.
+  - [x] 297h (noted 2026-11-11): "Rader att prediktera" keeps showing the
+    chosen dataset after "Starta prediktion" (and after a refused start).
   - [x] 297g (bug 2026-11-11): the predictions download opens in Excel (a
     UTF-8 byte-order mark; Excel took a file starting with "ID" for SYLK).
   - [ ] Requested 2026-11-11: the Dataset tab suggests column roles for a new

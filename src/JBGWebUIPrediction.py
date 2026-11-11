@@ -61,7 +61,7 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
         return checks, all(c["passed"] for c in checks), model
 
     @app.get("/ui/prediction", response_class=HTMLResponse, include_in_schema=False)
-    def prediction_tab(request: Request, run: str = "", page: int = 1,
+    def prediction_tab(request: Request, run: str = "", page: int = 1, dataset: str = "",
                        principal=Depends(principal_dependency)):
         owner = principal.principal_key
         project = active_project(request, owner)
@@ -69,7 +69,7 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                    "ready": False, "model": None, "datasets": [], "recent": [],
                    "overview": None, "selected_run": None, "stages": STAGES,
                    "terminal": TERMINAL, "tab_messages": MESSAGES, "has_log": False,
-                   "back": "/ui/prediction", "predictions": None}
+                   "back": "/ui/prediction", "predictions": None, "chosen_dataset": ""}
         if project is not None:
             context["csv_project"] = project["source"] == "csv"
             context["checks"], context["ready"], context["model"] = preflight(
@@ -102,6 +102,16 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                                                                 page=page)
                     except Exception:
                         context["predictions"] = None
+            # 297h: the dropdown shows the dataset of the run on show (it fell back
+            # to its first option after "Start prediction"), or the one just
+            # refused; the training dataset's rows are the empty choice.
+            offered = {d["dataset_id"] for d in context["datasets"]}
+            shown = next((r for r in context["recent"] if r["run_id"] == context["selected_run"]),
+                         None)
+            for candidate in (dataset, (shown or {}).get("dataset_id")):
+                if candidate and candidate in offered:
+                    context["chosen_dataset"] = candidate
+                    break
         return render(request, principal, "prediction.html", "prediction", **context)
 
     @app.post("/ui/prediction", include_in_schema=False)
@@ -116,11 +126,12 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                                                      model_id=model_id,
                                                      dataset_id=dataset_id or None)
         except PermissionError:
-            return redirect("/ui/prediction", message="signin_needed")
+            return redirect("/ui/prediction", message="signin_needed", dataset=dataset_id)
         except RunDoesNotMatchDataset:
-            return redirect("/ui/prediction", message="prediction_incompatible")
+            return redirect("/ui/prediction", message="prediction_incompatible",
+                            dataset=dataset_id)
         except NothingToPredict:
-            return redirect("/ui/prediction", message="nothing_to_predict")
+            return redirect("/ui/prediction", message="nothing_to_predict", dataset=dataset_id)
         except (RunRequestRefused, LookupError, ValueError, TypeError, OSError):
-            return redirect("/ui/prediction", message="prediction_refused")
+            return redirect("/ui/prediction", message="prediction_refused", dataset=dataset_id)
         return redirect("/ui/prediction", run=created["run_id"], message="prediction_started")

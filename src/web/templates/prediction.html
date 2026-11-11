@@ -22,7 +22,7 @@
           {# 297f: CSV projects may also predict another CSV dataset of the project. #}
           <select id="predict-dataset" name="dataset_id">
             <option value="">{{ _("Rows without a class in the training dataset") }}</option>
-            {% for d in datasets %}<option value="{{ d.dataset_id }}">{{ d.name }}</option>{% endfor %}
+            {% for d in datasets %}<option value="{{ d.dataset_id }}"{{ ' selected' if d.dataset_id == chosen_dataset }}>{{ d.name }}</option>{% endfor %}
           </select>
           {% if csv_project %}
             <p class="hint">{{ _("The rows without a class are predicted; a file without a class column is predicted in full. The predictions can be downloaded as a file when the run has finished.") }}</p>
