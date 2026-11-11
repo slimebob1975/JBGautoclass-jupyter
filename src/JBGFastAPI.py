@@ -582,6 +582,9 @@ def _add_run_log_endpoint(app, principal_dependency, logs):
                             filename=f"jbg_run_{run_id[:8]}.log")
 
 
+UTF8_BOM = b"\xef\xbb\xbf"          # 297g: Excel reads such CSV files as UTF-8, not SYLK
+
+
 def _add_run_results_endpoints(app, principal_dependency, results):
     """A project run's details for its owner (295a): class names and row values
     come from the run's own folder, never from the metadata database."""
@@ -599,14 +602,31 @@ def _add_run_results_endpoints(app, principal_dependency, results):
     @app.get("/api/runs/{run_id}/predictions.csv")
     def predictions_download(run_id: str,
                              principal: AuthenticatedPrincipal = Depends(principal_dependency)):
-        """296b: a prediction run's predictions as a file, for its owner only."""
-        from fastapi.responses import FileResponse
+        """296b: a prediction run's predictions as a file, for its owner only.
+
+        297g: the download starts with a UTF-8 byte-order mark, so that Excel
+        reads it as UTF-8 text (å, ä, ö) and does not take a file whose first
+        characters are "ID" (an ID column named so) for a SYLK file. The stored
+        file is not changed.
+        """
+        from fastapi.responses import StreamingResponse
         try:
             path = results.predictions_file(principal.principal_key, run_id)
         except RunResultsUnavailable:
             raise HTTPException(status_code=404, detail="predictions unavailable") from None
-        return FileResponse(path, media_type="text/csv; charset=utf-8",
-                            filename=f"jbg_predictions_{run_id[:8]}.csv")
+
+        def content():
+            with path.open("rb") as stream:
+                first = stream.read(65536)
+                if not first.startswith(UTF8_BOM):
+                    yield UTF8_BOM
+                while first:
+                    yield first
+                    first = stream.read(65536)
+
+        name = f"jbg_predictions_{run_id[:8]}.csv"
+        return StreamingResponse(content(), media_type="text/csv; charset=utf-8",
+                                 headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.get("/api/runs/{run_id}/details/{kind}")
     def run_detail(run_id: str, kind: str, page: int = 1, page_size: int = 50,

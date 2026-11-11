@@ -1,3 +1,21 @@
+## Revision 297g - Predictions open in Excel; backlog requests (2026-11-11)
+
+- Bug found on 2026-11-11: Excel refused a downloaded predictions file ("the
+  file format and extension do not match"; SYLK). Excel takes a text file
+  whose first characters are "ID" for a SYLK file, and the file starts with
+  the ID column's name (confirmed with the user's file, which began with
+  "ID;Predicted" and was otherwise sound: UTF-8, semicolons, decimal commas).
+  `GET /api/runs/{id}/predictions.csv` now starts the
+  download with a UTF-8 byte-order mark (unless the file has one), so Excel
+  reads it as UTF-8 text; that also keeps å, ä and ö right. The stored file
+  in the run folder is unchanged; the download is streamed.
+- BACKLOG: requests of 2026-11-11 (suggested column roles for new datasets;
+  the Classes view sets the class column; the Configuration tab in pipeline
+  order with an illustration) and a note on the Voilà GUI's combined CSV
+  limit, which is not to be fixed.
+- Tests: `tests/test_revision_297g_excel_download.py`; the 296b test expects
+  the byte-order mark.
+
 ## Revision 297f - CSV prediction datasets (2026-11-11)
 
 - Decision 4 changed on 2026-11-10 (option A), completed: a CSV project's

@@ -303,6 +303,30 @@ full SQL regression acceptance remain separately unverified.
     as a filled-in form to review and save; missing and non-numeric columns
     are named.
   - [ ] Later, if wanted: copy a configuration to another project.
+  - [x] 297g (bug 2026-11-11): the predictions download opens in Excel (a
+    UTF-8 byte-order mark; Excel took a file starting with "ID" for SYLK).
+  - [ ] Requested 2026-11-11: the Dataset tab suggests column roles for a new
+    dataset, so that wide datasets need not be filled in column by column:
+    every column except the class column gets a preliminary role (for
+    example ID: the first filled-in, unique column; numbers: numeric;
+    text with few distinct values: categorical; other text: text; empty or
+    single-valued columns: ignored). The class column is left for the user.
+    Open: shown as a suggestion to review and save (as 293b2 and 297d do), or
+    stored as preliminary roles at upload.
+  - [ ] Requested 2026-11-11: choosing a column on the Classes view and
+    showing its distribution makes it the class column on the Column roles
+    view, as long as the user does not choose another there (then the
+    user's choice stands).
+  - [ ] Requested 2026-11-11: the Configuration tab follows the pipeline
+    order, as the Voilà GUI does, and the left panel shows an illustration of
+    the pipeline below (or above) the list of configurations, ideally marking
+    the steps the selected configuration uses.
+  - Voilà, noted 2026-11-11 (not to be fixed; Voilà will be retired): its
+    combined CSV train-and-predict run refuses a file where every row has a
+    class ("Combined CSV needs unlabelled prediction rows",
+    `CSVCombinedDataLayer.read_partitions`), unchanged since before 295d. The
+    web interface does not have this limit: CSV training is train-only, and an
+    SQL training run without rows to predict trains only (297c).
   - [x] 297b (bug 2026-11-10): SQL runs read all rows when "Row limit" is
     empty (the engine read it as zero rows); a training run without a model
     fails instead of succeeding.

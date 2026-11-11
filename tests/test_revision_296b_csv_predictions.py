@@ -220,6 +220,8 @@ def test_the_prediction_tab_shows_and_offers_the_predictions(tmp_path):
         assert "Ladda ned prediktionerna" in page and "<th>P(a)</th>" in page
         assert "Sida 1 / 2" in page and "<td class=\"num\">0,9</td>" in page
         assert "prediktionstabellen i SQL Server" not in page              # CSV project
-        assert client.get(f"/api/runs/{run.key}/predictions.csv").text.startswith("id;Predicted")
+        # 297g: the download starts with a UTF-8 byte-order mark (for Excel).
+        assert client.get(f"/api/runs/{run.key}/predictions.csv").content.startswith(
+            b"\xef\xbb\xbfid;Predicted")
     with _client(tmp_path, subject="bob") as theirs:
         assert theirs.get(f"/api/runs/{run.key}/predictions.csv").status_code == 404
