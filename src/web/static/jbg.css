@@ -257,3 +257,7 @@ form.copy-roles { margin-bottom: 10px; }
 .scroll-top[hidden] { display: none; }
 .subtabs { flex-wrap: wrap; }                       /* 298j: more views than fit on one line */
 .dark-range { max-width: 480px; }
+
+/* 299a: corrections of mispredicted rows. */
+.correct-cell select { min-width: 110px; }
+.corrected { color: var(--ok); font-weight: 600; white-space: nowrap; }

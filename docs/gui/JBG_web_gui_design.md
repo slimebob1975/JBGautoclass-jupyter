@@ -406,7 +406,7 @@ Every control in the current Voilà GUI has a place in the new design, except th
 | Erase CSV model | Models → Delete |
 | Start | Run → Start run |
 | Progress bar, progress label, output area | Run → Monitor |
-| Mispredicted output and reclassification grid | Results → Mispredictions |
+| Mispredicted output and reclassification grid | Results → Mispredictions (SQL: 299a; CSV: 299b) |
 | Prediction runs, Refresh runs | Run History (filter: Prediction) |
 | Export CSV, Export joined | Results → Predictions |
 | Erase predictions | Run History → Delete |
@@ -491,6 +491,7 @@ The map above is the target. What exists after revision 285m3:
 | `.../datasets/{dataset}/roles` (`date`); validation (`date_types`); engine | 298h | A "date" column role (a feature): runs read it as text and name it in `mode.date_columns` (server-owned, new runtime field, empty by default); the input converter, saved with the model, derives year, month and weekday (sine and cosine) and a missing flag. Dates are suggested as ignored; CSV columns of ISO dates and SQL date types are detected; the date check is listed only for datasets with date features |
 | `/ui/dataset` (Column roles, validation); `/ui/run`, `/ui/prediction`; `POST .../runs`, `.../predictions` | 298i | SQL ID columns must be whole-number columns (`INTEGER_SQL_TYPES`): suggestions pick only those, Column roles warns before saving, validation's ID check requires the type in SQL (same check list for CSV and SQL), and SQL runs are refused before a worker starts (`IdColumnNotInteger`, 409; one metadata query on the run's own connection) |
 | `/ui/results?view=dark_numbers`; `jbg.js` (`.scroll`) | 298j | Dark Numbers on the Results tab: per target the engine's four estimates (`JBGDarkNumberReporting`) with the order status, the calculation table and the confusion matrices from the run folder, with readable estimate and model names; result sub-tabs wrap; every wide table (`.scroll`) gets a second horizontal scrollbar above it |
+| `POST /ui/results/{run}/corrections/review`, `.../corrections`, `.../corrections/{index}/undo` | 299a | Reclassification of mispredicted rows of SQL training runs (`JBGReclassification`): pick the right class, review, confirm; one parameterised transaction under the user's own sign-in; log (`corrections.json`) in the run folder, owner-only; undo writes the old class back |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |

@@ -189,6 +189,15 @@ expected to grow in that order and together form a heuristic range; the
 view says whether the order holds. Below are the calculations and the
 confusion matrices.
 
+In **Mispredictions** of an SQL run you can correct classes that are wrong
+in the source data. Choose the **Right class** for the rows, then **Review
+the corrections**. A page shows the changes, and only when you choose
+**Write the corrections** are they written to the source table with your SQL
+sign-in, all at once or none. The sign-in must be allowed to change the
+table. Corrected rows are marked, and the corrections are listed below the
+table; **Undo** writes the old class back. The next training uses the
+corrected classes.
+
 Wide tables have a scrollbar both below and above the table.
 
 ## Models

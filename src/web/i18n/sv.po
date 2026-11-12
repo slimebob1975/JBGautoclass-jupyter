@@ -1733,3 +1733,67 @@ msgstr "Korstränad modell"
 
 msgid "Final model"
 msgstr "Slutlig modell"
+
+# 299a: reclassification of mispredicted rows (SQL).
+msgid "The corrections are written to the source table."
+msgstr "Korrigeringarna är skrivna till källtabellen."
+
+msgid "The correction is undone: the old class is written back."
+msgstr "Korrigeringen är ångrad: den gamla klassen är återskriven."
+
+msgid "Nothing was corrected: choose a new class for at least one row."
+msgstr "Inget korrigerades: välj en ny klass för minst en rad."
+
+msgid "The source table could not be updated, so nothing was written. Check that your SQL sign-in may change the table."
+msgstr "Källtabellen kunde inte uppdateras, så inget skrevs. Kontrollera att din SQL-inloggning får ändra tabellen."
+
+msgid "Sign in to SQL Server first (Dataset tab)."
+msgstr "Logga in på SQL Server först (fliken Dataset)."
+
+msgid "Confirm the corrections"
+msgstr "Bekräfta korrigeringarna"
+
+msgid "These classes will be written to the source table in SQL Server with your sign-in. Each correction can be undone afterwards."
+msgstr "De här klasserna skrivs till källtabellen i SQL Server med din inloggning. Varje korrigering kan ångras efteråt."
+
+msgid "Row ID"
+msgstr "Rad-ID"
+
+msgid "Class now"
+msgstr "Klass nu"
+
+msgid "New class"
+msgstr "Ny klass"
+
+msgid "Write the corrections"
+msgstr "Skriv korrigeringarna"
+
+msgid "Choose the right class for rows that are wrongly labelled, then review the corrections before they are written to the source table."
+msgstr "Välj rätt klass för rader som har fel klass och granska sedan korrigeringarna innan de skrivs till källtabellen."
+
+msgid "Right class"
+msgstr "Rätt klass"
+
+msgid "corrected to"
+msgstr "korrigerad till"
+
+msgid "Review the corrections"
+msgstr "Granska korrigeringarna"
+
+msgid "Corrections"
+msgstr "Korrigeringar"
+
+msgid "Old class"
+msgstr "Gammal klass"
+
+msgid "When"
+msgstr "När"
+
+msgid "undone"
+msgstr "ångrad"
+
+msgid "Undo"
+msgstr "Ångra"
+
+msgid "Cancel"
+msgstr "Avbryt"

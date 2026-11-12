@@ -1,3 +1,30 @@
+## Revision 299a - Correcting mispredicted rows (SQL) (2026-11-12)
+
+- Voilà gap check (2026-11-12): four Voilà workflows were missing from the
+  web interface; reclassification, export joined, deleting and feature
+  investigation were agreed as needed before retirement (BACKLOG).
+- Design agreed 2026-11-12: Results -> Mispredictions of a finished SQL
+  training run gets a "Rätt klass" choice per row (once per row ID; the
+  run's classes). "Granska korrigeringarna" shows the changes; nothing is
+  written until "Skriv korrigeringarna". Then every correction is written to
+  the run's source table under the user's own SQL sign-in, in one
+  transaction (all or none), with a parameterised statement: the Voilà GUI
+  wrote per click and put the class into the SQL text unescaped. A new class
+  must be one of the run's classes and a row one of its mispredicted rows.
+- A log in the run's folder (`corrections.json`: ID, old and new class,
+  time), shown to the run's owner only like all class names (decision 5),
+  lists the corrections; corrected rows are marked, and "Ångra" writes the
+  old class back. A failed write writes nothing and keeps the driver's
+  message server-side. CSV runs get no controls (299b).
+- `JBGReclassification.SQLReclassificationService`; routes
+  `POST /ui/results/{run}/corrections/review`, `.../corrections`,
+  `.../corrections/{index}/undo`.
+- User guides and design document describe it; BACKLOG lists the Voilà
+  retirement items.
+- Tests: `tests/test_revision_299a_sql_reclassification.py` (a recording
+  SQL connection: statement, parameters, commit or rollback). Checked in
+  headless Chromium: choose, review, write, mark, undo.
+
 ## Revision 298j - Dark Numbers on the Results tab; top scrollbars (2026-11-12)
 
 - Noted 2026-11-12: Dark Numbers were computed and saved in the run folder

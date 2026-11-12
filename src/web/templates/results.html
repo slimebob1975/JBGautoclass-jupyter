@@ -75,8 +75,23 @@
       <p class="hint">{{ _("Nothing to show for this run (for example no mispredicted rows).") }}</p>
     {% elif detail_missing %}
       <p class="hint">{{ _("These details are kept for runs made after this update; earlier runs did not keep them.") }}</p>
+    {% elif review %}
+      {# 299a: nothing is written until the user confirms. #}
+      <h3>{{ _("Confirm the corrections") }}</h3>
+      <p class="message warn">{{ _("These classes will be written to the source table in SQL Server with your sign-in. Each correction can be undone afterwards.") }}</p>
+      <table class="grid">
+        <thead><tr><th>{{ _("Row ID") }}</th><th>{{ _("Class now") }}</th><th>{{ _("New class") }}</th></tr></thead>
+        <tbody>{% for change in review %}<tr><td>{{ change.id }}</td><td>{{ change.old }}</td><td><b>{{ change.new }}</b></td></tr>{% endfor %}</tbody>
+      </table>
+      <form method="post" action="/ui/results/{{ selected_run }}/corrections" class="inline">
+        {% for change in review %}<input type="hidden" name="corr:{{ change.id }}" value="{{ change.new }}">{% endfor %}
+        <button class="btn">{{ _("Write the corrections") }}</button>
+        <a href="/ui/results?run={{ selected_run }}&view=mispredictions" class="btn sub">{{ _("Cancel") }}</a>
+      </form>
     {% elif detail %}
       {% if view == "mispredictions" %}<p class="hint">{{ _("All labelled rows where the cross-trained or the final model is wrong.") }}</p>{% endif %}
+      {% if correctable %}<p class="hint">{{ _("Choose the right class for rows that are wrongly labelled, then review the corrections before they are written to the source table.") }}</p>
+      <form method="post" action="/ui/results/{{ selected_run }}/corrections/review?page={{ detail.page }}" id="corrections-form">{% endif %}
       {% if view == "dark_numbers" %}
         {# 298j: the estimates per target class, as the Voila GUI summarises them. #}
         <p class="hint">{{ _("The estimated share of hidden cases of each target class. The four estimates are expected to grow from left to right; together they form a heuristic range. Values are proportions.") }}</p>
@@ -98,9 +113,16 @@
       {% endif %}
       <p class="hint">{{ detail.total_rows }} {{ _("rows") }}</p>
       <div class="scroll"><table class="grid">
-        <thead><tr>{% for c in detail.columns %}<th>{{ _(dark_columns.get(c, c)) if view == "dark_numbers" else c }}</th>{% endfor %}</tr></thead>
-        <tbody>{% for row in detail.rows %}<tr>{% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        <thead><tr>{% if correctable %}<th>{{ _("Right class") }}</th>{% endif %}{% for c in detail.columns %}<th>{{ _(dark_columns.get(c, c)) if view == "dark_numbers" else c }}</th>{% endfor %}</tr></thead>
+        <tbody>{% set seen = namespace(ids=[]) %}{% for row in detail.rows %}<tr>
+          {% if correctable %}{% set rid = row[0] | int %}<td class="correct-cell">
+            {% if rid not in seen.ids %}{% set seen.ids = seen.ids + [rid] %}
+              {% if rid in corrected %}<span class="corrected">{{ _("corrected to") }} {{ corrected[rid] }}</span>
+              {% else %}<select name="corr:{{ rid }}" aria-label="{{ _('Right class') }} {{ rid }}"><option value="">–</option>{% for label in labels %}<option value="{{ label }}">{{ label }}</option>{% endfor %}</select>{% endif %}
+            {% endif %}</td>{% endif %}
+          {% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
       </table></div>
+      {% if correctable %}<button class="btn">{{ _("Review the corrections") }}</button></form>{% endif %}
       {% set pages = ((detail.total_rows + detail.page_size - 1) // detail.page_size) %}
       {% if pages > 1 %}
         <nav class="pager">
@@ -108,6 +130,15 @@
           <span>{{ _("Page") }} {{ detail.page }} / {{ pages }}</span>
           {% if detail.page < pages %}<a href="/ui/results?run={{ selected_run }}&view={{ view }}&page={{ detail.page + 1 }}">{{ _("Next") }} ›</a>{% endif %}
         </nav>
+      {% endif %}
+      {% if correctable and correction_log %}
+        {# 299a: the run's corrections, newest last; each can be undone. #}
+        <h3>{{ _("Corrections") }}</h3>
+        <table class="grid">
+          <thead><tr><th>{{ _("Row ID") }}</th><th>{{ _("Old class") }}</th><th>{{ _("New class") }}</th><th>{{ _("When") }}</th><th></th></tr></thead>
+          <tbody>{% for index, entry in correction_log %}<tr><td>{{ entry.id }}</td><td>{{ entry.old }}</td><td>{{ entry.new }}</td><td>{{ entry.at[:16] | replace("T", " ") }}</td>
+            <td>{% if entry.undone_at %}<span class="muted">{{ _("undone") }}</span>{% else %}<form method="post" action="/ui/results/{{ selected_run }}/corrections/{{ index }}/undo" class="inline"><button class="btn sub">{{ _("Undo") }}</button></form>{% endif %}</td></tr>{% endfor %}</tbody>
+        </table>
       {% endif %}
       {% if view == "dark_numbers" and dark_matrix %}
         <h3>{{ _("Confusion matrices") }}</h3>

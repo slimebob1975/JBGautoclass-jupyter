@@ -190,6 +190,14 @@ kombinerad och med den korstränade modellen på testdata. De väntas växa i
 den ordningen och bildar tillsammans ett heuristiskt intervall; vyn säger om
 ordningen håller. Därunder finns beräkningarna och förväxlingsmatriserna.
 
+I **Felklassificeringar** för en SQL-körning kan du rätta klasser som är
+fel i källdata. Välj **Rätt klass** för raderna och sedan **Granska
+korrigeringarna**. En sida visar ändringarna, och först när du väljer **Skriv
+korrigeringarna** skrivs de till källtabellen med din SQL-inloggning, alla på
+en gång eller ingen. Inloggningen måste få ändra tabellen. Rättade rader
+markeras, och under tabellen listas korrigeringarna; **Ångra** skriver
+tillbaka den gamla klassen. Nästa träning använder de rättade klasserna.
+
 Breda tabeller har en rullningslist både under och ovanför tabellen.
 
 ## Modeller
