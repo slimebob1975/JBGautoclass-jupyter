@@ -36,6 +36,14 @@ ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_MODEL_ROOT = ROOT / "output" / "models"
 
 
+def keeps_groups_apart(settings: dict) -> bool:
+    """298g: whether a configuration needs a group column (grouped
+    cross-validation or a holdout that keeps groups apart)."""
+    mode = (settings or {}).get("mode") or {}
+    return bool(mode.get("grouped_cross_validation")
+                or mode.get("holdout_split_mode") == "person_disjoint")
+
+
 class RunRequestRefused(ValueError):
     """The project cannot start this run (fixed message, 409)."""
 
@@ -131,6 +139,10 @@ class ProjectRunService:
         if roles is None:
             raise RunRequestRefused(
                 "the dataset has no column roles; set them on the Dataset tab first")
+        if keeps_groups_apart(settings) and not roles.group_column:
+            # 298g: the engine would stop at the split; refuse before a worker starts.
+            raise RunRequestRefused(
+                "the configuration keeps groups apart, but the dataset has no group column")
 
         # Decision 3: one model file per training run, outside Voilà's folders.
         model_id = str(uuid4())

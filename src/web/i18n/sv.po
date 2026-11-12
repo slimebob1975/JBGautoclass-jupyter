@@ -1542,16 +1542,6 @@ msgstr "α: medelsäkerhet för felen"
 msgid "alpha_FP / alpha_FN: mean certainty on FP / FN"
 msgstr "α_FP / α_FN: medelsäkerhet för FP / FN"
 
-# 298d: the group column is a choice.
-msgid "not a feature"
-msgstr "inte en variabel"
-
-msgid "Used only when groups are kept apart in cross-validation or in the holdout split. The choices are the features of the active training dataset."
-msgstr "Används bara när grupper hålls isär vid korsvalidering eller vid uppdelningen av testdata. Valen är variablerna i det aktiva träningsdatasetet."
-
-msgid "This column is not a feature of the active training dataset, so a run that keeps groups apart would stop. Choose a feature or None."
-msgstr "Kolumnen är inte en variabel i det aktiva träningsdatasetet, så en körning som håller grupper isär skulle avbrytas. Välj en variabel eller Ingen."
-
 # 298e: the pipeline picture.
 msgid "Pipeline"
 msgstr "Pipeline"
@@ -1616,3 +1606,22 @@ msgstr "Blandade dataset kan också predikteras på fliken Prediktion; träninge
 
 msgid "Put right"
 msgstr "Åtgärda"
+
+# 298g: the group column role.
+msgid "Keeps its rows together; not a feature"
+msgstr "Håller ihop sina rader; ingen variabel"
+
+msgid "at most one column can be the group column"
+msgstr "Högst en kolumn kan vara gruppkolumn."
+
+msgid "a column role of the active training dataset"
+msgstr "en kolumnroll i det aktiva träningsdatasetet"
+
+msgid "To keep groups apart, give a column the role Group column on the Dataset tab (Column roles)."
+msgstr "För att hålla grupper isär: ge en kolumn rollen Gruppkolumn under fliken Dataset (Kolumnroller)."
+
+msgid "The dataset has a group column for keeping groups apart."
+msgstr "Datasetet har en gruppkolumn för att hålla grupper isär."
+
+msgid "The configuration keeps groups apart, but the dataset has no group column (Dataset tab, Column roles)."
+msgstr "Konfigurationen håller grupper isär, men datasetet har ingen gruppkolumn (fliken Dataset, Kolumnroller)."

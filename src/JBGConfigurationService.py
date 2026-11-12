@@ -41,7 +41,9 @@ SERVER_OWNED = {
                        # 298d: only the lists of sampling methods are settings; the
                        # single, older fields keep their stored value (the engine's
                        # fallback when a list is empty).
-                       "oversampler", "undersampler"}),
+                       "oversampler", "undersampler",
+                       # 298g: from the dataset's "group" column role at run time.
+                       "validation_group_column"}),
     "mail": frozenset({"smtp_server"}),
 }
 _PLACEHOLDER_ID = "00000000-0000-4000-8000-000000000000"

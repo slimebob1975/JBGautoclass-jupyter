@@ -69,6 +69,12 @@ Exakt en kolumn ska vara ID-kolumn och exakt en klasskolumn, och minst en
 kolumn ska vara en variabel: numerisk variabel, textvariabel eller
 kategorisk variabel. Kolumner som ignoreras används inte.
 
+Högst en kolumn kan vara **Gruppkolumn**, till exempel en persons
+identitet. Den håller ihop sina rader när data delas upp, så att samma grupp
+inte hamnar både i träning och test, men den används inte som variabel.
+Den behövs när konfigurationen håller grupper isär. Prediktionsdataset måste
+också innehålla gruppkolumnen.
+
 Har datasetet inga sparade kolumnroller fylls formuläret i med förslag: den
 första kolumnen som är ifylld och har olika värden på alla rader blir
 ID-kolumn, tal blir numeriska variabler, text med högst så många olika
@@ -114,10 +120,10 @@ tillsammans i korsvalidering står inom en streckad ram med antalet
 kombinationer. Klicka på ett steg för att öppna dess avsnitt. Bilden visar den
 sparade versionen.
 
-I **Uppdelning** väljs **Gruppkolumn** bland variablerna i det aktiva
-träningsdatasetet, eller **Ingen**. Den används bara när grupper hålls isär
-vid korsvalidering eller vid uppdelningen av testdata. En sparad kolumn som
-inte är en variabel markeras. I **Översampling** och **Undersampling** kryssar
+I **Uppdelning** väljer du om grupper ska hållas isär vid korsvalidering
+eller vid uppdelningen av testdata. Gruppkolumnen anges inte här utan som
+kolumnroll på fliken Dataset; avsnittet visar vilken kolumn som används.
+Grupper isär vid uppdelningen av testdata kräver två klasser. I **Översampling** och **Undersampling** kryssar
 du i de metoder som ska prövas; är inget ikryssat används ingen sampling.
 
 I **Mörkertal** väljs **Målklass** bland klasserna i det aktiva

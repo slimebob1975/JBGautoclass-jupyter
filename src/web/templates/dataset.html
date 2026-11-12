@@ -232,6 +232,7 @@
                     <td class="muted">{% if current == "categorical" %}{{ _("Categorised (always)") }}
                       {% elif current == "text" and c.distinct is not none and c.distinct <= categorical_limit | int %}{{ _("Categorised (at most the limit)") }}
                       {% elif current == "text" %}{{ _("Free text") }}
+                      {% elif current == "group" %}{{ _("Keeps its rows together; not a feature") }}
                       {% elif current == "ignored" %}{{ _("Not used") }}{% else %}–{% endif %}</td></tr>
                 {% endfor %}
                 </tbody>

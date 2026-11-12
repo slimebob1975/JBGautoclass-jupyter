@@ -9,13 +9,19 @@ from their dataset; configurations hold only the machine-learning settings.
 Mapping to the engine's Config: ``categorical`` columns are text columns that
 are categorised, so they appear in ``data_text_columns`` and in
 ``mode.category_text_columns``.
+
+298g: at most one ``group`` column (for example a person's identity) keeps
+its rows together when data is split, without being a predictor. The engine
+needs it among its data columns to read it, so it is passed as a text column
+(numbers stay exact as text), named as the excluded predictor (dropped right
+after the split, before any conversion) and as ``mode.validation_group_column``.
 """
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 
-ROLES = ("id", "class", "numeric", "text", "categorical", "ignored")
+ROLES = ("id", "class", "numeric", "text", "categorical", "group", "ignored")
 FEATURE_ROLES = ("numeric", "text", "categorical")
 MAX_COLUMNS = 2000
 
@@ -80,6 +86,10 @@ class DatasetRoles:
         return (self.by_role("class") or [""])[0]
 
     @property
+    def group_column(self) -> str:
+        return (self.by_role("group") or [""])[0]
+
+    @property
     def features(self) -> list:
         return [name for name, role in self.columns if role in FEATURE_ROLES]
 
@@ -94,6 +104,8 @@ class DatasetRoles:
             raise ValueError("exactly one column must be the class column")
         if not self.features:
             raise ValueError("at least one column must be a feature")
+        if len(self.by_role("group")) > 1:
+            raise ValueError("at most one column can be the group column")
 
     def apply_to(self, config) -> None:
         """Set the engine's role fields of a Config from these roles."""
@@ -101,9 +113,14 @@ class DatasetRoles:
         config.connection.id_column = self.id_column
         config.connection.class_column = self.class_column
         config.connection.data_numerical_columns = self.by_role("numeric")
-        config.connection.data_text_columns = text + categorical
+        group = [self.group_column] if self.group_column else []
+        config.connection.data_text_columns = text + categorical + group
         config.mode.category_text_columns = categorical
         config.mode.categorical_limit = self.categorical_limit
+        # 298g: the group column belongs to the dataset; it replaces whatever a
+        # configuration held (configurations no longer set it).
+        config.mode.validation_group_column = self.group_column
+        config.mode.excluded_predictor_columns = self.group_column
 
 
 def roles_from_configuration(settings: dict, columns=None) -> dict:
@@ -191,8 +208,10 @@ def with_class_column(mapping: dict, column: str, suggested: dict) -> dict:
 def check_compatible(roles: DatasetRoles, training_kinds: dict, candidate_kinds: dict) -> None:
     """A prediction dataset must contain the ID and feature columns of the
     training roles; numeric features must stay numeric. The class column may
-    be missing (it is predicted); other columns are allowed."""
-    required = [roles.id_column] + roles.features
+    be missing (it is predicted); other columns are allowed. 298g: the group
+    column too, as the trained model's runs read it (as in the Voila GUI)."""
+    required = [roles.id_column] + roles.features + (
+        [roles.group_column] if roles.group_column else [])
     missing = [name for name in required if name not in candidate_kinds]
     different = [name for name in roles.by_role("numeric")
                  if name in candidate_kinds and candidate_kinds[name] != "number"

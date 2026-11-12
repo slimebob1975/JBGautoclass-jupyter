@@ -40,7 +40,7 @@ def test_the_groups_follow_the_pipeline():
     ("mode.use_metas", "run_type"), ("mode.use_categorization", "text_processing"),
     ("mode.ngram_range", "text_processing"), ("mode.feature_selection_mode", "feature_selection"),
     ("mode.feature_search_preset", "feature_selection"), ("mode.test_size", "splitting"),
-    ("mode.validation_group_column", "splitting"), ("mode.preprocessor", "scaling"),
+    ("mode.holdout_split_mode", "splitting"), ("mode.preprocessor", "scaling"),
     ("mode.oversamplers", "oversampling"), ("mode.undersamplers", "undersampling"),
     ("mode.feature_selection", "reduction"), ("mode.num_selected_features", "reduction"),
     ("mode.algorithm", "algorithms"), ("mode.scoring", "algorithms"),

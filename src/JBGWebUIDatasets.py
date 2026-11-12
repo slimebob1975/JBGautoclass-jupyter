@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse
 VIEWS = ("preview", "profile", "classes", "roles")
 ROLE_CHOICES = (("id", "ID column"), ("class", "Class column"), ("numeric", "Numeric feature"),
                 ("text", "Text feature"), ("categorical", "Categorical feature"),
-                ("ignored", "Ignored"))
+                ("group", "Group column"), ("ignored", "Ignored"))
 # Fixed texts from JBGDatasetRoles, shown on the roles view when saving fails.
 ROLE_ERRORS = (
     "a column with a role does not exist in the dataset",
@@ -24,6 +24,7 @@ ROLE_ERRORS = (
     "at least one column must be a feature",
     "the categorical limit must be a whole number between 2 and 1000",
     "unknown column role",
+    "at most one column can be the group column",                          # 298g
 )
 
 MESSAGES = {

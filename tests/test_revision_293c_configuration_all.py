@@ -86,8 +86,7 @@ def test_schema_offers_all_on_exactly_the_five_lists_and_no_roles():
                  "connection.data_numerical_columns", "mode.category_text_columns",
                  "mode.excluded_predictor_columns"):
         assert role not in keys
-    assert next(f for f in schema["fields"] if f["key"] == "mode.validation_group_column")[
-        "group"] == "splitting"                                   # 298b
+    assert "mode.validation_group_column" not in keys     # 298g: a column role of the dataset
 
 
 # --- Through the API and the tab -----------------------------------------------------------------

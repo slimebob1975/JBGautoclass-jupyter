@@ -118,9 +118,13 @@ def _ngram_range(config) -> tuple[int, int]:
 
 
 def _converter_config(config) -> dict:
+    # 298g: as fitted (JBGHandler.convert_text_and_categorical_features), without
+    # the excluded predictors, which are dropped before the converter is fitted.
+    excluded = set(_excluded_predictors(config))
     return {
-        "text_columns": tuple(config.get_text_column_names()),
-        "category_columns": tuple(config.get_categorical_text_column_names()),
+        "text_columns": tuple(c for c in config.get_text_column_names() if c not in excluded),
+        "category_columns": tuple(c for c in config.get_categorical_text_column_names()
+                                  if c not in excluded),
         # 293a2: the configured limit; the fitted converter records its own.
         "limit_categorize": config.get_categorical_limit(),
         "language": "sv",
@@ -265,9 +269,11 @@ def _csv_column_families(config, converter, csv_configuration) -> dict:
     if (set(csv_configuration.data_columns) & set(csv_configuration.text_columns)
             or not csv_configuration.data_columns and not csv_configuration.text_columns):
         raise ModelCompatibilityError("CSV feature roles are invalid.")
-    predicted = tuple(_expected_predictor_columns(config))
+    # 298g: the registration names every column read, excluded predictors (a
+    # group column) included; they are dropped after the split.
+    read = tuple(config.get_data_column_names())
     selected = set(csv_configuration.data_columns) | set(csv_configuration.text_columns)
-    if set(predicted) != selected:
+    if set(read) != selected:
         raise ModelCompatibilityError("CSV feature roles differ from the model configuration.")
     result = {csv_configuration.id_column: "text", csv_configuration.class_column: "text"}
     result.update({name: "numeric" for name in csv_configuration.data_columns})

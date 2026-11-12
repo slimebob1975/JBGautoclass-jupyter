@@ -1,3 +1,45 @@
+## Revision 298g - The group column role (2026-11-11)
+
+- Chosen 2026-11-11 (noted with 298d): in a web run only the ID, class and
+  feature columns reached the engine, so a group column had to be a feature
+  and was then also a predictor. The Voilà GUI kept it out of the
+  predictors ("exclude predictors").
+- Column roles (decision A): a new role "group" ("Gruppkolumn"), at most
+  one per dataset, not a feature. Runs pass it to the engine as a text
+  column (numbers stay exact as text), as `mode.excluded_predictor_columns`
+  (dropped right after the split, before any conversion) and as
+  `mode.validation_group_column` (`DatasetRoles.apply_to`). Prediction
+  datasets must contain it, as the trained model's runs read it (as in
+  Voilà); the upload and table checks say so.
+- Configurations no longer hold the group column: `validation_group_column`
+  is server-owned and comes from the roles at run time, so a stale value
+  (such as "iafId") no longer matters. The 298d choice among the features is
+  replaced: Uppdelning names the dataset's group column, or says how to set
+  one.
+- Before a run: a configuration that keeps groups apart (grouped
+  cross-validation or group-disjoint holdout) on a dataset without a group
+  column is refused (blocking check with "Åtgärda" to the column roles; 409
+  on `POST .../runs`). The pipeline picture names the group column.
+- Engine (only when a predictor is excluded; unchanged otherwise): the text
+  converter and its compatibility metadata leave excluded predictors out
+  (an excluded text column made training fail); the CSV registration is
+  compared with every column read; prediction-only runs drop excluded
+  predictors before the converter (the model's schema check refused them).
+  These also correct the Voilà GUI's exclusion of text predictors.
+- Tests: `tests/test_revision_298g_group_role.py`, including a native run:
+  a CSV training with groups kept apart in cross-validation and holdout
+  ("0 groups appear in both training and holdout"), then a prediction with
+  the saved model; a prediction file without the group column is refused.
+  The 293c and 298b tests no longer expect the configuration field; the
+  298d group-column tests were replaced.
+- Container testing: the `terminal` package is now installed instead of
+  stubbed, so the native tests run in the container as well.
+- Fix on top (2026-11-12, gate on Windows): the native test's persons each
+  had rows of one class only, so a grouped fold could lack a class and the
+  engine stopped the run ("A group CV fold lacks a target class"); persons
+  are now assigned round-robin so every person has both classes. The test
+  waits for its workers even when it fails (WinError 32 at cleanup).
+
 ## Revision 298f - Switching a dataset between training and mixed (2026-11-11)
 
 - Noted 2026-11-11: a CSV dataset uploaded as mixed by mistake could not be

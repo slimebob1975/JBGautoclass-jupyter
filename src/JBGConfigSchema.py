@@ -167,9 +167,8 @@ _f("mode.test_size", "splitting", "number", "Holdout share", "Share of rows kept
 _f("mode.holdout_split_mode", "splitting", "choice", "Holdout split",
    options=_inline("mode.holdout_split_mode"))
 _f("mode.grouped_cross_validation", "splitting", "boolean", "Keep groups apart in cross-validation")
-# The group column is a splitting setting (293c).
-_f("mode.validation_group_column", "splitting", "text", "Group column",
-   "Rows of one group stay together when data is split.")
+# 298g: the group column is a column role of the dataset (decision A); runs
+# set mode.validation_group_column from it.
 _f("mode.decision_policy", "decision", "choice", "Decision policy",
    options=_inline("mode.decision_policy"))
 _f("mode.probability_threshold", "decision", "number", "Probability threshold",

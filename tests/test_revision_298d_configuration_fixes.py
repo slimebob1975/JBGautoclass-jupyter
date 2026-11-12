@@ -76,10 +76,6 @@ def _page(client, configuration):
     return client.get(f"/ui/configuration?configuration={configuration['configuration_id']}").text
 
 
-def _group_select(page):
-    return re.search(r'<select id="f-mode-validation_group_column"[^>]*>(.*?)</select>', page, re.S).group(1)
-
-
 def test_pages_load_versioned_static_files(tmp_path):
     from JBGWebUI import static_version
     with _client(tmp_path) as client:
@@ -89,35 +85,14 @@ def test_pages_load_versioned_static_files(tmp_path):
 
 
 def test_new_configurations_have_no_group_column(tmp_path):
+    # 298g: server-owned since the group column became a dataset column role
+    # (the 298d choice among the features was replaced).
     with _client(tmp_path) as client:
-        _, configuration = _project(client)
-    assert configuration["settings"]["mode"]["validation_group_column"] == ""
-
-
-def test_the_group_column_is_chosen_among_the_features(tmp_path):
-    with _client(tmp_path) as client:
-        _, configuration = _project(client, mode={"validation_group_column": "grp"})
-        page = _page(client, configuration)
-    select = _group_select(page)
-    assert re.findall(r'<option value="([^"]*)"', select) == ["", "x", "grp"]
-    assert '<option value="grp" selected>grp</option>' in select
-    assert "inte en variabel" not in page
-
-
-def test_a_stored_column_that_is_not_a_feature_is_flagged(tmp_path):
-    with _client(tmp_path) as client:
-        _, configuration = _project(client, mode={"validation_group_column": "iafId"})
-        page = _page(client, configuration)
-    assert '<option value="iafId" selected>iafId (inte en variabel)</option>' in _group_select(page)
-    assert "Kolumnen är inte en variabel i det aktiva träningsdatasetet" in page
-
-
-def test_without_roles_the_stored_column_is_kept_unflagged(tmp_path):
-    with _client(tmp_path) as client:
-        _, configuration = _project(client, roles=False, mode={"validation_group_column": "iafId"})
-        page = _page(client, configuration)
-    assert re.findall(r'<option value="([^"]*)"', _group_select(page)) == ["", "iafId"]
-    assert "inte en variabel" not in page
+        project, configuration = _project(client)
+        stored = client.app.state.jbg["configuration_service"].stored_settings(
+            *_owner_and_ids(project, configuration))
+    assert "validation_group_column" not in configuration["settings"]["mode"]
+    assert stored["mode"]["validation_group_column"] == ""
 
 
 def test_only_the_sampling_lists_are_shown_with_the_fallback_ticked(tmp_path):

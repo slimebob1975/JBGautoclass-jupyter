@@ -36,6 +36,10 @@ PREFLIGHT = (
     ("trains", "The configuration trains a model.", "The configuration does not train a model.", True),
     ("train_only", "The configuration only trains (CSV).",
      "CSV runs cannot also predict: untick “Predict unlabelled rows” (Configuration tab).", True),
+    # 298g: only shown when the configuration keeps groups apart.
+    ("groups", "The dataset has a group column for keeping groups apart.",
+     "The configuration keeps groups apart, but the dataset has no group column (Dataset tab, Column roles).",
+     True),
     ("signed_in", "Signed in to SQL Server.", "Not signed in to SQL Server (Dataset tab).", True),
     ("validated", "The dataset is validated.", "The dataset has not been validated yet.", False),
 )
@@ -45,6 +49,7 @@ FIX_LINKS = {
     "dataset": "/ui/dataset", "roles": "/ui/dataset", "configuration": "/ui/configuration",
     "trains": "/ui/configuration#section-run_type",
     "train_only": "/ui/configuration#section-run_type", "signed_in": "/ui/dataset",
+    "groups": "/ui/dataset",
     "validated": "/ui/dataset",
 }
 MESSAGES = {
@@ -61,7 +66,7 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
                 project_runs, datasets, configurations, sessions, inspection,
                 models=None, results=None, logs=None) -> None:
     from JBGApplicationContracts import RunReference
-    from JBGProjectRuns import RunDoesNotMatchDataset, RunRequestRefused
+    from JBGProjectRuns import RunDoesNotMatchDataset, RunRequestRefused, keeps_groups_apart
 
     def preflight(request, principal, project):
         """Fixed check list; the start button needs every blocking check."""
@@ -91,6 +96,8 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
             "trains": bool(configuration and configuration["settings"]["mode"].get("train")),
             "train_only": None if project["source"] != "csv" else bool(
                 configuration and not configuration["settings"]["mode"].get("predict")),
+            "groups": None if not (configuration and keeps_groups_apart(
+                configuration["settings"])) else bool(roles and roles.group_column),
             "signed_in": None if project["source"] != "sql" else sessions.is_signed_in(principal),
             "validated": bool(active and active["validation_state"] == "valid"),
         }
@@ -98,6 +105,7 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
         if active is not None:
             links["roles"] = links["validated"] = f"/ui/dataset?dataset={active['dataset_id']}"
             links["roles"] += "&view=roles"
+            links["groups"] = links["roles"]
         if configuration is not None:
             links["trains"] = links["train_only"] = (
                 f"/ui/configuration?configuration={configuration['configuration_id']}#section-run_type")

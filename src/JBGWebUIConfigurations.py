@@ -225,9 +225,8 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
                     {"project_id": pid, "dataset_id": active["dataset_id"],
                      "column": roles.class_column, "dataset": active["name"]}
                     if roles is not None and roles.class_column else None)
-                # 298d: a group column must reach the engine, so it is chosen
-                # among the active training dataset's features.
-                context["group_columns"] = roles.features if roles is not None else None
+                # 298g: the group column is the dataset's "group" column role.
+                context["group_column"] = roles.group_column if roles is not None else None
                 # 298e: the pipeline picture in the left panel.
                 from JBGWebUIPipeline import CROSS_VALIDATED, pipeline_steps
                 steps = pipeline_steps(context["schema"], context["values"],
@@ -247,8 +246,8 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
         298c: the class column names the target classes; the classes
         themselves are read by the browser (the existing class-distribution
         endpoint) when the Dark Numbers section is opened, so a large SQL
-        table does not slow down every page. 298d: the features are the
-        possible group columns."""
+        table does not slow down every page. 298g: the roles name the group
+        column."""
         try:
             active = next((d for d in datasets.list(principal.principal_key, pid)
                            if d.get("active_training")), None)

@@ -69,6 +69,12 @@ it. Exactly one column must be the ID column and exactly one the class
 column, and at least one column must be a feature: a numeric feature, a text
 feature or a categorical feature. Ignored columns are not used.
 
+At most one column can be the **Group column**, for example a person's
+identity. It keeps its rows together when data is split, so that one group
+is not in both training and test, but it is not used as a feature. It is
+needed when the configuration keeps groups apart. Prediction datasets must
+also contain the group column.
+
 If the dataset has no saved column roles, the form is filled in with
 suggestions: the first filled-in column with a different value on every row
 becomes the ID column, numbers become numeric features, text with at most as
@@ -113,10 +119,10 @@ compares several alternatives and a dashed one is not used. The steps tried
 together in cross-validation are framed, with the number of combinations.
 Click a step to open its section. The picture shows the saved version.
 
-In **Data split**, the **Group column** is chosen among the features of the
-active training dataset, or **None**. It is used only when groups are kept
-apart in cross-validation or in the holdout split. A saved column that is
-not a feature is marked. In **Oversampling** and **Undersampling**, tick the
+In **Data split**, choose whether groups are kept apart in cross-validation
+or in the holdout split. The group column is not set here but as a column
+role on the Dataset tab; the section shows which column is used. Keeping
+groups apart in the holdout split needs two classes. In **Oversampling** and **Undersampling**, tick the
 methods to try; with nothing ticked, no sampling is used.
 
 In **Dark Numbers**, the **Target class** is chosen among the classes of the

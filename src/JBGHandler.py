@@ -490,10 +490,17 @@ class DatasetHandler:
         
         # The model has no text converter means we need to train a new one
         if self.handler.config.should_train():
+            # 298g: excluded predictors were dropped at the split, before this
+            # conversion, so the converter must not expect them (an excluded
+            # text column made the fit fail). Unchanged when nothing is excluded.
+            excluded = set(parse_excluded_columns(
+                getattr(self.handler.config.mode, "excluded_predictor_columns", "")))
             try:
                 ttnc = TextDataToNumbersConverter(
-                    text_columns=self.handler.config.get_text_column_names(), 
-                    category_columns=self.handler.config.get_categorical_text_column_names(), \
+                    text_columns=[c for c in self.handler.config.get_text_column_names()
+                                  if c not in excluded],
+                    category_columns=[c for c in self.handler.config.get_categorical_text_column_names()
+                                      if c not in excluded], \
                     limit_categorize=self.handler.config.get_categorical_limit(), \
                     language=TextDataToNumbersConverter.STANDARD_LANGUAGE, \
                     stop_words=self.handler.config.use_stop_words(), \
@@ -522,6 +529,13 @@ class DatasetHandler:
             if self.X_prediction is None:
                 self.handler.logger.print_warning("X_prediction is not set and cannot be text-converted")
             else:
+                # 298g: a prediction-only run has no split, where excluded
+                # predictors are otherwise dropped; drop them here too.
+                excluded = parse_excluded_columns(
+                    getattr(self.handler.config.mode, "excluded_predictor_columns", ""))
+                if excluded:
+                    self.X_prediction = self.X_prediction.drop(columns=list(excluded),
+                                                               errors="ignore")
                 self.X_prediction = ttnc.transform(self.X_prediction)
             
 

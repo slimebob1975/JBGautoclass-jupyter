@@ -85,6 +85,8 @@ def pipeline_steps(schema: dict, values: dict, *, translate, language: str = "sv
     split = f"{translate('Test share')} {_percent(mode.get('test_size'))}"
     if mode.get("grouped_cross_validation") or mode.get("holdout_split_mode") == "person_disjoint":
         split += f", {translate('groups kept apart')}"
+        if roles is not None and roles.group_column:
+            split += f" ({roles.group_column})"                   # 298g
     steps.append(step("splitting", USED, split))
 
     for key in ("scaling", "oversampling", "undersampling", "reduction"):

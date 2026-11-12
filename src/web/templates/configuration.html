@@ -25,18 +25,6 @@
         <label class="check"><input type="checkbox" name="f:{{ f.key }}" value="{{ column }}" {{ 'checked' if value and column in value }}> {{ column }}</label>
       {% endfor %}
     </fieldset>
-  {% elif f.key == "mode.validation_group_column" %}
-    {# 298d: a feature of the active training dataset, or none. #}
-    {% set known = group_columns or [] %}
-    {% set stale = value and group_columns is not none and value not in known %}
-    <label for="{{ id }}">{{ f.label }}</label>
-    <select id="{{ id }}" name="f:{{ f.key }}">
-      <option value="">{{ _("None") }}</option>
-      {% for column in known %}<option value="{{ column }}" {{ 'selected' if column == value }}>{{ column }}</option>{% endfor %}
-      {% if value and value not in known %}<option value="{{ value }}" selected>{{ value }}{% if stale %} ({{ _("not a feature") }}){% endif %}</option>{% endif %}
-    </select>
-    <p class="hint">{{ _("Used only when groups are kept apart in cross-validation or in the holdout split. The choices are the features of the active training dataset.") }}</p>
-    {% if stale %}<p class="message warn">{{ _("This column is not a feature of the active training dataset, so a run that keeps groups apart would stop. Choose a feature or None.") }}</p>{% endif %}
   {% elif f.key == "mode.dark_number_target" %}
     {# 298c: the classes of the active training dataset, read by jbg.js when
        the section opens; without it, "All classes" and the saved class. #}
@@ -201,6 +189,14 @@
             <p class="hint">{{ _("Settings for newly ticked algorithms appear after saving.") }}</p>
             <p class="hint combinations{{ ' warn' if combinations > 1000 }}">{{ _("Combinations to spot-check") }}: <b>{{ combinations }}</b>
               {% if combinations > 1000 %}– {{ _("only sensible for very small datasets") }}{% endif %}</p>
+          {% endif %}
+          {% if group.key == "splitting" %}
+            {# 298g: the group column is a column role of the dataset. #}
+            {% if group_column %}
+              <p class="hint group-column">{{ _("Group column") }}: <b>{{ group_column }}</b> ({{ _("a column role of the active training dataset") }}).</p>
+            {% else %}
+              <p class="hint group-column">{{ _("To keep groups apart, give a column the role Group column on the Dataset tab (Column roles).") }}</p>
+            {% endif %}
           {% endif %}
           {% if group.key == "dark_numbers" and dark_cards %}
             {# 298c: the formula of the chosen method and alpha, as in the Voila GUI;
