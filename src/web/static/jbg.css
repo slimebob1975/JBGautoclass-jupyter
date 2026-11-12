@@ -247,3 +247,6 @@ form.copy-roles { margin-bottom: 10px; }
 /* 298f: role change on the Dataset tab; links from the checks before a run. */
 .change-role { margin-top: 10px; }
 .fix-link { margin-left: 6px; font-size: 12.5px; white-space: nowrap; }
+
+/* 298i: a role that cannot work, shown before saving. */
+.role-warning { color: var(--error); font-weight: 600; }

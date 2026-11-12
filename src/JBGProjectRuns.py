@@ -44,8 +44,15 @@ def keeps_groups_apart(settings: dict) -> bool:
                 or mode.get("holdout_split_mode") == "person_disjoint")
 
 
+from JBGDatasetRoles import INTEGER_SQL_TYPES  # noqa: E402  (298i)
+
+
 class RunRequestRefused(ValueError):
     """The project cannot start this run (fixed message, 409)."""
+
+
+class IdColumnNotInteger(RunRequestRefused):
+    """298i: an SQL run's ID column is not a whole-number column."""
 
 
 class RunDoesNotMatchDataset(ValueError):
@@ -203,9 +210,8 @@ class ProjectRunService:
                     "dataset_id": dataset.dataset_id,
                     "configuration_name": trained.get("configuration_name"),
                     "configuration_version": trained.get("configuration_version")}
-        from JBGRunComposition import compose_sql_run
         from JBGRunSubmission import _SQL_SCOPE
-        composed = compose_sql_run(self._sessions, principal, config, _QuietLogger())
+        composed = self._compose_checked_sql(principal, config)
         prepared = composed.preparation.prepare(
             DatasetReference(DataSourceKind.SQL, composed.sql_dataset_key()),
             RunConfiguration(DataSourceKind.SQL, composed.configuration))
@@ -320,9 +326,28 @@ class ProjectRunService:
         return service.submit(principal, prepared, configuration_id=registered.configuration_id,
                               run_metadata=metadata)
 
+    def _compose_checked_sql(self, principal, config):
+        """Open the run's DataLayer with the user's own login and check, with one
+        metadata query, that the ID column is a whole-number column (298i);
+        then compose the run on that same layer."""
+        from JBGRunComposition import compose_sql_run_on_layer
+        logger = _QuietLogger()
+        # PermissionError("SQL sign-in required") without a sign-in.
+        layer = self._sessions.data_layer_for(principal, config, logger)
+        try:
+            types = layer.get_table_columns(config.connection.data_catalog,
+                                            config.connection.data_table)
+        except Exception:
+            types = None                    # the run's own checks report an unreachable table
+        if isinstance(types, dict):
+            kind = types.get(config.connection.id_column)
+            if kind is not None and str(kind).lower() not in INTEGER_SQL_TYPES:
+                raise IdColumnNotInteger(
+                    "the ID column is not a whole-number column (int, bigint, smallint, tinyint)")
+        return compose_sql_run_on_layer(layer, logger)
+
     def _submit_sql(self, principal, settings, dataset, model_folder, model_id, metadata,
                     roles):
-        from JBGRunComposition import compose_sql_run
         from JBGRunSubmission import _SQL_SCOPE, validate_saved_sql_run_config
         config = _load_config(settings)
         roles.apply_to(config)
@@ -340,7 +365,7 @@ class ProjectRunService:
         config.io.model_name = model_id
         # Opens the run's DataLayer with the user's own login for this server;
         # PermissionError("SQL sign-in required") without one.
-        composed = compose_sql_run(self._sessions, principal, config, _QuietLogger())
+        composed = self._compose_checked_sql(principal, config)
         prepared = composed.preparation.prepare(
             DatasetReference(DataSourceKind.SQL, composed.sql_dataset_key()),
             RunConfiguration(DataSourceKind.SQL, composed.configuration))

@@ -345,6 +345,11 @@ full SQL regression acceptance remain separately unverified.
     Dates stay ignored by default.
   - [ ] Later, if wanted: durations between two date columns; choosing the
     date parts per column; dates in other formats than ISO.
+  - [x] 298i (noted 2026-11-12): an SQL ID column must be a whole-number
+    column; guarded in suggestions, Column roles, validation and run start.
+  - [ ] Later (agreed 2026-11-12, rarely needed): general ID handling in the
+    engine's SQL path, so that uniqueidentifier and text IDs work as CSV IDs
+    already do (row ordering, holdout split, writing predictions back).
   - [ ] Noted with 298g: the engine's group-disjoint holdout supports only
     two classes ("Person-disjoint validation currently requires binary
     classification"); grouped cross-validation has no such limit.

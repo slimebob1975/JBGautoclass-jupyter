@@ -32,7 +32,9 @@ CHECKS = (
     ("source_readable", "The data could be read.", "The data could not be read."),
     ("has_rows", "The dataset contains rows.", "The dataset contains no rows."),
     ("id_column", "The ID column exists and is unique.",
-     "The ID column is missing, has empty values or repeats values."),
+     # 298i: in SQL also a whole-number type (the same check list for CSV and SQL).
+     "The ID column is missing, has empty values or repeats values, or is not a whole-number "
+     "column in an SQL table."),
     ("class_column", "The class column exists and has between 2 and 30 classes.",
      "The class column is missing, is the ID column or does not have between 2 and 30 classes."),
     ("feature_columns", "The feature columns exist and do not overlap with ID or class.",
@@ -194,6 +196,10 @@ class _SQLFacts:
 
     def date_ok(self, column):
         return str(self._types.get(column, "")).lower() in DATE_SQL_TYPES
+
+    def id_type_ok(self, column):
+        from JBGDatasetRoles import INTEGER_SQL_TYPES
+        return str(self._types.get(column, "")).lower() in INTEGER_SQL_TYPES
 
     def column_types(self):
         return [{"name": c, "type": str(t)} for c, t in self._types.items()]
@@ -440,6 +446,7 @@ class DatasetInspectionService:
         owner = principal.principal_key
         project, dataset = self._dataset(owner, project_id, dataset_id)
         roles, compatibility = None, None
+        is_sql = str(getattr(dataset.source, "value", dataset.source)) == "sql"     # 298i
         if dataset.role is DatasetRole.PREDICTION:
             training, training_roles = self._active_training(owner, project_id, dataset_id)
             if training is not None:
@@ -477,7 +484,8 @@ class DatasetInspectionService:
             if roles is None or not outcome["has_rows"]:
                 return
             columns = set(facts.columns)
-            outcome["id_column"] = roles["id"] in columns and facts.id_unique(roles["id"])
+            outcome["id_column"] = (roles["id"] in columns and facts.id_unique(roles["id"])
+                                    and (not is_sql or facts.id_type_ok(roles["id"])))
             known_class = roles["class"] in columns and roles["class"] != roles["id"]
             outcome["class_column"] = known_class and (
                 dataset.role is DatasetRole.PREDICTION or facts.class_ok(roles["class"]))

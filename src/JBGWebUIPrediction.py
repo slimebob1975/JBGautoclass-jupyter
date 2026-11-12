@@ -22,6 +22,9 @@ PREFLIGHT = (
 MESSAGES = {
     "prediction_started": ("ok", "The prediction has started."),
     "prediction_refused": ("error", "The prediction could not be started."),
+    "id_not_integer": ("error", "The ID column of an SQL dataset must hold whole numbers "
+                       "(int, bigint, smallint or tinyint). Choose another ID column on the "
+                       "Dataset tab (Column roles)."),
     "model_missing": ("error", "The model is not available."),
     "signin_needed": ("error", "Sign in to SQL Server first."),
     "cancel_requested": ("ok", "Cancelling the run."),
@@ -38,7 +41,8 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                        project_runs, datasets, sessions, models, logs=None,
                        results=None) -> None:
     from JBGApplicationContracts import RunReference
-    from JBGProjectRuns import NothingToPredict, RunDoesNotMatchDataset, RunRequestRefused
+    from JBGProjectRuns import (IdColumnNotInteger, NothingToPredict, RunDoesNotMatchDataset,
+                                RunRequestRefused)
     from JBGWebUIRun import STAGES, TERMINAL
 
     def preflight(request, principal, project):
@@ -130,6 +134,8 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
         except RunDoesNotMatchDataset:
             return redirect("/ui/prediction", message="prediction_incompatible",
                             dataset=dataset_id)
+        except IdColumnNotInteger:
+            return redirect("/ui/prediction", message="id_not_integer", dataset=dataset_id)
         except NothingToPredict:
             return redirect("/ui/prediction", message="nothing_to_predict", dataset=dataset_id)
         except (RunRequestRefused, LookupError, ValueError, TypeError, OSError):

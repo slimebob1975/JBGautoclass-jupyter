@@ -229,7 +229,8 @@
                     <td><select name="role:{{ c.name }}" aria-label="{{ _('Role') }} {{ c.name }}">
                       {% for value, label in role_choices %}<option value="{{ value }}" {{ 'selected' if value == current }}>{{ _(label) }}</option>{% endfor %}
                     </select></td>
-                    <td class="muted">{% if current == "categorical" %}{{ _("Categorised (always)") }}
+                    <td class="muted">{% if current == "id" and selected.source == "sql" and (c.type | lower) not in sql_integer_types %}<span class="role-warning">{{ _("An SQL ID column must hold whole numbers (int, bigint, smallint, tinyint).") }}</span>
+                      {% elif current == "categorical" %}{{ _("Categorised (always)") }}
                       {% elif current == "text" and c.distinct is not none and c.distinct <= categorical_limit | int %}{{ _("Categorised (at most the limit)") }}
                       {% elif current == "text" %}{{ _("Free text") }}
                       {% elif current == "group" %}{{ _("Keeps its rows together; not a feature") }}

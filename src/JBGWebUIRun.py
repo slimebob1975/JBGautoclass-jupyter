@@ -59,6 +59,9 @@ MESSAGES = {
     "not_fitting": ("error", "The column roles do not fit the dataset."),
     "signin_needed": ("error", "Sign in to SQL Server first."),
     "unavailable": ("error", "The run is no longer available."),
+    "id_not_integer": ("error", "The ID column of an SQL dataset must hold whole numbers "
+                       "(int, bigint, smallint or tinyint). Choose another ID column on the "
+                       "Dataset tab (Column roles)."),
 }
 
 
@@ -66,7 +69,8 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
                 project_runs, datasets, configurations, sessions, inspection,
                 models=None, results=None, logs=None) -> None:
     from JBGApplicationContracts import RunReference
-    from JBGProjectRuns import RunDoesNotMatchDataset, RunRequestRefused, keeps_groups_apart
+    from JBGProjectRuns import (IdColumnNotInteger, RunDoesNotMatchDataset, RunRequestRefused,
+                                keeps_groups_apart)
 
     def preflight(request, principal, project):
         """Fixed check list; the start button needs every blocking check."""
@@ -167,6 +171,8 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
                                           configuration_id=configuration_id)
         except RunDoesNotMatchDataset:
             return redirect("/ui/run", message="not_fitting")
+        except IdColumnNotInteger:
+            return redirect("/ui/run", message="id_not_integer")
         except PermissionError:
             return redirect("/ui/run", message="signin_needed")
         except (RunRequestRefused, LookupError, ValueError, TypeError, OSError):

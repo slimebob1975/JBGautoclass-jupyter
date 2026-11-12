@@ -142,6 +142,8 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                         context["data"] = profile
                         context["roles"] = roles_draft or (stored.as_mapping() if stored else {})
                         context["roles_stored"] = stored is not None
+                        from JBGDatasetRoles import INTEGER_SQL_TYPES
+                        context["sql_integer_types"] = sorted(INTEGER_SQL_TYPES)       # 298i
                         context["categorical_limit"] = (roles_draft or {}).get(
                             "__limit__", stored.categorical_limit if stored else 30)
                         if stored is None and not roles_draft and profile:
@@ -153,7 +155,7 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
                             chosen = column if column in names else ""
                             suggested = suggest_roles(
                                 profile["columns"], profile["basis"].get("rows_used") or 0,
-                                context["categorical_limit"], chosen)
+                                context["categorical_limit"], chosen, selected["source"])
                             context["roles"] = suggested
                             context["roles_suggested"] = True
                             context["roles_class_chosen"] = chosen

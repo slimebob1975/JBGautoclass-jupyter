@@ -69,6 +69,11 @@ it. Exactly one column must be the ID column and exactly one the class
 column, and at least one column must be a feature: a numeric feature, a text
 feature or a categorical feature. Ignored columns are not used.
 
+In SQL datasets the ID column must be a whole-number column (int, bigint,
+smallint or tinyint), not for example uniqueidentifier or text. Otherwise
+**Treated as** shows a warning, validation fails the ID column and a run does
+not start. In CSV datasets the ID column can hold anything.
+
 A date column can have the role **Date feature**. It then becomes the year
 (a number), month and weekday (points on a circle, so that December lies
 next to January) and a mark for a missing date. Dates are never suggested

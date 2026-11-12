@@ -672,8 +672,8 @@ msgstr "Tabell (schema.tabell)"
 msgid "The ID column exists and is unique."
 msgstr "ID-kolumnen finns och är unik."
 
-msgid "The ID column is missing, has empty values or repeats values."
-msgstr "ID-kolumnen saknas, har tomma värden eller upprepade värden."
+msgid "The ID column is missing, has empty values or repeats values, or is not a whole-number column in an SQL table."
+msgstr "ID-kolumnen saknas, har tomma värden, upprepar värden eller är inte en heltalskolumn i en SQL-tabell."
 
 msgid "The class column exists and has between 2 and 30 classes."
 msgstr "Klasskolumnen finns och har mellan 2 och 30 klasser."
@@ -1641,3 +1641,10 @@ msgstr "Datumvariablerna innehåller datum (ÅÅÅÅ-MM-DD)."
 
 msgid "A date feature column contains values that are not dates (YYYY-MM-DD)."
 msgstr "En datumvariabel innehåller värden som inte är datum (ÅÅÅÅ-MM-DD)."
+
+# 298i: SQL ID columns must hold whole numbers.
+msgid "An SQL ID column must hold whole numbers (int, bigint, smallint, tinyint)."
+msgstr "En ID-kolumn i SQL måste innehålla heltal (int, bigint, smallint, tinyint)."
+
+msgid "The ID column of an SQL dataset must hold whole numbers (int, bigint, smallint or tinyint). Choose another ID column on the Dataset tab (Column roles)."
+msgstr "ID-kolumnen i ett SQL-dataset måste innehålla heltal (int, bigint, smallint eller tinyint). Välj en annan ID-kolumn under fliken Dataset (Kolumnroller)."

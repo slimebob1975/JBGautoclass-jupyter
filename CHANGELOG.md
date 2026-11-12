@@ -1,3 +1,25 @@
+## Revision 298i - SQL ID columns must hold whole numbers (2026-11-12)
+
+- Noted 2026-11-12: an SQL training run with a uniqueidentifier ID column
+  fetched every row (58,963) and then failed ("cannot convert float NaN to
+  integer"). The engine's SQL path orders, splits and writes back rows by
+  whole-number IDs; the 298a suggestion had picked the first unique column
+  whatever its type, and no check caught it. Agreed: guard now; general ID
+  handling is in the BACKLOG (tables rarely lack an integer key).
+- Guarded in layers (`INTEGER_SQL_TYPES`: bigint, int, smallint, tinyint):
+  - Suggestions: in SQL datasets only whole-number columns can be the
+    suggested ID (`suggest_roles(..., source=)`); CSV IDs stay opaque text.
+  - Column roles: a non-whole-number SQL ID shows a warning under "Behandlas
+    som" before saving.
+  - Validation: the ID check also requires a whole-number type in SQL; its
+    failure text says so (the check list stays the same for CSV and SQL).
+  - Runs: SQL training and prediction runs check the ID column's type with
+    one metadata query on the run's own connection and are refused before a
+    worker starts (`IdColumnNotInteger`, a `RunRequestRefused`: 409 on the
+    API); the Training and Prediction tabs say why and where to change it.
+- User guides and design document describe the rule.
+- Tests: `tests/test_revision_298i_sql_id_type.py`.
+
 ## Revision 298h - Date features (2026-11-12)
 
 - Agreed 2026-11-12: dates stay ignored in suggestions, but can be used

@@ -23,6 +23,11 @@ from dataclasses import dataclass
 
 ROLES = ("id", "class", "numeric", "text", "categorical", "date", "group", "ignored")
 FEATURE_ROLES = ("numeric", "text", "categorical", "date")
+# 298i: the engine's SQL path orders, splits and writes back rows by whole-number
+# IDs (Helpers.get_rid_of_decimals), so an SQL ID column must have one of these
+# types (a uniqueidentifier ID made a run fail after fetching every row). CSV IDs
+# are opaque text and need no such type.
+INTEGER_SQL_TYPES = frozenset({"bigint", "int", "smallint", "tinyint"})
 MAX_COLUMNS = 2000
 
 
@@ -159,7 +164,7 @@ def _column_kind(type_name) -> str:
 
 
 def suggest_roles(columns, rows: int, categorical_limit: int = DEFAULT_CATEGORICAL_LIMIT,
-                  class_column: str = "") -> dict:
+                  class_column: str = "", source: str = "csv") -> dict:
     """298a: preliminary roles for a dataset without roles, from its profile
     (``columns``: name, type, missing and distinct per column; ``rows``: the
     rows the profile counted). A suggestion to review and save; nothing here
@@ -172,6 +177,8 @@ def suggest_roles(columns, rows: int, categorical_limit: int = DEFAULT_CATEGORIC
     numbers are numeric features; text with at most ``categorical_limit``
     distinct values is categorical, other text is free text. Other SQL types
     (dates, binary data, ...) are ignored unless they are the ID column.
+    298i: in SQL datasets (``source="sql"``) only whole-number columns can be
+    the suggested ID.
     """
     mapping, id_given = {}, False
     names = [c["name"] for c in columns]
@@ -182,7 +189,8 @@ def suggest_roles(columns, rows: int, categorical_limit: int = DEFAULT_CATEGORIC
         elif column.get("date"):
             mapping[name] = "ignored"        # 298h: dates are an informed choice
         elif (not id_given and rows >= 2 and distinct == rows
-                and not column.get("missing")):
+                and not column.get("missing")
+                and (source != "sql" or str(column.get("type", "")).lower() in INTEGER_SQL_TYPES)):
             mapping[name], id_given = "id", True
         elif distinct is None or distinct <= 1:
             mapping[name] = "ignored"

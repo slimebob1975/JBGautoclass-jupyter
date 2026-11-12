@@ -69,6 +69,11 @@ Exakt en kolumn ska vara ID-kolumn och exakt en klasskolumn, och minst en
 kolumn ska vara en variabel: numerisk variabel, textvariabel eller
 kategorisk variabel. Kolumner som ignoreras används inte.
 
+I SQL-dataset måste ID-kolumnen vara en heltalskolumn (int, bigint, smallint
+eller tinyint), till exempel inte uniqueidentifier eller text. Annars visas en
+varning under **Behandlas som**, valideringen underkänner ID-kolumnen och en
+körning startar inte. I CSV-dataset kan ID-kolumnen innehålla vad som helst.
+
 En datumkolumn kan få rollen **Datumvariabel**. Den blir då år (som tal),
 månad och veckodag (som punkter på en cirkel, så att december ligger nära
 januari) samt en markering för saknat datum. Datum föreslås aldrig
