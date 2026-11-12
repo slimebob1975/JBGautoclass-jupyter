@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import datetime
 import decimal
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -40,6 +41,9 @@ CHECKS = (
      "A numeric feature column contains values that are not numbers."),
 )
 ROLE_CHECKS = ("id_column", "class_column", "feature_columns", "feature_types")
+# 298h: listed only when the dataset has date features.
+DATE_CHECK = ("date_types", "Date feature columns contain dates (YYYY-MM-DD).",
+              "A date feature column contains values that are not dates (YYYY-MM-DD).")
 # 293a: prediction datasets are checked against the active training dataset.
 COMPATIBILITY_CHECK = ("compatible_structure",
                        "The columns are compatible with the training dataset.",
@@ -55,6 +59,16 @@ SAMPLE_TARGET = 100_000
 QUERY_SECONDS = 60
 MAX_CLASSES = 100
 _TEXT_SQL_TYPES = frozenset({"char", "nchar", "varchar", "nvarchar", "text", "ntext"})
+# 298h: date columns. SQL: these types (datetimeoffset and time are not
+# dates the converter reads); CSV: every value an ISO date, as the converter
+# (JBGTransformers._parse_dates) reads them.
+DATE_SQL_TYPES = frozenset({"date", "datetime", "datetime2", "smalldatetime"})
+ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?$")
+
+
+def _all_dates(values) -> bool:
+    present = [v for v in values if v]
+    return bool(present) and all(ISO_DATE.match(v) for v in present)
 _NO_DISTINCT_SQL_TYPES = frozenset({"image", "binary", "varbinary", "xml", "geography",
                                     "geometry", "hierarchyid", "sql_variant", "timestamp",
                                     "rowversion"})
@@ -110,6 +124,10 @@ class _CSVFacts:
     def numeric_ok(self, column):
         return column not in self._schema.text_feature_candidates
 
+    def date_ok(self, column):
+        index = self.columns.index(column)
+        return _all_dates([row[index].strip() if index < len(row) else "" for row in self._all_rows()])
+
     def column_types(self):
         return [{"name": c, "type": "text" if c in self._schema.text_feature_candidates
                  else "number"} for c in self.columns]
@@ -138,10 +156,11 @@ class _CSVFacts:
         for index, column in enumerate(self.columns):
             values = [row[index].strip() if index < len(row) else "" for row in rows]
             present = [v for v in values if v]
-            result.append({"name": column, "type": "text" if column in
-                           self._schema.text_feature_candidates else "number",
+            text = column in self._schema.text_feature_candidates
+            result.append({"name": column, "type": "text" if text else "number",
                            "missing": len(values) - len(present),
-                           "distinct": len(set(present))})
+                           "distinct": len(set(present)),
+                           "date": text and _all_dates(present)})                # 298h
         return result
 
     def classes(self, column):
@@ -172,6 +191,9 @@ class _SQLFacts:
 
     def numeric_ok(self, column):
         return str(self._types.get(column, "")).lower() in NUMERIC_SQL_TYPES
+
+    def date_ok(self, column):
+        return str(self._types.get(column, "")).lower() in DATE_SQL_TYPES
 
     def column_types(self):
         return [{"name": c, "type": str(t)} for c, t in self._types.items()]
@@ -235,7 +257,8 @@ class _SQLFacts:
         self.rows_used = int(row[0])
         return [{"name": column, "type": str(self._types[column]),
                  "missing": int(row[1 + 2 * i] or 0),
-                 "distinct": None if row[2 + 2 * i] is None else int(row[2 + 2 * i])}
+                 "distinct": None if row[2 + 2 * i] is None else int(row[2 + 2 * i]),
+                 "date": str(self._types[column]).lower() in DATE_SQL_TYPES}        # 298h
                 for i, column in enumerate(self.columns)]
 
     def classes(self, column):
@@ -431,9 +454,10 @@ class DatasetInspectionService:
             if stored is not None:
                 text = stored.by_role("text") + stored.by_role("categorical")
                 roles = {"id": stored.id_column, "class": stored.class_column,
-                         "numeric": stored.by_role("numeric"), "text": text}
+                         "numeric": stored.by_role("numeric"), "text": text,
+                         "date": stored.by_role("date")}
 
-        outcome = {code: None for code, _, _ in CHECKS + (COMPATIBILITY_CHECK,)}
+        outcome = {code: None for code, _, _ in CHECKS + (COMPATIBILITY_CHECK, DATE_CHECK)}
 
         def run_checks(facts):
             outcome["source_reachable"] = True              # the source answered
@@ -457,11 +481,13 @@ class DatasetInspectionService:
             known_class = roles["class"] in columns and roles["class"] != roles["id"]
             outcome["class_column"] = known_class and (
                 dataset.role is DatasetRole.PREDICTION or facts.class_ok(roles["class"]))
-            features = roles["numeric"] + roles["text"]
+            features = roles["numeric"] + roles["text"] + roles["date"]
             outcome["feature_columns"] = bool(features) and len(set(features)) == len(features) \
                 and all(c in columns and c not in (roles["id"], roles["class"]) for c in features)
             if outcome["feature_columns"]:
                 outcome["feature_types"] = all(facts.numeric_ok(c) for c in roles["numeric"])
+                if roles["date"]:
+                    outcome["date_types"] = all(facts.date_ok(c) for c in roles["date"])
 
         state = {"reached": False}
         try:
@@ -483,7 +509,8 @@ class DatasetInspectionService:
 
         checks, valid = [], True
         shown = CHECKS[:3] + ((COMPATIBILITY_CHECK,) if compatibility is not None else ()) \
-            + (CHECKS[3:] if roles is not None else ())
+            + (CHECKS[3:] if roles is not None else ()) \
+            + ((DATE_CHECK,) if roles is not None and roles["date"] else ())
         for code, passed_text, failed_text in shown:
             result = outcome[code]
             if result is None:

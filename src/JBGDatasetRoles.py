@@ -21,8 +21,8 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
-ROLES = ("id", "class", "numeric", "text", "categorical", "group", "ignored")
-FEATURE_ROLES = ("numeric", "text", "categorical")
+ROLES = ("id", "class", "numeric", "text", "categorical", "date", "group", "ignored")
+FEATURE_ROLES = ("numeric", "text", "categorical", "date")
 MAX_COLUMNS = 2000
 
 
@@ -114,7 +114,10 @@ class DatasetRoles:
         config.connection.class_column = self.class_column
         config.connection.data_numerical_columns = self.by_role("numeric")
         group = [self.group_column] if self.group_column else []
-        config.connection.data_text_columns = text + categorical + group
+        # 298h: date features are read as text and converted as dates.
+        dates = self.by_role("date")
+        config.connection.data_text_columns = text + categorical + dates + group
+        config.mode.date_columns = ",".join(dates)
         config.mode.category_text_columns = categorical
         config.mode.categorical_limit = self.categorical_limit
         # 298g: the group column belongs to the dataset; it replaces whatever a
@@ -176,6 +179,8 @@ def suggest_roles(columns, rows: int, categorical_limit: int = DEFAULT_CATEGORIC
         name, distinct = column["name"], column.get("distinct")
         if name == class_column:
             mapping[name] = "class"
+        elif column.get("date"):
+            mapping[name] = "ignored"        # 298h: dates are an informed choice
         elif (not id_given and rows >= 2 and distinct == rows
                 and not column.get("missing")):
             mapping[name], id_given = "id", True

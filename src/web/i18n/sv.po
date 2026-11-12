@@ -1625,3 +1625,19 @@ msgstr "Datasetet har en gruppkolumn för att hålla grupper isär."
 
 msgid "The configuration keeps groups apart, but the dataset has no group column (Dataset tab, Column roles)."
 msgstr "Konfigurationen håller grupper isär, men datasetet har ingen gruppkolumn (fliken Dataset, Kolumnroller)."
+
+# 298h: date features.
+msgid "Date feature"
+msgstr "Datumvariabel"
+
+msgid "Year, month and weekday"
+msgstr "År, månad och veckodag"
+
+msgid "Not used (a date: can be a date feature)"
+msgstr "Används inte (datum: kan bli datumvariabel)"
+
+msgid "Date feature columns contain dates (YYYY-MM-DD)."
+msgstr "Datumvariablerna innehåller datum (ÅÅÅÅ-MM-DD)."
+
+msgid "A date feature column contains values that are not dates (YYYY-MM-DD)."
+msgstr "En datumvariabel innehåller värden som inte är datum (ÅÅÅÅ-MM-DD)."

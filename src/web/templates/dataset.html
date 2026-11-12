@@ -233,6 +233,8 @@
                       {% elif current == "text" and c.distinct is not none and c.distinct <= categorical_limit | int %}{{ _("Categorised (at most the limit)") }}
                       {% elif current == "text" %}{{ _("Free text") }}
                       {% elif current == "group" %}{{ _("Keeps its rows together; not a feature") }}
+                      {% elif current == "date" %}{{ _("Year, month and weekday") }}
+                      {% elif current == "ignored" and c.date %}{{ _("Not used (a date: can be a date feature)") }}
                       {% elif current == "ignored" %}{{ _("Not used") }}{% else %}–{% endif %}</td></tr>
                 {% endfor %}
                 </tbody>

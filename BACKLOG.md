@@ -340,6 +340,11 @@ full SQL regression acceptance remain separately unverified.
   - [x] 298g (chosen 2026-11-11): a "group" column role on the Dataset tab
     (decision A), passed to the engine as an excluded predictor, so a group
     column keeps rows together without being a predictor.
+  - [x] 298h (agreed 2026-11-12): a "date" column role; year, month and
+    weekday (cyclic) and a missing flag, derived by the saved input converter.
+    Dates stay ignored by default.
+  - [ ] Later, if wanted: durations between two date columns; choosing the
+    date parts per column; dates in other formats than ISO.
   - [ ] Noted with 298g: the engine's group-disjoint holdout supports only
     two classes ("Person-disjoint validation currently requires binary
     classification"); grouped cross-validation has no such limit.

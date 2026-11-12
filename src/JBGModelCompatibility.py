@@ -121,10 +121,14 @@ def _converter_config(config) -> dict:
     # 298g: as fitted (JBGHandler.convert_text_and_categorical_features), without
     # the excluded predictors, which are dropped before the converter is fitted.
     excluded = set(_excluded_predictors(config))
-    return {
-        "text_columns": tuple(c for c in config.get_text_column_names() if c not in excluded),
+    # 298h: date predictors are converted as dates, not text. The key is only
+    # present when there are dates, so earlier models' metadata is unchanged.
+    dates = tuple(c for c in _date_columns(config) if c not in excluded)
+    settings = {
+        "text_columns": tuple(c for c in config.get_text_column_names()
+                              if c not in excluded and c not in dates),
         "category_columns": tuple(c for c in config.get_categorical_text_column_names()
-                                  if c not in excluded),
+                                  if c not in excluded and c not in dates),
         # 293a2: the configured limit; the fitted converter records its own.
         "limit_categorize": config.get_categorical_limit(),
         "language": "sv",
@@ -134,6 +138,14 @@ def _converter_config(config) -> dict:
         "use_encryption": bool(config.should_hex_encode()),
         "use_categorization": bool(config.use_categorization()),
     }
+    if dates:
+        settings["date_columns"] = dates
+    return settings
+
+
+def _date_columns(config) -> tuple[str, ...]:
+    from JBGValidation149 import parse_excluded_columns
+    return tuple(parse_excluded_columns(str(getattr(config.mode, "date_columns", "") or "")))
 
 
 def _required_columns(config, converter=None) -> tuple[str, ...]:
@@ -174,6 +186,10 @@ def _converter_setting_issues(config, converter) -> list[str]:
         "use_encryption": "use_encryption_",
         "use_categorization": "use_categorization_",
     }
+    # 298h: converters saved before dates existed have none.
+    if tuple(getattr(converter, "configured_date_columns_", ()) or ()) != expected.get(
+            "date_columns", ()):
+        return ["Saved converter settings differ from the saved model configuration"]
     for key, attribute in attributes.items():
         if not hasattr(converter, attribute):
             return ["Fitted converter lacks revision-173 configuration metadata"]

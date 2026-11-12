@@ -268,6 +268,48 @@ class LongLabelEncoder(LabelEncoder):
         return super().inverse_transform(X.astype(int))
     
 
+DATE_FEATURE_SUFFIXES = ("year", "month_sin", "month_cos", "weekday_sin", "weekday_cos", "missing")
+
+
+def _parse_dates(values: pd.Series) -> pd.Series:
+    """298h: ISO dates (YYYY-MM-DD, optionally with a time) as timestamps; any
+    other value, and a missing one, becomes NaT."""
+    text = values.astype(str).str.strip()
+    try:
+        parsed = pd.to_datetime(text, errors="coerce", format="ISO8601")
+    except (TypeError, ValueError):
+        parsed = pd.to_datetime(text, errors="coerce")
+    if getattr(parsed.dt, "tz", None) is not None:
+        parsed = parsed.dt.tz_localize(None)
+    return parsed
+
+
+def _date_features(values: pd.Series, column: str, fill_year: float) -> pd.DataFrame:
+    """298h: a date as features every model type can use: the year as a number
+    (trends), month and weekday as points on a circle (December lies next to
+    January, Sunday next to Monday), and whether the date was missing. A missing
+    date takes the training median year and the circle's centre."""
+    parsed = _parse_dates(values)
+    missing = parsed.isna()
+    month = 2 * np.pi * (parsed.dt.month - 1) / 12
+    weekday = 2 * np.pi * parsed.dt.weekday / 7
+    frame = pd.DataFrame({
+        f"{column}_year": parsed.dt.year.astype(float).where(~missing, fill_year),
+        f"{column}_month_sin": np.sin(month).where(~missing, 0.0),
+        f"{column}_month_cos": np.cos(month).where(~missing, 0.0),
+        f"{column}_weekday_sin": np.sin(weekday).where(~missing, 0.0),
+        f"{column}_weekday_cos": np.cos(weekday).where(~missing, 0.0),
+        f"{column}_missing": missing.astype(float),
+    }, index=values.index)
+    return frame.astype(float)
+
+
+def _converter_dates(converter) -> list:
+    """298h: a converter's date columns. Converters saved before 298h (and
+    stand-ins for them) have none."""
+    return list(getattr(converter, "date_columns_", None) or [])
+
+
 class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
 
     STANDARD_LANGUAGE = 'sv'
@@ -277,7 +319,7 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
     def __init__(self, text_columns: list[str] = None, category_columns: list[str] = None, \
         limit_categorize: int = LIMIT_IS_CATEGORICAL, language: str = STANDARD_LANGUAGE, \
         stop_words: bool = True, df: float = 1.0, ngram_range: tuple = (1,1), use_encryption: bool = True, \
-        use_categorization: bool = True ):
+        use_categorization: bool = True, date_columns: list[str] = None ):
                 
         # Take care of input
         if text_columns:
@@ -288,6 +330,12 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
             self.category_columns_ = category_columns.copy()
         else:
             self.category_columns_ = []
+        # 298h: date predictors become year, month and weekday features. They are
+        # never text: a column named both ways is a date. None/empty: unchanged.
+        self.date_columns_ = list(date_columns or [])
+        self.configured_date_columns_ = tuple(date_columns or ())
+        self.text_columns_ = [c for c in self.text_columns_ if c not in self.date_columns_]
+        self.category_columns_ = [c for c in self.category_columns_ if c not in self.date_columns_]
         # Preserve requested representation settings separately from fitted state.
         # Auto-categorization mutates text_columns_/category_columns_ during fit.
         self.configured_text_columns_ = tuple(text_columns or ())
@@ -318,6 +366,12 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
         self.input_feature_type_families_ = {
             str(column): pandas_dtype_family(X[column].dtype) for column in X.columns
         }
+
+        # 298h: the year that stands in for a missing date (the training median).
+        self.date_fill_year_ = {}
+        for column in _converter_dates(self):
+            years = _parse_dates(X[column]).dt.year.dropna()
+            self.date_fill_year_[column] = float(years.median()) if len(years) else 0.0
 
         if self.text_columns_:
         
@@ -410,12 +464,23 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
             X_category = pd.DataFrame(self.ordinalencoder_.transform(X_category), \
                 columns = self.ordinalencoder_.get_feature_names_out(), index=X.index)
 
+        # 298h: date columns are replaced by their derived features. Read inline:
+        # converters saved before 298h have no date columns (and this method
+        # must run with only pandas at hand, see tests/test_saved_model_schema_162).
+        dates = list(getattr(self, "date_columns_", None) or [])
+        X_dates = None
+        if dates:
+            X_dates = pd.concat([_date_features(X[column], column,
+                                                self.date_fill_year_.get(column, 0.0))
+                                 for column in dates], axis=1)
+            X = X.drop(dates, axis=1)
+
         # Remove text and category columns from X and put conversion result there instead.
         # Concatenate matrices and column names. Any Nones are dropped silently as long as X is not None.
         if self.text_columns_ or self.category_columns_:
             X = X.drop(self.text_columns_ + self.category_columns_, axis=1)
         
-        X = pd.concat([X, X_category, X_document], axis=1, ignore_index=False)
+        X = pd.concat([X, X_dates, X_category, X_document], axis=1, ignore_index=False)
 
         return X
     
@@ -425,6 +490,9 @@ class TextDataToNumbersConverter(TransformerMixin, BaseEstimator):
         return self.transform(X)
     
     # Some help functions below
+    def _dates(self) -> list:
+        return _converter_dates(self)
+
     def _is_categorical_column(self, X: pd.DataFrame, column: str) -> bool:
         if X is None or column not in X.columns:
             return False

@@ -43,7 +43,9 @@ SERVER_OWNED = {
                        # fallback when a list is empty).
                        "oversampler", "undersampler",
                        # 298g: from the dataset's "group" column role at run time.
-                       "validation_group_column"}),
+                       "validation_group_column",
+                       # 298h: from the dataset's "date" column roles at run time.
+                       "date_columns"}),
     "mail": frozenset({"smtp_server"}),
 }
 _PLACEHOLDER_ID = "00000000-0000-4000-8000-000000000000"

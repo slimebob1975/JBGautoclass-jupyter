@@ -1,3 +1,33 @@
+## Revision 298h - Date features (2026-11-12)
+
+- Agreed 2026-11-12: dates stay ignored in suggestions, but can be used
+  deliberately. A day number (the engine's numeric handling) mixes trend and
+  timing and extrapolates worst, and in this engine "categorical" means
+  ordinal codes, so a new role "date" ("Datumvariabel") turns a date into
+  features every model type can use: the year as a number, month and weekday
+  as points on a circle (sine and cosine: December lies next to January,
+  Sunday next to Monday) and a flag for a missing date (which takes the
+  training median year).
+- Engine (opt-in, empty by default: the Voilà GUI and earlier models are
+  unchanged): a runtime field `mode.date_columns`; the input converter
+  (`TextDataToNumbersConverter`, saved with the model) derives the features,
+  so predictions get exactly the same ones; converters saved earlier have no
+  dates. The compatibility metadata records the dates only when there are
+  any.
+- Dataset tab: the role "Datumvariabel" (a feature: prediction datasets must
+  contain it). Date columns are detected (CSV: every value an ISO date,
+  optionally with a time; SQL: date, datetime, datetime2, smalldatetime), are
+  suggested as ignored, and "Behandlas som" says they can be date features.
+  Validation adds "Datumvariablerna innehåller datum" only for datasets with
+  date features, so other datasets are checked as before. Runs read dates as
+  text and name them in `mode.date_columns` (server-owned, from the roles).
+- User guides and design document describe the role. BACKLOG: durations,
+  per-column parts and other date formats as later options.
+- Tests: `tests/test_revision_298h_date_role.py`, including a native run: a
+  CSV training with a date feature (four numeric inputs plus six date
+  features: "Number of features after text and category conversion: 10") and
+  a prediction with the saved model.
+
 ## Revision 298g - The group column role (2026-11-11)
 
 - Chosen 2026-11-11 (noted with 298d): in a web run only the ID, class and

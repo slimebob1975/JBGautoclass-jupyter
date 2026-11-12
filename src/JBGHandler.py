@@ -495,12 +495,16 @@ class DatasetHandler:
             # text column made the fit fail). Unchanged when nothing is excluded.
             excluded = set(parse_excluded_columns(
                 getattr(self.handler.config.mode, "excluded_predictor_columns", "")))
+            # 298h: date predictors are read as text but converted as dates.
+            dates = [c for c in parse_excluded_columns(
+                getattr(self.handler.config.mode, "date_columns", "")) if c not in excluded]
             try:
                 ttnc = TextDataToNumbersConverter(
                     text_columns=[c for c in self.handler.config.get_text_column_names()
-                                  if c not in excluded],
+                                  if c not in excluded and c not in dates],
                     category_columns=[c for c in self.handler.config.get_categorical_text_column_names()
-                                      if c not in excluded], \
+                                      if c not in excluded and c not in dates],
+                    date_columns=dates or None, \
                     limit_categorize=self.handler.config.get_categorical_limit(), \
                     language=TextDataToNumbersConverter.STANDARD_LANGUAGE, \
                     stop_words=self.handler.config.use_stop_words(), \

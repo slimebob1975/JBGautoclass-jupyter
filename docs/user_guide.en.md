@@ -69,6 +69,15 @@ it. Exactly one column must be the ID column and exactly one the class
 column, and at least one column must be a feature: a numeric feature, a text
 feature or a categorical feature. Ignored columns are not used.
 
+A date column can have the role **Date feature**. It then becomes the year
+(a number), month and weekday (points on a circle, so that December lies
+next to January) and a mark for a missing date. Dates are never suggested
+automatically: a date column is suggested as ignored, and **Treated as**
+shows that it can be a date feature. Dates must be in the format YYYY-MM-DD,
+optionally with a time; in SQL tables the types date, datetime, datetime2 and
+smalldatetime count. Keep in mind that the year only describes the period
+the model was trained on; a new year is a value it has not seen.
+
 At most one column can be the **Group column**, for example a person's
 identity. It keeps its rows together when data is split, so that one group
 is not in both training and test, but it is not used as a feature. It is

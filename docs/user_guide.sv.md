@@ -69,6 +69,15 @@ Exakt en kolumn ska vara ID-kolumn och exakt en klasskolumn, och minst en
 kolumn ska vara en variabel: numerisk variabel, textvariabel eller
 kategorisk variabel. Kolumner som ignoreras används inte.
 
+En datumkolumn kan få rollen **Datumvariabel**. Den blir då år (som tal),
+månad och veckodag (som punkter på en cirkel, så att december ligger nära
+januari) samt en markering för saknat datum. Datum föreslås aldrig
+automatiskt: en datumkolumn föreslås som ignorerad, och **Behandlas som**
+visar att den kan bli datumvariabel. Datum ska vara i formatet ÅÅÅÅ-MM-DD,
+gärna med klockslag; i SQL-tabeller räknas typerna date, datetime, datetime2
+och smalldatetime. Tänk på att året bara beskriver tiden modellen tränats
+på; för nya år får modellen ett värde den inte har sett.
+
 Högst en kolumn kan vara **Gruppkolumn**, till exempel en persons
 identitet. Den håller ihop sina rader när data delas upp, så att samma grupp
 inte hamnar både i träning och test, men den används inte som variabel.

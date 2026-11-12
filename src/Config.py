@@ -413,6 +413,9 @@ class Config:
         validation_group_column: str = "iafId"
         grouped_cross_validation: bool = False
         excluded_predictor_columns: str = ""
+        # 298h: comma-separated date predictors; the input converter turns each
+        # into year, month and weekday features. Empty (the default) changes nothing.
+        date_columns: str = ""
         preprocessor: PreprocessTuple = field(default_factory=PreprocessTuple.defaultPreprocessTuple)
         feature_selection: ReductionTuple = field(default_factory=ReductionTuple.defaultReductionTuple)
         num_selected_features: int = None
@@ -687,6 +690,7 @@ class Config:
                 "Validation group column": getattr(self, "validation_group_column", "iafId"),
                 "Grouped cross-validation": getattr(self, "grouped_cross_validation", False),
                 "Excluded predictor columns": getattr(self, "excluded_predictor_columns", ""),
+                "Date columns": getattr(self, "date_columns", ""),
                 "Preprocessing method of choice":        self.preprocessor.full_name,
                 "Scoring method":                        self.scoring.full_name,
                 "Feature selection":                     self.feature_selection.full_name,
@@ -1327,6 +1331,7 @@ class Config:
                 validation_group_column=module.mode.get("validation_group_column", "iafId"),
                 grouped_cross_validation=bool(module.mode.get("grouped_cross_validation", False)),
                 excluded_predictor_columns=module.mode.get("excluded_predictor_columns", ""),
+                date_columns=module.mode.get("date_columns", ""),
                 preprocessor=(PreprocessTuple.from_string(module.mode["preprocessor"])
                               if isinstance(module.mode["preprocessor"], str)
                               else PreprocessTuple(module.mode["preprocessor"])),
