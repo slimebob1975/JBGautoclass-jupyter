@@ -350,6 +350,8 @@ full SQL regression acceptance remain separately unverified.
   - [ ] Later (agreed 2026-11-12, rarely needed): general ID handling in the
     engine's SQL path, so that uniqueidentifier and text IDs work as CSV IDs
     already do (row ordering, holdout split, writing predictions back).
+  - [x] 298j (noted 2026-11-12): Dark Numbers on the Results tab; a top
+    scrollbar on every wide table.
   - [ ] Noted with 298g: the engine's group-disjoint holdout supports only
     two classes ("Person-disjoint validation currently requires binary
     classification"); grouped cross-validation has no such limit.

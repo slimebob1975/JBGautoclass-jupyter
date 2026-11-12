@@ -177,9 +177,19 @@ confusion matrix and the most important features are shown.
 ## Results
 
 The project's finished training runs. For a selected run there are the
-views Overview, Model comparison, Mispredictions and Feature importance.
-Class names and row values are shown only to the person who started the
-run. Older runs may lack some details.
+views Overview, Model comparison, Mispredictions, Feature importance and
+Dark Numbers. Class names and row values are shown only to the person who
+started the run. Older runs may lack some details.
+
+**Dark Numbers** shows, when the configuration estimates Dark Numbers, the
+estimated share of hidden cases for each target class. Four estimates are
+made: with the final model and with the cross-trained model on all data, a
+combined one, and with the cross-trained model on the test data. They are
+expected to grow in that order and together form a heuristic range; the
+view says whether the order holds. Below are the calculations and the
+confusion matrices.
+
+Wide tables have a scrollbar both below and above the table.
 
 ## Models
 

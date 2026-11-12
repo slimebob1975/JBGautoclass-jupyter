@@ -1,3 +1,27 @@
+## Revision 298j - Dark Numbers on the Results tab; top scrollbars (2026-11-12)
+
+- Noted 2026-11-12: Dark Numbers were computed and saved in the run folder
+  (`dark_numbers_*.csv`, `dark_numbers_conf_matrix_*.csv`) but shown nowhere
+  in the web interface; the log leaves them out as they may name classes.
+  The Results tab has a view "Mörkertal": per target class the engine's four
+  estimates in their expected order (final model and cross-trained model on
+  all data, combined, cross-trained model on the test data) with the order
+  status and the zero-false-positive note (`JBGDarkNumberReporting`, as the
+  Voilà GUI summarises them), then the calculation table and the confusion
+  matrices. Estimate, model and calculation names are readable and
+  translated; class names are never changed (`readable_dark_table`). The
+  matrices keep their first column, the actual class
+  (`KEEP_FIRST_COLUMN`); the calculation table's file is told apart from the
+  matrices' by name. The result sub-tabs wrap when they do not fit.
+- Noted 2026-11-12: wide tables could only be scrolled sideways at their
+  bottom. Every wide table (a `.scroll` box) now has a second horizontal
+  scrollbar above it, kept in step both ways and hidden while nothing
+  overflows (`jbg.js`).
+- User guides and design document describe both.
+- Tests: `tests/test_revision_298j_dark_numbers_results.py`, including a
+  native run with Dark Numbers shown on the Results tab. Checked in headless
+  Chromium: the view, the top scrollbar and its syncing.
+
 ## Revision 298i - SQL ID columns must hold whole numbers (2026-11-12)
 
 - Noted 2026-11-12: an SQL training run with a uniqueidentifier ID column

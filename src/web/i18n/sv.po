@@ -1648,3 +1648,88 @@ msgstr "En ID-kolumn i SQL måste innehålla heltal (int, bigint, smallint, tiny
 
 msgid "The ID column of an SQL dataset must hold whole numbers (int, bigint, smallint or tinyint). Choose another ID column on the Dataset tab (Column roles)."
 msgstr "ID-kolumnen i ett SQL-dataset måste innehålla heltal (int, bigint, smallint eller tinyint). Välj en annan ID-kolumn under fliken Dataset (Kolumnroller)."
+
+# 298j: Dark Numbers on the Results tab.
+msgid "Final model, all data"
+msgstr "Slutlig modell, alla data"
+
+msgid "Cross-trained model, all data"
+msgstr "Korstränad modell, alla data"
+
+msgid "Combined"
+msgstr "Kombinerad"
+
+msgid "Cross-trained model, test data"
+msgstr "Korstränad modell, testdata"
+
+msgid "cannot be estimated"
+msgstr "kan inte skattas"
+
+msgid "missing"
+msgstr "saknas"
+
+msgid "ambiguous"
+msgstr "tvetydig"
+
+msgid "not a number"
+msgstr "inte ett tal"
+
+msgid "unknown correction"
+msgstr "okänd korrektion"
+
+msgid "inconsistent"
+msgstr "motsägelsefull"
+
+msgid "Estimate"
+msgstr "Skattning"
+
+msgid "Calculation"
+msgstr "Beräkning"
+
+msgid "Correction (c)"
+msgstr "Korrektion (c)"
+
+msgid "Correction from"
+msgstr "Korrektion från"
+
+msgid "Basis of the correction"
+msgstr "Korrektionens grund"
+
+msgid "Dark Number"
+msgstr "Mörkertal"
+
+msgid "The estimated share of hidden cases of each target class. The four estimates are expected to grow from left to right; together they form a heuristic range. Values are proportions."
+msgstr "Den skattade andelen dolda fall för varje målklass. De fyra skattningarna väntas växa från vänster till höger och bildar tillsammans ett heuristiskt intervall. Värdena är andelar."
+
+msgid "The estimates are in the expected order."
+msgstr "Skattningarna ligger i förväntad ordning."
+
+msgid "The estimates are not in the expected order."
+msgstr "Skattningarna ligger inte i förväntad ordning."
+
+msgid "The order could not be checked: an estimate is missing or cannot be estimated."
+msgstr "Ordningen kunde inte kontrolleras: en skattning saknas eller kan inte skattas."
+
+msgid "No false positives were observed, so no correction was needed."
+msgstr "Inga falska positiva observerades, så ingen korrektion behövdes."
+
+msgid "No summary could be made from the calculations."
+msgstr "Ingen sammanfattning kunde göras av beräkningarna."
+
+msgid "Calculations"
+msgstr "Beräkningar"
+
+msgid "Confusion matrices"
+msgstr "Förväxlingsmatriser"
+
+msgid "Per estimate: rows are the actual class, columns the predicted class."
+msgstr "Per skattning: rader är faktisk klass, kolumner predikterad klass."
+
+msgid "Actual class"
+msgstr "Faktisk klass"
+
+msgid "Cross-trained model"
+msgstr "Korstränad modell"
+
+msgid "Final model"
+msgstr "Slutlig modell"

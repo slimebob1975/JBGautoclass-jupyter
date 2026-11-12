@@ -77,9 +77,28 @@
       <p class="hint">{{ _("These details are kept for runs made after this update; earlier runs did not keep them.") }}</p>
     {% elif detail %}
       {% if view == "mispredictions" %}<p class="hint">{{ _("All labelled rows where the cross-trained or the final model is wrong.") }}</p>{% endif %}
+      {% if view == "dark_numbers" %}
+        {# 298j: the estimates per target class, as the Voila GUI summarises them. #}
+        <p class="hint">{{ _("The estimated share of hidden cases of each target class. The four estimates are expected to grow from left to right; together they form a heuristic range. Values are proportions.") }}</p>
+        {% for interval in dark_summary %}
+          <h3>{{ _("Target class") }}: {{ interval.target }} <span class="muted">· {{ interval.formula | replace("_", " ") }}</span></h3>
+          <table class="grid dark-range">
+            <thead><tr><th>{{ _("Estimate") }}</th><th class="num">{{ _("Dark Number") }}</th></tr></thead>
+            <tbody>{% for p in interval.points %}<tr><td>{{ _(dark_estimates.get(p.label, p.label)) }}</td>
+              <td class="num">{% if p.value is not none %}{{ p.value | num(language) }}{% else %}{{ _(dark_reasons.get(p.reason, p.reason)) }}{% endif %}</td></tr>{% endfor %}</tbody>
+          </table>
+          {% if interval.status == "ordered" %}<p class="hint">{{ _("The estimates are in the expected order.") }}</p>
+          {% elif interval.status == "broken" %}<p class="message warn">{{ _("The estimates are not in the expected order.") }}</p>
+          {% else %}<p class="message warn">{{ _("The order could not be checked: an estimate is missing or cannot be estimated.") }}</p>{% endif %}
+          {% if interval.points | selectattr("source", "equalto", "not_needed_zero_fp") | list %}<p class="hint">{{ _("No false positives were observed, so no correction was needed.") }}</p>{% endif %}
+        {% else %}
+          <p class="hint">{{ _("No summary could be made from the calculations.") }}</p>
+        {% endfor %}
+        <h3>{{ _("Calculations") }}</h3>
+      {% endif %}
       <p class="hint">{{ detail.total_rows }} {{ _("rows") }}</p>
       <div class="scroll"><table class="grid">
-        <thead><tr>{% for c in detail.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+        <thead><tr>{% for c in detail.columns %}<th>{{ _(dark_columns.get(c, c)) if view == "dark_numbers" else c }}</th>{% endfor %}</tr></thead>
         <tbody>{% for row in detail.rows %}<tr>{% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
       </table></div>
       {% set pages = ((detail.total_rows + detail.page_size - 1) // detail.page_size) %}
@@ -89,6 +108,14 @@
           <span>{{ _("Page") }} {{ detail.page }} / {{ pages }}</span>
           {% if detail.page < pages %}<a href="/ui/results?run={{ selected_run }}&view={{ view }}&page={{ detail.page + 1 }}">{{ _("Next") }} ›</a>{% endif %}
         </nav>
+      {% endif %}
+      {% if view == "dark_numbers" and dark_matrix %}
+        <h3>{{ _("Confusion matrices") }}</h3>
+        <p class="hint">{{ _("Per estimate: rows are the actual class, columns the predicted class.") }}</p>
+        <div class="scroll"><table class="grid">
+          <thead><tr>{% for c in dark_matrix.columns %}<th>{{ _("Actual class") if loop.first else _(dark_columns.get(c, c)) }}</th>{% endfor %}</tr></thead>
+          <tbody>{% for row in dark_matrix.rows %}<tr>{% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+        </table></div>
       {% endif %}
     {% endif %}
   {% else %}

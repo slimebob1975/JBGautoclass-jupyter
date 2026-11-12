@@ -179,9 +179,18 @@ och de viktigaste variablerna.
 ## Resultat
 
 Projektets avslutade träningskörningar. För en vald körning finns vyerna
-Översikt, Modelljämförelse, Felklassificeringar och Variabelbetydelse.
-Klassnamn och radvärden visas bara för den som startade körningen. Äldre
-körningar kan sakna en del detaljer.
+Översikt, Modelljämförelse, Felklassificeringar, Variabelbetydelse och
+Mörkertal. Klassnamn och radvärden visas bara för den som startade
+körningen. Äldre körningar kan sakna en del detaljer.
+
+**Mörkertal** visar, när konfigurationen skattar mörkertal, den skattade
+andelen dolda fall för varje målklass. Fyra skattningar görs: med den
+slutliga modellen och med den korstränade modellen på alla data, en
+kombinerad och med den korstränade modellen på testdata. De väntas växa i
+den ordningen och bildar tillsammans ett heuristiskt intervall; vyn säger om
+ordningen håller. Därunder finns beräkningarna och förväxlingsmatriserna.
+
+Breda tabeller har en rullningslist både under och ovanför tabellen.
 
 ## Modeller
 

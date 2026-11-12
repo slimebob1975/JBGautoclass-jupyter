@@ -25,7 +25,13 @@ DETAILS = {
     # calculation's metadata and is excluded below.
     "feature_importance": "feature_importance_",
     "predictions": "predictions_",                         # 296b: prediction runs
+    # 298j: Dark Numbers. The calculation table's prefix also starts the
+    # confusion matrices' file name, which _file tells apart.
+    "dark_numbers": "dark_numbers_",
+    "dark_numbers_matrix": "dark_numbers_conf_matrix_",
 }
+# 298j: tables whose unnamed first column is data (the true class), not an index.
+KEEP_FIRST_COLUMN = frozenset({"dark_numbers_matrix"})
 PAGE_SIZE = 50
 MAX_PAGE_SIZE = 500
 
@@ -87,7 +93,9 @@ class RunResultsService:
         if not folder.is_dir():
             return None
         matches = [p for p in folder.glob(f"{prefix}*.csv")
-                   if not (prefix == "feature_importance_" and "details" in p.name)]
+                   if not (prefix == "feature_importance_" and "details" in p.name)
+                   and not (prefix == "dark_numbers_"
+                            and p.name.startswith("dark_numbers_conf_matrix_"))]
         # The engine writes companions with longer names next to the main table
         # (e.g. crossval_..._grid_search.csv); the main table has the shortest.
         return min(matches, key=lambda p: (len(p.name), p.name)) if matches else None
@@ -107,13 +115,28 @@ class RunResultsService:
             header = next(reader, [])
             rows = [row for row in reader if row]
         # The engine's index column has an empty header; it is not data.
-        drop_index = bool(header) and header[0].strip() == ""
+        drop_index = bool(header) and header[0].strip() == "" and kind not in KEEP_FIRST_COLUMN
         columns = header[1:] if drop_index else header
         start = (page - 1) * page_size
         selected = [row[1:] if drop_index else row for row in rows[start:start + page_size]]
         return {"run_id": run_id, "kind": kind, "columns": columns,
                 "rows": [[_number(value) for value in row] for row in selected],
                 "total_rows": len(rows), "page": page, "page_size": page_size}
+
+
+    def dark_number_summary(self, owner: str, run_id: str) -> list:
+        """298j: per target class, the engine's four Dark Number estimates in
+        their expected order, with a status (JBGDarkNumberReporting, as the
+        Voila GUI shows it). Empty when the run has no Dark Numbers."""
+        path = self._file(self._folder(owner, run_id) / "output" / "csvs", DETAILS["dark_numbers"])
+        if path is None:
+            return []
+        import pandas as pd
+        from JBGDarkNumberReporting import build_dark_number_intervals
+        matrix = pd.read_csv(path, sep=";", decimal=",", index_col=0, keep_default_na=False,
+                             dtype={"Model type": str, "type": str, "target": str,
+                                    "corr_source": str})
+        return build_dark_number_intervals(matrix)
 
 
 class RunLogService:

@@ -250,3 +250,10 @@ form.copy-roles { margin-bottom: 10px; }
 
 /* 298i: a role that cannot work, shown before saving. */
 .role-warning { color: var(--error); font-weight: 600; }
+
+/* 298j: the scrollbar above a wide table. */
+.scroll-top { overflow-x: auto; overflow-y: hidden; max-width: 100%; height: 16px; }
+.scroll-top > div { height: 1px; }
+.scroll-top[hidden] { display: none; }
+.subtabs { flex-wrap: wrap; }                       /* 298j: more views than fit on one line */
+.dark-range { max-width: 480px; }

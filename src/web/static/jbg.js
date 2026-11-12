@@ -204,7 +204,38 @@
     if (target && target.tagName === "DETAILS") { target.open = true; }
   }
 
+  /* 298j: a wide table (in a .scroll box) gets a second horizontal scrollbar
+     above it, kept in step with the one below; hidden while nothing overflows
+     (also when a closed section opens: the box is watched for size changes). */
+  function addTopScrollbar(box) {
+    var top = document.createElement("div");
+    top.className = "scroll-top";
+    top.setAttribute("aria-hidden", "true");
+    var inner = document.createElement("div");
+    top.appendChild(inner);
+    box.parentNode.insertBefore(top, box);
+    function size() {
+      inner.style.width = box.scrollWidth + "px";
+      top.hidden = box.scrollWidth <= box.clientWidth + 1;
+    }
+    top.addEventListener("scroll", function () {
+      if (box.scrollLeft !== top.scrollLeft) { box.scrollLeft = top.scrollLeft; }
+    });
+    box.addEventListener("scroll", function () {
+      if (top.scrollLeft !== box.scrollLeft) { top.scrollLeft = box.scrollLeft; }
+    });
+    size();
+    if (window.ResizeObserver) {
+      var watcher = new ResizeObserver(size);
+      watcher.observe(box);
+      if (box.firstElementChild) { watcher.observe(box.firstElementChild); }
+    } else {
+      window.addEventListener("resize", size);
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".scroll").forEach(addTopScrollbar);
     document.querySelectorAll("[data-all-group]").forEach(wireAllGroup);
     document.querySelectorAll("[data-run-poll]").forEach(followRun);
     var configuration = document.getElementById("config-form");
