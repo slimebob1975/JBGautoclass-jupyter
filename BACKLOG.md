@@ -375,6 +375,8 @@ full SQL regression acceptance remain separately unverified.
       pause/resume); first make the Variabelurval section honest: it has no
       effect in web runs today.
     - [ ] Minor: rerun, run history (Körhistorik).
+  - [x] 299f2 (asked 2026-11-13): the Dark Numbers alphas shown as numbers
+    (they showed "np.float64(...)").
   - [x] 299e (asked 2026-11-13): "Välj för körning" follows the traffic
     lights; the Dark Numbers confusion matrices show the estimate first.
   - [x] 299d (asked 2026-11-13; traffic lights agreed): action buttons are

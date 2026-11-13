@@ -1,3 +1,14 @@
+## Revision 299f2 - Alphas as numbers in Dark Numbers (2026-11-13)
+
+- Asked 2026-11-13: the Dark Numbers calculation table on the Results tab
+  showed the alphas as the engine's Python text, e.g.
+  "[1, np.float64(0.7205267055383298)]". Each factor is now shown as the
+  Dark Number column shows numbers (at most four significant digits, a
+  decimal comma in Swedish): "1; 0,7205" in Swedish (semicolons, as the comma
+  is the decimal sign), "1, 0.7205" in English. Values that are not a list of
+  numbers are shown unchanged.
+- Tests: `tests/test_revision_299f2_alpha_format.py`.
+
 ## Revision 299f - Deleting datasets and projects (2026-11-13)
 
 - Voilà retirement item (agreed 2026-11-13): deleting, part 2, with the rule

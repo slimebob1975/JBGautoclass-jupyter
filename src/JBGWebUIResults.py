@@ -95,10 +95,37 @@ def with_percentages(summary: list, language: str) -> list:
     return summary
 
 
-def readable_dark_table(detail: dict, translate) -> dict:
+def alpha_text(value, language: str = "sv"):
+    """299f2 (asked 2026-11-13): the engine writes a list of alphas as Python
+    text, e.g. "[1, np.float64(0.7205267055383298)]". Show each factor as the
+    Dark Number column shows numbers (at most four significant digits, decimal
+    comma in Swedish), separated by a semicolon in Swedish, where the comma is
+    the decimal sign. Anything else is returned unchanged."""
+    import re
+    from JBGWebUI import _number_text
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not (text.startswith("[") and text.endswith("]")):
+        return value
+    parts = [p.strip() for p in text[1:-1].split(",")]
+    numbers = []
+    for part in parts:
+        match = re.fullmatch(r"(?:np\.float(?:32|64)\((.+)\)|(.+))", part)
+        try:
+            numbers.append(float((match.group(1) or match.group(2)).strip()))
+        except (AttributeError, ValueError):
+            return value
+    if not numbers:
+        return value
+    return ("; " if language == "sv" else ", ").join(
+        _number_text(number, language) for number in numbers)
+
+
+def readable_dark_table(detail: dict, translate, language: str = "sv") -> dict:
     """298j: the engine's Dark Number tables with readable estimate and model
     names and calculation types. Only these known columns are changed, never a
-    class name."""
+    class name. 299f2: the alphas as numbers."""
     columns = detail["columns"]
     for row in detail["rows"]:
         for index, column in enumerate(columns):
@@ -110,6 +137,8 @@ def readable_dark_table(detail: dict, translate) -> dict:
                 row[index] = translate(_CORRECTION_MODELS[value])
             elif column == "type" and isinstance(value, str):
                 row[index] = value.replace("_", " ")
+            elif column == "alphas":
+                row[index] = alpha_text(value, language)
     return detail
 
 
@@ -200,13 +229,15 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                         # 298j: the estimates per target, then the calculation
                         # table (above) and the confusion matrices.
                         translate = translator(request_language(request))
-                        readable_dark_table(context["detail"], translate)
+                        readable_dark_table(context["detail"], translate,
+                                            request_language(request))
                         context["dark_summary"] = with_percentages(
                             results.dark_number_summary(owner, chosen), request_language(request))
                         try:
                             context["dark_matrix"] = estimate_first(readable_dark_table(
                                 results.detail(owner, chosen, "dark_numbers_matrix",
-                                               page_size=500), translate))
+                                               page_size=500), translate,
+                                request_language(request)))
                         except RunResultsUnavailable:
                             context["dark_matrix"] = None
                 except RunResultsUnavailable:
