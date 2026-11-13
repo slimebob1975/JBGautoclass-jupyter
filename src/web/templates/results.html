@@ -113,7 +113,7 @@
       {% endif %}
       <p class="hint">{{ detail.total_rows }} {{ _("rows") }}</p>
       <div class="scroll"><table class="grid">
-        <thead><tr>{% if correctable %}<th>{{ _("Right class") }}</th>{% endif %}{% for c in detail.columns %}<th>{{ _(dark_columns.get(c, c)) if view == "dark_numbers" else c }}</th>{% endfor %}</tr></thead>
+        <thead><tr>{% if correctable %}<th>{{ _("Right class") }}</th>{% endif %}{% for heading in detail.headings %}<th>{{ heading }}</th>{% endfor %}</tr></thead>
         <tbody>{% set seen = namespace(ids=[]) %}{% for row in detail.rows %}<tr>
           {% if correctable %}{% set rid = row[0] | int %}<td class="correct-cell">
             {% if rid not in seen.ids %}{% set seen.ids = seen.ids + [rid] %}

@@ -1797,3 +1797,67 @@ msgstr "Ångra"
 
 msgid "Cancel"
 msgstr "Avbryt"
+
+# 299a2: result table headings.
+msgid "Predicted class"
+msgstr "Predikterad klass"
+
+msgid "Algorithm (library)"
+msgstr "Algoritm (bibliotek)"
+
+msgid "Components"
+msgstr "Komponenter"
+
+msgid "Mean CV score"
+msgstr "Medelvärde CV"
+
+msgid "Standard deviation"
+msgstr "Standardavvikelse"
+
+msgid "CV target class"
+msgstr "CV-målklass"
+
+msgid "CV precision"
+msgstr "CV-precision"
+
+msgid "CV recall"
+msgstr "CV-täckning"
+
+msgid "CV F1"
+msgstr "CV-F1"
+
+msgid "CV predicted positives"
+msgstr "CV-predikterade positiva"
+
+msgid "CV target class rows"
+msgstr "CV-rader i målklassen"
+
+msgid "CV validation rows"
+msgstr "CV-valideringsrader"
+
+msgid "CV diagnostic status"
+msgstr "CV-diagnos"
+
+msgid "Time (s)"
+msgstr "Tid (s)"
+
+msgid "Error"
+msgstr "Fel"
+
+msgid "Rank"
+msgstr "Rang"
+
+msgid "Feature"
+msgstr "Variabel"
+
+msgid "Mean score decrease"
+msgstr "Medelminskning av poäng"
+
+msgid "Standard deviation across repeats"
+msgstr "Standardavvikelse över upprepningar"
+
+msgid "Repeat"
+msgstr "Upprepning"
+
+msgid "No model"
+msgstr "Ingen modell"

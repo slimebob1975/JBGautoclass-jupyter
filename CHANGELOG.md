@@ -1,3 +1,15 @@
+## Revision 299a2 - Result table headings in the interface's language (2026-11-12)
+
+- Asked 2026-11-12: the mispredictions' columns "Actual", "Predicted" and
+  "Model" were shown in English whatever the language. The result tables'
+  column headings (model comparison, mispredictions, feature importance,
+  including "Repeat 1", "Repeat 2", ...) and the mispredictions' model names
+  ("cross trained", "retrained") are now shown in the chosen language
+  (`JBGWebUIResults.HEADINGS`, `MODEL_VALUES`). Class names, `P(<class>)`
+  and feature names are data and stay as they are, even when one happens to
+  match a heading.
+- Tests: `tests/test_revision_299a2_result_headings.py`.
+
 ## Revision 299a - Correcting mispredicted rows (SQL) (2026-11-12)
 
 - Voilà gap check (2026-11-12): four Voilà workflows were missing from the

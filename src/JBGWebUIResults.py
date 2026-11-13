@@ -29,6 +29,41 @@ DARK_COLUMNS = {"Model type": "Estimate", "type": "Calculation", "target": "Targ
                 "corr_source": "Basis of the correction", "dark_number": "Dark Number"}
 
 
+# 299a2 (asked 2026-11-12): the engine's English column names in the result
+# tables, shown in the interface's language. Class names, P(<class>) and
+# feature names are data and stay as they are.
+HEADINGS = {
+    "Actual": "Actual class", "Predicted": "Predicted class", "Model": "Model",
+    "Oversampling": "Oversampling", "Undersampling": "Undersampling", "Preprocessor": "Scaling",
+    "Feature Reduction": "Dimensionality reduction", "Algorithm (Library)": "Algorithm (library)",
+    "Components": "Components", "Mean cv": "Mean CV score", "Stdev.": "Standard deviation",
+    "CV target": "CV target class", "CV target precision": "CV precision",
+    "CV target recall": "CV recall", "CV target F1": "CV F1",
+    "CV predicted positives": "CV predicted positives", "CV target support": "CV target class rows",
+    "CV validation rows": "CV validation rows", "CV diagnostic status": "CV diagnostic status",
+    "Elapsed Time": "Time (s)", "Exception": "Error",
+    "Rank": "Rank", "Feature": "Feature", "Mean score decrease": "Mean score decrease",
+    "Std. across repeats": "Standard deviation across repeats",
+}
+# The mispredictions' Model column (JBGHandler.PredictionsHandler).
+MODEL_VALUES = {"cross trained": "Cross-trained model", "retrained": "Final model",
+                "no model": "No model"}
+
+
+def headings(columns, translate, names=None) -> list:
+    """The columns' headings in the interface's language (unknown names unchanged)."""
+    import re
+    names = HEADINGS if names is None else names
+    result = []
+    for column in columns:
+        repeat = re.fullmatch(r"Repeat (\d+)", str(column))
+        if repeat:
+            result.append(f"{translate('Repeat')} {repeat.group(1)}")
+        else:
+            result.append(translate(names[column]) if column in names else column)
+    return result
+
+
 # The engine's names for its estimate blocks ("D_cv_test - Cross-trained model").
 _ESTIMATE_PREFIXES = (("D_re_full", "D_retrained_full"), ("D_cv_full", "D_cv_full"),
                       ("D_comb", "Combined"), ("D_cv_test", "D_cv_test"))
@@ -104,6 +139,16 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                     context["available"] = results.available(owner, chosen)
                     if view != "overview":
                         context["detail"] = results.detail(owner, chosen, view, page=page)
+                        translate = translator(request_language(request))
+                        detail = context["detail"]
+                        detail["headings"] = headings(
+                            detail["columns"], translate,
+                            DARK_COLUMNS if view == "dark_numbers" else None)
+                        if view == "mispredictions" and "Model" in detail["columns"]:
+                            at = detail["columns"].index("Model")
+                            for row in detail["rows"]:
+                                if at < len(row) and row[at] in MODEL_VALUES:
+                                    row[at] = translate(MODEL_VALUES[row[at]])
                     if view == "mispredictions" and reclassification is not None \
                             and reclassification.correctable(owner, chosen):
                         # 299a: SQL runs: pick the right class, review, confirm.
