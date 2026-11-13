@@ -406,7 +406,7 @@ Every control in the current Voilà GUI has a place in the new design, except th
 | Erase CSV model | Models → Delete |
 | Start | Run → Start run |
 | Progress bar, progress label, output area | Run → Monitor |
-| Mispredicted output and reclassification grid | Results → Mispredictions (SQL: 299a; CSV: 299b) |
+| Mispredicted output and reclassification grid | Results → Mispredictions (SQL: 299a; CSV: 299b, done) |
 | Prediction runs, Refresh runs | Run History (filter: Prediction) |
 | Export CSV, Export joined | Results → Predictions |
 | Erase predictions | Run History → Delete |
@@ -493,6 +493,7 @@ The map above is the target. What exists after revision 285m3:
 | `/ui/results?view=dark_numbers`; `jbg.js` (`.scroll`) | 298j | Dark Numbers on the Results tab: per target the engine's four estimates (`JBGDarkNumberReporting`) with the order status, the calculation table and the confusion matrices from the run folder, with readable estimate and model names; result sub-tabs wrap; every wide table (`.scroll`) gets a second horizontal scrollbar above it |
 | `POST /ui/results/{run}/corrections/review`, `.../corrections`, `.../corrections/{index}/undo` | 299a | Reclassification of mispredicted rows of SQL training runs (`JBGReclassification`): pick the right class, review, confirm; one parameterised transaction under the user's own sign-in; log (`corrections.json`) in the run folder, owner-only; undo writes the old class back |
 | `/ui/results` (leaderboard, mispredictions, feature importance) | 299a2 | The engine's column names and the mispredictions' model names shown in the interface's language (`HEADINGS`, `MODEL_VALUES`); class names, `P(<class>)` and feature names unchanged |
+| `/ui/results` (mispredictions, CSV runs; Dark Numbers); `GET /ui/dataset/{id}/download` | 299b | CSV corrections: a new version of the dataset's current file with the classes changed (row IDs as written), the dataset points to it (`replace_csv_file`, validation starts over); uploaded and earlier versions kept. Dark Number estimates in percent with bars on the target's scale and the range |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |

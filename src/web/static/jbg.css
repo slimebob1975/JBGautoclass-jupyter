@@ -256,8 +256,14 @@ form.copy-roles { margin-bottom: 10px; }
 .scroll-top > div { height: 1px; }
 .scroll-top[hidden] { display: none; }
 .subtabs { flex-wrap: wrap; }                       /* 298j: more views than fit on one line */
-.dark-range { max-width: 480px; }
+.dark-range { max-width: 720px; }
 
 /* 299a: corrections of mispredicted rows. */
 .correct-cell select { min-width: 110px; }
 .corrected { color: var(--ok); font-weight: 600; white-space: nowrap; }
+
+/* 299b: Dark Number estimates as percentages, with bars on the target's scale. */
+.dark-bar-cell { width: 45%; white-space: nowrap; }
+.dark-track { display: inline-block; width: calc(100% - 84px); min-width: 80px; vertical-align: middle; margin-right: 8px; }
+.dark-bar { display: block; height: 10px; min-width: 2px; background: var(--blue); border-radius: 2px; }
+.dark-percent { vertical-align: middle; font-variant-numeric: tabular-nums; }

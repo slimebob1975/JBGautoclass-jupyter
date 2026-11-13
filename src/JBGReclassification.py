@@ -1,4 +1,4 @@
-"""Reclassification of mispredicted rows (revision 299a, SQL).
+"""Reclassification of mispredicted rows (revisions 299a: SQL, 299b: CSV).
 
 Agreed 2026-11-12, replacing the Voila GUI's write-per-click grid: on the
 Results tab the owner of a finished SQL training run picks the right class for
@@ -16,6 +16,14 @@ Every written correction is logged in the run's own folder
 owner can see, like all class names (decision 5). A logged correction can be
 undone, which writes the old class back. The next training run reads the
 corrected classes from the table; the reviewed run's tables stay as they were.
+
+299b, CSV (new: the Voila GUI's CSV corrections were never connected to
+runs): the dataset's current file is read, the class of the matching rows is
+changed (IDs compared as written: "0036" is not 36) and the result is stored
+as a new version of the file, which the dataset then points to; every reader
+(Dataset tab, training, predictions) sees the corrected rows. The original
+upload and earlier versions stay, as runs and models refer to them. All rows
+must be found, or nothing is written. Row IDs are text for both sources.
 """
 from __future__ import annotations
 
@@ -41,20 +49,26 @@ def _bracket(name: str) -> str:
     return "[" + str(name).replace("]", "]]") + "]"
 
 
-def _row_id(value) -> int:
-    """SQL IDs are whole numbers (298i); the table file may show 36 as 36.0 or 0036."""
-    number = float(str(value).strip().replace(",", "."))
+def _sql_id(value) -> int:
+    """SQL IDs are whole numbers (298i)."""
+    try:
+        number = float(str(value).strip().replace(",", "."))
+    except ValueError:
+        raise CorrectionRefused("unknown row") from None
     if not number.is_integer():
         raise CorrectionRefused("unknown row")
     return int(number)
 
 
-class SQLReclassificationService:
-    def __init__(self, store, results, sessions, sql_server) -> None:
+class ReclassificationService:
+    def __init__(self, store, results, sessions=None, sql_server=None, *,
+                 datasets=None, csv_root=None) -> None:
         self._store = store
         self._results = results
         self._sessions = sessions
         self._sql_server = sql_server
+        self._datasets = datasets           # 299b: the dataset repository (CSV files)
+        self._csv_root = csv_root
 
     # --- Reading -----------------------------------------------------------------------
 
@@ -65,11 +79,20 @@ class SQLReclassificationService:
         except (KeyError, ValueError):
             raise CorrectionRefused("run unavailable") from None
         project_run = record.spec.get("project_run") if isinstance(record.spec, dict) else None
-        if (record.source is not DataSourceKind.SQL or not isinstance(project_run, dict)
+        supported = ((record.source is DataSourceKind.SQL and self._sessions is not None
+                      and self._sql_server is not None)
+                     or (record.source is DataSourceKind.CSV and self._datasets is not None
+                         and self._csv_root is not None and isinstance(project_run, dict)
+                         and project_run.get("dataset_id")))
+        if (not supported or not isinstance(project_run, dict)
                 or project_run.get("kind", "training") != "training"
                 or record.status is not RunStatus.SUCCEEDED):
-            raise CorrectionRefused("only finished SQL training runs can be corrected")
+            raise CorrectionRefused("only finished training runs can be corrected")
         return record
+
+    def source(self, owner: str, run_id: str) -> str:
+        """"sql" or "csv": where a run's corrections are written."""
+        return self._record(owner, run_id).source.value
 
     def correctable(self, owner: str, run_id: str) -> bool:
         try:
@@ -79,7 +102,7 @@ class SQLReclassificationService:
         return True
 
     def mispredicted(self, owner: str, run_id: str) -> dict:
-        """The run's mispredicted rows: ID -> the class the run saw."""
+        """The run's mispredicted rows: ID (as written) -> the class the run saw."""
         from JBGRunResults import DETAILS
         self._record(owner, run_id)
         folder = self._results._folder(owner, run_id)
@@ -95,7 +118,7 @@ class SQLReclassificationService:
             rows = {}
             for row in reader:
                 if row and len(row) > actual:
-                    rows.setdefault(_row_id(row[0]), row[actual])
+                    rows.setdefault(row[0].strip(), row[actual])
         return rows
 
     def log(self, owner: str, run_id: str) -> list:
@@ -109,10 +132,11 @@ class SQLReclassificationService:
         """ID -> the class it was last corrected to (undone corrections left out)."""
         result = {}
         for entry in self.log(owner, run_id):
+            # 299a logs kept SQL IDs as numbers; IDs are text since 299b.
             if entry.get("undone_at"):
-                result.pop(entry["id"], None)
+                result.pop(str(entry["id"]), None)
             else:
-                result[entry["id"]] = entry["new"]
+                result[str(entry["id"])] = entry["new"]
         return result
 
     # --- Reviewing and writing ----------------------------------------------------------
@@ -126,7 +150,7 @@ class SQLReclassificationService:
         for raw_id, new_class in chosen.items():
             if not str(new_class):
                 continue
-            row_id = _row_id(raw_id)
+            row_id = str(raw_id).strip()
             if row_id not in rows:
                 raise CorrectionRefused("unknown row")
             if str(new_class) not in labels:
@@ -135,7 +159,7 @@ class SQLReclassificationService:
                 changes.append({"id": row_id, "old": str(rows[row_id]), "new": str(new_class)})
         if not changes:
             raise CorrectionRefused("nothing to change")
-        return sorted(changes, key=lambda change: change["id"])
+        return sorted(changes, key=lambda change: (len(change["id"]), change["id"]))
 
     def apply(self, principal, run_id: str, chosen: dict) -> int:
         """Write the reviewed corrections in one transaction and log them."""
@@ -163,6 +187,63 @@ class SQLReclassificationService:
         return entry
 
     def _write(self, principal, record, pairs) -> None:
+        if record.source is DataSourceKind.CSV:
+            return self._write_csv(principal.principal_key, record, pairs)
+        return self._write_sql(principal, record, [(_sql_id(i), c) for i, c in pairs])
+
+    def _write_csv(self, owner, record, pairs) -> None:
+        """299b: a new version of the dataset's current file with the classes changed."""
+        import io
+        import tempfile
+        from JBGProjectStorage import (csv_upload_format, project_csv_storage,
+                                       register_csv_upload)
+        project_run = record.spec["project_run"]
+        connection = record.spec["configuration"]["connection"]
+        try:
+            dataset = self._datasets.get_owned(owner, project_run["project_id"],
+                                               project_run["dataset_id"])
+        except KeyError:
+            raise CorrectionRefused("dataset unavailable") from None
+        repository, scope = project_csv_storage(project_run["project_id"], root=self._csv_root)
+        try:
+            form = csv_upload_format(repository, scope, dataset.registration_id)
+            with repository.open_artifact(scope, dataset.registration_id) as stream:
+                text = stream.read().decode(form["encoding"])
+        except (OSError, ValueError, UnicodeError):
+            raise CorrectionFailed("the dataset's file could not be read") from None
+        rows = list(csv.reader(io.StringIO(text, newline=""), delimiter=form["delimiter"],
+                               quotechar=form["quotechar"]))
+        header = rows[0] if rows else []
+        if connection["id_column"] not in header or connection["class_column"] not in header:
+            raise CorrectionFailed("the dataset's file has changed")
+        id_at = header.index(connection["id_column"])
+        class_at = header.index(connection["class_column"])
+        wanted = {str(row_id): new_class for row_id, new_class in pairs}
+        found = set()
+        for row in rows[1:]:
+            key = row[id_at].strip() if len(row) > id_at else None
+            if key in wanted and len(row) > class_at:
+                row[class_at] = wanted[key]
+                found.add(key)
+        if found != set(wanted):
+            raise CorrectionFailed("rows are missing from the dataset's file")
+        out = io.StringIO(newline="")
+        csv.writer(out, delimiter=form["delimiter"], quotechar=form["quotechar"],
+                   lineterminator="\r\n").writerows(rows)
+        encoding = "utf-8-sig" if form["encoding"] == "utf-8-sig" else form["encoding"]
+        with tempfile.TemporaryDirectory(prefix="jbg_correct_") as folder:
+            path = Path(folder) / "corrected.csv"
+            path.write_bytes(out.getvalue().encode(encoding))
+            try:
+                upload = register_csv_upload(repository, scope, path, delimiter=form["delimiter"],
+                                             encoding=form["encoding"],
+                                             original_name=f"{dataset.name}.csv")
+            except ValueError:
+                raise CorrectionFailed("the corrected file could not be stored") from None
+        self._datasets.replace_csv_file(owner, project_run["project_id"],
+                                        project_run["dataset_id"], upload.artifact_id)
+
+    def _write_sql(self, principal, record, pairs) -> None:
         from JBGProjectRuns import _QuietLogger, _load_config
         config = _load_config(record.spec["configuration"])
         self._sql_server.apply_to(config)
@@ -193,3 +274,7 @@ class SQLReclassificationService:
         temporary = path.with_suffix(".tmp")
         temporary.write_text(json.dumps(entries, ensure_ascii=False, indent=1), encoding="utf-8")
         temporary.replace(path)
+
+
+# 299a's name, kept for callers and tests.
+SQLReclassificationService = ReclassificationService

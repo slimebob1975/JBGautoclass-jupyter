@@ -280,6 +280,23 @@ def add_dataset_tab(app, *, principal_dependency, render, redirect, active_proje
             return redirect("/ui/dataset", dataset=dataset_id, message="cannot_activate")
         return redirect("/ui/dataset", dataset=dataset_id, message="activated")
 
+    @app.get("/ui/dataset/{dataset_id}/download", include_in_schema=False)
+    def download_csv(request: Request, dataset_id: str, principal=Depends(principal_dependency)):
+        """299b: the dataset's current CSV file, with any corrected classes."""
+        from urllib.parse import quote
+        from fastapi.responses import Response
+        pid = project_id(request, principal)
+        if pid is None:
+            return redirect("/ui/dataset")
+        try:
+            content, name = datasets.csv_file(principal.principal_key, pid, dataset_id)
+        except (DatasetUnavailable, ProjectUnavailable):
+            return redirect("/ui/dataset", message="unavailable")
+        plain = "".join(c if c.isascii() and (c.isalnum() or c in "._- ") else "_" for c in name)
+        return Response(content, media_type="text/csv", headers={
+            "Content-Disposition": f'attachment; filename="{plain}"; '
+                                   f"filename*=UTF-8''{quote(name)}"})
+
     @app.post("/ui/dataset/{dataset_id}/role", include_in_schema=False)
     def change_role(request: Request, dataset_id: str, role: str = Form(""),
                     principal=Depends(principal_dependency)):

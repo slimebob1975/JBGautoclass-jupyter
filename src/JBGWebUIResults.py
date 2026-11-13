@@ -70,6 +70,30 @@ _ESTIMATE_PREFIXES = (("D_re_full", "D_retrained_full"), ("D_cv_full", "D_cv_ful
 _CORRECTION_MODELS = {"Cross-trained model": "Cross-trained model", "Retrained model": "Final model"}
 
 
+def percent_text(value: float, language: str) -> str:
+    """A share as a percentage with two decimals ("0,10 %" in Swedish)."""
+    if value > 0 and value * 100 < 0.005:
+        text = "< 0.01 %"
+    else:
+        text = f"{value * 100:.2f} %"
+    return text.replace(".", ",") if language == "sv" else text
+
+
+def with_percentages(summary: list, language: str) -> list:
+    """299b (asked 2026-11-12): each estimate as a percentage, with its share of
+    the target's largest estimate for the bar, and the range as text."""
+    for interval in summary:
+        values = [p["value"] for p in interval["points"] if p.get("value") is not None]
+        top = max(values) if values else 0.0
+        for point in interval["points"]:
+            value = point.get("value")
+            point["percent"] = None if value is None else percent_text(value, language)
+            point["bar"] = 0.0 if value is None or top <= 0 else round(100 * value / top, 1)
+        interval["range_text"] = (f"{percent_text(min(values), language)} – "
+                                  f"{percent_text(max(values), language)}") if values else ""
+    return summary
+
+
 def readable_dark_table(detail: dict, translate) -> dict:
     """298j: the engine's Dark Number tables with readable estimate and model
     names and calculation types. Only these known columns are changed, never a
@@ -91,6 +115,8 @@ def readable_dark_table(detail: dict, translate) -> dict:
 # 299a: reclassification messages.
 MESSAGES = {
     "corrected": ("ok", "The corrections are written to the source table."),
+    "corrected_csv": ("ok", "The corrections are saved in a new version of the dataset's file."),
+    "correction_failed_csv": ("error", "The dataset's file could not be updated, so nothing was changed."),
     "undone": ("ok", "The correction is undone: the old class is written back."),
     "correction_refused": ("error", "Nothing was corrected: choose a new class for at least one row."),
     "correction_failed": ("error", "The source table could not be updated, so nothing was written. "
@@ -121,6 +147,7 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                    "detail": None, "detail_missing": False, "available": {},
                    "has_folder": False, "dark_summary": [], "dark_matrix": None,
                    "correctable": False, "corrected": {}, "correction_log": [], "review": None,
+                   "correction_source": "",
                    "dark_estimates": DARK_ESTIMATES, "dark_reasons": DARK_REASONS,
                    "dark_columns": DARK_COLUMNS}
         if project is not None:
@@ -153,6 +180,7 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                             and reclassification.correctable(owner, chosen):
                         # 299a: SQL runs: pick the right class, review, confirm.
                         context["correctable"] = True
+                        context["correction_source"] = reclassification.source(owner, chosen)
                         context["corrected"] = reclassification.current(owner, chosen)
                         context["correction_log"] = list(enumerate(reclassification.log(owner, chosen)))
                     if view == "dark_numbers":
@@ -160,7 +188,8 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                         # table (above) and the confusion matrices.
                         translate = translator(request_language(request))
                         readable_dark_table(context["detail"], translate)
-                        context["dark_summary"] = results.dark_number_summary(owner, chosen)
+                        context["dark_summary"] = with_percentages(
+                            results.dark_number_summary(owner, chosen), request_language(request))
                         try:
                             context["dark_matrix"] = readable_dark_table(results.detail(
                                 owner, chosen, "dark_numbers_matrix", page_size=500), translate)
@@ -174,6 +203,15 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
     if reclassification is None or redirect is None:
         return
     from JBGReclassification import CorrectionFailed, CorrectionRefused
+
+    def is_csv(principal, run_id) -> bool:
+        try:
+            return reclassification.source(principal.principal_key, run_id) == "csv"
+        except CorrectionRefused:
+            return False
+
+    def failed_message(principal, run_id) -> str:
+        return "correction_failed_csv" if is_csv(principal, run_id) else "correction_failed"
 
     def chosen_classes(form) -> dict:
         return {key[len("corr:"):]: value for key, value in form.multi_items()
@@ -192,6 +230,7 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                             message="correction_refused")
         context = context_for(request, principal, run_id, "mispredictions", page)
         context["review"] = changes
+        context["correction_source"] = reclassification.source(principal.principal_key, run_id)
         return render(request, principal, "results.html", "results", **context)
 
     @app.post("/ui/results/{run_id}/corrections", include_in_schema=False)
@@ -208,8 +247,9 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                             message="signin_needed")
         except CorrectionFailed:
             return redirect("/ui/results", run=run_id, view="mispredictions",
-                            message="correction_failed")
-        return redirect("/ui/results", run=run_id, view="mispredictions", message="corrected")
+                            message=failed_message(principal, run_id))
+        return redirect("/ui/results", run=run_id, view="mispredictions",
+                        message="corrected_csv" if is_csv(principal, run_id) else "corrected")
 
     @app.post("/ui/results/{run_id}/corrections/{index}/undo", include_in_schema=False)
     def undo_correction(run_id: str, index: int, principal=Depends(principal_dependency)):
@@ -223,5 +263,5 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                             message="signin_needed")
         except CorrectionFailed:
             return redirect("/ui/results", run=run_id, view="mispredictions",
-                            message="correction_failed")
+                            message=failed_message(principal, run_id))
         return redirect("/ui/results", run=run_id, view="mispredictions", message="undone")

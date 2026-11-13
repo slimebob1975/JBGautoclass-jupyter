@@ -152,6 +152,21 @@ class DatasetService:
             raise
         return dataset_response(dataset, upload=upload)
 
+    def csv_file(self, owner: str, project_id: str, dataset_id: str) -> tuple[bytes, str]:
+        """299b: a CSV dataset's current file (with any corrected classes) and a
+        file name, for its owner."""
+        project = self._project(owner, project_id, DataSourceKind.CSV)
+        try:
+            dataset = self._repository.get_owned(owner, project_id, dataset_id)
+        except KeyError:
+            raise DatasetUnavailable("dataset unavailable") from None
+        repository, scope = project_csv_storage(project.project_id, root=self._csv_root)
+        try:
+            with repository.open_artifact(scope, dataset.registration_id) as stream:
+                return stream.read(), f"{dataset.name}.csv"
+        except (OSError, ValueError):
+            raise DatasetUnavailable("dataset file unavailable") from None
+
     def activate(self, owner: str, project_id: str, dataset_id: str) -> dict[str, Any]:
         self._project(owner, project_id)
         try:

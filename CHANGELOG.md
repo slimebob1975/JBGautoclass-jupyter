@@ -1,3 +1,34 @@
+## Revision 299b - Correcting mispredicted rows (CSV); Dark Numbers in percent (2026-11-12)
+
+- CSV reclassification (agreed 2026-11-12; the Voilà GUI's CSV corrections
+  were never connected to runs): the mispredictions of a finished CSV
+  training run get the same "Rätt klass" choice, review and confirmation as
+  SQL runs (299a). A confirmed batch reads the dataset's current file,
+  changes the class of the matching rows and stores the result as a new
+  version of the file, which the dataset then points to
+  (`DatasetRepository.replace_csv_file`); every reader (Dataset tab,
+  training, predictions) sees the corrected rows. The uploaded file and
+  earlier versions stay, as runs and models refer to them. Row IDs are
+  compared as written ("0036" is not 36), so the mispredictions table now
+  keeps its ID column as text for both sources (`TEXT_FIRST_COLUMN`). All
+  rows must be found, or nothing is written. The dataset's validation state
+  starts over. Undo writes the old class back the same way.
+- The Dataset tab offers "Hämta CSV": the dataset's current file, with any
+  corrected classes (`DatasetService.csv_file`; the file name also as
+  RFC 5987 `filename*` for names with å, ä, ö).
+- Dark Numbers (asked 2026-11-12): each estimate is also shown in percent,
+  with a bar on the target class's scale, and below the table the range
+  ("Intervall: 0,10 % – 1,43 %") (`with_percentages`).
+- `JBGReclassification.ReclassificationService` serves both sources
+  (`SQLReclassificationService` kept as a name); IDs in the log are text
+  (299a logs with numeric IDs are still read).
+- User guides and design document describe both; the 299a tests use text
+  IDs.
+- Tests: `tests/test_revision_299b_csv_reclassification.py`, including a
+  native run: a CSV training with wrong labels, a correction through the
+  Results tab, and a second training that reads the corrected file. Checked
+  in headless Chromium: the percentage bars.
+
 ## Revision 299a2 - Result table headings in the interface's language (2026-11-12)
 
 - Asked 2026-11-12: the mispredictions' columns "Actual", "Predicted" and

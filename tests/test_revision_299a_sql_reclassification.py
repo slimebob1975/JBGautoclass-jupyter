@@ -94,8 +94,8 @@ def setting(tmp_path):
 # --- The service --------------------------------------------------------------------------------
 
 def test_review_lists_real_changes_only(setting):
-    changes = setting.service.review(setting.owner, setting.run, {"36": "hund", "9.0": "hund"})
-    assert changes == [{"id": 36, "old": "katt", "new": "hund"}]           # 9 is already hund
+    changes = setting.service.review(setting.owner, setting.run, {"36": "hund", "9": "hund"})
+    assert changes == [{"id": "36", "old": "katt", "new": "hund"}]         # 9 is already hund
     with pytest.raises(CorrectionRefused, match="unknown class"):
         setting.service.review(setting.owner, setting.run, {"36": "älg"})
     with pytest.raises(CorrectionRefused, match="unknown row"):
@@ -111,8 +111,8 @@ def test_corrections_are_parameterised_in_one_transaction_and_logged(setting):
     assert setting.helper.executed == [(statement, ("katt", 9)), (statement, ("hund", 36))]
     log = json.loads((setting.folder / "corrections.json").read_text(encoding="utf-8"))
     assert [(e["id"], e["old"], e["new"], e["undone_at"]) for e in log] == [
-        (9, "hund", "katt", None), (36, "katt", "hund", None)]
-    assert setting.service.current(setting.owner, setting.run) == {9: "katt", 36: "hund"}
+        ("9", "hund", "katt", None), ("36", "katt", "hund", None)]       # IDs as text (299b)
+    assert setting.service.current(setting.owner, setting.run) == {"9": "katt", "36": "hund"}
 
 
 def test_a_failed_write_writes_nothing_and_says_little(setting):
@@ -134,7 +134,7 @@ def test_undo_writes_the_old_class_back(setting):
         setting.service.undo(setting.principal, setting.run, 0)            # already undone
 
 
-@pytest.mark.parametrize("change", [{"source": DataSourceKind.CSV}, {"kind": "prediction"},
+@pytest.mark.parametrize("change", [{"kind": "prediction"},
                                     {"status": RunStatus.FAILED}, {"owner": "someone-else"}])
 def test_only_finished_own_sql_training_runs(setting, change):
     run, _ = _run(setting.store, setting.root, "22222222-2222-4222-8222-222222222222", **change)
@@ -213,7 +213,8 @@ def test_an_empty_review_and_a_refused_write_explain_themselves(tmp_path):
     assert "Källtabellen kunde inte uppdateras, så inget skrevs." in page
 
 
-def test_csv_runs_show_no_correction_controls(tmp_path):
+def test_runs_without_a_known_dataset_show_no_correction_controls(tmp_path):
+    # 299b: CSV runs are corrected through their dataset; a run without one is not.
     with _client(tmp_path) as client:
         location = client.post("/ui/projects", data={"name": "C", "source": "csv"},
                                follow_redirects=False).headers["location"]

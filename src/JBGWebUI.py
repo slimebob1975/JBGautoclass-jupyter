@@ -260,12 +260,12 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                        runs=runs, datasets=datasets)
     if results is not None and runs is not None:
         from JBGWebUIResults import add_results_tab
-        reclassification = None
-        if sessions is not None and sql_server is not None:
-            # 299a: corrections of mispredicted rows in SQL runs.
-            from JBGReclassification import SQLReclassificationService
-            reclassification = SQLReclassificationService(results._store, results, sessions,
-                                                          sql_server)
+        # 299a/299b: corrections of mispredicted rows (SQL tables, CSV files).
+        from JBGReclassification import ReclassificationService
+        reclassification = ReclassificationService(
+            results._store, results, sessions, sql_server,
+            datasets=getattr(datasets, "_repository", None),
+            csv_root=getattr(datasets, "_csv_root", None))
         add_results_tab(app, principal_dependency=principal_dependency, render=render,
                         active_project=active_project, runs=runs, results=results,
                         reclassification=reclassification, redirect=_redirect)

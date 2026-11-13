@@ -296,6 +296,23 @@ class DatasetRepository:
                 validation_state=DatasetValidationState.UNVERIFIED.value, updated_at=now))
         return self.get_roles(owner, project_id, dataset_id)
 
+    def replace_csv_file(self, owner, project_id, dataset_id, registration_id: str):
+        """299b: point a CSV dataset at a new version of its file (corrected
+        classes). The earlier versions stay, as runs and models refer to them.
+        The data changed, so the validation state starts over."""
+        owner = _text(owner, "owner", 256)
+        registration_id = _text(registration_id, "CSV registration ID", 64)
+        with self._engine.begin() as connection:
+            row = self._owned_row(connection, owner, project_id, dataset_id)
+            if row.source != DataSourceKind.CSV.value:
+                raise ValueError("only CSV datasets have files")
+            connection.execute(update(self._datasets).where(
+                self._datasets.c.dataset_id == dataset_id).values(
+                registration_id=registration_id,
+                validation_state=DatasetValidationState.UNVERIFIED.value,
+                updated_at=datetime.now(timezone.utc)))
+        return self.get_owned(owner, project_id, dataset_id)
+
     def set_validation(self, owner, project_id, dataset_id, state: DatasetValidationState):
         """Record a result obtained by a separate validation service.
 

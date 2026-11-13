@@ -129,6 +129,7 @@
         <button class="btn sub">{{ _("Activate for training") }}</button>
       </form>
       {% endif %}
+      {% if selected.source == "csv" %}<p><a href="/ui/dataset/{{ selected.dataset_id }}/download">{{ _("Download CSV") }}</a> <span class="muted">· {{ _("with corrected classes, if any") }}</span></p>{% endif %}
       {% if selected.role != "prediction" %}
       {# 298f: training and mixed datasets may switch role. #}
       {% set other = "mixed" if selected.role == "training" else "training" %}

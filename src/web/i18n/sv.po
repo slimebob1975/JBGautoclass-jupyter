@@ -1861,3 +1861,28 @@ msgstr "Upprepning"
 
 msgid "No model"
 msgstr "Ingen modell"
+
+# 299b: corrections of CSV datasets.
+msgid "The corrections are saved in a new version of the dataset's file."
+msgstr "Korrigeringarna är sparade i en ny version av datasetets fil."
+
+msgid "The dataset's file could not be updated, so nothing was changed."
+msgstr "Datasetets fil kunde inte uppdateras, så inget ändrades."
+
+msgid "These classes will be saved in a new version of the dataset's CSV file, which every later run reads. The uploaded file is kept. Each correction can be undone afterwards."
+msgstr "De här klasserna sparas i en ny version av datasetets CSV-fil, som alla senare körningar läser. Den uppladdade filen behålls. Varje korrigering kan ångras efteråt."
+
+msgid "Choose the right class for rows that are wrongly labelled, then review the corrections before they are saved in the dataset's file."
+msgstr "Välj rätt klass för rader som har fel klass och granska sedan korrigeringarna innan de sparas i datasetets fil."
+
+msgid "Download CSV"
+msgstr "Hämta CSV"
+
+msgid "with corrected classes, if any"
+msgstr "med eventuella korrigerade klasser"
+
+msgid "In percent"
+msgstr "I procent"
+
+msgid "Range"
+msgstr "Intervall"

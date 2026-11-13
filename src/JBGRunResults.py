@@ -32,6 +32,9 @@ DETAILS = {
 }
 # 298j: tables whose unnamed first column is data (the true class), not an index.
 KEEP_FIRST_COLUMN = frozenset({"dark_numbers_matrix"})
+# 299b: tables whose first column is a row ID, kept as written (CSV IDs are
+# text: "0036" is not 36).
+TEXT_FIRST_COLUMN = frozenset({"mispredictions"})
 PAGE_SIZE = 50
 MAX_PAGE_SIZE = 500
 
@@ -120,7 +123,8 @@ class RunResultsService:
         start = (page - 1) * page_size
         selected = [row[1:] if drop_index else row for row in rows[start:start + page_size]]
         return {"run_id": run_id, "kind": kind, "columns": columns,
-                "rows": [[_number(value) for value in row] for row in selected],
+                "rows": [[value if (index == 0 and kind in TEXT_FIRST_COLUMN) else _number(value)
+                          for index, value in enumerate(row)] for row in selected],
                 "total_rows": len(rows), "page": page, "page_size": page_size}
 
 

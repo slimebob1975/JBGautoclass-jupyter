@@ -78,7 +78,8 @@
     {% elif review %}
       {# 299a: nothing is written until the user confirms. #}
       <h3>{{ _("Confirm the corrections") }}</h3>
-      <p class="message warn">{{ _("These classes will be written to the source table in SQL Server with your sign-in. Each correction can be undone afterwards.") }}</p>
+      {% if correction_source == "csv" %}<p class="message warn">{{ _("These classes will be saved in a new version of the dataset's CSV file, which every later run reads. The uploaded file is kept. Each correction can be undone afterwards.") }}</p>
+      {% else %}<p class="message warn">{{ _("These classes will be written to the source table in SQL Server with your sign-in. Each correction can be undone afterwards.") }}</p>{% endif %}
       <table class="grid">
         <thead><tr><th>{{ _("Row ID") }}</th><th>{{ _("Class now") }}</th><th>{{ _("New class") }}</th></tr></thead>
         <tbody>{% for change in review %}<tr><td>{{ change.id }}</td><td>{{ change.old }}</td><td><b>{{ change.new }}</b></td></tr>{% endfor %}</tbody>
@@ -90,7 +91,7 @@
       </form>
     {% elif detail %}
       {% if view == "mispredictions" %}<p class="hint">{{ _("All labelled rows where the cross-trained or the final model is wrong.") }}</p>{% endif %}
-      {% if correctable %}<p class="hint">{{ _("Choose the right class for rows that are wrongly labelled, then review the corrections before they are written to the source table.") }}</p>
+      {% if correctable %}<p class="hint">{% if correction_source == "csv" %}{{ _("Choose the right class for rows that are wrongly labelled, then review the corrections before they are saved in the dataset's file.") }}{% else %}{{ _("Choose the right class for rows that are wrongly labelled, then review the corrections before they are written to the source table.") }}{% endif %}</p>
       <form method="post" action="/ui/results/{{ selected_run }}/corrections/review?page={{ detail.page }}" id="corrections-form">{% endif %}
       {% if view == "dark_numbers" %}
         {# 298j: the estimates per target class, as the Voila GUI summarises them. #}
@@ -98,10 +99,12 @@
         {% for interval in dark_summary %}
           <h3>{{ _("Target class") }}: {{ interval.target }} <span class="muted">· {{ interval.formula | replace("_", " ") }}</span></h3>
           <table class="grid dark-range">
-            <thead><tr><th>{{ _("Estimate") }}</th><th class="num">{{ _("Dark Number") }}</th></tr></thead>
+            <thead><tr><th>{{ _("Estimate") }}</th><th class="num">{{ _("Dark Number") }}</th><th>{{ _("In percent") }}</th></tr></thead>
             <tbody>{% for p in interval.points %}<tr><td>{{ _(dark_estimates.get(p.label, p.label)) }}</td>
-              <td class="num">{% if p.value is not none %}{{ p.value | num(language) }}{% else %}{{ _(dark_reasons.get(p.reason, p.reason)) }}{% endif %}</td></tr>{% endfor %}</tbody>
+              <td class="num">{% if p.value is not none %}{{ p.value | num(language) }}{% else %}{{ _(dark_reasons.get(p.reason, p.reason)) }}{% endif %}</td>
+              <td class="dark-bar-cell">{% if p.percent %}<span class="dark-track"><span class="dark-bar" style="width: {{ p.bar }}%"></span></span><span class="dark-percent">{{ p.percent }}</span>{% endif %}</td></tr>{% endfor %}</tbody>
           </table>
+          {% if interval.range_text %}<p class="hint">{{ _("Range") }}: <b>{{ interval.range_text }}</b></p>{% endif %}
           {% if interval.status == "ordered" %}<p class="hint">{{ _("The estimates are in the expected order.") }}</p>
           {% elif interval.status == "broken" %}<p class="message warn">{{ _("The estimates are not in the expected order.") }}</p>
           {% else %}<p class="message warn">{{ _("The order could not be checked: an estimate is missing or cannot be estimated.") }}</p>{% endif %}
@@ -115,7 +118,7 @@
       <div class="scroll"><table class="grid">
         <thead><tr>{% if correctable %}<th>{{ _("Right class") }}</th>{% endif %}{% for heading in detail.headings %}<th>{{ heading }}</th>{% endfor %}</tr></thead>
         <tbody>{% set seen = namespace(ids=[]) %}{% for row in detail.rows %}<tr>
-          {% if correctable %}{% set rid = row[0] | int %}<td class="correct-cell">
+          {% if correctable %}{% set rid = row[0] | string | trim %}<td class="correct-cell">
             {% if rid not in seen.ids %}{% set seen.ids = seen.ids + [rid] %}
               {% if rid in corrected %}<span class="corrected">{{ _("corrected to") }} {{ corrected[rid] }}</span>
               {% else %}<select name="corr:{{ rid }}" aria-label="{{ _('Right class') }} {{ rid }}"><option value="">–</option>{% for label in labels %}<option value="{{ label }}">{{ label }}</option>{% endfor %}</select>{% endif %}

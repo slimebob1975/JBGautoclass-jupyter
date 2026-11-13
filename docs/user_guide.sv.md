@@ -198,6 +198,15 @@ en gång eller ingen. Inloggningen måste få ändra tabellen. Rättade rader
 markeras, och under tabellen listas korrigeringarna; **Ångra** skriver
 tillbaka den gamla klassen. Nästa träning använder de rättade klasserna.
 
+För en CSV-körning fungerar det likadant, men korrigeringarna sparas i en ny
+version av datasetets fil, som alla senare körningar läser; den uppladdade
+filen behålls. Datasetet behöver valideras igen. **Hämta CSV** under fliken
+Dataset hämtar filen med de rättade klasserna.
+
+I **Mörkertal** visas varje skattning också i procent, med en stapel på
+målklassens skala, och under tabellen intervallet från minsta till största
+skattning.
+
 Breda tabeller har en rullningslist både under och ovanför tabellen.
 
 ## Modeller

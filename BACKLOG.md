@@ -355,9 +355,11 @@ full SQL regression acceptance remain separately unverified.
   - [ ] Voilà retirement (gap check 2026-11-12; items 1-4 agreed as needed):
     - [x] 299a: reclassification of mispredictions, SQL (review, confirm,
       one transaction, log, undo).
-    - [ ] 299b: reclassification for CSV: corrections stored per dataset
-      beside the original file, applied whenever the dataset is read;
-      corrected download.
+    - [x] 299b: reclassification for CSV: a new version of the dataset's file
+      per confirmed batch (originals kept), read by every later run;
+      corrected download. Also: Dark Numbers in percent (asked 2026-11-12).
+    - [ ] Note with 299b: file versions from corrections are kept, as runs
+      and models refer to them; cleaning them up belongs with deleting.
     - [ ] "Export joined" for CSV predictions (predictions with the original
       columns).
     - [ ] Deleting datasets, models, runs and projects (with the per-project

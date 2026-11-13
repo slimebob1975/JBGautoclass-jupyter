@@ -198,6 +198,15 @@ table. Corrected rows are marked, and the corrections are listed below the
 table; **Undo** writes the old class back. The next training uses the
 corrected classes.
 
+For a CSV run it works the same way, but the corrections are saved in a new
+version of the dataset's file, which every later run reads; the uploaded file
+is kept. The dataset needs validating again. **Download CSV** on the Dataset
+tab downloads the file with the corrected classes.
+
+In **Dark Numbers** each estimate is also shown in percent, with a bar on
+the target class's scale, and below the table the range from the smallest
+to the largest estimate.
+
 Wide tables have a scrollbar both below and above the table.
 
 ## Models
