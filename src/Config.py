@@ -111,7 +111,9 @@ class Config:
 
     # 293a2: section keys added after the schema-v2 baseline, with the default
     # an older file implies. Agreed 2026-11-05; extend only deliberately.
-    LATER_KEYS = {"mode": {"categorical_limit": 30}}
+    # 299b2: date_columns (298h) was missing here, so a configuration saved
+    # before 298h could not be loaded (found 2026-11-13 on a CSV run).
+    LATER_KEYS = {"mode": {"categorical_limit": 30, "date_columns": ""}}
     JSON_CONFIG_SCHEMA_VERSION = 2
 
     CLASS_TABLE_SCRIPT = "./sql/CreatePredictionTables.sql.txt"

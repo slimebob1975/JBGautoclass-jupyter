@@ -1,3 +1,17 @@
+## Revision 299b2 - Configurations saved before 298h load again (2026-11-13)
+
+- Found 2026-11-13: a CSV training run with a configuration saved before
+  298h failed with a server error ("JSON schema v2 section 'mode' is missing
+  keys: date_columns"). 298h added `mode.date_columns` but did not list it
+  in `Config.LATER_KEYS`, the 293a2 mechanism that gives keys added after
+  the schema-v2 baseline their default when an older configuration lacks
+  them. Now listed (default ""). This also covers Voilà configuration files
+  saved before 298h. Other missing keys are still refused.
+- Tests: `tests/test_revision_299b2_older_configurations.py` (an older
+  configuration loads; a stored configuration from before 298h starts a CSV
+  run; the test fails without the fix). The 293a2 test no longer pins the
+  whole `LATER_KEYS`.
+
 ## Revision 299b - Correcting mispredicted rows (CSV); Dark Numbers in percent (2026-11-12)
 
 - CSV reclassification (agreed 2026-11-12; the Voilà GUI's CSV corrections

@@ -41,7 +41,7 @@ def test_the_limit_must_be_a_whole_number_from_2_to_1000(value):
 
 
 def test_only_listed_later_keys_may_be_missing():
-    assert Config.LATER_KEYS == {"mode": {"categorical_limit": 30}}
+    assert Config.LATER_KEYS["mode"]["categorical_limit"] == 30          # 299b2: more keys since
     payload = Config()._config_to_json(username="")
     del payload["mode"]["test_size"]                                  # still strict
     with pytest.raises(Exception, match="missing keys"):
