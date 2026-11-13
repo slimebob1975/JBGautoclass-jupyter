@@ -114,10 +114,23 @@ class StoreProgressLogger:
         self.evaluation = None
         self.feature_importance = None
         self._inner = {}     # 297a: key -> [kind, total, recorded done, recorded at, latest done]
+        # 299g: set here, never looked up through __getattr__ (the engine logger).
+        self._checked_at = float("-inf")
 
     # --- 297a: inner progress (Voilà's inner bars), for the web interface ---------------
 
     INNER_INTERVAL = 1.0                    # seconds between recorded steps of one bar
+    CHECK_INTERVAL = 1.0                    # 299g: seconds between cancel checks in inner steps
+
+    def _inner_checkpoint(self) -> None:
+        """299g: every inner step (an algorithm combination, rows fetched, a
+        Dark Number fit) is a checkpoint too, so "Cancel the run" takes effect
+        after the current step instead of the current stage. The database is
+        read at most once a second."""
+        now = time.monotonic()
+        if self._heartbeat.lost or now - self._checked_at >= self.CHECK_INTERVAL:
+            self._checked_at = now
+            self.checkpoint()
 
     def _record_inner(self, kind, done=0, total=1):
         try:
@@ -137,6 +150,7 @@ class StoreProgressLogger:
         if kind is not None and total >= 1:
             self._inner[key] = [kind, total, 0, time.monotonic(), 0]
             self._record_inner(kind, 0, total)
+        self._inner_checkpoint()
         return result
 
     def update_inline_progress(self, key, current_count, terminal_text):
@@ -153,6 +167,7 @@ class StoreProgressLogger:
             if done != previous and (done == total or now - recorded >= self.INNER_INTERVAL):
                 bar[2], bar[3] = done, now
                 self._record_inner(kind, done, total)
+        self._inner_checkpoint()
         return result
 
     def reset_inline_progress(self, key):

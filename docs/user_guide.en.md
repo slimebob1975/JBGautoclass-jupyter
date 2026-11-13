@@ -190,6 +190,13 @@ thinner bar shows how many algorithm combinations are done, for example
 browser, and it can be stopped with **Cancel the run**. **Show log** shows
 the run's log.
 
+**Cancel the run** asks the run to stop: it stops after the step it is
+working on, such as the algorithm combination being tried. A long step can
+take a while. Once you have cancelled, **Stop now** ends the run at once; the
+step in progress is lost, which does not matter for a cancelled run. If the
+program on the server is stopped or ends unexpectedly, its runs are marked
+interrupted: at once when the server notices, otherwise after five minutes.
+
 If the configuration also predicts rows without a class but the training
 dataset has no such rows, the run only trains and skips the prediction; the
 log says so.

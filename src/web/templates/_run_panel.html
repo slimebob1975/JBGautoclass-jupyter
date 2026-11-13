@@ -30,10 +30,21 @@
       </div>
     </div>
     <p class="hint">{{ _("The page updates itself while the run is in progress.") }}</p>
+    {% if overview.cancel_requested and overview.status == "running" %}
+      {# 299g: cancelling waits for the next checkpoint; "Stop now" ends the worker at once. #}
+      <p class="message warn">{{ _("Cancelling: the run stops after the step it is working on. A long step can take a while; Stop now ends it at once.") }}</p>
+      {% if can_stop %}
+      <form method="post" action="/ui/run/{{ overview.run_id }}/stop">
+        <input type="hidden" name="back" value="{{ back }}">
+        <button class="btn act warning">{{ _("Stop now") }}</button>
+      </form>
+      {% endif %}
+    {% else %}
     <form method="post" action="/ui/run/{{ overview.run_id }}/cancel">
       <input type="hidden" name="back" value="{{ back }}">
       <button class="btn sub">{{ _("Cancel the run") }}</button>
     </form>
+    {% endif %}
   {% endif %}
   {# 297e: why the run failed, as a fixed text per failure code #}
   {% set failures = {"no_model": "No model was trained; the log says why.",

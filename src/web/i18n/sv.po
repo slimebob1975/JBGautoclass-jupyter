@@ -2071,3 +2071,16 @@ msgstr "Ta bort projektet…"
 
 msgid "Nothing outside the program: the CSV files on your own computer are not touched."
 msgstr "Inget utanför programmet: CSV-filerna på din egen dator berörs inte."
+
+# 299g: stopping a run
+msgid "The run is stopped."
+msgstr "Körningen är stoppad."
+
+msgid "The run could not be stopped: it has already ended."
+msgstr "Körningen kunde inte stoppas: den har redan avslutats."
+
+msgid "Cancelling: the run stops after the step it is working on. A long step can take a while; Stop now ends it at once."
+msgstr "Avbryter: körningen stannar efter steget den arbetar med. Ett långt steg kan ta en stund; Stoppa nu avslutar den direkt."
+
+msgid "Stop now"
+msgstr "Stoppa nu"

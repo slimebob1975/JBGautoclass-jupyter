@@ -88,7 +88,8 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
     submission = RunSubmission(store, configurations=configurations or SavedConfigurations(),
                                sessions=sessions, on_submit=dispatcher.wake,
                                **submission_options)
-    runs = DurableRunService(store, scope_for=_no_scope)
+    runs = DurableRunService(store, scope_for=_no_scope,
+                             stop_worker=dispatcher.stop_run)       # 299g
     project_service = ProjectService(projects)
     configuration_service = ConfigurationService(saved_configs, project_service)
     inspection = DatasetInspectionService(datasets, project_service, configuration_service,

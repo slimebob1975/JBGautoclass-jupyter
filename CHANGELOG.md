@@ -1,3 +1,33 @@
+## Revision 299g - Stopping a run that does not stop (2026-11-13)
+
+- Asked 2026-11-13: "Avbryt körningen" on a wrongly configured run seemed to
+  do nothing, and after killing the processes and restarting, the run stayed
+  "running" for minutes. "Cancel" is a request the worker honours at its next
+  checkpoint (stage changes and outer progress), and a dead worker was only
+  noticed when its heartbeat had been silent for five minutes. Agreed
+  2026-11-13 (three parts):
+  - Every inner step is a checkpoint too (an algorithm combination, rows
+    fetched, columns checked, feature importance steps, Dark Number fits), so
+    cancelling takes effect after the current step instead of the current
+    stage. The database is read at most once a second.
+  - "Stoppa nu" (orange), shown once a running run has been cancelled: ends
+    the worker process with its child processes at once and records the run
+    as cancelled (`RunDispatcher.stop_run`, `DurableRunService.stop`,
+    `POST /ui/run/{run}/stop`). A worker left by an earlier server session is
+    found by its command line. Owner only. The run overview tells whether
+    cancelling was requested (`cancel_requested`).
+  - When the dispatcher sees one of its own workers end while its job is
+    still running (killed or crashed), the run is marked interrupted at once
+    (`RunJobStore.interrupt`). Runs whose worker belonged to an earlier server
+    session still go by the five-minute heartbeat rule. Worker IDs now carry
+    a token per dispatcher (`pid<server>-<token>-<n>`): two servers in one
+    process (a restart in the tests) handed out the same IDs, and a worker
+    that lost the race for a job would have interrupted the winner's run. A
+    worker that exits with "not claimed" never interrupts anything.
+- User guides: what cancelling and stopping do.
+- Tests: `tests/test_revision_299g_stopping_runs.py` (including a real process
+  found and ended by its command line).
+
 ## Revision 299f2 - Alphas as numbers in Dark Numbers (2026-11-13)
 
 - Asked 2026-11-13: the Dark Numbers calculation table on the Results tab

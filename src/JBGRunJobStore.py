@@ -397,6 +397,24 @@ class RunJobStore:
                         error_type=error_type)).rowcount
         return changed == 1
 
+    def interrupt(self, run: RunReference, worker_id: str) -> bool:
+        """299g: the dispatcher saw this worker's process end while the job was
+        still running (killed or crashed): interrupted at once, instead of when
+        its heartbeat has gone stale. Only the job of that very worker."""
+        if not self._worker_is(run, worker_id):
+            return False
+        return self._move(run, RunStatus.RUNNING, RunStatus.INTERRUPTED, finished_at=_now())
+
+    def stop(self, run: RunReference) -> bool:
+        """299g: "Stop now": a running job whose worker was ended is cancelled."""
+        return self._move(run, RunStatus.RUNNING, RunStatus.CANCELLED, finished_at=_now(),
+                          cancel_requested=True)
+
+    def _worker_is(self, run: RunReference, worker_id: str) -> bool:
+        with self._engine.connect() as connection:
+            return connection.execute(select(self._jobs.c.worker_id).where(
+                self._jobs.c.run_id == run.key)).scalar_one_or_none() == worker_id
+
     def mark_stale_interrupted(self, older_than: timedelta) -> tuple[RunReference, ...]:
         """Mark running jobs whose heartbeat is older than ``older_than`` as interrupted."""
         if not isinstance(older_than, timedelta) or older_than <= timedelta(0):

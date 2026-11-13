@@ -191,6 +191,14 @@ en tunnare stapel hur många algoritmkombinationer som är klara, till exempel
 webbläsaren och kan avbrytas med **Avbryt körningen**. **Visa logg** visar
 körningens logg.
 
+**Avbryt körningen** ber körningen att stanna: den stannar efter steget den
+arbetar med, till exempel algoritmkombinationen som prövas. Ett långt steg
+kan ta en stund. När du har avbrutit avslutar **Stoppa nu** körningen direkt;
+steget som pågår går förlorat, vilket inte spelar någon roll för en avbruten
+körning. Om programmet på servern stoppas eller avslutas oväntat markeras
+dess körningar som avbrutna: direkt när servern märker det, annars efter fem
+minuter.
+
 Om konfigurationen också predikterar rader utan klass men träningsdatasetet
 saknar sådana rader, tränar körningen bara och hoppar över prediktionen;
 loggen säger det.

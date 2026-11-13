@@ -375,6 +375,9 @@ full SQL regression acceptance remain separately unverified.
       pause/resume); first make the Variabelurval section honest: it has no
       effect in web runs today.
     - [ ] Minor: rerun, run history (Körhistorik).
+  - [x] 299g (asked 2026-11-13): cancelling takes effect after the current
+    inner step; "Stoppa nu" ends a cancelled run's worker at once; a dead
+    worker of this server is marked interrupted at once.
   - [x] 299f2 (asked 2026-11-13): the Dark Numbers alphas shown as numbers
     (they showed "np.float64(...)").
   - [x] 299e (asked 2026-11-13): "Välj för körning" follows the traffic

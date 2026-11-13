@@ -21,6 +21,7 @@ import os
 import subprocess
 import sys
 import threading
+from uuid import uuid4
 from datetime import timedelta
 from pathlib import Path
 from typing import Callable
@@ -93,6 +94,7 @@ class RunDispatcher:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._counter = 0
+        self._token = uuid4().hex[:8]                  # 299g
 
     # --- One polling round ---------------------------------------------------------------
 
@@ -150,7 +152,9 @@ class RunDispatcher:
 
     def _launch(self, run: RunReference, credentials) -> None:
         self._counter += 1
-        worker_id = f"pid{os.getpid()}-{self._counter}"
+        # 299g: unique per dispatcher too (a token), so a worker's exit can be
+        # tied to its own job only, also when two servers share a process ID.
+        worker_id = f"pid{os.getpid()}-{self._token}-{self._counter}"
         self._log_dir.mkdir(parents=True, exist_ok=True)
         log = open(self._log_dir / f"run_{run.key}.log", "ab")
         try:
@@ -171,16 +175,22 @@ class RunDispatcher:
             process.stdin.close()
         except OSError:
             pass                                   # the worker failed at start; reaped later
-        self._processes[run.key] = (process, log)
+        self._processes[run.key] = (process, log, worker_id)
 
     def _reap(self) -> None:
-        for key, (process, log) in list(self._processes.items()):
+        for key, (process, log, worker_id) in list(self._processes.items()):
             code = process.poll()
             if code is None:
                 continue
             del self._processes[key]
             log.close()
             run = RunReference(key)
+            # 299g: a worker of this server ended while its job is still
+            # running (killed, crashed): interrupted now, not after the
+            # heartbeat goes stale. A job claimed by another worker is left
+            # to the heartbeat, as before.
+            if code != EXIT_NOT_CLAIMED and self._store.interrupt(run, worker_id):
+                continue
             if code == EXIT_NO_CREDENTIALS:
                 self._store.mark_awaiting_credentials(run)
             elif code not in (EXIT_FINISHED, EXIT_NOT_CLAIMED):
@@ -220,10 +230,76 @@ class RunDispatcher:
             self._thread.join(10)
             self._thread = None
         with self._lock:
-            for _, log in self._processes.values():
+            for _, log, _ in self._processes.values():
                 log.close()
             self._processes.clear()
+
+    def stop_run(self, run: RunReference) -> bool:
+        """299g: "Stop now": end the run's worker process with its child
+        processes (a worker of this server, or one left by an earlier server
+        session, found by its command line), then record the run as
+        cancelled. True if the run was running and is now cancelled."""
+        with self._lock:
+            entry = self._processes.get(run.key)
+            if entry is not None:
+                _end_process(entry[0])
+            else:
+                for pid in _worker_pids(run.key):
+                    _end_pid(pid)
+            stopped = self._store.stop(run)
+            self._reap()                          # releases the log file at once
+        return stopped
 
     def active_runs(self) -> tuple[RunReference, ...]:
         with self._lock:
             return tuple(RunReference(key) for key in self._processes)
+
+
+# --- 299g: ending a worker process --------------------------------------------------------
+
+def _end_pid(pid: int) -> None:
+    """End a process and its children (joblib workers), children first."""
+    try:
+        import psutil
+        parent = psutil.Process(pid)
+        family = parent.children(recursive=True) + [parent]
+    except Exception:
+        return                                     # already gone
+    for process in family:
+        try:
+            process.kill()
+        except Exception:
+            pass
+    try:
+        psutil.wait_procs(family, timeout=5)
+    except Exception:
+        pass
+
+
+def _end_process(process) -> None:
+    pid = getattr(process, "pid", None)
+    if isinstance(pid, int):
+        _end_pid(pid)
+    else:
+        kill = getattr(process, "kill", None)       # e.g. a test double
+        if callable(kill):
+            kill()
+
+
+def _worker_pids(run_key: str) -> list:
+    """Worker processes of ``run_key`` on this computer (local mode)."""
+    try:
+        import psutil
+    except ImportError:
+        return []
+    found = []
+    for process in psutil.process_iter(["pid", "cmdline"]):
+        try:
+            line = process.info.get("cmdline") or []
+        except Exception:
+            continue
+        if "JBGRunWorker" in line and "--run" in line:
+            at = line.index("--run")
+            if at + 1 < len(line) and line[at + 1] == run_key:
+                found.append(process.info["pid"])
+    return found

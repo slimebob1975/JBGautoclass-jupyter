@@ -59,6 +59,8 @@ MESSAGES = {
     "configuration_deleted": ("ok", "The configuration is deleted."),
     "delete_unavailable": ("error", "It is no longer available."),
     "delete_failed": ("error", "A file could not be removed, so nothing was deleted. Try again in a moment."),
+    "stopped": ("ok", "The run is stopped."),                                # 299g
+    "stop_failed": ("error", "The run could not be stopped: it has already ended."),
     "dataset_deleted": ("ok", "The dataset is deleted."),                      # 299f
     "project_deleted": ("ok", "The project is deleted."),
 }
@@ -253,7 +255,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                                                              project),
                 "active_model": active_model(request, principal.principal_key, project),
                 "message": message,
-                "can_delete": deletion is not None and runs is not None}   # 299e
+                "can_delete": deletion is not None and runs is not None,   # 299e
+                "can_stop": bool(getattr(runs, "can_stop", False))}        # 299g
         base.update(context)
         return templates.TemplateResponse(request, template, base, status_code=status_code)
 

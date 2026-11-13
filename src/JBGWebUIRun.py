@@ -189,6 +189,17 @@ def add_run_tab(app, *, principal_dependency, render, redirect, active_project, 
             return redirect(target, message="unavailable")
         return redirect(target, run=run_id, message="cancel_requested")
 
+    @app.post("/ui/run/{run_id}/stop", include_in_schema=False)
+    def stop(request: Request, run_id: str, back: str = Form("/ui/run"),
+             principal=Depends(principal_dependency)):
+        """299g: "Stop now": end the worker at once after "Cancel the run"."""
+        target = back if back in ("/ui/run", "/ui/prediction") else "/ui/run"
+        try:
+            runs.stop(principal.principal_key, RunReference(run_id))
+        except Exception:
+            return redirect(target, run=run_id, message="stop_failed")
+        return redirect(target, run=run_id, message="stopped")
+
     @app.get("/ui/runs/{run_id}/log", response_class=HTMLResponse, include_in_schema=False)
     def run_log(request: Request, run_id: str, principal=Depends(principal_dependency)):
         """296a: the end of a run's worker log in the browser; the whole log

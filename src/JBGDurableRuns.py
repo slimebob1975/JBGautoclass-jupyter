@@ -27,7 +27,8 @@ class DurableRunService:
                  scope_for: Callable[[AuthenticatedPrincipal], StorageScope],
                  authorize_dataset: Callable[[AuthenticatedPrincipal, PreparedRun], None]
                  | None = None,
-                 on_submit: Callable[[], None] | None = None) -> None:
+                 on_submit: Callable[[], None] | None = None,
+                 stop_worker: Callable[[RunReference], bool] | None = None) -> None:
         if not isinstance(store, RunJobStore):
             raise TypeError("RunJobStore required")
         if not callable(scope_for):
@@ -40,6 +41,7 @@ class DurableRunService:
         self._scope_for = scope_for
         self._authorize_dataset = authorize_dataset
         self._on_submit = on_submit
+        self._stop_worker = stop_worker            # 299g: the dispatcher's stop_run
 
     # --- Submitting (same authorization as PrincipalRunAccessService) ------------------
 
@@ -129,13 +131,29 @@ class DurableRunService:
         """Safe, versioned GUI overview; authorization precedes progress reads."""
         from JBGRunOverview import project_run_overview
         record = self._owned(principal, run)
-        return project_run_overview(run.key, record.status, self._store.progress(run),
-                                    record.result, error_type=record.error_type)
+        overview = project_run_overview(run.key, record.status, self._store.progress(run),
+                                        record.result, error_type=record.error_type)
+        # 299g: whether "Cancel the run" was chosen; the page then offers "Stop now".
+        overview["cancel_requested"] = bool(record.cancel_requested)
+        return overview
 
     def cancel(self, principal: str, run: RunReference) -> dict[str, Any]:
         """Queued jobs stop at once; a running job stops at its next checkpoint."""
         self._owned(principal, run)
         self._store.request_cancel(run)
+        return self._snapshot(self._store.get(run))
+
+    @property
+    def can_stop(self) -> bool:
+        return self._stop_worker is not None
+
+    def stop(self, principal: str, run: RunReference) -> dict[str, Any]:
+        """299g: "Stop now": end a running job's worker at once (after "Cancel
+        the run" was chosen). The step in progress is lost; the run is cancelled."""
+        record = self._owned(principal, run)
+        if self._stop_worker is None or record.status is not RunStatus.RUNNING:
+            raise PermissionError("run cannot be stopped")
+        self._stop_worker(run)
         return self._snapshot(self._store.get(run))
 
     def list_project_runs(self, principal: str, project_id: str,
