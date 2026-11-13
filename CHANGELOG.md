@@ -1,3 +1,28 @@
+## Revision 299d - Action buttons that wait; actions at the top of long pages (2026-11-13)
+
+- Asked 2026-11-13; agreed to keep the design's traffic-light convention
+  (decision: ready green, blocked red with the reason on hover), which so
+  far covered the footer's main action only. In-page action buttons now
+  follow it while there is nothing to do yet (`jbg.js`, `data-wait`):
+  "Granska korrigeringarna" until a class is chosen, "Spara kolumnroller"
+  and "Spara konfiguration" until something changes (ready from the start
+  for an unsaved suggestion or after a refused save), "Ladda upp" until a
+  file and a name are given, "Skapa projekt", "Skapa konfiguration" and
+  "Registrera" until a name is entered. A waiting button stays focusable
+  (`aria-disabled`) and shows why; clicking it or pressing Enter does
+  nothing. Without JavaScript the buttons work as before; the server
+  checks everything as before.
+- The footer's actions also stand at the top of pages longer than the
+  window (`base.html` renders the block twice; `jbg.js` shows the copy only
+  then). "Granska korrigeringarna" and "Spara kolumnroller" also stand
+  above their tables. Blocked footer buttons now say why on hover
+  ("Validera dataset", "Spara konfiguration").
+- User guides describe the colours once, at the start.
+- Tests: `tests/test_revision_299d_waiting_buttons.py`. Checked in headless
+  Chromium: blocked with the reason, a click does nothing, ready after a
+  choice or change (and blocked again when changed back), the top copies
+  act like the originals.
+
 ## Revision 299c - Predictions with the original columns; Översikt wording (2026-11-13)
 
 - Voilà retirement item (gap check 2026-11-12): "Export joined" for CSV

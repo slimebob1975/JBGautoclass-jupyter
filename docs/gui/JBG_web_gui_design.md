@@ -18,7 +18,7 @@ Design principles, each traced to a constraint already in the code:
 
 - **Jobs outlive requests.** Starting a run returns a run ID immediately; the UI polls or streams progress. Closing the browser never kills a run.
 
-- **Semantic action states.** Every primary button uses the four states in `GUI/ButtonStates.py`: ready (green), waiting (yellow), blocked (red, disabled), warning (orange, actionable). A blocked button always shows why on hover.
+- **Semantic action states.** Every primary button uses the four states in `GUI/ButtonStates.py`: ready (green), waiting (yellow), blocked (red, disabled), warning (orange, actionable). A blocked button always shows why on hover. 299d (agreed 2026-11-13): in-page action buttons follow the same convention while there is nothing to do yet.
 
 - **No hidden GUI state.** Anything the UI shows as "current" (project, dataset, configuration, model) is persisted server-side, so a reload or a second browser shows the same thing.
 
@@ -495,6 +495,7 @@ The map above is the target. What exists after revision 285m3:
 | `/ui/results` (leaderboard, mispredictions, feature importance) | 299a2 | The engine's column names and the mispredictions' model names shown in the interface's language (`HEADINGS`, `MODEL_VALUES`); class names, `P(<class>)` and feature names unchanged |
 | `/ui/results` (mispredictions, CSV runs; Dark Numbers); `GET /ui/dataset/{id}/download` | 299b | CSV corrections: a new version of the dataset's current file with the classes changed (row IDs as written), the dataset points to it (`replace_csv_file`, validation starts over); uploaded and earlier versions kept. Dark Number estimates in percent with bars on the target's scale and the range |
 | `GET /ui/prediction/{run}/joined.csv`; `/ui/overview` (no project) | 299c | CSV predictions joined with the predicted rows' original columns from the run's own file (`JBGPredictionExport`; Voilà's "Export joined"); prediction table headings translated; Översikt's empty state with the tab name as the link |
+| all tabs (`jbg.js`, `base.html`) | 299d | The action-state convention (decision 21: ready green, blocked red with the reason on hover) extended to in-page action buttons while there is nothing to do yet (`data-wait`: change / fields / fields-any; ready from the start for unsaved suggestions and refused saves); the footer's actions repeated at the top of pages longer than the window; buttons below long tables repeated above them |
 | `GET`, `PUT .../datasets/{dataset}/roles`; `GET /api/sql/catalogs`, `GET /api/sql/tables` | 293a | Column roles and the categorical limit (293a2) belong to the training dataset (one role per column); prediction datasets must be compatible; catalog and table lists for the user's login |
 | `POST /api/projects/{id}/runs` | 288a, 288b | Run from a project configuration (latest or pinned version) and dataset (default: active training dataset); one model file per run; CSV (288a) and SQL (288b, needs the SQL sign-in) |
 | `GET /api/projects/{id}/models`, `GET .../models/{model}` | 288c | Models registered by project runs (name, state, run, dataset); no paths |

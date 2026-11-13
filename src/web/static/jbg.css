@@ -267,3 +267,8 @@ form.copy-roles { margin-bottom: 10px; }
 .dark-track { display: inline-block; width: calc(100% - 84px); min-width: 80px; vertical-align: middle; margin-right: 8px; }
 .dark-bar { display: block; height: 10px; min-width: 2px; background: var(--blue); border-radius: 2px; }
 .dark-percent { vertical-align: middle; font-variant-numeric: tabular-nums; }
+
+/* 299d: waiting buttons stay focusable (aria-disabled); the footer's actions at the top. */
+.btn.act.blocked[aria-disabled="true"] { pointer-events: auto; }
+.actions-top { border-top: 0; border-bottom: 1px solid var(--line2); }
+.actions-top[hidden] { display: none; }

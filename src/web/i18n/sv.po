@@ -1903,3 +1903,16 @@ msgstr "Öppna först ett projekt under fliken {tab}."
 
 msgid "New to the program? The {tab} tab explains how to use it."
 msgstr "Ny i programmet? Fliken {tab} beskriver hur det används."
+
+# 299d: why an action button is waiting.
+msgid "Nothing has been changed yet."
+msgstr "Inget har ändrats ännu."
+
+msgid "Enter a name first."
+msgstr "Ange ett namn först."
+
+msgid "Choose a file and enter a name first."
+msgstr "Välj en fil och ange ett namn först."
+
+msgid "Choose the right class for at least one row first."
+msgstr "Välj rätt klass för minst en rad först."

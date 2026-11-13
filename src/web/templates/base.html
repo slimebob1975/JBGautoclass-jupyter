@@ -68,6 +68,11 @@
     <div class="message {{ message[0] }}" role="{{ 'alert' if message[0] == 'error' else 'status' }}">{{ _(message[1]) }}</div>
   {% endif %}
 
+  {# 299d (asked 2026-11-13): on pages longer than the window, the footer's
+     actions also stand at the top (jbg.js shows them). #}
+  {% set top_actions = self.actions() %}
+  {% if top_actions | trim %}<div class="actions actions-top" data-top-actions hidden>{{ top_actions }}</div>{% endif %}
+
   <main>{% block main %}{% endblock %}</main>
 
   <footer class="actions">{% block actions %}{% endblock %}</footer>

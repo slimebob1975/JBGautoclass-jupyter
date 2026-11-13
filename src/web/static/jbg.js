@@ -234,6 +234,87 @@
     }
   }
 
+  /* 299d (asked 2026-11-13): an action button follows the traffic lights
+     (design decision: ready green, blocked red with the reason on hover)
+     while there is nothing to do yet:
+       data-wait="change"      until the form differs from how it was shown
+                               (data-wait-dirty: ready from the start, e.g.
+                               an unsaved suggestion or a refused save);
+       data-wait="fields"      until every field in data-wait-fields is filled;
+       data-wait-fields-any    ("fields-any") until one of them is.
+     A waiting button stays focusable and shows its reason; clicking it, or
+     pressing Enter in the form, does nothing. Without JavaScript the buttons
+     work as before and the server checks everything. */
+  function formState(form) {
+    var parts = [];
+    Array.prototype.forEach.call(form.elements, function (field) {
+      if (!field.name || field.type === "submit" || field.type === "button") { return; }
+      if ((field.type === "checkbox" || field.type === "radio") && !field.checked) { return; }
+      if (field.type === "file") { parts.push(field.name + "=" + field.files.length); return; }
+      if (field.multiple && field.options) {
+        Array.prototype.forEach.call(field.selectedOptions, function (o) { parts.push(field.name + "=" + o.value); });
+        return;
+      }
+      parts.push(field.name + "=" + field.value);
+    });
+    return parts.join("&");
+  }
+
+  function filled(field) {
+    return field.type === "file" ? field.files.length > 0 : String(field.value || "").trim() !== "";
+  }
+
+  function wireWaiting(button) {
+    var form = button.form;
+    if (!form) { return; }
+    var mode = button.getAttribute("data-wait");
+    var reason = button.getAttribute("data-wait-reason") || "";
+    var title = button.getAttribute("title") || "";
+    var initial = formState(form);
+    function fields() {
+      // form.elements also holds controls tied to the form with form="...".
+      var selector = button.getAttribute("data-wait-fields") || "";
+      return Array.prototype.filter.call(form.elements, function (field) {
+        return selector && field.matches(selector);
+      });
+    }
+    function ready() {
+      if (mode === "change") { return button.hasAttribute("data-wait-dirty") || formState(form) !== initial; }
+      var list = fields();
+      if (mode === "fields") { return list.length > 0 && list.every(filled); }
+      if (mode === "fields-any") { return list.some(filled); }
+      return true;
+    }
+    function update() {
+      var ok = ready();
+      button.classList.toggle("ready", ok);
+      button.classList.toggle("blocked", !ok);
+      button.setAttribute("aria-disabled", ok ? "false" : "true");
+      button.title = ok ? title : reason;
+    }
+    form.addEventListener("input", update);
+    form.addEventListener("change", update);
+    button.addEventListener("click", function (event) {
+      if (button.getAttribute("aria-disabled") === "true") { event.preventDefault(); }
+    });
+    form.addEventListener("submit", function (event) {
+      if (event.submitter === button && button.getAttribute("aria-disabled") === "true") {
+        event.preventDefault();
+      }
+    });
+    update();
+  }
+
+  /* 299d: the footer's actions also at the top, on pages longer than the window. */
+  function wireTopActions(top) {
+    function update() {
+      top.hidden = document.documentElement.scrollHeight <= window.innerHeight + 120;
+    }
+    update();
+    window.addEventListener("resize", update);
+    if (window.ResizeObserver) { new ResizeObserver(update).observe(document.body); }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(".scroll").forEach(addTopScrollbar);
     document.querySelectorAll("[data-all-group]").forEach(wireAllGroup);
@@ -243,5 +324,7 @@
     document.querySelectorAll("[data-dark-formula]").forEach(wireDarkFormula);
     document.querySelectorAll("select[data-class-choice]").forEach(wireClassChoice);
     wireSectionLinks();
+    document.querySelectorAll("[data-top-actions]").forEach(wireTopActions);
+    document.querySelectorAll("button[data-wait]").forEach(wireWaiting);
   });
 })();

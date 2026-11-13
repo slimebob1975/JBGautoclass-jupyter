@@ -38,7 +38,8 @@
         <p class="hint">{{ _("The source type cannot be changed after the project has been created.") }}</p>
         <label for="new-description">{{ _("Description") }}</label>
         <textarea id="new-description" name="description" maxlength="4000" rows="2"></textarea>
-        <button class="btn">{{ _("Create project") }}</button>
+        <button class="btn act ready" data-wait="fields" data-wait-fields="input[name=name]"
+          data-wait-reason="{{ _('Enter a name first.') }}">{{ _("Create project") }}</button>
       </fieldset>
     </form>
   </section>

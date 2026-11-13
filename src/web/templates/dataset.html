@@ -51,7 +51,8 @@
         <select id="csv-role" name="role">
           {% for value, label in role_labels.items() %}<option value="{{ value }}">{{ _(label) }}</option>{% endfor %}
         </select>
-        <button class="btn">{{ _("Upload") }}</button>
+        <button class="btn act ready" data-wait="fields" data-wait-fields="#csv-file, #csv-name"
+          data-wait-reason="{{ _('Choose a file and enter a name first.') }}">{{ _("Upload") }}</button>
       </fieldset>
     </form>
     {% else %}
@@ -105,7 +106,8 @@
             {% if table_choice.filtered %}<p class="hint">{{ _("Only tables compatible with the training dataset are shown.") }}</p>{% endif %}
             <label for="sql-name">{{ _("Name") }}</label>
             <input id="sql-name" name="name" required maxlength="200">
-            <button class="btn">{{ _("Register") }}</button>
+            <button class="btn act ready" data-wait="fields" data-wait-fields="#sql-name"
+              data-wait-reason="{{ _('Enter a name first.') }}">{{ _("Register") }}</button>
           </form>
           {% else %}
             <p class="hint">{{ _("No suitable tables in this catalog.") }}</p>
@@ -219,6 +221,9 @@
                 <input id="categorical-limit" name="categorical_limit" value="{{ categorical_limit }}" inputmode="numeric">
                 <p class="hint">{{ _("Text columns with at most this many distinct values are categorised; other text columns are treated as free text. Categorical columns are always categorised.") }}</p>
               </div>
+              {% set roles_dirty = (not roles_stored) or roles_error %}
+              <button class="btn act ready" data-wait="change"{% if roles_dirty %} data-wait-dirty{% endif %}
+                data-wait-reason="{{ _('Nothing has been changed yet.') }}">{{ _("Save column roles") }}</button>
               <div class="scroll"><table class="grid">
                 <thead><tr><th>{{ _("Column") }}</th><th>{{ _("Type") }}</th><th>{{ _("Distinct values") }}</th><th>{{ _("Role") }}</th><th>{{ _("Treated as") }}</th></tr></thead>
                 <tbody>
@@ -241,7 +246,8 @@
                 {% endfor %}
                 </tbody>
               </table></div>
-              <button class="btn">{{ _("Save column roles") }}</button>
+              <button class="btn act ready" data-wait="change"{% if roles_dirty %} data-wait-dirty{% endif %}
+                data-wait-reason="{{ _('Nothing has been changed yet.') }}">{{ _("Save column roles") }}</button>
             </form>
           {% endif %}
         {% elif view == "classes" %}
@@ -287,6 +293,6 @@
   {% if selected %}
     <button class="btn act ready" form="validate-form">{{ _("Validate dataset") }}</button>
   {% else %}
-    <button class="btn act blocked" disabled>{{ _("Validate dataset") }}</button>
+    <button class="btn act blocked" disabled title="{{ _('Select a dataset in the list.') }}">{{ _("Validate dataset") }}</button>
   {% endif %}
 {% endblock %}

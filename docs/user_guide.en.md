@@ -28,6 +28,11 @@ model. The program opens on the Overview tab, and the title "JBG Automatic
 classification" leads there.
 Choose the language with SV/EN at the top right.
 
+Buttons that perform an action are green when they can be used and red,
+dimmed, while there is nothing to do yet, for example **Save** before
+anything has changed. Hold the pointer over a red button to see why. On long
+pages, the page's main button is at both the top and the bottom.
+
 ## Overview
 
 A summary of the open project: the active training dataset, the chosen

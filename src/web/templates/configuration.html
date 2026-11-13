@@ -94,7 +94,8 @@
         <label for="new-config">{{ _("Name") }}</label>
         <input id="new-config" name="name" required maxlength="200">
         <p class="hint">{{ _("Starts with the default settings.") }}</p>
-        <button class="btn">{{ _("Create configuration") }}</button>
+        <button class="btn act ready" data-wait="fields" data-wait-fields="#new-config"
+          data-wait-reason="{{ _('Enter a name first.') }}">{{ _("Create configuration") }}</button>
       </fieldset>
     </form>
     {% if pipeline %}
@@ -241,8 +242,9 @@
 {% block actions %}
   <span class="hint">{{ _("Saving creates a new version; earlier versions are kept.") if selected else _("Select a configuration in the list.") }}</span>
   {% if selected and schema %}
-    <button class="btn act ready" form="config-form">{{ _("Save configuration") }}</button>
+    <button class="btn act ready" form="config-form" data-wait="change"{% if unsaved %} data-wait-dirty{% endif %}
+      data-wait-reason="{{ _('Nothing has been changed yet.') }}">{{ _("Save configuration") }}</button>
   {% else %}
-    <button class="btn act blocked" disabled>{{ _("Save configuration") }}</button>
+    <button class="btn act blocked" disabled title="{{ _('Select a configuration in the list.') }}">{{ _("Save configuration") }}</button>
   {% endif %}
 {% endblock %}

@@ -207,6 +207,7 @@ def add_configuration_tab(app, *, principal_dependency, render, redirect, active
                 language = request_language(request)
                 context["schema"] = configuration_schema(project["source"], translator(language),
                                                          _server_template())
+                context["unsaved"] = values is not None          # 299d: a refused save
                 if values is None:
                     try:
                         stored = configurations.stored_settings(owner, pid,

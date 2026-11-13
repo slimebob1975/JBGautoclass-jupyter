@@ -28,6 +28,11 @@ Programmet öppnas på fliken Översikt, och rubriken ”JBG Automatisk
 klassificering” leder dit.
 Språket väljs med SV/EN uppe till höger.
 
+Knappar som utför en åtgärd är gröna när de kan användas och röda, nedtonade,
+när det ännu inte finns något att göra, till exempel **Spara** innan något
+har ändrats. Håll muspekaren över en röd knapp för att se varför. På långa
+sidor finns sidans huvudknapp både överst och längst ned.
+
 ## Översikt
 
 En sammanfattning av det öppna projektet: aktivt träningsdataset, vald

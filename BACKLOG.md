@@ -368,12 +368,10 @@ full SQL regression acceptance remain separately unverified.
       pause/resume); first make the Variabelurval section honest: it has no
       effect in web runs today.
     - [ ] Minor: rerun, run history (Körhistorik).
-  - [ ] 299d (asked 2026-11-13): buttons. (1) A button whose action is not
-    available yet (nothing chosen or changed, for example "Granska
-    korrigeringarna" with no class chosen) looks inactive until it is;
-    colour to be agreed. (2) Where action buttons sit at the end of a long
-    page or table, a copy above it as well: mispredictions, Configuration,
-    the Dataset preview and similar.
+  - [x] 299d (asked 2026-11-13; traffic lights agreed): action buttons are
+    red with the reason on hover until there is something to do, then
+    green; the footer's actions also at the top of long pages; buttons
+    below long tables also above them.
   - [ ] Översikt (agreed 2026-11-13; mockup `oversikt_mockup.html` shared in
     the conversation), for the user, managers and colleagues, both scopes:
     - All projects: key figures (training runs, rows processed, models

@@ -92,7 +92,9 @@
     {% elif detail %}
       {% if view == "mispredictions" %}<p class="hint">{{ _("All labelled rows where the cross-trained or the final model is wrong.") }}</p>{% endif %}
       {% if correctable %}<p class="hint">{% if correction_source == "csv" %}{{ _("Choose the right class for rows that are wrongly labelled, then review the corrections before they are saved in the dataset's file.") }}{% else %}{{ _("Choose the right class for rows that are wrongly labelled, then review the corrections before they are written to the source table.") }}{% endif %}</p>
-      <form method="post" action="/ui/results/{{ selected_run }}/corrections/review?page={{ detail.page }}" id="corrections-form">{% endif %}
+      <form method="post" action="/ui/results/{{ selected_run }}/corrections/review?page={{ detail.page }}" id="corrections-form">
+      <button class="btn act ready" data-wait="fields-any" data-wait-fields="select[name^='corr:']"
+        data-wait-reason="{{ _('Choose the right class for at least one row first.') }}">{{ _("Review the corrections") }}</button>{% endif %}
       {% if view == "dark_numbers" %}
         {# 298j: the estimates per target class, as the Voila GUI summarises them. #}
         <p class="hint">{{ _("The estimated share of hidden cases of each target class. The four estimates are expected to grow from left to right; together they form a heuristic range. Values are proportions.") }}</p>
@@ -125,7 +127,8 @@
             {% endif %}</td>{% endif %}
           {% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
       </table></div>
-      {% if correctable %}<button class="btn">{{ _("Review the corrections") }}</button></form>{% endif %}
+      {% if correctable %}<button class="btn act ready" data-wait="fields-any" data-wait-fields="select[name^='corr:']"
+        data-wait-reason="{{ _('Choose the right class for at least one row first.') }}">{{ _("Review the corrections") }}</button></form>{% endif %}
       {% set pages = ((detail.total_rows + detail.page_size - 1) // detail.page_size) %}
       {% if pages > 1 %}
         <nav class="pager">
