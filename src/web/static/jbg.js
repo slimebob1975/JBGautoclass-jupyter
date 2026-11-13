@@ -242,6 +242,9 @@
                                an unsaved suggestion or a refused save);
        data-wait="fields"      until every field in data-wait-fields is filled;
        data-wait-fields-any    ("fields-any") until one of them is.
+       data-wait="match"       (299f) until the field in data-wait-fields holds
+                               exactly data-wait-match (a project's name).
+     A warning (orange) button turns orange, not green, when it is ready (299f).
      A waiting button stays focusable and shows its reason; clicking it, or
      pressing Enter in the form, does nothing. Without JavaScript the buttons
      work as before and the server checks everything. */
@@ -270,6 +273,7 @@
     var mode = button.getAttribute("data-wait");
     var reason = button.getAttribute("data-wait-reason") || "";
     var title = button.getAttribute("title") || "";
+    var readyClass = button.classList.contains("warning") ? "warning" : "ready";
     var initial = formState(form);
     function fields() {
       // form.elements also holds controls tied to the form with form="...".
@@ -283,11 +287,17 @@
       var list = fields();
       if (mode === "fields") { return list.length > 0 && list.every(filled); }
       if (mode === "fields-any") { return list.some(filled); }
+      if (mode === "match") {
+        var wanted = button.getAttribute("data-wait-match") || "";
+        return list.length > 0 && list.every(function (field) {
+          return String(field.value || "").trim() === wanted;
+        });
+      }
       return true;
     }
     function update() {
       var ok = ready();
-      button.classList.toggle("ready", ok);
+      button.classList.toggle(readyClass, ok);
       button.classList.toggle("blocked", !ok);
       button.setAttribute("aria-disabled", ok ? "false" : "true");
       button.title = ok ? title : reason;

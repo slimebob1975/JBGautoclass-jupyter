@@ -48,6 +48,11 @@ välj **Skapa projekt**. Källan kan inte ändras efteråt. Markera projektet i
 listan och välj **Öppna projekt** för att arbeta med det. Krysset vid
 projektnamnet i raden under rubriken stänger projektet.
 
+**Ta bort projektet…** tar bort projektet med allt i det: dataset,
+konfigurationer, körningar med resultat och prediktioner, och modeller. Skriv
+projektets namn för att bekräfta; knappen **Ta bort** blir orange när namnet
+stämmer. Tabeller i SQL Server berörs inte.
+
 ## Dataset
 
 Ett projekt kan ha flera dataset. Varje dataset har en roll: Träning,
@@ -67,6 +72,11 @@ bara rader med klass, och ett blandat dataset kan också predikteras på fliken
 Prediktion. Prediktionsdataset kan inte byta roll.
 Under datasetet finns vyerna Förhandsgranskning, Profil, Klasser och
 Kolumnroller.
+
+**Ta bort datasetet…** tar bort datasetet med dess kolumnroller, alla
+versioner av dess CSV-fil (även korrigerade), träningskörningarna på det,
+modellerna som tränats på det och prediktionerna som gjorts på det eller med
+de modellerna. Konfigurationerna finns kvar: de hör inte till något dataset.
 
 ### Kolumnroller
 
@@ -260,11 +270,14 @@ Kommer i en senare version.
 - **Ta bort**: det som äger något tar det med sig. En körning tar med sig sin
   logg och sina resultatfiler, en modell sina filer och sina
   prediktionskörningar, en konfiguration sina versioner, sina
-  träningskörningar och deras modeller. En sida visar först exakt vad som tas
+  träningskörningar och deras modeller, ett dataset sina filversioner,
+  körningarna på det och modellerna som tränats på det, ett projekt allt i
+  det. Versioner av CSV-filer som inget längre använder städas bort när ett
+  dataset tas bort. En sida visar först exakt vad som tas
   bort och vad som finns kvar; **Ta bort** (orange) genomför det och kan inte
   ångras. Inget tas bort medan en körning som skulle tas bort står i kö eller
   pågår. När en träningskörning tas bort men dess modell finns kvar sparas
-  bara körningens inställningar för modellen, dolda. Dataset och tabeller i
-  SQL Server ändras aldrig: prediktioner och korrigeringar som redan skrivits
-  finns kvar.
+  bara körningens inställningar för modellen, dolda. Tabeller i SQL Server
+  ändras aldrig: prediktioner och korrigeringar som redan skrivits finns
+  kvar.
 - Den här fliken visar programmets version.

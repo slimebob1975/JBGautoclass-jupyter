@@ -1,3 +1,36 @@
+## Revision 299f - Deleting datasets and projects (2026-11-13)
+
+- Voilà retirement item (agreed 2026-11-13): deleting, part 2, with the rule
+  from 299e (what owns something takes it with it).
+  - A dataset: its registration and column roles, every version of its CSV
+    file (corrected ones included), the training runs on it, the models
+    trained on it and the prediction runs made on it or with those models.
+    Changed 2026-11-13: deleting a dataset with models was to be refused; it
+    now takes them. Configurations stay: they are not tied to a dataset
+    (decision 1).
+  - A project: everything in it, hidden run records included, and its
+    folders of CSV files, models and run results. Agreed 2026-11-13: it is
+    deleted only when its name is typed; the orange button waits until the
+    name matches (`data-wait="match"`), and the server checks it again.
+  - The same confirmation page as in 299e, refused while a run that would go
+    is queued or running. Owner only. Tables in SQL Server are never touched.
+    The open project, configuration and model are cleared when deleted.
+  - Entry points: "Ta bort datasetet…" on the Dataset tab, "Ta bort
+    projektet…" on the Projects tab.
+- Cleanup of unused CSV file versions (299b note): the versions of a file
+  are not linked to each other, so deleting a dataset also removes every
+  version in the project that no remaining dataset or run refers to (the
+  dataset's current file, a run's file, its model's training file). They come
+  from corrections or interrupted uploads; the confirmation page counts them.
+  Everything the engine stored with a file version goes with it.
+- `jbg.js`: a waiting warning (orange) button turns orange, not green, when
+  it is ready.
+- User guides: deleting datasets and projects.
+- Tests: `tests/test_revision_299f_deleting_datasets_projects.py`. Checked in
+  headless Chromium: the dataset confirmation page; the project button red
+  until the exact name is typed, then orange; deleting the open project
+  clears the context bar.
+
 ## Revision 299e - Deleting runs, models and configurations (2026-11-13)
 
 - Voilà retirement item (agreed 2026-11-13): deleting, part 1. The rule

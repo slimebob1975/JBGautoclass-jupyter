@@ -11,7 +11,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 from sqlalchemy import (Column, DateTime, Index, MetaData, String, Table,
-                        Text, UniqueConstraint, create_engine, insert, select, update)
+                        Text, UniqueConstraint, create_engine, delete, insert, select,
+                        update)
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
@@ -62,7 +63,8 @@ class Project:
 
 
 class ProjectRepository:
-    """Owner-scoped CRUD metadata except deletion, which needs cascade policy.
+    """Owner-scoped CRUD metadata. Deletion (299f) removes the project row only;
+    JBGDeletion removes everything in the project first (cascade policy).
 
     Use the same metadata database and schema as durable jobs, not the data-source
     SQL Server. All lookups are owner-filtered and unknown/foreign IDs are identical.
@@ -157,3 +159,12 @@ class ProjectRepository:
         if not changed:
             raise KeyError("project unavailable")
         return self.get_owned(owner, project_id)
+
+    def delete(self, owner: str, project_id: str) -> None:
+        """299f: remove the project's own row; its contents must be gone already."""
+        with self._engine.begin() as connection:
+            removed = connection.execute(delete(self._projects).where(
+                self._projects.c.project_id == project_id,
+                self._projects.c.owner == _owner(owner))).rowcount
+        if not removed:
+            raise KeyError("project unavailable")

@@ -48,6 +48,11 @@ choose **Create project**. The source cannot be changed afterwards. Select
 the project in the list and choose **Open project** to work with it. The
 cross by the project name in the line below the title closes the project.
 
+**Delete the project…** deletes the project with everything in it:
+datasets, configurations, runs with their results and predictions, and
+models. Type the project's name to confirm; the **Delete** button turns
+orange when the name is right. Tables in SQL Server are not touched.
+
 ## Dataset
 
 A project can have several datasets. Each dataset has a role: Training,
@@ -67,6 +72,11 @@ role to …**; its column roles and validation are kept. Training uses only
 rows with a class, and a mixed dataset can also be predicted on the
 Prediction tab. Prediction datasets cannot switch role. Below the dataset are the views Preview, Profile, Classes and Column
 roles.
+
+**Delete the dataset…** deletes the dataset with its column roles, every
+version of its CSV file (corrected ones included), the training runs on it,
+the models trained on it and the predictions made on it or with those
+models. Configurations stay: they are not tied to a dataset.
 
 ### Column roles
 
@@ -260,11 +270,14 @@ Available in a later version.
 - Every run keeps its results in a folder of its own on the server.
 - **Deleting**: what owns something takes it with it. A run takes its log
   and result files; a model its files and its prediction runs; a
-  configuration its versions, its training runs and their models. A page
+  configuration its versions, its training runs and their models; a
+  dataset its file versions, the runs on it and the models trained on it; a
+  project everything in it. CSV file versions that nothing uses any more are
+  cleaned up when a dataset is deleted. A page
   first lists exactly what is deleted and what stays; **Delete** (orange)
   carries it out and cannot be undone. Nothing is deleted while a run that
   would go is queued or running. When a training run is deleted but its
   model is kept, only the run's settings are kept for the model, hidden.
-  Datasets and SQL Server tables are never changed: predictions and
-  corrections already written stay.
+  Tables in SQL Server are never changed: predictions and corrections
+  already written stay.
 - This tab shows the program's version.

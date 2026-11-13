@@ -358,15 +358,15 @@ full SQL regression acceptance remain separately unverified.
     - [x] 299b: reclassification for CSV: a new version of the dataset's file
       per confirmed batch (originals kept), read by every later run;
       corrected download. Also: Dark Numbers in percent (asked 2026-11-12).
-    - [ ] Note with 299b: file versions from corrections are kept, as runs
-      and models refer to them; cleaning them up belongs with deleting
-      datasets (299f).
+    - [x] Note with 299b: file versions from corrections are kept, as runs
+      and models refer to them; 299f removes the unused ones when a dataset
+      is deleted.
     - [x] 299c: "Export joined" for CSV predictions (predictions with the
       original columns, from the file the prediction read).
     - [x] 299e: deleting runs, models and configurations (agreed
       2026-11-13: what owns something takes it with it; a training run whose
       model remains is hidden; prediction runs go with their model).
-    - [ ] 299f: deleting datasets (with the runs on them, their models and
+    - [x] 299f: deleting datasets (with the runs on them, their models and
       predictions, every CSV file version and the column roles;
       configurations stay) and projects (everything in them, hidden records
       included; confirmed by typing the project name). SQL tables stay.

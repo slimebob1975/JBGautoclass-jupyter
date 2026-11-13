@@ -10,6 +10,13 @@ Agreed 2026-11-13: what owns something takes it with it.
   it (as runs above), and its training run's record if that run was deleted.
 - A configuration: every version, the training runs made with it, their
   models, and the prediction runs made with those models.
+- 299f: a dataset: the training runs on it, the models trained on it, the
+  prediction runs on it or with those models, its column roles and every
+  version of its CSV file. Configurations are not tied to a dataset and stay.
+  Any other CSV file version no remaining dataset or run refers to (from
+  corrections or interrupted uploads) is cleaned up at the same time.
+- 299f: a project: everything in it, hidden run records included, and its
+  folders of CSV files, models and run results.
 
 Nothing is deleted while a run that would go is queued, running or still
 being finished by its worker. SQL tables are never touched: predictions
@@ -47,7 +54,7 @@ class DeletionFailed(OSError):
 @dataclass
 class DeletionPlan:
     """Exactly what a deletion removes. ``refused`` is a reason code or None."""
-    kind: str                                   # "run", "model" or "configuration"
+    kind: str                       # "run", "model", "configuration", "dataset", "project"
     name: str
     project_id: str
     runs: list = field(default_factory=list)            # JobRecords removed entirely
@@ -57,6 +64,20 @@ class DeletionPlan:
     configuration: object = None                        # Configuration removed
     versions: int = 0
     refused: str | None = None
+    datasets: list = field(default_factory=list)        # Datasets removed (299f)
+    configurations: list = field(default_factory=list)  # Configurations removed (project)
+    file_groups: list = field(default_factory=list)     # CSV file versions of the dataset
+    unused_groups: list = field(default_factory=list)   # other CSV file versions no one uses
+    target_id: str = ""                                 # the item's own ID
+    source: str = ""                                    # "csv" or "sql" (299f pages)
+
+    @property
+    def file_versions(self) -> int:
+        return sum(1 for group in self.file_groups if group[1])
+
+    @property
+    def unused_versions(self) -> int:
+        return sum(1 for group in self.unused_groups if group[1])
 
     @property
     def training_runs(self) -> list:
@@ -79,7 +100,8 @@ def _kind(record) -> str:
 class DeletionService:
     def __init__(self, store, *, catalog, configurations, results_root: Path,
                  log_dir: Path, model_root: Path,
-                 active_runs: Callable[[], tuple] | None = None) -> None:
+                 active_runs: Callable[[], tuple] | None = None,
+                 datasets=None, projects=None, csv_root: Path | None = None) -> None:
         self._store = store
         self._catalog = catalog
         self._configurations = configurations
@@ -87,6 +109,9 @@ class DeletionService:
         self._log_dir = Path(log_dir)
         self._model_root = Path(model_root)
         self._active_runs = active_runs or (lambda: ())
+        self._datasets = datasets                  # 299f
+        self._projects = projects
+        self._csv_root = None if csv_root is None else Path(csv_root)
 
     # --- What belongs to what ---------------------------------------------------------
 
@@ -163,6 +188,81 @@ class DeletionService:
         plan.refused = self._refusal(plan.runs)
         return plan
 
+    def plan_dataset(self, owner: str, project_id: str, dataset_id: str) -> DeletionPlan:
+        """299f: the dataset, its runs, the models trained on it and their predictions."""
+        try:
+            dataset = self._datasets.get_owned(owner, project_id, dataset_id)
+        except KeyError:
+            raise DeletionUnavailable("dataset unavailable") from None
+        plan = DeletionPlan("dataset", dataset.name, project_id, datasets=[dataset],
+                            target_id=dataset_id, source=dataset.source.value)
+        runs = self._project_runs(owner, project_id)
+        training = [r for r in runs if _kind(r) != "prediction"
+                    and _meta(r).get("dataset_id") == dataset_id]
+        keys = {r.run.key for r in training}
+        plan.models = [m for m in self._models(owner, project_id)
+                       if m.dataset_id == dataset_id or m.run_id in keys]
+        model_ids = {m.model_id for m in plan.models}
+        plan.runs = training + [r for r in runs if _kind(r) == "prediction" and (
+            _meta(r).get("dataset_id") == dataset_id or _meta(r).get("model_id") in model_ids)]
+        if dataset.source.value == "csv":
+            others = [d for d in self._datasets.list_for_project(owner, project_id, limit=1000)
+                      if d.dataset_id != dataset_id]
+            gone = {r.run.key for r in plan.runs}
+            plan.file_groups, plan.unused_groups = self._file_groups(
+                project_id, keep=(others, [r for r in runs if r.run.key not in gone]),
+                own=([dataset], [r for r in plan.runs
+                                 if _meta(r).get("dataset_id") == dataset_id]))
+        plan.refused = self._refusal(plan.runs)
+        return plan
+
+    def plan_project(self, owner: str, project_id: str) -> DeletionPlan:
+        """299f: everything in the project."""
+        try:
+            project = self._projects.get_owned(owner, project_id)
+        except KeyError:
+            raise DeletionUnavailable("project unavailable") from None
+        plan = DeletionPlan("project", project.name, project_id, target_id=project_id,
+                            source=project.source.value)
+        runs = self._project_runs(owner, project_id)
+        plan.runs = runs                    # hidden records included: they all go
+        plan.models = self._models(owner, project_id)
+        plan.datasets = list(self._datasets.list_for_project(owner, project_id, limit=1000))
+        plan.configurations = list(self._configurations.list_for_project(owner, project_id))
+        plan.refused = self._refusal(runs)
+        return plan
+
+    # --- CSV file versions (299f) -----------------------------------------------------
+
+    def _storage(self, project_id: str):
+        from JBGProjectStorage import project_csv_storage
+        return project_csv_storage(project_id, root=self._csv_root)
+
+    def _file_groups(self, project_id: str, *, keep, own):
+        """The project's CSV artifacts grouped by file version (the staging
+        identity every artifact of one uploaded file shares). Returns the
+        groups of the dataset (``own``) and the other groups that nothing kept
+        refers to. A group is (staging ID, has a CSV file, artifact IDs)."""
+        if self._csv_root is None:
+            return [], []
+        from Storage.ArtifactContract import ArtifactKind
+        repository, scope = self._storage(project_id)
+        groups, by_artifact = {}, {}
+        for ref in repository.list_artifacts(scope):
+            if not ref.dataset_id:
+                continue
+            groups.setdefault(ref.dataset_id, []).append(ref)
+            by_artifact[ref.artifact_id] = ref.dataset_id
+        kept = _referenced(*keep, by_artifact)
+        mine = _referenced(*own, by_artifact) - kept
+
+        def described(stage):
+            refs = groups[stage]
+            return (stage, any(r.kind is ArtifactKind.DATASET for r in refs),
+                    [r.artifact_id for r in refs])
+        return ([described(g) for g in sorted(mine) if g in groups],
+                [described(g) for g in sorted(groups) if g not in kept and g not in mine])
+
     # --- Deleting ---------------------------------------------------------------------
 
     def delete(self, owner: str, plan: DeletionPlan) -> DeletionPlan:
@@ -173,7 +273,9 @@ class DeletionService:
                  "model": lambda: self.plan_model(owner, plan.project_id,
                                                   plan.models[0].model_id),
                  "configuration": lambda: self.plan_configuration(
-                     owner, plan.project_id, plan.configuration.configuration_id)}[plan.kind]()
+                     owner, plan.project_id, plan.configuration.configuration_id),
+                 "dataset": lambda: self.plan_dataset(owner, plan.project_id, plan.target_id),
+                 "project": lambda: self.plan_project(owner, plan.project_id)}[plan.kind]()
         if fresh.refused:
             raise DeletionRefused(fresh.refused)
         self._remove_files(fresh)
@@ -189,12 +291,20 @@ class DeletionService:
                 pass
         for record in fresh.hidden_runs:
             self._store.hide(record.run)
-        if fresh.configuration is not None:
+        for configuration in ([fresh.configuration] if fresh.configuration is not None
+                              else []) + fresh.configurations:
             try:
                 self._configurations.delete(owner, fresh.project_id,
-                                            fresh.configuration.configuration_id)
+                                            configuration.configuration_id)
             except KeyError:
                 pass
+        for dataset in fresh.datasets:
+            try:
+                self._datasets.delete(owner, fresh.project_id, dataset.dataset_id)
+            except KeyError:
+                pass
+        if fresh.kind == "project":
+            self._projects.delete(owner, fresh.project_id)
         return fresh
 
     def _remove_files(self, plan: DeletionPlan) -> None:
@@ -210,7 +320,23 @@ class DeletionService:
                     self._remove_model_files(plan.project_id, _meta(record).get("model_id"))
             for model in plan.models:
                 self._remove_model_files(plan.project_id, model.artifact_key)
-        except OSError as error:
+            if plan.file_groups or plan.unused_groups:
+                repository, scope = self._storage(plan.project_id)
+                for _, _, artifacts in plan.file_groups + plan.unused_groups:
+                    for artifact_id in artifacts:
+                        try:
+                            repository.delete_artifact(scope, artifact_id)
+                        except FileNotFoundError:
+                            pass
+            if plan.kind == "project":
+                # 299f: the project's own folders, with anything left in them.
+                _remove_tree(self._results_root, self._results_root / plan.project_id)
+                _remove_tree(self._model_root, self._model_root / plan.project_id)
+                if self._csv_root is not None:
+                    _, scope = self._storage(plan.project_id)
+                    objects = self._csv_root / "objects"
+                    _remove_tree(objects, objects / scope.tenant_id / scope.project_id)
+        except (OSError, ValueError) as error:
             raise DeletionFailed("a file could not be removed") from error
 
     def _remove_model_files(self, project_id: str, stem) -> None:
@@ -249,3 +375,24 @@ def _remove_tree(root: Path, path: Path) -> None:
         if not _inside(root, path) or path.resolve() == root.resolve():
             raise OSError("outside its folder")
         shutil.rmtree(path)
+
+
+def _referenced(datasets, runs, by_artifact: dict) -> set:
+    """299f: the CSV file versions (staging IDs) the datasets and runs refer to:
+    a dataset's current file, a run's file and its model's training file."""
+    stages = set()
+    for dataset in datasets:
+        if getattr(dataset, "registration_id", None) in by_artifact:
+            stages.add(by_artifact[dataset.registration_id])
+    for record in runs:
+        spec = record.spec if isinstance(record.spec, dict) else {}
+        sources = [spec.get("csv") or {}, _meta(record).get("model_source") or {},
+                   ((spec.get("configuration") or {}).get("data_source") or {})]
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            if source.get("artifact_id") in by_artifact:
+                stages.add(by_artifact[source["artifact_id"]])
+            if isinstance(source.get("dataset_id"), str):
+                stages.add(source["dataset_id"])
+    return stages

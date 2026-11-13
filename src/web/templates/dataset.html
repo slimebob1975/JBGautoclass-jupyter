@@ -290,6 +290,7 @@
 
 {% block actions %}
   <span class="hint">{{ _("Validate the selected dataset.") if selected else _("Select a dataset in the list.") }}</span>
+  {% if selected and can_delete %}<a class="btn sub" href="/ui/dataset/{{ selected.dataset_id }}/delete">{{ _("Delete the dataset…") }}</a>{% endif %}
   {% if selected %}
     <button class="btn act ready" form="validate-form">{{ _("Validate dataset") }}</button>
   {% else %}

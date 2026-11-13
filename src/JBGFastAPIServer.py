@@ -98,7 +98,8 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
     from JBGDeletion import DeletionService                     # 299e
     deletion = DeletionService(store, catalog=models, configurations=saved_configs,
                                results_root=results_root, log_dir=run_logs,
-                               model_root=model_root, active_runs=dispatcher.active_runs)
+                               model_root=model_root, active_runs=dispatcher.active_runs,
+                               datasets=datasets, projects=projects, csv_root=csv_root)
 
     @asynccontextmanager
     async def lifespan(app):

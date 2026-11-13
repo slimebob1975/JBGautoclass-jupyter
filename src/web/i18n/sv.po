@@ -2016,3 +2016,58 @@ msgstr "Borttagen"
 
 msgid "This configuration is already chosen for runs."
 msgstr "Konfigurationen är redan vald för körning."
+
+# 299f: deleting datasets and projects
+msgid "The dataset is deleted."
+msgstr "Datasetet är borttaget."
+
+msgid "The project is deleted."
+msgstr "Projektet är borttaget."
+
+msgid "Delete dataset"
+msgstr "Ta bort dataset"
+
+msgid "Delete project"
+msgstr "Ta bort projekt"
+
+msgid "The project and everything in it"
+msgstr "Projektet och allt i det"
+
+msgid "with its column roles"
+msgstr "med sina kolumnroller"
+
+msgid "The dataset's CSV file versions, including corrected ones"
+msgstr "Datasetets versioner av CSV-filen, även korrigerade"
+
+msgid "Other CSV file versions in the project that nothing uses any more (from corrections or interrupted uploads)"
+msgstr "Andra versioner av CSV-filer i projektet som inget längre använder (från korrigeringar eller avbrutna uppladdningar)"
+
+msgid "with all its versions"
+msgstr "med alla sina versioner"
+
+msgid "and more runs"
+msgstr "och fler körningar"
+
+msgid "Configurations: they are not tied to a dataset."
+msgstr "Konfigurationer: de hör inte till något dataset."
+
+msgid "Everything in SQL Server: source tables, and predictions and corrections already written."
+msgstr "Allt i SQL Server: källtabeller samt prediktioner och korrigeringar som redan skrivits."
+
+msgid "Type the project's name to confirm"
+msgstr "Skriv projektets namn för att bekräfta"
+
+msgid "The name did not match, so nothing was deleted."
+msgstr "Namnet stämde inte, så inget togs bort."
+
+msgid "Type the project name first."
+msgstr "Skriv projektets namn först."
+
+msgid "Delete the dataset…"
+msgstr "Ta bort datasetet…"
+
+msgid "Delete the project…"
+msgstr "Ta bort projektet…"
+
+msgid "Nothing outside the program: the CSV files on your own computer are not touched."
+msgstr "Inget utanför programmet: CSV-filerna på din egen dator berörs inte."

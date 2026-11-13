@@ -69,6 +69,7 @@
 {% block actions %}
   {% set is_open = selected and active_project and active_project.project_id == selected.project_id %}
   <span class="hint">{{ _("This project is open.") if is_open else _("Open a project to continue with its datasets.") }}</span>
+  {% if selected and can_delete %}<a class="btn sub" href="/ui/projects/{{ selected.project_id }}/delete">{{ _("Delete the project…") }}</a>{% endif %}
   {% if selected and not is_open %}
     <form method="post" action="/ui/projects/{{ selected.project_id }}/open">
       <button class="btn act ready">{{ _("Open project") }}</button>

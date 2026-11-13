@@ -59,6 +59,8 @@ MESSAGES = {
     "configuration_deleted": ("ok", "The configuration is deleted."),
     "delete_unavailable": ("error", "It is no longer available."),
     "delete_failed": ("error", "A file could not be removed, so nothing was deleted. Try again in a moment."),
+    "dataset_deleted": ("ok", "The dataset is deleted."),                      # 299f
+    "project_deleted": ("ok", "The project is deleted."),
 }
 
 

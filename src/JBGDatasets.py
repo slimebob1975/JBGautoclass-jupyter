@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (Boolean, Column, DateTime, ForeignKeyConstraint, Index,
                         MetaData, String, Table, Text, UniqueConstraint, create_engine,
-                        insert, select, update)
+                        delete, insert, select, update)
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
@@ -327,3 +327,13 @@ class DatasetRepository:
                 self._datasets.c.dataset_id == dataset_id).values(
                 validation_state=state.value, updated_at=datetime.now(timezone.utc)))
         return self.get_owned(owner, project_id, dataset_id)
+
+    def delete(self, owner, project_id, dataset_id):
+        """299f: remove a dataset's registration and column roles (metadata
+        only; its files, runs and models are removed by JBGDeletion first)."""
+        owner = _text(owner, "owner", 256)
+        with self._engine.begin() as connection:
+            self._owned_row(connection, owner, project_id, dataset_id)
+            connection.execute(delete(self._roles).where(self._roles.c.dataset_id == dataset_id))
+            connection.execute(delete(self._datasets).where(
+                self._datasets.c.dataset_id == dataset_id))

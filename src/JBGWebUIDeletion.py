@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 
 CONFIGURATION_COOKIE = "jbg_configuration"
 MODEL_COOKIE = "jbg_model"
+PROJECT_COOKIE = "jbg_project"
 RUN_BACKS = {"/ui/run": "run", "/ui/prediction": "prediction", "/ui/results": "results"}
 REFUSALS = {
     "running": "A run that would be deleted is queued or running. Wait for it to finish, "
@@ -146,3 +147,66 @@ def add_deletion_pages(app, *, principal_dependency, render, redirect, active_pr
         if done is None:
             return redirect(f"/ui/configuration/{configuration_id}/delete")
         return forget(request, done, plan)
+
+    # --- Datasets (299f) ------------------------------------------------------------
+
+    def dataset_plan(request, principal, dataset_id):
+        pid = project_id(request, principal)
+        if pid is None:
+            raise DeletionUnavailable("no project")
+        return deletion.plan_dataset(principal.principal_key, pid, dataset_id)
+
+    @app.get("/ui/dataset/{dataset_id}/delete", response_class=HTMLResponse,
+             include_in_schema=False)
+    def confirm_dataset(request: Request, dataset_id: str, principal=Depends(principal_dependency)):
+        try:
+            plan = dataset_plan(request, principal, dataset_id)
+        except DeletionUnavailable:
+            return redirect("/ui/dataset", message="delete_unavailable")
+        return page(request, principal, plan, tab="dataset",
+                    action=f"/ui/dataset/{dataset_id}/delete",
+                    back=f"/ui/dataset?dataset={dataset_id}")
+
+    @app.post("/ui/dataset/{dataset_id}/delete", include_in_schema=False)
+    def delete_dataset(request: Request, dataset_id: str, principal=Depends(principal_dependency)):
+        try:
+            plan = dataset_plan(request, principal, dataset_id)
+        except DeletionUnavailable:
+            return redirect("/ui/dataset", message="delete_unavailable")
+        done = carry_out(principal, plan, "/ui/dataset", "dataset_deleted")
+        if done is None:
+            return redirect(f"/ui/dataset/{dataset_id}/delete")
+        return forget(request, done, plan)
+
+    # --- Projects (299f) ------------------------------------------------------------
+
+    @app.get("/ui/projects/{project_id}/delete", response_class=HTMLResponse,
+             include_in_schema=False)
+    def confirm_project(request: Request, project_id: str, mismatch: str = "",
+                        principal=Depends(principal_dependency)):
+        try:
+            plan = deletion.plan_project(principal.principal_key, project_id)
+        except DeletionUnavailable:
+            return redirect("/ui/projects", message="delete_unavailable")
+        return render(request, principal, "delete.html", "projects", plan=plan,
+                      action=f"/ui/projects/{project_id}/delete",
+                      back=f"/ui/projects?selected={project_id}", refusals=REFUSALS,
+                      source=None, mismatch=bool(mismatch))
+
+    @app.post("/ui/projects/{project_id}/delete", include_in_schema=False)
+    def delete_project(request: Request, project_id: str, confirm_name: str = Form(""),
+                       principal=Depends(principal_dependency)):
+        try:
+            plan = deletion.plan_project(principal.principal_key, project_id)
+        except DeletionUnavailable:
+            return redirect("/ui/projects", message="delete_unavailable")
+        if confirm_name.strip() != plan.name:
+            # Agreed 2026-11-13: a project is deleted only when its name is typed.
+            return redirect(f"/ui/projects/{project_id}/delete", mismatch="1")
+        done = carry_out(principal, plan, "/ui/projects", "project_deleted")
+        if done is None:
+            return redirect(f"/ui/projects/{project_id}/delete")
+        if request.cookies.get(PROJECT_COOKIE) == project_id:
+            for cookie in (PROJECT_COOKIE, CONFIGURATION_COOKIE, MODEL_COOKIE):
+                done.delete_cookie(cookie, path="/ui")
+        return done
