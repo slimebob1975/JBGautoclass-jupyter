@@ -1,3 +1,25 @@
+## Revision 299c - Predictions with the original columns; Översikt wording (2026-11-13)
+
+- Voilà retirement item (gap check 2026-11-12): "Export joined" for CSV
+  predictions. The Prediction tab of a finished CSV prediction run offers
+  "Hämta med originalkolumnerna": every original column of each predicted
+  row, followed by the prediction's columns (`JBGPredictionExport`). The
+  rows come from the very file version the prediction read (the run's own
+  CSV artifact), so a later correction (299b) does not change an earlier
+  export; IDs are matched as written. Written like the plain download
+  (297g): semicolons and a UTF-8 byte-order mark. For the run's owner only.
+- The predictions table's headings are shown in the interface's language
+  ("Predicted" -> "Predikterad klass", "Rate" -> "Säkerhet"), as the
+  Results tables since 299a2.
+- Asked 2026-11-13: Översikt without an open project wrote each tab's name
+  twice ("... under fliken Projekt. Projekt"); the tab name in the sentence
+  is now the link, in both languages.
+- BACKLOG: the agreed Översikt design (both scopes) and the button requests
+  (299d).
+- Tests: `tests/test_revision_299c_joined_predictions.py`, including a
+  native run: a CSV training, a prediction of the rows without a class, and
+  the joined download checked against the original rows.
+
 ## Revision 299b2 - Configurations saved before 298h load again (2026-11-13)
 
 - Found 2026-11-13: a CSV training run with a configuration saved before

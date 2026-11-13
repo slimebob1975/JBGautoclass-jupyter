@@ -61,9 +61,10 @@
       {% if predictions %}
         <h3>{{ _("Predictions") }}</h3>
         <p><a class="btn sub" href="/api/runs/{{ selected_run }}/predictions.csv" download>{{ _("Download the predictions") }}</a>
+          {% if csv_project %}<a class="btn sub" href="/ui/prediction/{{ selected_run }}/joined.csv" download>{{ _("Download with the original columns") }}</a>{% endif %}
           <span class="hint">{{ predictions.total_rows }} {{ _("rows") }}</span></p>
         <div class="scroll"><table class="grid">
-          <thead><tr>{% for c in predictions.columns %}<th>{{ c }}</th>{% endfor %}</tr></thead>
+          <thead><tr>{% for c in (predictions.headings or predictions.columns) %}<th>{{ c }}</th>{% endfor %}</tr></thead>
           <tbody>{% for row in predictions.rows %}<tr>{% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
         </table></div>
         {% set pages = ((predictions.total_rows + predictions.page_size - 1) // predictions.page_size) %}

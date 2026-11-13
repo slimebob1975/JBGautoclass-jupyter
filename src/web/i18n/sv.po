@@ -1886,3 +1886,20 @@ msgstr "I procent"
 
 msgid "Range"
 msgstr "Intervall"
+
+# 299c: predictions joined with the original columns.
+msgid "Certainty"
+msgstr "Säkerhet"
+
+msgid "Download with the original columns"
+msgstr "Hämta med originalkolumnerna"
+
+msgid "The predictions could not be joined with the original rows: the file the prediction read is no longer available."
+msgstr "Prediktionerna kunde inte kopplas till originalraderna: filen som prediktionen läste finns inte längre."
+
+# 299c: Översikt without an open project: the tab name is the link.
+msgid "Open a project in the {tab} tab first."
+msgstr "Öppna först ett projekt under fliken {tab}."
+
+msgid "New to the program? The {tab} tab explains how to use it."
+msgstr "Ny i programmet? Fliken {tab} beskriver hur det används."

@@ -230,7 +230,10 @@ Prediction uses the model chosen on the Models tab.
   tab says so before anything starts.
 
 When the run has finished, the predictions are shown page by page, and they
-can be downloaded as a file with **Download the predictions**.
+can be downloaded as a file with **Download the predictions**. In CSV
+projects, **Download with the original columns** downloads the predictions
+together with all columns of the predicted rows, from the file the prediction
+read.
 
 ## Run History
 

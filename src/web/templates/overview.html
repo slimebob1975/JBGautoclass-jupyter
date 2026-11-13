@@ -8,10 +8,11 @@
 {% block main %}
 {% if no_project %}
   <div class="card">
-    <p class="empty">{{ _("Open a project in the Projects tab first.") }}
-      <a href="/ui/projects">{{ _("Projects") }}</a></p>
-    <p class="hint">{{ _("New to the program? The About tab explains how to use it.") }}
-      <a href="/ui/about">{{ _("About") }}</a></p>
+    {# 299c (asked 2026-11-13): the tab's name in the sentence is the link. #}
+    {% set projects_link %}<a href="/ui/projects">{{ _("Projects") }}</a>{% endset %}
+    {% set about_link %}<a href="/ui/about">{{ _("About") }}</a>{% endset %}
+    <p class="empty">{{ (_("Open a project in the {tab} tab first.") | e).replace("{tab}", projects_link) | safe }}</p>
+    <p class="hint">{{ (_("New to the program? The {tab} tab explains how to use it.") | e).replace("{tab}", about_link) | safe }}</p>
   </div>
 {% else %}
 <div class="overview-grid">

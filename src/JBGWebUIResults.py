@@ -34,6 +34,7 @@ DARK_COLUMNS = {"Model type": "Estimate", "type": "Calculation", "target": "Targ
 # feature names are data and stay as they are.
 HEADINGS = {
     "Actual": "Actual class", "Predicted": "Predicted class", "Model": "Model",
+    "Rate": "Certainty",                                         # 299c: predictions
     "Oversampling": "Oversampling", "Undersampling": "Undersampling", "Preprocessor": "Scaling",
     "Feature Reduction": "Dimensionality reduction", "Algorithm (Library)": "Algorithm (library)",
     "Components": "Components", "Mean cv": "Mean CV score", "Stdev.": "Standard deviation",

@@ -96,7 +96,8 @@ def test_overview_without_a_project_is_empty_apart_from_a_hint(tmp_path):
         response = client.get("/ui/overview")
     main = _main(response.text)
     assert response.status_code == 200 and "overview-grid" not in main
-    assert "Öppna först ett projekt under fliken Projekt." in main
+    # 299c: the tab name in the sentence is the link.
+    assert 'Öppna först ett projekt under fliken <a href="/ui/projects">Projekt</a>.' in main
     assert 'href="/ui/projects"' in main and 'href="/ui/about"' in main
 
 

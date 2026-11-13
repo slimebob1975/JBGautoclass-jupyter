@@ -360,14 +360,37 @@ full SQL regression acceptance remain separately unverified.
       corrected download. Also: Dark Numbers in percent (asked 2026-11-12).
     - [ ] Note with 299b: file versions from corrections are kept, as runs
       and models refer to them; cleaning them up belongs with deleting.
-    - [ ] "Export joined" for CSV predictions (predictions with the original
-      columns).
+    - [x] 299c: "Export joined" for CSV predictions (predictions with the
+      original columns, from the file the prediction read).
     - [ ] Deleting datasets, models, runs and projects (with the per-project
       retention item).
     - [ ] Feature investigation (assisted feature selection, recommendations,
       pause/resume); first make the Variabelurval section honest: it has no
       effect in web runs today.
     - [ ] Minor: rerun, run history (Körhistorik).
+  - [ ] 299d (asked 2026-11-13): buttons. (1) A button whose action is not
+    available yet (nothing chosen or changed, for example "Granska
+    korrigeringarna" with no class chosen) looks inactive until it is;
+    colour to be agreed. (2) Where action buttons sit at the end of a long
+    page or table, a copy above it as well: mispredictions, Configuration,
+    the Dataset preview and similar.
+  - [ ] Översikt (agreed 2026-11-13; mockup `oversikt_mockup.html` shared in
+    the conversation), for the user, managers and colleagues, both scopes:
+    - All projects: key figures (training runs, rows processed, models
+      compared, models in use), each with "of which in the open project";
+      runs per week (succeeded / failed); rows processed per project with
+      the open project highlighted.
+    - Open project: "Continue where you left off" (dataset, configuration,
+      latest run, start button); model quality per training run (the
+      configuration's metric) with the average of the last three; rows
+      processed per week; latest runs linking to their results.
+    - Without an open project: only the all-projects part.
+    - Charts drawn on the server as SVG (offline, both languages), with
+      placeholders until there is data. Rows processed and models compared
+      per run are recorded when a run finishes (no engine change); charts
+      fill in from new runs onward.
+    - [x] 299c: the empty state's duplicated tab names merged (the tab name
+      in the sentence is the link).
   - [ ] Noted with 298g: the engine's group-disjoint holdout supports only
     two classes ("Person-disjoint validation currently requires binary
     classification"); grouped cross-validation has no such limit.

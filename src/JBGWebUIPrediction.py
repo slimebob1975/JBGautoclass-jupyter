@@ -26,6 +26,8 @@ MESSAGES = {
                        "(int, bigint, smallint or tinyint). Choose another ID column on the "
                        "Dataset tab (Column roles)."),
     "model_missing": ("error", "The model is not available."),
+    "joined_unavailable": ("error", "The predictions could not be joined with the original rows: "
+                           "the file the prediction read is no longer available."),
     "signin_needed": ("error", "Sign in to SQL Server first."),
     "cancel_requested": ("ok", "Cancelling the run."),
     "unavailable": ("error", "The run is no longer available."),
@@ -104,6 +106,11 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                     try:
                         context["predictions"] = results.detail(owner, chosen, "predictions",
                                                                 page=page)
+                        # 299c: headings in the interface's language (299a2).
+                        from JBGWebUI import request_language, translator
+                        from JBGWebUIResults import headings
+                        context["predictions"]["headings"] = headings(
+                            context["predictions"]["columns"], translator(request_language(request)))
                     except Exception:
                         context["predictions"] = None
             # 297h: the dropdown shows the dataset of the run on show (it fell back
@@ -117,6 +124,22 @@ def add_prediction_tab(app, *, principal_dependency, render, redirect, active_pr
                     context["chosen_dataset"] = candidate
                     break
         return render(request, principal, "prediction.html", "prediction", **context)
+
+    @app.get("/ui/prediction/{run_id}/joined.csv", include_in_schema=False)
+    def joined_download(run_id: str, principal=Depends(principal_dependency)):
+        """299c: the predictions with the predicted rows' original columns (CSV)."""
+        from fastapi.responses import Response
+        from JBGPredictionExport import JoinedExportUnavailable, joined_predictions
+        if results is None or datasets is None:
+            return redirect("/ui/prediction", message="unavailable")
+        try:
+            content, name = joined_predictions(results._store, results,
+                                               getattr(datasets, "_csv_root", None),
+                                               principal.principal_key, run_id)
+        except JoinedExportUnavailable:
+            return redirect("/ui/prediction", run=run_id, message="joined_unavailable")
+        return Response(content, media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
     @app.post("/ui/prediction", include_in_schema=False)
     def predict(request: Request, dataset_id: str = Form(""),

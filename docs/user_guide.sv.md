@@ -231,6 +231,9 @@ Prediktion använder modellen som är vald under fliken Modeller.
 
 När körningen är klar visas prediktionerna sida för sida, och de kan laddas
 ned som en fil med **Ladda ned prediktionerna**.
+I CSV-projekt hämtar **Hämta med originalkolumnerna** prediktionerna
+tillsammans med de predikterade radernas alla kolumner, från den fil som
+prediktionen läste.
 
 ## Körhistorik
 
