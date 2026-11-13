@@ -30,7 +30,8 @@ Choose the language with SV/EN at the top right.
 
 Buttons that perform an action are green when they can be used and red,
 dimmed, while there is nothing to do yet, for example **Save** before
-anything has changed. Hold the pointer over a red button to see why. On long
+anything has changed. Hold the pointer over a red button to see why. Orange
+buttons can be used but cannot be undone, such as **Delete**. On long
 pages, the page's main button is at both the top and the bottom.
 
 ## Overview
@@ -155,6 +156,10 @@ only be chosen with the method "Linear".
   last choice is ticked, and it is unticked when a choice is unticked.
 - **Save configuration** creates a new version; earlier versions are kept.
 - **Choose for runs** makes the configuration the one used for training.
+  It is red when the configuration is already chosen.
+- **Delete the configuration…** deletes it with every version, the training
+  runs made with it, their models and the predictions made with those
+  models (see Deleting below).
 - CSV runs only train. New configurations in CSV projects therefore have
   "Predict unlabelled rows" unticked.
 
@@ -165,6 +170,9 @@ active training dataset with column roles, a chosen configuration and, for
 SQL, a sign-in. For a point that is not met, **Put right** leads to where it
 is fixed. **Start training** starts the run with the active dataset
 and the chosen configuration.
+
+A finished run can be deleted with **Delete the run…** (also on the
+Prediction and Results tabs).
 
 The progress updates itself. While the models are trained and compared, a
 thinner bar shows how many algorithm combinations are done, for example
@@ -217,8 +225,9 @@ Wide tables have a scrollbar both below and above the table.
 ## Models
 
 The models the training runs have created, with where they came from and
-their key figures. **Choose model** makes an available model the one used
-for prediction.
+their key figures, and the model's remaining runs. **Choose model** makes an
+available model the one used for prediction. **Delete the model…** deletes
+it with its files and the prediction runs made with it.
 
 ## Prediction
 
@@ -249,4 +258,13 @@ Available in a later version.
 - Logs and predictions may contain values from your data and are shown only
   to the person who started the run.
 - Every run keeps its results in a folder of its own on the server.
+- **Deleting**: what owns something takes it with it. A run takes its log
+  and result files; a model its files and its prediction runs; a
+  configuration its versions, its training runs and their models. A page
+  first lists exactly what is deleted and what stays; **Delete** (orange)
+  carries it out and cannot be undone. Nothing is deleted while a run that
+  would go is queued or running. When a training run is deleted but its
+  model is kept, only the run's settings are kept for the model, hidden.
+  Datasets and SQL Server tables are never changed: predictions and
+  corrections already written stay.
 - This tab shows the program's version.

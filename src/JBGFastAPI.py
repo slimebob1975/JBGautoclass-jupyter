@@ -109,6 +109,7 @@ def create_app(
     dataset_inspection=None,
     run_results=None,
     run_logs=None,
+    deletion=None,
     trust_app_service_headers: bool = False,
     sql_server=None,
     web_ui: bool = False,
@@ -208,7 +209,8 @@ def create_app(
                    sessions=sessions, sql_server=sql_server,
                    runs=presentation if hasattr(presentation, "list_project_runs") else None,
                    project_runs=project_runs, results=run_results, models=models,
-                   logs=run_logs, trust_app_service_headers=trust_app_service_headers)
+                   logs=run_logs, deletion=deletion,
+                   trust_app_service_headers=trust_app_service_headers)
     if datasets is not None:
         _add_dataset_endpoints(app, principal_dependency, datasets)
     if configurations is not None:

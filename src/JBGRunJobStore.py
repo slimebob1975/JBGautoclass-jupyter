@@ -75,6 +75,17 @@ def _metadata(schema: str | None) -> tuple[MetaData, Table, Table]:
     return metadata, jobs, events
 
 
+def _hidden_table(metadata: MetaData, jobs: Table) -> Table:
+    """299e: runs their owner deleted while a model still needs their settings.
+    Their log, results and events are gone; the record stays out of every list
+    and owner read. A table of its own keeps the existing tables unchanged."""
+    return Table(
+        f"{TABLE_PREFIX}hidden", metadata,
+        Column("run_id", String(36), ForeignKey(jobs.c.run_id), primary_key=True),
+        Column("hidden_at", DateTime(timezone=True), nullable=False),
+    )
+
+
 @dataclass(frozen=True)
 class JobRecord:
     run: RunReference
@@ -122,6 +133,7 @@ class RunJobStore:
         self._engine = engine
         self._max_events = max_events
         self._metadata, self._jobs, self._events = _metadata(schema)
+        self._hidden = _hidden_table(self._metadata, self._jobs)
         self._schema = schema
 
     @property
@@ -188,19 +200,76 @@ class RunJobStore:
             raise KeyError("unknown run reference")
         return self._row_to_record(row)
 
-    def get_owned(self, owner: str, run: RunReference) -> JobRecord:
-        """Owner-checked read: unknown and foreign runs both raise KeyError."""
+    def get_owned(self, owner: str, run: RunReference, *,
+                  include_hidden: bool = False) -> JobRecord:
+        """Owner-checked read: unknown and foreign runs both raise KeyError.
+
+        299e: a deleted (hidden) run is unknown too, except where its stored
+        settings are needed (``include_hidden``: its model predicting)."""
         record = self.get(run)
         if record.owner != owner:
             raise KeyError("unknown run reference")
+        if not include_hidden and self.is_hidden(run):
+            raise KeyError("unknown run reference")
         return record
 
-    def list_for_owner(self, owner: str, limit: int = 50) -> tuple[JobRecord, ...]:
+    def is_hidden(self, run: RunReference) -> bool:
+        with self._engine.connect() as connection:
+            return connection.execute(select(self._hidden.c.run_id).where(
+                self._hidden.c.run_id == run.key)).first() is not None
+
+    def list_for_owner(self, owner: str, limit: int | None = 50, *,
+                       include_hidden: bool = False) -> tuple[JobRecord, ...]:
+        """The owner's runs, newest first; deleted (hidden) runs only on request (299e)."""
+        query = select(self._jobs).where(self._jobs.c.owner == owner)
+        if not include_hidden:
+            query = query.where(self._jobs.c.run_id.not_in(select(self._hidden.c.run_id)))
+        query = query.order_by(self._jobs.c.created_at.desc())
+        if limit is not None:
+            query = query.limit(limit)
+        with self._engine.connect() as connection:
+            rows = connection.execute(query).all()
+        return tuple(self._row_to_record(row) for row in rows)
+
+    def hidden_runs(self, owner: str) -> frozenset[str]:
+        """299e: the keys of the owner's deleted runs whose record is kept."""
         with self._engine.connect() as connection:
             rows = connection.execute(
-                select(self._jobs).where(self._jobs.c.owner == owner)
-                .order_by(self._jobs.c.created_at.desc()).limit(limit)).all()
-        return tuple(self._row_to_record(row) for row in rows)
+                select(self._hidden.c.run_id).join(
+                    self._jobs, self._jobs.c.run_id == self._hidden.c.run_id)
+                .where(self._jobs.c.owner == owner)).all()
+        return frozenset(row.run_id for row in rows)
+
+    # --- Deleting (299e) --------------------------------------------------------------
+
+    def _finished(self, connection, run: RunReference) -> None:
+        status = connection.execute(select(self._jobs.c.status).where(
+            self._jobs.c.run_id == run.key)).scalar_one_or_none()
+        if status is None:
+            raise KeyError("unknown run reference")
+        if RunStatus(status) not in TERMINAL_STATES:
+            raise ValueError("the run has not finished")
+
+    def hide(self, run: RunReference) -> None:
+        """Keep only a finished run's record (its settings), out of every list:
+        its progress events and result summary are removed."""
+        with self._engine.begin() as connection:
+            self._finished(connection, run)
+            connection.execute(delete(self._events).where(self._events.c.run_id == run.key))
+            connection.execute(update(self._jobs).where(self._jobs.c.run_id == run.key)
+                               .values(result=None))
+            if connection.execute(select(self._hidden.c.run_id).where(
+                    self._hidden.c.run_id == run.key)).first() is None:
+                connection.execute(insert(self._hidden).values(run_id=run.key,
+                                                               hidden_at=_now()))
+
+    def remove(self, run: RunReference) -> None:
+        """Remove a finished run's record and events entirely."""
+        with self._engine.begin() as connection:
+            self._finished(connection, run)
+            connection.execute(delete(self._events).where(self._events.c.run_id == run.key))
+            connection.execute(delete(self._hidden).where(self._hidden.c.run_id == run.key))
+            connection.execute(delete(self._jobs).where(self._jobs.c.run_id == run.key))
 
     def _with_status(self, status: RunStatus, limit: int | None) -> tuple[JobRecord, ...]:
         query = (select(self._jobs).where(self._jobs.c.status == status.value)

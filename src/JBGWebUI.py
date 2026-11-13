@@ -53,6 +53,12 @@ MESSAGES = {
     "duplicate": ("error", "A project with that name already exists."),
     "invalid": ("error", "The input was not accepted. Check the name (1-200 characters)."),
     "unavailable": ("error", "The project is no longer available."),
+    # 299e: deleting (shown on the tab the deletion returns to).
+    "run_deleted": ("ok", "The run is deleted."),
+    "model_deleted": ("ok", "The model is deleted."),
+    "configuration_deleted": ("ok", "The configuration is deleted."),
+    "delete_unavailable": ("error", "It is no longer available."),
+    "delete_failed": ("error", "A file could not be removed, so nothing was deleted. Try again in a moment."),
 }
 
 
@@ -151,7 +157,8 @@ def _redirect(path: str, **query) -> RedirectResponse:
 def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: str = "",
                datasets=None, inspection=None, configurations=None, sessions=None,
                sql_server=None, runs=None, project_runs=None, results=None,
-               models=None, logs=None, trust_app_service_headers: bool = False) -> None:
+               models=None, logs=None, deletion=None,
+               trust_app_service_headers: bool = False) -> None:
     """Mount the interface under /ui on ``app``.
 
     The Dataset tab (291a) is mounted when its services are given.
@@ -243,7 +250,8 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
                 "active_configuration": active_configuration(request, principal.principal_key,
                                                              project),
                 "active_model": active_model(request, principal.principal_key, project),
-                "message": message}
+                "message": message,
+                "can_delete": deletion is not None and runs is not None}   # 299e
         base.update(context)
         return templates.TemplateResponse(request, template, base, status_code=status_code)
 
@@ -285,6 +293,11 @@ def add_web_ui(app: FastAPI, *, principal_dependency, projects, version_line: st
     add_overview_tab(app, principal_dependency=principal_dependency, render=render,
                      active_project=active_project, datasets=datasets,
                      configurations=configurations, runs=runs, models=models)
+    if deletion is not None and runs is not None:                 # 299e
+        from JBGWebUIDeletion import add_deletion_pages
+        add_deletion_pages(app, principal_dependency=principal_dependency, render=render,
+                           redirect=_redirect, active_project=active_project,
+                           deletion=deletion)
     from JBGWebUIAbout import add_about_tab                       # 295d
     add_about_tab(app, principal_dependency=principal_dependency, render=render)
     if configurations is not None and datasets is not None:

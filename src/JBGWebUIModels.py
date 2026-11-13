@@ -29,15 +29,18 @@ def add_models_tab(app, *, principal_dependency, render, redirect, active_projec
     def card(principal, project, model):
         """Origin and key figures of one model; parts that are gone stay empty."""
         owner, pid = principal.principal_key, project["project_id"]
-        info = {"dataset": None, "run": None, "evaluation": None}
+        info = {"dataset": None, "run": None, "evaluation": None, "predictions": []}
         if model.get("dataset_id"):
             try:
                 info["dataset"] = datasets.get(owner, pid, model["dataset_id"])
             except Exception:
                 info["dataset"] = None
+        listed = runs.list_project_runs(owner, pid, limit=200)
+        # 299e: the model's remaining prediction runs (deleted ones are not listed).
+        info["predictions"] = [r for r in listed if r.get("kind") == "prediction"
+                               and r.get("model_id") == model["model_id"]]
         if model.get("run_id"):
-            info["run"] = next((r for r in runs.list_project_runs(owner, pid, limit=200)
-                                if r["run_id"] == model["run_id"]), None)
+            info["run"] = next((r for r in listed if r["run_id"] == model["run_id"]), None)
             try:
                 results = runs.overview(owner, RunReference(model["run_id"]))["results"]
                 info["evaluation"] = (results or {}).get("evaluation")

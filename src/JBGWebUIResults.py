@@ -113,6 +113,18 @@ def readable_dark_table(detail: dict, translate) -> dict:
     return detail
 
 
+def estimate_first(detail: dict) -> dict:
+    """299e (asked 2026-11-13): in the Dark Numbers confusion matrices the
+    estimate ("Model type") comes first, left of the actual class (the
+    engine writes the actual class first)."""
+    columns = detail["columns"]
+    if len(columns) >= 2 and columns[0] == "" and columns[1] == "Model type":
+        detail["columns"] = [columns[1], columns[0]] + columns[2:]
+        detail["rows"] = [([row[1], row[0]] + row[2:]) if len(row) >= 2 else row
+                          for row in detail["rows"]]
+    return detail
+
+
 # 299a: reclassification messages.
 MESSAGES = {
     "corrected": ("ok", "The corrections are written to the source table."),
@@ -192,8 +204,9 @@ def add_results_tab(app, *, principal_dependency, render, active_project, runs, 
                         context["dark_summary"] = with_percentages(
                             results.dark_number_summary(owner, chosen), request_language(request))
                         try:
-                            context["dark_matrix"] = readable_dark_table(results.detail(
-                                owner, chosen, "dark_numbers_matrix", page_size=500), translate)
+                            context["dark_matrix"] = estimate_first(readable_dark_table(
+                                results.detail(owner, chosen, "dark_numbers_matrix",
+                                               page_size=500), translate))
                         except RunResultsUnavailable:
                             context["dark_matrix"] = None
                 except RunResultsUnavailable:

@@ -133,14 +133,19 @@
   {% if selected and schema %}
     <div class="card-head">
       <h2>{{ selected.name }} <span class="badge b-neu">{{ _("Version") }} {{ selected.version }}</span></h2>
+      <div class="card-head-actions">
       {% if selected.configuration_id == chosen_id %}
+        {# 299e: the traffic lights: red with the reason when already chosen. #}
         <span class="badge b-ok">{{ _("Chosen for runs") }}</span>
+        <button class="btn act blocked" disabled title="{{ _('This configuration is already chosen for runs.') }}">{{ _("Choose for runs") }}</button>
       {% else %}
         {# 295b2: choosing does not create a new version, unlike saving. #}
         <form method="post" action="/ui/configuration/{{ selected.configuration_id }}/select">
-          <button class="btn sub">{{ _("Choose for runs") }}</button>
+          <button class="btn act ready">{{ _("Choose for runs") }}</button>
         </form>
       {% endif %}
+      {% if can_delete %}<a class="btn sub" href="/ui/configuration/{{ selected.configuration_id }}/delete">{{ _("Delete the configuration…") }}</a>{% endif %}
+      </div>
     </div>
     {% if form_message == "fields" %}<p class="message error">{{ _("Some values were not accepted. See the marked fields.") }}</p>
     {% elif form_message == "invalid" %}<p class="message error">{{ _("The configuration was not accepted. Check the settings and save again.") }}</p>

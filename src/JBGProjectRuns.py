@@ -186,7 +186,9 @@ class ProjectRunService:
         if entry.state is not ModelState.AVAILABLE or not entry.run_id:
             raise RunRequestRefused("the model is not available")
         try:
-            training = self._store.get_owned(owner, RunReference(entry.run_id))
+            # 299e: also when the training run was deleted (its settings are kept).
+            training = self._store.get_owned(owner, RunReference(entry.run_id),
+                                             include_hidden=True)
         except (KeyError, ValueError):
             raise RunRequestRefused("the model is not available") from None
         trained = training.spec.get("project_run") or {}

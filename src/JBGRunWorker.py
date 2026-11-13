@@ -361,7 +361,10 @@ def run_job(store: RunJobStore, run: RunReference, worker_id: str, *, logger=Non
             own_logger = logger is None
             if own_logger:
                 from JBGLogger import JBGLogger
-                logger = JBGLogger(quiet=not config.io.verbose, in_terminal=True, log_dir=log_dir)
+                # 299e: the engine's log is named after the run, so deleting the
+                # run can remove it (it was named by time and process only).
+                logger = JBGLogger(quiet=not config.io.verbose, in_terminal=True, log_dir=log_dir,
+                                   log_filename=f"run_{run.key}_engine.log")
             observed = StoreProgressLogger(logger, store, run, heartbeat)
             observed.checkpoint()                    # cancelled while it was queued
             composed, reference, run_config = _compose(record, config, observed,

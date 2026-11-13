@@ -2,7 +2,8 @@
 
 Model binaries remain with the existing persistence layer. An opaque artifact key
 is registered only after artifact persistence succeeds. Legacy artifacts are
-not imported automatically and no model deletion is performed here.
+not imported automatically. 299e: ``delete`` removes a catalog entry only; the
+model files are removed by JBGDeletion.
 """
 from __future__ import annotations
 
@@ -12,7 +13,7 @@ from enum import Enum
 from uuid import UUID, uuid4
 
 from sqlalchemy import (Column, DateTime, ForeignKeyConstraint, Index, MetaData,
-                        String, Table, UniqueConstraint, create_engine, insert,
+                        String, Table, UniqueConstraint, create_engine, delete, insert,
                         select, update, inspect)
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
@@ -205,3 +206,13 @@ class ModelCatalog:
             if not changed:
                 raise KeyError("model unavailable")
         return self.get_owned(owner, project_id, model_id)
+
+    def delete(self, owner, project_id, model_id):
+        """299e: remove one catalog entry of the owner's project (metadata only)."""
+        with self._engine.begin() as conn:
+            self._owned_project(conn, _text(owner, "owner", 256), project_id)
+            removed = conn.execute(delete(self._models).where(
+                self._models.c.project_id == project_id,
+                self._models.c.model_id == model_id)).rowcount
+        if not removed:
+            raise KeyError("model unavailable")

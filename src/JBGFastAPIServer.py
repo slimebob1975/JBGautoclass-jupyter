@@ -95,6 +95,11 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                                           sessions=sessions, sql_server=sql_server,
                                           csv_root=csv_root)
 
+    from JBGDeletion import DeletionService                     # 299e
+    deletion = DeletionService(store, catalog=models, configurations=saved_configs,
+                               results_root=results_root, log_dir=run_logs,
+                               model_root=model_root, active_runs=dispatcher.active_runs)
+
     @asynccontextmanager
     async def lifespan(app):
         store.create_tables()
@@ -129,10 +134,11 @@ def create_server_app(*, settings: MetadataStoreSettings | None = None,
                      dataset_inspection=inspection,
                      run_results=RunResultsService(store, results_root=results_root),
                      run_logs=RunLogService(store, run_logs),
+                     deletion=deletion,
                      trust_app_service_headers=_trust_headers(trust_app_service_headers),
                      web_ui=True, version_line=_version_line(),
                      lifespan=lifespan)
-    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service,
+    app.state.jbg = {"store": store, "dispatcher": dispatcher, "sessions": sessions, "projects": projects, "configurations": saved_configs, "datasets": datasets, "models": models, "configuration_service": configuration_service, "deletion": deletion,
                      "datasets": datasets}
     return app
 

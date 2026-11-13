@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% set title = {"run": "Delete run", "model": "Delete model", "configuration": "Delete configuration"}[plan.kind] %}
+{# 299e: what a deletion removes and what stays, before it is confirmed. #}
+{% macro run_line(r) %}{% set m = r.spec.project_run or {} %}
+  <li>{{ _("Prediction run") if m.kind == "prediction" else _("Training run") }}
+    {{ r.created_at.isoformat() | localtime }}{% if m.configuration_name %} · {{ m.configuration_name }}{% if m.configuration_version %} v{{ m.configuration_version }}{% endif %}{% endif %}</li>
+{% endmacro %}
+{% block main %}
+<div class="card delete-card">
+  <h2>{{ _(title) }}{% if plan.kind != "run" %}: <b>{{ plan.name }}</b>{% endif %}</h2>
+  {% if plan.refused %}<p class="message error">{{ _(refusals.get(plan.refused, refusals.running)) }}</p>{% endif %}
+
+  <h3>{{ _("This is deleted") }}</h3>
+  <ul class="delete-list goes">
+    {% if plan.configuration %}<li>{{ _("The configuration with all its versions") }}: {{ plan.versions }}</li>{% endif %}
+    {% for m in plan.models %}<li>{{ _("Model") }} <b>{{ m.name }}</b> {{ _("and its model files") }}</li>{% endfor %}
+    {% for r in plan.runs %}{{ run_line(r) }}{% endfor %}
+    {% for r in plan.hidden_runs %}{{ run_line(r) }}{% endfor %}
+    {% if plan.runs or plan.hidden_runs %}<li>{{ _("For each run: its log and all its result files (results, predictions, correction log).") }}</li>{% endif %}
+    {% if plan.kind == "run" and plan.training_runs and not plan.hidden_runs %}<li>{{ _("The run's model file, if one was kept (no model is registered for this run).") }}</li>{% endif %}
+  </ul>
+
+  <h3>{{ _("This stays") }}</h3>
+  <ul class="delete-list stays">
+    {% if plan.hidden_runs %}<li>{{ _("The model trained by this run stays and can still predict") }}: {% for m in plan.kept_models %}<b>{{ m.name }}</b>{{ ", " if not loop.last }}{% endfor %}.
+      {{ _("Only the run's settings are kept for it, hidden from every list.") }}</li>{% endif %}
+    {% if plan.kind == "model" and not plan.training_runs %}<li>{{ _("The training run and its results (Results tab).") }}</li>{% endif %}
+    <li>{{ _("Datasets, and everything in SQL Server: predictions and corrections already written stay in their tables.") if source == "sql" else _("Datasets, including the file versions with corrections already saved.") }}</li>
+  </ul>
+  <p class="hint">{{ _("A deletion cannot be undone.") }}</p>
+</div>
+{% endblock %}
+
+{% block actions %}
+  <span class="hint">{{ _("Check the list before deleting.") }}</span>
+  <a class="btn sub" href="{{ back }}">{{ _("Cancel") }}</a>
+  {% if plan.refused %}
+    <button class="btn act blocked" disabled title="{{ _(refusals.get(plan.refused, refusals.running)) }}">{{ _("Delete") }}</button>
+  {% else %}
+    <form method="post" action="{{ action }}">
+      {% if plan.kind == "run" %}<input type="hidden" name="back" value="{{ back }}">{% endif %}
+      <button class="btn act warning">{{ _("Delete") }}</button>
+    </form>
+  {% endif %}
+{% endblock %}

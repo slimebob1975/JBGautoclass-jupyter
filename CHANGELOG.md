@@ -1,3 +1,46 @@
+## Revision 299e - Deleting runs, models and configurations (2026-11-13)
+
+- Voilà retirement item (agreed 2026-11-13): deleting, part 1. The rule
+  (decision 2026-11-13): what owns something takes it with it.
+  - A run: its worker and engine logs, its result folder (results,
+    predictions, correction log) and its progress events. Refinement of the
+    agreed plan: a succeeded training run whose model still exists is hidden
+    instead of removed (new table `jbg_run_hidden`, no change to existing
+    tables), since its model predicts with the run's stored settings; its
+    summary and events are cleared and it is left out of every list and owner
+    read. A training run without a model also takes its model file.
+  - A model: its catalog entry and model files (`<id>.sav` and sidecars), the
+    prediction runs made with it (changed 2026-11-13: they went as history
+    before), and its training run's hidden record if that run was deleted.
+  - A configuration: every version, the training runs made with it, their
+    models and the prediction runs made with those models.
+  - Each deletion first shows a page listing exactly what goes and what stays,
+    with an orange "Ta bort" button (`JBGWebUIDeletion`, `delete.html`). It is
+    refused, with the reason and a red button, while a run that would go is
+    queued or running, or while the server's worker still holds its log
+    (Windows). Owner only; items of other users or other projects are unknown.
+    Files go before records, so a file that cannot be removed leaves
+    everything as it was. Datasets and SQL tables are never touched. The
+    chosen configuration and model are cleared when deleted.
+  - Entry points: "Ta bort körningen…" on a finished run (Training,
+    Prediction, Results), "Ta bort modellen…" on the model card, "Ta bort
+    konfigurationen…" next to "Välj för körning".
+- The model card lists the model's remaining runs (training run and
+  prediction runs); a deleted training run shows as "Borttagen".
+- Web workers name the engine's log `run_<id>_engine.log` (it was named by
+  time and process only), so deleting a run removes it. Logs of earlier runs
+  cannot be matched to their run and stay.
+- Fix (asked 2026-11-13): "Välj för körning" follows the traffic lights:
+  green when it can be chosen, red with the reason on hover when the
+  configuration is already chosen (the badge stays).
+- Fix (asked 2026-11-13): Resultat → Mörkertal → Förväxlingsmatriser shows
+  "Skattning" left of "Faktisk klass".
+- User guides: orange buttons, deleting, the new links.
+- Tests: `tests/test_revision_299e_deleting.py`. Checked in headless
+  Chromium: the red "Välj för körning" with its reason, the confirmation
+  pages, deleting a prediction run, a model and a configuration, and the
+  context bar cleared afterwards.
+
 ## Revision 299d - Action buttons that wait; actions at the top of long pages (2026-11-13)
 
 - Asked 2026-11-13; agreed to keep the design's traffic-light convention

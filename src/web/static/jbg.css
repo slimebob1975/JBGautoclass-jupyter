@@ -272,3 +272,10 @@ form.copy-roles { margin-bottom: 10px; }
 .btn.act.blocked[aria-disabled="true"] { pointer-events: auto; }
 .actions-top { border-top: 0; border-bottom: 1px solid var(--line2); }
 .actions-top[hidden] { display: none; }
+/* 299e: deleting */
+.card-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card-head-actions form { margin: 0; }
+.delete-card { max-width: 820px; }
+.delete-list li { margin: 4px 0; }
+.delete-list.goes li::marker { color: var(--warning); }
+.model-runs { margin: 4px 0 12px; padding-left: 20px; }

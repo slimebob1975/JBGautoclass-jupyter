@@ -30,7 +30,8 @@ Språket väljs med SV/EN uppe till höger.
 
 Knappar som utför en åtgärd är gröna när de kan användas och röda, nedtonade,
 när det ännu inte finns något att göra, till exempel **Spara** innan något
-har ändrats. Håll muspekaren över en röd knapp för att se varför. På långa
+har ändrats. Håll muspekaren över en röd knapp för att se varför. Orange
+knappar kan användas men går inte att ångra, till exempel **Ta bort**. På långa
 sidor finns sidans huvudknapp både överst och längst ned.
 
 ## Översikt
@@ -156,7 +157,10 @@ dina val direkt, och alpha ”Separated” går bara att välja med metoden
   valet markeras, och den avmarkeras när ett val avmarkeras.
 - **Spara konfiguration** skapar en ny version; tidigare versioner sparas.
 - **Välj för körning** gör konfigurationen till den som används vid
-  träning.
+  träning. Den är röd när konfigurationen redan är vald.
+- **Ta bort konfigurationen…** tar bort den med alla versioner, de
+  träningskörningar som gjorts med den, deras modeller och prediktionerna
+  som gjorts med de modellerna (se Ta bort nedan).
 - CSV-körningar tränar bara. Nya konfigurationer i CSV-projekt har därför
   ”Prediktera rader utan klass” avmarkerat.
 
@@ -167,6 +171,9 @@ träningsdataset med kolumnroller, vald konfiguration och, för SQL, inloggning.
 Vid en punkt som inte är uppfylld leder **Åtgärda** dit den rättas till.
 **Starta träning** startar körningen med det aktiva datasetet och den valda
 konfigurationen.
+
+En avslutad körning kan tas bort med **Ta bort körningen…** (även på flikarna
+Prediktion och Resultat).
 
 Förloppet uppdateras av sig självt. När modellerna tränas och jämförs visar
 en tunnare stapel hur många algoritmkombinationer som är klara, till exempel
@@ -217,8 +224,9 @@ Breda tabeller har en rullningslist både under och ovanför tabellen.
 ## Modeller
 
 Modellerna som träningskörningarna har skapat, med var de kommer ifrån och
-deras nyckeltal. **Välj modell** gör en tillgänglig modell till den som
-används vid prediktion.
+deras nyckeltal, och modellens kvarvarande körningar. **Välj modell** gör en
+tillgänglig modell till den som används vid prediktion. **Ta bort modellen…**
+tar bort den med dess filer och de prediktionskörningar som gjorts med den.
 
 ## Prediktion
 
@@ -249,4 +257,14 @@ Kommer i en senare version.
 - Loggar och prediktioner kan innehålla värden ur dina data och visas bara
   för den som startade körningen.
 - Varje körning sparar sina resultat i en egen mapp på servern.
+- **Ta bort**: det som äger något tar det med sig. En körning tar med sig sin
+  logg och sina resultatfiler, en modell sina filer och sina
+  prediktionskörningar, en konfiguration sina versioner, sina
+  träningskörningar och deras modeller. En sida visar först exakt vad som tas
+  bort och vad som finns kvar; **Ta bort** (orange) genomför det och kan inte
+  ångras. Inget tas bort medan en körning som skulle tas bort står i kö eller
+  pågår. När en träningskörning tas bort men dess modell finns kvar sparas
+  bara körningens inställningar för modellen, dolda. Dataset och tabeller i
+  SQL Server ändras aldrig: prediktioner och korrigeringar som redan skrivits
+  finns kvar.
 - Den här fliken visar programmets version.

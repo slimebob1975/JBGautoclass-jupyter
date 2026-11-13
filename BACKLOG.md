@@ -359,15 +359,24 @@ full SQL regression acceptance remain separately unverified.
       per confirmed batch (originals kept), read by every later run;
       corrected download. Also: Dark Numbers in percent (asked 2026-11-12).
     - [ ] Note with 299b: file versions from corrections are kept, as runs
-      and models refer to them; cleaning them up belongs with deleting.
+      and models refer to them; cleaning them up belongs with deleting
+      datasets (299f).
     - [x] 299c: "Export joined" for CSV predictions (predictions with the
       original columns, from the file the prediction read).
-    - [ ] Deleting datasets, models, runs and projects (with the per-project
-      retention item).
+    - [x] 299e: deleting runs, models and configurations (agreed
+      2026-11-13: what owns something takes it with it; a training run whose
+      model remains is hidden; prediction runs go with their model).
+    - [ ] 299f: deleting datasets (with the runs on them, their models and
+      predictions, every CSV file version and the column roles;
+      configurations stay) and projects (everything in them, hidden records
+      included; confirmed by typing the project name). SQL tables stay.
+    - [ ] Later: per-project retention.
     - [ ] Feature investigation (assisted feature selection, recommendations,
       pause/resume); first make the Variabelurval section honest: it has no
       effect in web runs today.
     - [ ] Minor: rerun, run history (Körhistorik).
+  - [x] 299e (asked 2026-11-13): "Välj för körning" follows the traffic
+    lights; the Dark Numbers confusion matrices show the estimate first.
   - [x] 299d (asked 2026-11-13; traffic lights agreed): action buttons are
     red with the reason on hover until there is something to do, then
     green; the footer's actions also at the top of long pages; buttons

@@ -150,7 +150,7 @@
         <h3>{{ _("Confusion matrices") }}</h3>
         <p class="hint">{{ _("Per estimate: rows are the actual class, columns the predicted class.") }}</p>
         <div class="scroll"><table class="grid">
-          <thead><tr>{% for c in dark_matrix.columns %}<th>{{ _("Actual class") if loop.first else _(dark_columns.get(c, c)) }}</th>{% endfor %}</tr></thead>
+          <thead><tr>{% for c in dark_matrix.columns %}<th>{{ _("Actual class") if c == "" else _(dark_columns.get(c, c)) }}</th>{% endfor %}</tr></thead>
           <tbody>{% for row in dark_matrix.rows %}<tr>{% for value in row %}<td class="{{ 'num' if value is number }}">{{ value | num(language) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
         </table></div>
       {% endif %}
@@ -162,4 +162,5 @@
 </div>
 {% endif %}
 {% endblock %}
-{% block actions %}<span class="hint">{{ _("Results of the project's finished runs.") }}</span>{% endblock %}
+{% block actions %}<span class="hint">{{ _("Results of the project's finished runs.") }}</span>
+  {% if selected_run and can_delete %}<a class="btn sub" href="/ui/runs/{{ selected_run }}/delete?back=/ui/results">{{ _("Delete the run…") }}</a>{% endif %}{% endblock %}

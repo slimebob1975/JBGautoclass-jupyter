@@ -38,7 +38,7 @@
       <dt>{{ _("Created") }}</dt><dd>{{ selected.created_at | localtime }}</dd>
       <dt>{{ _("Dataset") }}</dt><dd>{{ card.dataset.name if card.dataset else "–" }}</dd>
       <dt>{{ _("Configuration") }}</dt><dd>{% if card.run %}{{ card.run.configuration_name or "–" }}{% if card.run.configuration_version %} v{{ card.run.configuration_version }}{% endif %}{% else %}–{% endif %}</dd>
-      <dt>{{ _("Run") }}</dt><dd>{% if selected.run_id %}<a href="/ui/results?run={{ selected.run_id }}">{{ (card.run.created_at | localtime) if card.run else selected.run_id[:8] }}</a>{% else %}–{% endif %}</dd>
+      <dt>{{ _("Run") }}</dt><dd>{% if card.run %}<a href="/ui/results?run={{ selected.run_id }}">{{ card.run.created_at | localtime }}</a>{% elif selected.run_id %}{{ _("Deleted") }}{% else %}–{% endif %}</dd>
     </dl>
     {% set ev = card.evaluation %}
     {% if ev %}
@@ -50,7 +50,16 @@
         <dt>F1 (macro)</dt><dd>{{ ev.f1_macro | num(language) }}</dd>
       </dl>
     {% endif %}
-    {% if selected.run_id %}<p><a href="/ui/results?run={{ selected.run_id }}">{{ _("All results of this run") }} ›</a></p>{% endif %}
+    {% if selected.run_id and card.run %}<p><a href="/ui/results?run={{ selected.run_id }}">{{ _("All results of this run") }} ›</a></p>{% endif %}
+    {# 299e: the model's remaining runs; deleting the model takes its predictions with it. #}
+    <h3>{{ _("Runs") }}</h3>
+    {% if card.run or card.predictions %}
+      <ul class="model-runs">
+        {% if card.run %}<li>{{ _("Training run") }} <a href="/ui/results?run={{ card.run.run_id }}">{{ card.run.created_at | localtime }}</a></li>{% endif %}
+        {% for p in card.predictions %}<li>{{ _("Prediction run") }} <a href="/ui/prediction?run={{ p.run_id }}">{{ p.created_at | localtime }}</a></li>{% endfor %}
+      </ul>
+    {% else %}<p class="empty">{{ _("No runs remain: they have been deleted.") }}</p>{% endif %}
+    {% if can_delete %}<p><a class="btn sub" href="/ui/models/{{ selected.model_id }}/delete">{{ _("Delete the model…") }}</a></p>{% endif %}
   {% else %}
     <p class="empty">{{ _("Select a model in the list.") }}</p>
   {% endif %}

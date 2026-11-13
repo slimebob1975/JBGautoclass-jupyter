@@ -45,4 +45,6 @@
                      "other": "The run failed; the log says why."} %}
   {% if overview.failure %}<p class="message error run-failure">{{ _(failures.get(overview.failure, failures.other)) }}</p>{% endif %}
   {% if has_log %}<p><a href="/ui/runs/{{ overview.run_id }}/log">{{ _("Show log") }}</a></p>{% endif %}
+  {# 299e: a finished run can be deleted after a confirmation page. #}
+  {% if finished and can_delete %}<p><a class="btn sub" href="/ui/runs/{{ overview.run_id }}/delete?back={{ back }}">{{ _("Delete the run…") }}</a></p>{% endif %}
 </div>

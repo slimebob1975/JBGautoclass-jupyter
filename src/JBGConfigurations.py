@@ -13,7 +13,8 @@ from uuid import uuid4
 
 from sqlalchemy import (Column, DateTime, ForeignKeyConstraint,
                         Index, Integer, MetaData, String, Table, Text,
-                        UniqueConstraint, create_engine, insert, select, update)
+                        UniqueConstraint, create_engine, delete, insert, select,
+                        update)
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 
@@ -233,3 +234,20 @@ class ConfigurationRepository:
                 configuration_id=configuration_id, version=expected_version + 1,
                 settings_json=encoded, created_at=now))
         return self.get_owned(owner, project_id, configuration_id)
+
+    def delete(self, owner: str, project_id: str, configuration_id: str) -> int:
+        """299e: remove a configuration with every version; returns how many
+        versions there were. Runs keep their own copy of the settings."""
+        owner = _text(owner, "owner", 256)
+        with self._engine.begin() as connection:
+            self._project_owned(connection, owner, project_id)
+            header = connection.execute(select(self._configs).where(
+                self._configs.c.project_id == project_id,
+                self._configs.c.configuration_id == configuration_id)).first()
+            if header is None:
+                raise KeyError("configuration unavailable")
+            connection.execute(delete(self._revisions).where(
+                self._revisions.c.configuration_id == configuration_id))
+            connection.execute(delete(self._configs).where(
+                self._configs.c.configuration_id == configuration_id))
+        return header.current_version

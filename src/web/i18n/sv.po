@@ -1916,3 +1916,103 @@ msgstr "Välj en fil och ange ett namn först."
 
 msgid "Choose the right class for at least one row first."
 msgstr "Välj rätt klass för minst en rad först."
+
+# 299e: deleting runs, models and configurations
+msgid "The run is deleted."
+msgstr "Körningen är borttagen."
+
+msgid "The model is deleted."
+msgstr "Modellen är borttagen."
+
+msgid "The configuration is deleted."
+msgstr "Konfigurationen är borttagen."
+
+msgid "It is no longer available."
+msgstr "Den finns inte längre."
+
+msgid "A file could not be removed, so nothing was deleted. Try again in a moment."
+msgstr "En fil kunde inte tas bort, så inget togs bort. Försök igen om en stund."
+
+msgid "A run that would be deleted is queued or running. Wait for it to finish, or cancel it first."
+msgstr "En körning som skulle tas bort står i kö eller pågår. Vänta tills den är klar eller avbryt den först."
+
+msgid "A run that would be deleted is still being finished on the server. Try again in a moment."
+msgstr "En körning som skulle tas bort avslutas fortfarande på servern. Försök igen om en stund."
+
+msgid "Delete run"
+msgstr "Ta bort körning"
+
+msgid "Delete model"
+msgstr "Ta bort modell"
+
+msgid "Delete configuration"
+msgstr "Ta bort konfiguration"
+
+msgid "This is deleted"
+msgstr "Detta tas bort"
+
+msgid "This stays"
+msgstr "Detta finns kvar"
+
+msgid "The configuration with all its versions"
+msgstr "Konfigurationen med alla sina versioner"
+
+msgid "and its model files"
+msgstr "och dess modellfiler"
+
+msgid "Prediction run"
+msgstr "Prediktionskörning"
+
+msgid "Training run"
+msgstr "Träningskörning"
+
+msgid "For each run: its log and all its result files (results, predictions, correction log)."
+msgstr "För varje körning: dess logg och alla dess resultatfiler (resultat, prediktioner, korrigeringslogg)."
+
+msgid "The run's model file, if one was kept (no model is registered for this run)."
+msgstr "Körningens modellfil, om en sparades (ingen modell är registrerad för körningen)."
+
+msgid "The model trained by this run stays and can still predict"
+msgstr "Modellen som körningen tränade finns kvar och kan fortfarande prediktera"
+
+msgid "Only the run's settings are kept for it, hidden from every list."
+msgstr "Bara körningens inställningar sparas för den, dolda i alla listor."
+
+msgid "The training run and its results (Results tab)."
+msgstr "Träningskörningen och dess resultat (fliken Resultat)."
+
+msgid "Datasets, and everything in SQL Server: predictions and corrections already written stay in their tables."
+msgstr "Dataset och allt i SQL Server: prediktioner och korrigeringar som redan skrivits finns kvar i sina tabeller."
+
+msgid "Datasets, including the file versions with corrections already saved."
+msgstr "Dataset, även filversionerna med korrigeringar som redan sparats."
+
+msgid "A deletion cannot be undone."
+msgstr "En borttagning kan inte ångras."
+
+msgid "Check the list before deleting."
+msgstr "Kontrollera listan innan du tar bort."
+
+msgid "Delete"
+msgstr "Ta bort"
+
+msgid "Delete the run…"
+msgstr "Ta bort körningen…"
+
+msgid "Delete the model…"
+msgstr "Ta bort modellen…"
+
+msgid "Delete the configuration…"
+msgstr "Ta bort konfigurationen…"
+
+msgid "Runs"
+msgstr "Körningar"
+
+msgid "No runs remain: they have been deleted."
+msgstr "Inga körningar finns kvar: de har tagits bort."
+
+msgid "Deleted"
+msgstr "Borttagen"
+
+msgid "This configuration is already chosen for runs."
+msgstr "Konfigurationen är redan vald för körning."
